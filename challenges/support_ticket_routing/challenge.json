@@ -1,0 +1,280 @@
+{
+  "slug": "support-ticket-routing",
+  "title": "Classify and Route Customer Support Tickets",
+  "description": "At a B2B SaaS company, the support team receives hundreds of tickets daily through email, chat, and in-app forms. Each ticket needs to be classified by:\n- **department**: billing, technical, account, security, feature_request, onboarding\n- **priority**: critical, high, medium, low\n- **sentiment**: angry, frustrated, neutral, satisfied\n- **requires_escalation**: boolean — true if the customer threatens legal action, mentions a deadline, is an enterprise account, or describes data loss\n\nYour pipeline receives raw ticket text (often poorly written, with typos, mixed languages, and emotional language) and must output structured classification for each ticket.\n\nOutput a JSON array to stdout. Each object must have: ticket_id, department, priority, sentiment, requires_escalation, reasoning (one-sentence justification for the routing).\n\nThe tricky part: tickets are ambiguous. A billing complaint about a technical issue that caused an overcharge touches both departments — you must pick the PRIMARY department. Priority must account for business impact, not just how angry the customer sounds.",
+  "difficulty": "hard",
+  "category": "classification",
+  "tags": ["saas", "customer-support", "nlp", "multi-label", "triage"],
+  "company_context": "SaaS companies like Zendesk, Intercom, and Freshdesk route millions of tickets. Misrouted tickets add 4-8 hours to resolution time. AI-powered routing reduces mean time to resolution by 35% when done correctly, but bad classification is worse than no classification.",
+  "input_format": "text",
+  "output_format": "json",
+  "constraints": {
+    "max_llm_calls": 15,
+    "allowed_models": ["gpt-4o", "gpt-4o-mini"],
+    "time_limit_seconds": 120
+  },
+  "sample_input": {
+    "tickets": [
+      {
+        "ticket_id": "T-0000",
+        "channel": "email",
+        "account_tier": "startup",
+        "text": "Hi, I can't log into my dashboard. It says my password is wrong but I just reset it."
+      }
+    ]
+  },
+  "sample_output": [
+    {
+      "ticket_id": "T-0000",
+      "department": "technical",
+      "priority": "medium",
+      "sentiment": "frustrated",
+      "requires_escalation": false,
+      "reasoning": "Login issue after password reset indicates a technical bug, not a billing or account problem."
+    }
+  ],
+  "config": {
+    "accuracy_mode": "json",
+    "expected_calls": 4,
+    "processing_rules": {
+      "skip_conditions": [
+        "Tickets with status 'resolved', 'closed', or 'duplicate' in their metadata must be excluded from output",
+        "Tickets that are auto-generated system health checks (channel='internal_monitor') must be excluded",
+        "If two tickets from the same account reference the same issue (matching ticket IDs in text), only classify the LATEST one (higher ticket_id number)",
+        "Tickets marked as 'spam' or containing only promotional/marketing content must be excluded"
+      ],
+      "escalation_rules": [
+        "requires_escalation is true if ANY of: (1) legal threat, (2) explicit deadline mentioned, (3) enterprise account tier, (4) data loss described, (5) references regulatory compliance (GDPR, HIPAA, SOC2, PCI-DSS)",
+        "Enterprise accounts ALWAYS require escalation regardless of issue severity",
+        "Mentions of 'chargeback', 'BBB complaint', or 'social media' constitute implicit legal/reputational threats"
+      ],
+      "priority_rules": [
+        "critical: service completely down for multiple users, data loss/breach, OR enterprise account with any blocking issue",
+        "high: single-user blocking issue with business impact, security concern, deadline within 48 hours",
+        "medium: non-blocking issue affecting workflow, billing discrepancy, onboarding friction",
+        "low: feature requests, general inquiries, cosmetic issues, praise/feedback"
+      ],
+      "department_rules": [
+        "When a ticket spans multiple departments, classify by ROOT CAUSE not symptom. E.g., a billing complaint caused by a technical bug is 'technical'",
+        "Account changes (email, team members, permissions) go to 'account' even if described as technical",
+        "Security audit requests, vulnerability reports, and compliance inquiries go to 'security'",
+        "New customers (<30 days) with setup/migration issues go to 'onboarding' not 'technical'"
+      ]
+    },
+    "inputs": {
+      "tickets": [
+        {
+          "ticket_id": "T-4401",
+          "channel": "email",
+          "account_tier": "enterprise",
+          "text": "This is UNACCEPTABLE. We've been double-charged for the last THREE months and nobody has responded to my previous two tickets (#3871, #3999). Our CFO is asking me to prepare documentation for our legal team if this isn't resolved by Friday. We pay $48,000/year for this service and this is how we're treated? I need a full refund for the duplicate charges AND a credit for the time we've spent dealing with this. Account ID: ENT-7842."
+        },
+        {
+          "ticket_id": "T-4402",
+          "channel": "in-app",
+          "account_tier": "pro",
+          "text": "hey the api keeps returning 502 errors when i try to batch upload more than 50 records. started happening after your last update on tuesday. my integration is completely broken and we have a client demo tomorrow morning. endpoint: POST /v2/records/batch. getting timeout after ~30s. tried smaller batches (25) and those work fine. this is blocking our entire team."
+        },
+        {
+          "ticket_id": "T-4403",
+          "channel": "chat",
+          "account_tier": "startup",
+          "text": "hola, necesito cambiar el email de mi cuenta de juan@oldcompany.com a juan@newcompany.com pero no puedo encontrar donde hacerlo en settings. also i need to add 3 new team members but it says I've hit my seat limit? we're on the startup plan. can someone help?"
+        },
+        {
+          "ticket_id": "T-4404",
+          "channel": "email",
+          "account_tier": "enterprise",
+          "text": "Hi Support,\n\nDuring our quarterly security audit, our InfoSec team discovered that your API endpoint /v2/users/export returns PII (full names, emails, phone numbers) without requiring any additional authentication beyond the standard API key. This seems like it should require elevated permissions or MFA verification.\n\nWe need a formal response on this within 48 hours per our vendor security policy. Can you also provide your latest SOC 2 report?\n\nRegards,\nDavid Park\nHead of Security, MegaCorp Inc."
+        },
+        {
+          "ticket_id": "T-4405",
+          "channel": "in-app",
+          "account_tier": "free",
+          "text": "it would be really cool if you guys added dark mode. also the mobile app is kinda laggy on android. not a huge deal just thought id mention it. love the product overall tho keep it up! 💯"
+        },
+        {
+          "ticket_id": "T-4406",
+          "channel": "email",
+          "account_tier": "pro",
+          "text": "We just signed up last week and I'm trying to migrate our data from Competitor X. I've exported everything as CSV but your import tool keeps failing silently — no error message, the progress bar just stops at 73% every time. I have about 12,000 records. Is there a size limit? Also, can someone walk me through setting up the webhook integration? The docs reference a 'Developer Settings' page that doesn't seem to exist in our dashboard."
+        },
+        {
+          "ticket_id": "T-4407",
+          "channel": "email",
+          "account_tier": "enterprise",
+          "text": "URGENT: Our entire team (200+ users) lost access to the platform at approximately 2:15 PM EST today. Everyone is getting a 'Your organization has been suspended' message. We have NOT missed any payments — I just verified with our finance team. This is causing massive disruption to our operations. We have critical deadlines this week and cannot afford any downtime. Please restore access IMMEDIATELY.\n\n-- Patricia Williams, VP Operations, GlobalTech Solutions"
+        },
+        {
+          "ticket_id": "T-4408",
+          "channel": "chat",
+          "account_tier": "pro",
+          "text": "quick question — if i downgrade from pro to startup mid-billing-cycle, do i get a prorated refund or does the pro plan just run until the end of the period? also what happens to our data if we exceed the startup storage limit? do you delete it or just prevent new uploads?"
+        },
+        {
+          "ticket_id": "T-4409",
+          "channel": "internal_monitor",
+          "account_tier": "system",
+          "text": "[AUTOMATED HEALTH CHECK] Service: api-gateway-prod. Status: DEGRADED. Latency p99 > 2000ms for last 15 minutes. Region: us-east-1. Alert ID: MON-88421. Escalation tier: P2. Runbook: https://internal.wiki/runbooks/api-gw-latency"
+        },
+        {
+          "ticket_id": "T-4410",
+          "channel": "email",
+          "account_tier": "enterprise",
+          "status": "resolved",
+          "text": "Hi, following up on ticket #4301 about the SSO configuration issue. Your engineer James fixed it last Thursday — everything is working great now. Just wanted to confirm it's all set and close this out. Thanks for the quick turnaround!\n\n- Linda Park, IT Admin, NovaCorp"
+        },
+        {
+          "ticket_id": "T-4411",
+          "channel": "email",
+          "account_tier": "pro",
+          "text": "🎉 CONGRATULATIONS! You've been selected for an exclusive business partnership opportunity! Click here to claim your FREE enterprise upgrade worth $50,000. Limited time offer — act now! Reply STOP to unsubscribe. #blessed #opportunity #bizgrowth"
+        },
+        {
+          "ticket_id": "T-4412",
+          "channel": "email",
+          "account_tier": "enterprise",
+          "text": "Support team,\n\nI need to discuss our data handling practices. We're a healthcare company subject to HIPAA regulations. During an internal audit, we discovered that our team has been uploading patient intake forms (containing PHI) to your platform. We need to understand:\n\n1. Is your platform HIPAA compliant? Do you have a BAA we can sign?\n2. Where exactly is our data stored? We need to confirm it's not leaving US soil.\n3. Can we get a data processing audit trail for the last 90 days?\n\nThis is urgent — our compliance officer needs a response by end of week or we may need to suspend use of your platform pending review.\n\nDr. Raymond Liu\nChief Medical Information Officer, HealthFirst Clinics"
+        },
+        {
+          "ticket_id": "T-4413",
+          "channel": "chat",
+          "account_tier": "startup",
+          "text": "hey so i accidentally deleted our entire 'Q4 Clients' workspace and it had like 2 years of client data in it. is there any way to recover it?? i checked the trash folder and it's not there. this is really really bad. my manager is going to kill me. please help asap 😰"
+        },
+        {
+          "ticket_id": "T-4414",
+          "channel": "in-app",
+          "account_tier": "free",
+          "status": "duplicate",
+          "text": "Can't upload files larger than 10MB. This is annoying. I'm trying to upload a presentation and it keeps failing. Same issue I reported yesterday."
+        },
+        {
+          "ticket_id": "T-4415",
+          "channel": "email",
+          "account_tier": "pro",
+          "text": "Hi there,\n\nI noticed my API calls started failing today with 403 errors. After some digging, it looks like my API key was rotated without my knowledge. I checked the audit log and it shows the key was rotated by 'admin@mycompany.com' at 3:42 AM — but that's our former CTO who left the company two months ago and should have been offboarded. His account still has admin access to our workspace.\n\nThis is a serious security concern. Can you help us immediately revoke his access and confirm whether any data was exported using his credentials in the last 60 days?\n\n— Chen Wei, Engineering Lead"
+        },
+        {
+          "ticket_id": "T-4416",
+          "channel": "email",
+          "account_tier": "enterprise",
+          "text": "To Whom It May Concern,\n\nPursuant to Article 17 of the General Data Protection Regulation (GDPR), I am formally requesting the complete erasure of all personal data associated with our organization's account (Enterprise ID: ENT-2291). This includes all user records, activity logs, analytics data, and any backups or cached copies.\n\nPlease confirm receipt of this request and provide a timeline for completion. Under GDPR, you have 30 days to comply.\n\nRegards,\nSophie Müller\nData Protection Officer, EuroTech GmbH"
+        },
+        {
+          "ticket_id": "T-4417",
+          "channel": "chat",
+          "account_tier": "pro",
+          "text": "your reporting dashboard is showing different numbers than what i get from the API. the dashboard says we have 4,521 active users but the /v2/analytics/users endpoint returns 4,102. which one is correct? we're preparing our board deck and need accurate numbers by tomorrow EOD."
+        }
+      ]
+    },
+    "ground_truth": [
+      {
+        "ticket_id": "T-4401",
+        "department": "billing",
+        "priority": "critical",
+        "sentiment": "angry",
+        "requires_escalation": true,
+        "reasoning": "Enterprise account with duplicate charges, legal threat, and prior unresolved tickets — billing issue requiring immediate escalation."
+      },
+      {
+        "ticket_id": "T-4402",
+        "department": "technical",
+        "priority": "critical",
+        "sentiment": "frustrated",
+        "requires_escalation": false,
+        "reasoning": "API regression after update blocking team with imminent client demo — critical technical issue with clear reproduction steps."
+      },
+      {
+        "ticket_id": "T-4403",
+        "department": "account",
+        "priority": "medium",
+        "sentiment": "neutral",
+        "requires_escalation": false,
+        "reasoning": "Account email change and seat limit inquiry — standard account management, no urgency."
+      },
+      {
+        "ticket_id": "T-4404",
+        "department": "security",
+        "priority": "high",
+        "sentiment": "neutral",
+        "requires_escalation": true,
+        "reasoning": "Enterprise security audit finding with 48-hour deadline and SOC 2 request — security concern requiring formal response."
+      },
+      {
+        "ticket_id": "T-4405",
+        "department": "feature_request",
+        "priority": "low",
+        "sentiment": "satisfied",
+        "requires_escalation": false,
+        "reasoning": "Positive feedback with casual feature suggestions — low priority feature request from free tier."
+      },
+      {
+        "ticket_id": "T-4406",
+        "department": "onboarding",
+        "priority": "high",
+        "sentiment": "frustrated",
+        "requires_escalation": false,
+        "reasoning": "New customer blocked on data migration and missing documentation — onboarding friction risking early churn."
+      },
+      {
+        "ticket_id": "T-4407",
+        "department": "technical",
+        "priority": "critical",
+        "sentiment": "angry",
+        "requires_escalation": true,
+        "reasoning": "Enterprise-wide platform suspension affecting 200+ users with no valid reason — critical outage requiring immediate action."
+      },
+      {
+        "ticket_id": "T-4408",
+        "department": "billing",
+        "priority": "low",
+        "sentiment": "neutral",
+        "requires_escalation": false,
+        "reasoning": "Pre-sale billing and data policy questions — informational inquiry with no urgency."
+      },
+      {
+        "ticket_id": "T-4412",
+        "department": "security",
+        "priority": "critical",
+        "sentiment": "neutral",
+        "requires_escalation": true,
+        "reasoning": "Enterprise HIPAA compliance concern with PHI data exposure risk and end-of-week deadline — regulatory security issue requiring immediate response."
+      },
+      {
+        "ticket_id": "T-4413",
+        "department": "technical",
+        "priority": "high",
+        "sentiment": "frustrated",
+        "requires_escalation": false,
+        "reasoning": "Accidental deletion of 2 years of client data not recoverable from trash — data loss scenario requiring urgent technical intervention."
+      },
+      {
+        "ticket_id": "T-4415",
+        "department": "security",
+        "priority": "critical",
+        "sentiment": "neutral",
+        "requires_escalation": false,
+        "reasoning": "Former employee retaining admin access and rotating API keys — active security breach with potential unauthorized data access."
+      },
+      {
+        "ticket_id": "T-4416",
+        "department": "security",
+        "priority": "high",
+        "sentiment": "neutral",
+        "requires_escalation": true,
+        "reasoning": "Formal GDPR Article 17 data erasure request from enterprise DPO — regulatory compliance with legal deadline."
+      },
+      {
+        "ticket_id": "T-4417",
+        "department": "technical",
+        "priority": "high",
+        "sentiment": "frustrated",
+        "requires_escalation": false,
+        "reasoning": "Data discrepancy between dashboard and API with board presentation deadline — technical data integrity issue with business impact."
+      }
+    ],
+    "files": {}
+  }
+}

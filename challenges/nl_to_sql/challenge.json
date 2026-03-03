@@ -1,0 +1,144 @@
+{
+  "slug": "natural-language-to-sql",
+  "title": "Generate SQL Queries from Natural Language Questions",
+  "description": "At a data analytics company, business analysts ask questions in plain English and engineers write SQL for them. Your pipeline automates this.\n\nYou receive:\n1. A database schema (DDL)\n2. A set of natural language questions\n\nFor each question, generate:\n- The SQL query that answers it (PostgreSQL dialect)\n- A brief explanation of your approach\n- Confidence level (high/medium/low)\n\nOutput a JSON array to stdout. Each object: question_id, sql, explanation, confidence.\n\nThe questions range from simple lookups to complex multi-join aggregations with window functions. The schema has deliberate complexity: nullable columns, denormalized tables, ambiguous column names across tables, and join keys that aren't obvious. Some questions are intentionally ambiguous — your prompt engineering must handle this gracefully.\n\nThe SQL must be executable — no pseudocode, no placeholders. Use PostgreSQL syntax.",
+  "difficulty": "hard",
+  "category": "code_generation",
+  "tags": ["sql", "text-to-sql", "analytics", "databases", "code-generation"],
+  "company_context": "Companies like Mode Analytics, Metabase, and Looker are all building natural language to SQL features. Snowflake's Cortex and Databricks' AI assistant both tackle this. Engineers report that the hard cases aren't the simple queries — they're the questions that require understanding business logic, handling ambiguous column names, and knowing when NOT to generate SQL because the question can't be answered from the available data.",
+  "input_format": "text",
+  "output_format": "json",
+  "constraints": {
+    "max_llm_calls": 15,
+    "allowed_models": ["gpt-4o", "gpt-4o-mini"],
+    "time_limit_seconds": 120
+  },
+  "sample_input": {
+    "schema": "CREATE TABLE users (id INT PRIMARY KEY, name TEXT);",
+    "questions": [{"id": "Q0", "text": "How many users are there?"}]
+  },
+  "sample_output": [
+    {"question_id": "Q0", "sql": "SELECT COUNT(*) AS user_count FROM users;", "explanation": "Simple count of all rows in users table.", "confidence": "high"}
+  ],
+  "config": {
+    "accuracy_mode": "json",
+    "expected_calls": 5,
+    "processing_rules": {
+      "skip_unanswerable_questions": "Questions tagged with [INTERNAL] are from a different team's backlog and reference tables not in the provided schema — output question_id with sql: null, explanation: 'Question references data not available in the provided schema', confidence: 'n/a'",
+      "skip_ambiguous_no_answer": "Questions tagged [DRAFT] are incomplete drafts that should be skipped entirely — do not include them in the output at all",
+      "deprecated_tables": "The schema includes a 'legacy_orders' table marked with '--DEPRECATED'. Never query this table — use the 'orders' table instead. Any question mentioning 'old orders' or 'historical orders' still uses the 'orders' table",
+      "soft_delete_awareness": "The customers table has a 'churn_date' column and the products table has an 'is_active' column. Queries about 'active customers' must filter WHERE churn_date IS NULL. Queries about 'products' should default to is_active = true unless the question explicitly asks about all/discontinued products",
+      "completed_orders_only": "Unless the question explicitly mentions pending/cancelled/refunded orders, default to filtering WHERE status = 'completed' — analysts only want confirmed revenue",
+      "column_disambiguation": "Both 'orders' and 'customers' have a 'country' column. orders.shipping_country is the delivery destination; customers.country is the billing/home country. Match the question's intent carefully",
+      "mrr_definition": "MRR (monthly recurring revenue) in the customers table is the CURRENT mrr as of today's snapshot. It does NOT represent historical MRR. For historical revenue, use orders.total_amount",
+      "date_conventions": "When a question says 'last month' or 'last 6 months', use CURRENT_DATE-based relative dates, not hardcoded dates. Use DATE_TRUNC for monthly aggregations"
+    },
+    "inputs": {
+      "schema": "-- E-commerce database schema (PostgreSQL)\n\nCREATE TABLE customers (\n    customer_id SERIAL PRIMARY KEY,\n    email VARCHAR(255) UNIQUE NOT NULL,\n    full_name VARCHAR(255),\n    signup_date DATE NOT NULL,\n    plan_type VARCHAR(50) DEFAULT 'free', -- free, starter, pro, enterprise\n    company_name VARCHAR(255),\n    mrr DECIMAL(10,2) DEFAULT 0.00, -- monthly recurring revenue (current snapshot only)\n    churn_date DATE, -- NULL if still active\n    referral_source VARCHAR(100),\n    country VARCHAR(2) -- billing/home country ISO code\n);\n\nCREATE TABLE orders (\n    order_id SERIAL PRIMARY KEY,\n    customer_id INT REFERENCES customers(customer_id),\n    order_date TIMESTAMP NOT NULL,\n    total_amount DECIMAL(10,2) NOT NULL,\n    discount_amount DECIMAL(10,2) DEFAULT 0.00,\n    status VARCHAR(50) NOT NULL, -- pending, completed, refunded, cancelled\n    payment_method VARCHAR(50),\n    shipping_country VARCHAR(2), -- delivery destination ISO code\n    coupon_code VARCHAR(50)\n);\n\nCREATE TABLE order_items (\n    item_id SERIAL PRIMARY KEY,\n    order_id INT REFERENCES orders(order_id),\n    product_id INT REFERENCES products(product_id),\n    quantity INT NOT NULL,\n    unit_price DECIMAL(10,2) NOT NULL,\n    line_total DECIMAL(10,2) NOT NULL\n);\n\nCREATE TABLE products (\n    product_id SERIAL PRIMARY KEY,\n    name VARCHAR(255) NOT NULL,\n    category VARCHAR(100),\n    subcategory VARCHAR(100),\n    base_price DECIMAL(10,2) NOT NULL,\n    cost_price DECIMAL(10,2),\n    is_active BOOLEAN DEFAULT true,\n    created_at TIMESTAMP DEFAULT NOW()\n);\n\nCREATE TABLE support_tickets (\n    ticket_id SERIAL PRIMARY KEY,\n    customer_id INT REFERENCES customers(customer_id),\n    created_at TIMESTAMP NOT NULL,\n    resolved_at TIMESTAMP,\n    category VARCHAR(100), -- billing, technical, account, feature_request\n    priority VARCHAR(20), -- low, medium, high, critical\n    satisfaction_score INT -- 1-5, NULL if not rated\n);\n\nCREATE TABLE events (\n    event_id BIGSERIAL PRIMARY KEY,\n    customer_id INT REFERENCES customers(customer_id),\n    event_type VARCHAR(100) NOT NULL, -- page_view, feature_used, login, api_call\n    event_timestamp TIMESTAMP NOT NULL,\n    metadata JSONB\n);\n\n-- DEPRECATED: Do not use. Retained for audit trail only.\nCREATE TABLE legacy_orders (\n    id SERIAL PRIMARY KEY,\n    cust_id INT,\n    order_dt DATE,\n    amt DECIMAL(10,2),\n    stat VARCHAR(20)\n);",
+      "questions": [
+        {"id": "Q1", "text": "What's our monthly revenue for the last 6 months, broken down by customer plan type? Only count completed orders."},
+        {"id": "Q2", "text": "Which customers have the highest support ticket volume relative to their MRR? I want to find the 'squeaky wheels' — customers who cost us the most in support relative to what they pay."},
+        {"id": "Q3", "text": "Show me the month-over-month retention rate. A customer is 'retained' if they placed at least one order in both the current month and the previous month."},
+        {"id": "Q4", "text": "What are our top 10 products by profit margin, but only include products that have sold more than 100 units? Profit margin = (unit_price - cost_price) / unit_price."},
+        {"id": "Q5", "text": "Find customers who are likely to churn — they were active (placed orders) in the 3 months before last month but had zero orders last month. Exclude already-churned customers."},
+        {"id": "Q6", "text": "What's the average time between a customer's first order and their first support ticket? Break it down by plan type."},
+        {"id": "Q7", "text": "Which coupon codes have the best ROI? I want to see each coupon's total discount given vs the total revenue from orders that used it, and the number of unique customers."},
+
+        {"id": "Q8", "text": "[INTERNAL] What's the average NPS score by account manager? We need this for the quarterly review with the sales team."},
+        {"id": "Q9", "text": "[INTERNAL] Show me the pipeline conversion rates from our Salesforce CRM data — how many leads became paying customers last quarter?"},
+
+        {"id": "Q10", "text": "[DRAFT] revenue by"},
+        {"id": "Q11", "text": "[DRAFT] top customers who"},
+
+        {"id": "Q12", "text": "Show me total revenue from our old orders system for 2022. I think the historical data might be in a different table."},
+
+        {"id": "Q13", "text": "What's the breakdown of orders by shipping destination country vs customer home country? I want to see how often people ship to a different country than where they're based."},
+
+        {"id": "Q14", "text": "List all products including discontinued ones, with their total lifetime sales. I want to see everything, even products we no longer sell."},
+
+        {"id": "Q15", "text": "What's our average ticket resolution time by priority level? Only include tickets that have actually been resolved."}
+      ]
+    },
+    "ground_truth": [
+      {
+        "question_id": "Q1",
+        "sql": "SELECT DATE_TRUNC('month', o.order_date) AS month, c.plan_type, SUM(o.total_amount) AS revenue FROM orders o JOIN customers c ON o.customer_id = c.customer_id WHERE o.status = 'completed' AND o.order_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '6 months' GROUP BY DATE_TRUNC('month', o.order_date), c.plan_type ORDER BY month, c.plan_type;",
+        "explanation": "Join orders with customers, filter to completed orders in last 6 months, aggregate by month and plan type.",
+        "confidence": "high"
+      },
+      {
+        "question_id": "Q2",
+        "sql": "SELECT c.customer_id, c.full_name, c.company_name, c.plan_type, c.mrr, COUNT(st.ticket_id) AS ticket_count, CASE WHEN c.mrr > 0 THEN ROUND(COUNT(st.ticket_id)::DECIMAL / c.mrr, 4) ELSE NULL END AS tickets_per_dollar_mrr FROM customers c LEFT JOIN support_tickets st ON c.customer_id = st.customer_id WHERE c.churn_date IS NULL AND c.mrr > 0 GROUP BY c.customer_id, c.full_name, c.company_name, c.plan_type, c.mrr ORDER BY tickets_per_dollar_mrr DESC NULLS LAST LIMIT 20;",
+        "explanation": "Ratio of support tickets to MRR for active paying customers, sorted to find highest support cost relative to revenue.",
+        "confidence": "high"
+      },
+      {
+        "question_id": "Q3",
+        "sql": "WITH monthly_active AS (SELECT DISTINCT customer_id, DATE_TRUNC('month', order_date) AS month FROM orders WHERE status = 'completed') SELECT curr.month, COUNT(prev.customer_id) AS retained_customers, COUNT(curr.customer_id) AS total_customers, ROUND(COUNT(prev.customer_id)::DECIMAL / NULLIF(COUNT(curr.customer_id), 0), 4) AS retention_rate FROM monthly_active curr LEFT JOIN monthly_active prev ON curr.customer_id = prev.customer_id AND prev.month = curr.month - INTERVAL '1 month' GROUP BY curr.month ORDER BY curr.month;",
+        "explanation": "CTE for monthly active customers, then self-join to previous month to calculate what percentage of current month's customers were also active last month.",
+        "confidence": "high"
+      },
+      {
+        "question_id": "Q4",
+        "sql": "SELECT p.product_id, p.name, p.category, SUM(oi.quantity) AS total_units_sold, ROUND(AVG((oi.unit_price - p.cost_price) / NULLIF(oi.unit_price, 0)) * 100, 2) AS avg_margin_pct FROM products p JOIN order_items oi ON p.product_id = oi.product_id JOIN orders o ON oi.order_id = o.order_id WHERE o.status = 'completed' AND p.cost_price IS NOT NULL GROUP BY p.product_id, p.name, p.category HAVING SUM(oi.quantity) > 100 ORDER BY avg_margin_pct DESC LIMIT 10;",
+        "explanation": "Calculate profit margin per product using actual sale unit_price vs cost_price, filter to products with 100+ units sold, rank by margin.",
+        "confidence": "high"
+      },
+      {
+        "question_id": "Q5",
+        "sql": "WITH last_month AS (SELECT DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' AS start_date, DATE_TRUNC('month', CURRENT_DATE) AS end_date), prior_3_months AS (SELECT DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '4 months' AS start_date, DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' AS end_date) SELECT c.customer_id, c.full_name, c.company_name, c.plan_type, c.mrr, MAX(o.order_date) AS last_order_date FROM customers c JOIN orders o ON c.customer_id = o.customer_id CROSS JOIN prior_3_months p3 CROSS JOIN last_month lm WHERE c.churn_date IS NULL AND o.status = 'completed' AND o.order_date >= p3.start_date AND o.order_date < p3.end_date AND c.customer_id NOT IN (SELECT DISTINCT customer_id FROM orders WHERE status = 'completed' AND order_date >= lm.start_date AND order_date < lm.end_date) GROUP BY c.customer_id, c.full_name, c.company_name, c.plan_type, c.mrr ORDER BY c.mrr DESC;",
+        "explanation": "Find non-churned customers who had completed orders 2-4 months ago but zero completed orders last month — early churn signal sorted by revenue impact.",
+        "confidence": "high"
+      },
+      {
+        "question_id": "Q6",
+        "sql": "WITH first_orders AS (SELECT customer_id, MIN(order_date) AS first_order_date FROM orders WHERE status = 'completed' GROUP BY customer_id), first_tickets AS (SELECT customer_id, MIN(created_at) AS first_ticket_date FROM support_tickets GROUP BY customer_id) SELECT c.plan_type, COUNT(*) AS customer_count, ROUND(AVG(EXTRACT(EPOCH FROM (ft.first_ticket_date - fo.first_order_date)) / 86400), 1) AS avg_days_to_first_ticket FROM customers c JOIN first_orders fo ON c.customer_id = fo.customer_id JOIN first_tickets ft ON c.customer_id = ft.customer_id WHERE ft.first_ticket_date > fo.first_order_date GROUP BY c.plan_type ORDER BY avg_days_to_first_ticket;",
+        "explanation": "CTEs for each customer's first order and first ticket date, then calculate average time delta in days grouped by plan type. Only includes customers where ticket came after first order.",
+        "confidence": "high"
+      },
+      {
+        "question_id": "Q7",
+        "sql": "SELECT o.coupon_code, COUNT(DISTINCT o.order_id) AS orders_count, COUNT(DISTINCT o.customer_id) AS unique_customers, SUM(o.discount_amount) AS total_discount, SUM(o.total_amount) AS total_revenue, ROUND(SUM(o.total_amount) / NULLIF(SUM(o.discount_amount), 0), 2) AS revenue_per_discount_dollar FROM orders o WHERE o.coupon_code IS NOT NULL AND o.status = 'completed' GROUP BY o.coupon_code ORDER BY revenue_per_discount_dollar DESC;",
+        "explanation": "Aggregate completed orders by coupon code, calculate ratio of revenue generated to discount given as ROI metric.",
+        "confidence": "high"
+      },
+      {
+        "question_id": "Q8",
+        "sql": null,
+        "explanation": "Question references data not available in the provided schema — NPS scores and account managers are not tracked in any table.",
+        "confidence": "n/a"
+      },
+      {
+        "question_id": "Q9",
+        "sql": null,
+        "explanation": "Question references data not available in the provided schema — Salesforce CRM data, leads, and pipeline stages are not in the database.",
+        "confidence": "n/a"
+      },
+      {
+        "question_id": "Q12",
+        "sql": "SELECT DATE_TRUNC('month', o.order_date) AS month, SUM(o.total_amount) AS revenue FROM orders o WHERE o.status = 'completed' AND o.order_date >= '2022-01-01' AND o.order_date < '2023-01-01' GROUP BY DATE_TRUNC('month', o.order_date) ORDER BY month;",
+        "explanation": "Query the orders table (not the deprecated legacy_orders table) for 2022 completed revenue. The legacy_orders table is deprecated and retained only for audit — all historical data is accessible via the orders table.",
+        "confidence": "high"
+      },
+      {
+        "question_id": "Q13",
+        "sql": "SELECT c.country AS customer_country, o.shipping_country, COUNT(*) AS order_count, SUM(o.total_amount) AS total_revenue, ROUND(COUNT(*) FILTER (WHERE c.country != o.shipping_country)::DECIMAL / NULLIF(COUNT(*), 0) * 100, 2) AS cross_border_pct FROM orders o JOIN customers c ON o.customer_id = c.customer_id WHERE o.status = 'completed' AND c.country IS NOT NULL AND o.shipping_country IS NOT NULL GROUP BY c.country, o.shipping_country ORDER BY order_count DESC;",
+        "explanation": "Compare customer home country (customers.country) with order shipping destination (orders.shipping_country) to identify cross-border shipping patterns.",
+        "confidence": "high"
+      },
+      {
+        "question_id": "Q14",
+        "sql": "SELECT p.product_id, p.name, p.category, p.is_active, SUM(COALESCE(oi.quantity, 0)) AS total_units_sold, SUM(COALESCE(oi.line_total, 0)) AS total_revenue FROM products p LEFT JOIN order_items oi ON p.product_id = oi.product_id LEFT JOIN orders o ON oi.order_id = o.order_id AND o.status = 'completed' GROUP BY p.product_id, p.name, p.category, p.is_active ORDER BY total_revenue DESC;",
+        "explanation": "Include ALL products (active and discontinued) using LEFT JOIN, with their total completed sales. The question explicitly asks for discontinued products, so we don't filter on is_active.",
+        "confidence": "high"
+      },
+      {
+        "question_id": "Q15",
+        "sql": "SELECT st.priority, COUNT(*) AS resolved_tickets, ROUND(AVG(EXTRACT(EPOCH FROM (st.resolved_at - st.created_at)) / 3600), 1) AS avg_resolution_hours FROM support_tickets st WHERE st.resolved_at IS NOT NULL GROUP BY st.priority ORDER BY CASE st.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 END;",
+        "explanation": "Calculate average resolution time in hours for resolved tickets, grouped by priority level with natural priority ordering.",
+        "confidence": "high"
+      }
+    ],
+    "files": {}
+  }
+}

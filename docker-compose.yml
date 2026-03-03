@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: promptcode
+      POSTGRES_PASSWORD: promptcode
+      POSTGRES_DB: promptcode
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U promptcode"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  sandbox:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.sandbox
+    image: promptcode-sandbox:latest
+    entrypoint: ["echo", "sandbox image built"]
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      PROMPTCODE_DATABASE_URL: postgresql+asyncpg://promptcode:promptcode@db:5432/promptcode
+      PROMPTCODE_OPENAI_API_KEY: ${OPENAI_API_KEY}
+      PROMPTCODE_SANDBOX_IMAGE: promptcode-sandbox:latest
+    depends_on:
+      db:
+        condition: service_healthy
+      sandbox:
+        condition: service_completed_successfully
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  pgdata:

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign In — PromptCode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0a09; --surface: #111110; --surface2: #141412;
+  --border: #1f1f1d; --border-light: #2a2a27;
+  --text: #e8e6e0; --muted: #6b6b65;
+  --accent: #c8f060; --accent-dim: rgba(200,240,96,0.10);
+  --warn: #f0a060; --danger: #f06060; --success: #60d4a8;
+  --radius: 6px;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; line-height: 1.6; display: flex; flex-direction: column; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.7)} }
+@keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+.fade-in { animation: fadeUp 0.5s ease both; }
+.d1 { animation-delay: 0.08s; opacity:0; }
+.d2 { animation-delay: 0.16s; opacity:0; }
+.d3 { animation-delay: 0.24s; opacity:0; }
+
+/* NAV */
+nav {
+  height: 52px; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 32px; border-bottom: 1px solid var(--border);
+  background: var(--bg); flex-shrink: 0;
+}
+.nav-logo { display: flex; align-items: center; gap: 8px; font-family: 'Instrument Serif', serif; font-size: 18px; letter-spacing: -0.02em; color: var(--text); text-decoration: none; }
+.nav-logo .dot { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; animation: pulse 2.4s ease-in-out infinite; }
+
+/* LAYOUT */
+.page { flex: 1; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
+
+/* LEFT PANEL */
+.left-panel {
+  border-right: 1px solid var(--border);
+  padding: 48px 56px;
+  display: flex; flex-direction: column; justify-content: center;
+  background: var(--surface2);
+  overflow-y: auto;
+}
+
+.form-eyebrow { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 20px; }
+.form-title { font-family: 'Instrument Serif', serif; font-size: 36px; letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 8px; }
+.form-sub { font-size: 12px; color: var(--muted); margin-bottom: 36px; }
+
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 7px; letter-spacing: 0.04em; }
+.form-input {
+  width: 100%; background: var(--surface); border: 1px solid var(--border-light);
+  border-radius: var(--radius); padding: 10px 14px;
+  font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text);
+  outline: none; transition: border-color 0.15s;
+}
+.form-input:focus { border-color: var(--accent); }
+.form-input::placeholder { color: var(--muted); font-size: 12px; }
+
+.form-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; font-size: 11px; }
+.checkbox-row { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.checkbox { width: 14px; height: 14px; accent-color: var(--accent); }
+.forgot-link { color: var(--muted); text-decoration: none; transition: color 0.2s; }
+.forgot-link:hover { color: var(--accent); }
+
+.btn-submit {
+  width: 100%; padding: 11px; background: var(--accent); border: none;
+  border-radius: var(--radius); font-family: 'DM Mono', monospace;
+  font-size: 13px; font-weight: 500; color: var(--bg);
+  cursor: pointer; transition: background 0.15s; margin-bottom: 16px;
+}
+.btn-submit:hover { background: #d4f870; }
+
+.divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; }
+.divider-line { flex: 1; height: 1px; background: var(--border); }
+.divider-text { font-size: 11px; color: var(--muted); }
+
+.oauth-btn {
+  width: 100%; padding: 10px; background: transparent;
+  border: 1px solid var(--border-light); border-radius: var(--radius);
+  font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted);
+  cursor: pointer; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-bottom: 8px;
+}
+.oauth-btn:hover { border-color: var(--text); color: var(--text); }
+
+.signup-link { text-align: center; font-size: 12px; color: var(--muted); margin-top: 20px; }
+.signup-link a { color: var(--accent); text-decoration: none; }
+.signup-link a:hover { text-decoration: underline; }
+
+/* RIGHT PANEL */
+.right-panel {
+  background: var(--bg);
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  padding: 48px; position: relative; overflow: hidden;
+}
+
+/* grid */
+.right-panel::before {
+  content: ''; position: absolute; inset: 0;
+  background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px; opacity: 0.35;
+  mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 100%);
+}
+
+.right-content { position: relative; z-index: 1; width: 100%; max-width: 380px; }
+
+.score-showcase {
+  border: 1px solid var(--border); border-radius: 10px;
+  overflow: hidden; background: var(--surface);
+  box-shadow: 0 40px 80px rgba(0,0,0,0.5);
+  animation: fadeUp 0.8s 0.2s ease both; opacity: 0;
+}
+.ss-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.ss-title { font-size: 12px; color: var(--text); }
+.ss-badge { font-family: 'Instrument Serif', serif; font-size: 22px; color: var(--accent); }
+.ss-body { padding: 18px; }
+.ss-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+.ss-cell { background: #0c0c0b; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; }
+.ss-cell-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
+.ss-cell-val { font-family: 'Instrument Serif', serif; font-size: 20px; color: var(--text); }
+.ss-bar { height: 2px; background: var(--border); border-radius: 2px; margin-top: 5px; overflow: hidden; }
+.ss-fill { height: 100%; border-radius: 2px; }
+.ss-report { background: #080807; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; font-size: 11px; line-height: 1.9; }
+.report-kw { color: #a8b8d0; }
+.report-val-g { color: var(--accent); }
+.report-val-w { color: var(--warn); }
+.report-val-b { color: #60c8f0; }
+
+.tagline { text-align: center; margin-top: 24px; font-size: 12px; color: var(--muted); line-height: 1.6; }
+.tagline em { color: var(--text); font-style: normal; }
+
+/* Error state */
+.form-error { display: none; font-size: 11px; color: var(--danger); margin-top: 5px; }
+
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="/index.html"><div class="dot"></div>PromptCode</a>
+  <span style="font-size:11px;color:var(--muted)">don't have an account? <a href="/signup.html" style="color:var(--accent);text-decoration:none">sign up</a></span>
+</nav>
+
+<div class="page">
+
+  <!-- LEFT: FORM -->
+  <div class="left-panel">
+    <div class="form-eyebrow fade-in">sign in</div>
+    <h1 class="form-title fade-in d1">Welcome back.</h1>
+    <p class="form-sub fade-in d1">Pick up where you left off.</p>
+
+    <form onsubmit="handleLogin(event)" class="fade-in d2">
+      <div class="form-group">
+        <label class="form-label">email</label>
+        <input class="form-input" type="email" placeholder="you@company.com" id="email">
+      </div>
+      <div class="form-group">
+        <label class="form-label">password</label>
+        <input class="form-input" type="password" placeholder="••••••••••" id="password">
+        <div class="form-error" id="loginError">incorrect email or password</div>
+      </div>
+      <div class="form-row">
+        <label class="checkbox-row">
+          <input type="checkbox" class="checkbox"> remember me
+        </label>
+        <a href="javascript:void(0)" class="forgot-link" onclick="alert('Password reset coming soon — contact support for now')">forgot password?</a>
+      </div>
+      <button type="submit" class="btn-submit">sign in →</button>
+    </form>
+
+    <div class="divider fade-in d2">
+      <div class="divider-line"></div>
+      <span class="divider-text">or continue with</span>
+      <div class="divider-line"></div>
+    </div>
+
+    <div class="fade-in d3">
+      <button class="oauth-btn" onclick="alert('GitHub OAuth coming soon — use email login for now')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        GitHub
+      </button>
+      <button class="oauth-btn" onclick="alert('Google OAuth coming soon — use email login for now')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        Google
+      </button>
+    </div>
+
+    <div class="signup-link fade-in d3">no account? <a href="/signup.html">create one free →</a></div>
+  </div>
+
+  <!-- RIGHT: SCORE SHOWCASE -->
+  <div class="right-panel">
+    <div class="right-content">
+      <div class="score-showcase">
+        <div class="ss-header">
+          <span class="ss-title">Claims Parser · your last run</span>
+          <span class="ss-badge">0.97</span>
+        </div>
+        <div class="ss-body">
+          <div class="ss-grid">
+            <div class="ss-cell">
+              <div class="ss-cell-label">accuracy</div>
+              <div class="ss-cell-val">0.94</div>
+              <div class="ss-bar"><div class="ss-fill" style="width:94%;background:var(--accent)"></div></div>
+            </div>
+            <div class="ss-cell">
+              <div class="ss-cell-label">efficiency</div>
+              <div class="ss-cell-val">0.97</div>
+              <div class="ss-bar"><div class="ss-fill" style="width:97%;background:var(--accent)"></div></div>
+            </div>
+            <div class="ss-cell">
+              <div class="ss-cell-label">reliability</div>
+              <div class="ss-cell-val">0.91</div>
+              <div class="ss-bar"><div class="ss-fill" style="width:91%;background:var(--accent)"></div></div>
+            </div>
+            <div class="ss-cell">
+              <div class="ss-cell-label">orchestration</div>
+              <div class="ss-cell-val">0.88</div>
+              <div class="ss-bar"><div class="ss-fill" style="width:88%;background:var(--accent)"></div></div>
+            </div>
+          </div>
+          <div class="ss-report">
+            {<br>
+            &nbsp;&nbsp;<span class="report-kw">"accuracy"</span>: <span class="report-val-g">0.94</span>,<br>
+            &nbsp;&nbsp;<span class="report-kw">"efficiency"</span>: <span class="report-val-g">0.97</span>,<br>
+            &nbsp;&nbsp;<span class="report-kw">"cost_usd"</span>: <span class="report-val-b">0.04</span>,<br>
+            &nbsp;&nbsp;<span class="report-kw">"llm_calls"</span>: <span class="report-val-b">1</span><br>
+            }
+          </div>
+        </div>
+      </div>
+      <div class="tagline">Sign in to see your<br><em>Prompt Efficiency Report.</em></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="/static/api.js"></script>
+<script>
+  if (PromptCodeAPI.isLoggedIn()) window.location.href = '/challenges.html';
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('email').value.trim();
+    const pass = document.getElementById('password').value;
+    const err = document.getElementById('loginError');
+    if (!email || !pass) {
+      err.style.display = 'block';
+      err.textContent = 'please fill in all fields';
+      return;
+    }
+    err.style.display = 'none';
+    const btn = document.querySelector('.btn-submit');
+    btn.textContent = 'signing in...';
+    try {
+      await PromptCodeAPI.login(email, pass);
+      window.location.href = '/challenges.html';
+    } catch (error) {
+      err.style.display = 'block';
+      err.textContent = error.message || 'incorrect email or password';
+      btn.textContent = 'sign in →';
+    }
+  }
+  function oauthLogin(provider) {
+    // OAuth not yet implemented — redirect to signup
+    window.location.href = '/signup.html';
+  }
+</script>
+</body>
+</html>

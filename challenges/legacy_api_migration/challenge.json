@@ -1,0 +1,242 @@
+{
+  "slug": "legacy-api-xml-to-json",
+  "title": "Convert Legacy SOAP/XML API Responses to Modern JSON Schemas",
+  "description": "A fintech company is migrating from a 15-year-old SOAP API to a modern REST/JSON API. Your pipeline receives raw XML responses from the legacy system and must:\n\n1. Parse the XML (which has inconsistent namespaces, CDATA sections, and attributes mixed with elements)\n2. Transform each response into the target JSON schema (provided)\n3. Handle edge cases: null vs missing vs empty string, date format conversion (XML uses mixed formats), monetary values (XML stores as strings with currency codes), nested arrays that are sometimes single elements\n4. Flag any fields that couldn't be confidently mapped with a \"_unmapped\" suffix\n\nOutput a JSON array of transformed records to stdout.\n\nThe XML is real enterprise-grade ugly — namespaces that change between API versions, CDATA wrapping inconsistently applied, attributes that override child element values, and fields that appear in different locations depending on the record type.",
+  "difficulty": "hard",
+  "category": "transformation",
+  "tags": ["fintech", "api-migration", "xml", "json", "schema-mapping", "legacy-systems"],
+  "company_context": "Every enterprise with systems older than 10 years faces API migration. Stripe, Plaid, and Square all maintain legacy integration layers. Engineers at banks report spending 40% of migration time on edge cases in XML-to-JSON conversion that automated tools miss — namespaces, CDATA, and inconsistent date formats are the top three pain points.",
+  "input_format": "xml",
+  "output_format": "json",
+  "constraints": {
+    "max_llm_calls": 12,
+    "allowed_models": ["gpt-4o", "gpt-4o-mini"],
+    "time_limit_seconds": 120
+  },
+  "sample_input": {
+    "xml_records": ["<Transaction><id>123</id><amount currency=\"USD\">50.00</amount></Transaction>"],
+    "target_schema": {"transaction_id": "string", "amount": "number", "currency": "string"}
+  },
+  "sample_output": [{"transaction_id": "123", "amount": 50.00, "currency": "USD"}],
+  "config": {
+    "accuracy_mode": "json",
+    "expected_calls": 4,
+    "processing_rules": {
+      "skip_test_records": "Any record with id containing 'TEST', 'DEMO', or 'SANDBOX' must be excluded from output",
+      "skip_voided_records": "Records with status 'VOIDED' or 'REVERSED' must be excluded — they represent cancelled transactions",
+      "amendment_precedence": "If a record's Memo or Notes field contains 'AMENDMENT TO <id>' or 'CORRECTS <id>', the amendment supersedes the original. Use the amendment's data but keep the ORIGINAL transaction_id",
+      "duplicate_handling": "If two records share the same transaction_id, keep only the one with the later timestamp. The earlier one is a stale cache entry",
+      "timezone_normalization": "All dates must be normalized to UTC (Z suffix). EST = UTC-5, CST = UTC-6, PST = UTC-8, CET = UTC+1. The format '02/15/2024 14:30:22 EST' means local time",
+      "currency_precision": "USD amounts to 2 decimal places, EUR to 2, JPY to 0 (no decimals for yen). Round half-up",
+      "counterparty_null_rules": "If counterparty routing is 'n/a', 'N/A', 'none', or empty string, normalize to null. If counterparty name is empty or whitespace-only, normalize to null",
+      "account_type_normalization": "Map legacy codes: COMMERCIAL_CHECKING -> commercial_checking, PERSONAL_SAVINGS -> personal_savings, PERS_CHK/PERSONAL_CHECKING -> personal_checking, BIZ_SAV/BUSINESS_SAVINGS -> commercial_checking"
+    },
+    "inputs": {
+      "xml_records": [
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tx=\"http://legacy.finco.com/transactions/v3\">\n  <soap:Body>\n    <tx:TransactionResponse>\n      <tx:Transaction id=\"TXN-2024-00847\" version=\"3.1\">\n        <tx:AccountHolder>\n          <tx:Name><![CDATA[O'Brien & Associates LLC]]></tx:Name>\n          <tx:AccountNum>4829-1847-2938</tx:AccountNum>\n          <tx:AccountType type=\"business\">COMMERCIAL_CHECKING</tx:AccountType>\n        </tx:AccountHolder>\n        <tx:Details>\n          <tx:Amount currency=\"USD\" precision=\"2\">14750.00</tx:Amount>\n          <tx:Fee currency=\"USD\">35.00</tx:Fee>\n          <tx:TransactionDate format=\"legacy\">02/15/2024 14:30:22 EST</tx:TransactionDate>\n          <tx:SettlementDate>2024-02-16T00:00:00Z</tx:SettlementDate>\n          <tx:Type code=\"WIRE_OUT\">Outgoing Wire Transfer</tx:Type>\n          <tx:Status>COMPLETED</tx:Status>\n          <tx:Memo><![CDATA[Payment for Invoice #INV-2024-0392 — Q1 consulting services\nNote: includes $750 expense reimbursement]]></tx:Memo>\n        </tx:Details>\n        <tx:Counterparty>\n          <tx:Name>Meridian Consulting Group</tx:Name>\n          <tx:RoutingNumber>021000089</tx:RoutingNumber>\n          <tx:AccountNum>****7721</tx:AccountNum>\n        </tx:Counterparty>\n        <tx:Compliance>\n          <tx:AMLFlag>false</tx:AMLFlag>\n          <tx:RiskScore>LOW</tx:RiskScore>\n        </tx:Compliance>\n      </tx:Transaction>\n    </tx:TransactionResponse>\n  </soap:Body>\n</soap:Envelope>",
+
+        "<?xml version=\"1.0\"?>\n<TransactionResponse xmlns=\"http://legacy.finco.com/transactions/v2\">\n  <Transaction>\n    <TransactionID>TXN-2024-00848</TransactionID>\n    <Account>\n      <HolderName>Maria Elena Gutierrez</HolderName>\n      <Number>8827-3341-0092</Number>\n      <Type>PERSONAL_SAVINGS</Type>\n    </Account>\n    <Amount>2340.00</Amount>\n    <Currency>USD</Currency>\n    <Fee>0</Fee>\n    <Date>Feb 15, 2024 3:45 PM</Date>\n    <SettleDate/>\n    <TransType>ACH_CREDIT</TransType>\n    <Description>Payroll deposit - Acme Corp</Description>\n    <Status>PENDING</Status>\n    <Recipient>\n      <Name/>\n      <Routing>n/a</Routing>\n      <AcctLast4/>\n    </Recipient>\n    <AML>false</AML>\n    <Risk>LOW</Risk>\n  </Transaction>\n</TransactionResponse>",
+
+        "<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n<ns1:TransactionResponse xmlns:ns1=\"http://legacy.finco.com/transactions/v3\" xmlns:ns2=\"http://legacy.finco.com/compliance\">\n  <ns1:Transaction id=\"TXN-2024-00849\">\n    <ns1:AccountHolder>\n      <ns1:Name>Zhang Wei International Trading Co., Ltd.</ns1:Name>\n      <ns1:AccountNum>6612-0094-8837</ns1:AccountNum>\n      <ns1:AccountType type=\"business\">COMMERCIAL_CHECKING</ns1:AccountType>\n    </ns1:AccountHolder>\n    <ns1:Details>\n      <ns1:Amount currency=\"EUR\" precision=\"2\">89200.00</ns1:Amount>\n      <ns1:Fee currency=\"EUR\">125.00</ns1:Fee>\n      <ns1:TransactionDate format=\"iso\">2024-02-15T09:12:00+01:00</ns1:TransactionDate>\n      <ns1:SettlementDate>2024-02-19T00:00:00Z</ns1:SettlementDate>\n      <ns1:Type code=\"INTL_WIRE_OUT\">International Wire Transfer</ns1:Type>\n      <ns1:Status>UNDER_REVIEW</ns1:Status>\n      <ns1:Memo><![CDATA[Payment to supplier — PO #ZW-2024-1847]]></ns1:Memo>\n    </ns1:Details>\n    <ns1:Counterparty>\n      <ns1:Name><![CDATA[Shenzhen Huawei Electronics & Components Co.]]></ns1:Name>\n      <ns1:SWIFT>HXBKCNBJ</ns1:SWIFT>\n      <ns1:AccountNum>****4419</ns1:AccountNum>\n    </ns1:Counterparty>\n    <ns2:Compliance>\n      <ns2:AMLFlag>true</ns2:AMLFlag>\n      <ns2:RiskScore>HIGH</ns2:RiskScore>\n      <ns2:ReviewRequired>true</ns2:ReviewRequired>\n      <ns2:Notes>Large international wire to flagged jurisdiction. Manual review required per BSA/AML policy.</ns2:Notes>\n    </ns2:Compliance>\n  </ns1:Transaction>\n</ns1:TransactionResponse>\n</soap:Body>\n</soap:Envelope>",
+
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tx=\"http://legacy.finco.com/transactions/v3\">\n  <soap:Body>\n    <tx:TransactionResponse>\n      <tx:Transaction id=\"TEST-2024-00001\" version=\"3.1\">\n        <tx:AccountHolder>\n          <tx:Name>Test User Alpha</tx:Name>\n          <tx:AccountNum>0000-0000-0001</tx:AccountNum>\n          <tx:AccountType type=\"personal\">PERSONAL_CHECKING</tx:AccountType>\n        </tx:AccountHolder>\n        <tx:Details>\n          <tx:Amount currency=\"USD\" precision=\"2\">1.00</tx:Amount>\n          <tx:Fee currency=\"USD\">0.00</tx:Fee>\n          <tx:TransactionDate format=\"legacy\">02/15/2024 00:00:01 EST</tx:TransactionDate>\n          <tx:SettlementDate>2024-02-15T05:00:01Z</tx:SettlementDate>\n          <tx:Type code=\"WIRE_OUT\">Outgoing Wire Transfer</tx:Type>\n          <tx:Status>COMPLETED</tx:Status>\n          <tx:Memo>Automated test transaction — do not process</tx:Memo>\n        </tx:Details>\n        <tx:Counterparty>\n          <tx:Name>Test Recipient</tx:Name>\n          <tx:RoutingNumber>000000000</tx:RoutingNumber>\n          <tx:AccountNum>****0000</tx:AccountNum>\n        </tx:Counterparty>\n        <tx:Compliance>\n          <tx:AMLFlag>false</tx:AMLFlag>\n          <tx:RiskScore>LOW</tx:RiskScore>\n        </tx:Compliance>\n      </tx:Transaction>\n    </tx:TransactionResponse>\n  </soap:Body>\n</soap:Envelope>",
+
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tx=\"http://legacy.finco.com/transactions/v3\">\n  <soap:Body>\n    <tx:TransactionResponse>\n      <tx:Transaction id=\"DEMO-WIRE-9999\" version=\"3.1\">\n        <tx:AccountHolder>\n          <tx:Name>Demo Account Holder</tx:Name>\n          <tx:AccountNum>9999-9999-9999</tx:AccountNum>\n          <tx:AccountType type=\"business\">COMMERCIAL_CHECKING</tx:AccountType>\n        </tx:AccountHolder>\n        <tx:Details>\n          <tx:Amount currency=\"USD\" precision=\"2\">99999.99</tx:Amount>\n          <tx:Fee currency=\"USD\">0.00</tx:Fee>\n          <tx:TransactionDate format=\"iso\">2024-02-15T12:00:00Z</tx:TransactionDate>\n          <tx:SettlementDate>2024-02-15T12:00:00Z</tx:SettlementDate>\n          <tx:Type code=\"WIRE_OUT\">Outgoing Wire Transfer</tx:Type>\n          <tx:Status>COMPLETED</tx:Status>\n          <tx:Memo>DEMO TRANSACTION FOR SALES PRESENTATION</tx:Memo>\n        </tx:Details>\n        <tx:Counterparty>\n          <tx:Name>Demo Recipient Corp</tx:Name>\n          <tx:RoutingNumber>999999999</tx:RoutingNumber>\n          <tx:AccountNum>****9999</tx:AccountNum>\n        </tx:Counterparty>\n        <tx:Compliance>\n          <tx:AMLFlag>false</tx:AMLFlag>\n          <tx:RiskScore>LOW</tx:RiskScore>\n        </tx:Compliance>\n      </tx:Transaction>\n    </tx:TransactionResponse>\n  </soap:Body>\n</soap:Envelope>",
+
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tx=\"http://legacy.finco.com/transactions/v3\">\n  <soap:Body>\n    <tx:TransactionResponse>\n      <tx:Transaction id=\"TXN-2024-00847\" version=\"3.1\">\n        <tx:AccountHolder>\n          <tx:Name><![CDATA[O'Brien & Associates LLC]]></tx:Name>\n          <tx:AccountNum>4829-1847-2938</tx:AccountNum>\n          <tx:AccountType type=\"business\">COMMERCIAL_CHECKING</tx:AccountType>\n        </tx:AccountHolder>\n        <tx:Details>\n          <tx:Amount currency=\"USD\" precision=\"2\">14750.00</tx:Amount>\n          <tx:Fee currency=\"USD\">35.00</tx:Fee>\n          <tx:TransactionDate format=\"legacy\">02/15/2024 13:45:00 EST</tx:TransactionDate>\n          <tx:SettlementDate>2024-02-16T00:00:00Z</tx:SettlementDate>\n          <tx:Type code=\"WIRE_OUT\">Outgoing Wire Transfer</tx:Type>\n          <tx:Status>COMPLETED</tx:Status>\n          <tx:Memo><![CDATA[Payment for Invoice #INV-2024-0392 — Q1 consulting services\nNote: includes $750 expense reimbursement]]></tx:Memo>\n        </tx:Details>\n        <tx:Counterparty>\n          <tx:Name>Meridian Consulting Group</tx:Name>\n          <tx:RoutingNumber>021000089</tx:RoutingNumber>\n          <tx:AccountNum>****7721</tx:AccountNum>\n        </tx:Counterparty>\n        <tx:Compliance>\n          <tx:AMLFlag>false</tx:AMLFlag>\n          <tx:RiskScore>LOW</tx:RiskScore>\n        </tx:Compliance>\n      </tx:Transaction>\n    </tx:TransactionResponse>\n  </soap:Body>\n</soap:Envelope>",
+
+        "<?xml version=\"1.0\"?>\n<TransactionResponse xmlns=\"http://legacy.finco.com/transactions/v2\">\n  <Transaction>\n    <TransactionID>TXN-2024-00850</TransactionID>\n    <Account>\n      <HolderName>Robert \"Bobby\" McFarlane Jr.</HolderName>\n      <Number>3310-8827-4451</Number>\n      <Type>PERS_CHK</Type>\n    </Account>\n    <Amount>875.50</Amount>\n    <Currency>USD</Currency>\n    <Fee>15.00</Fee>\n    <Date>15-Feb-2024 16:22:00 CST</Date>\n    <SettleDate>2024-02-16</SettleDate>\n    <TransType>WIRE_OUT</TransType>\n    <Description>Rent payment Feb 2024</Description>\n    <Status>COMPLETED</Status>\n    <Recipient>\n      <Name>Oakwood Property Management</Name>\n      <Routing>071000013</Routing>\n      <AcctLast4>3382</AcctLast4>\n    </Recipient>\n    <AML>false</AML>\n    <Risk>LOW</Risk>\n  </Transaction>\n</TransactionResponse>",
+
+        "<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n<ns1:TransactionResponse xmlns:ns1=\"http://legacy.finco.com/transactions/v3\" xmlns:ns2=\"http://legacy.finco.com/compliance\">\n  <ns1:Transaction id=\"TXN-2024-00851\">\n    <ns1:AccountHolder>\n      <ns1:Name>Nakamura Electronics K.K.</ns1:Name>\n      <ns1:AccountNum>7744-2200-1398</ns1:AccountNum>\n      <ns1:AccountType type=\"business\">COMMERCIAL_CHECKING</ns1:AccountType>\n    </ns1:AccountHolder>\n    <ns1:Details>\n      <ns1:Amount currency=\"JPY\" precision=\"0\">4850000</ns1:Amount>\n      <ns1:Fee currency=\"JPY\">3500</ns1:Fee>\n      <ns1:TransactionDate format=\"iso\">2024-02-16T02:30:00+09:00</ns1:TransactionDate>\n      <ns1:SettlementDate>2024-02-20T00:00:00Z</ns1:SettlementDate>\n      <ns1:Type code=\"INTL_WIRE_IN\">International Wire Transfer (Inbound)</ns1:Type>\n      <ns1:Status>COMPLETED</ns1:Status>\n      <ns1:Memo><![CDATA[Q4-2023 component supply invoice — JPY settlement]]></ns1:Memo>\n    </ns1:Details>\n    <ns1:Counterparty>\n      <ns1:Name>Tokyo Semiconductor Supply Co.</ns1:Name>\n      <ns1:SWIFT>MHCBJPJT</ns1:SWIFT>\n      <ns1:AccountNum>****8810</ns1:AccountNum>\n    </ns1:Counterparty>\n    <ns2:Compliance>\n      <ns2:AMLFlag>false</ns2:AMLFlag>\n      <ns2:RiskScore>MEDIUM</ns2:RiskScore>\n    </ns2:Compliance>\n  </ns1:Transaction>\n</ns1:TransactionResponse>\n</soap:Body>\n</soap:Envelope>",
+
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tx=\"http://legacy.finco.com/transactions/v3\">\n  <soap:Body>\n    <tx:TransactionResponse>\n      <tx:Transaction id=\"TXN-2024-00852\" version=\"3.1\">\n        <tx:AccountHolder>\n          <tx:Name><![CDATA[Sarah & David Chen Family Trust]]></tx:Name>\n          <tx:AccountNum>5501-3928-7710</tx:AccountNum>\n          <tx:AccountType type=\"personal\">PERSONAL_SAVINGS</tx:AccountType>\n        </tx:AccountHolder>\n        <tx:Details>\n          <tx:Amount currency=\"USD\" precision=\"2\">250000.00</tx:Amount>\n          <tx:Fee currency=\"USD\">75.00</tx:Fee>\n          <tx:TransactionDate format=\"legacy\">02/15/2024 11:00:00 PST</tx:TransactionDate>\n          <tx:SettlementDate/>\n          <tx:Type code=\"WIRE_IN\">Incoming Wire Transfer</tx:Type>\n          <tx:Status>UNDER_REVIEW</tx:Status>\n          <tx:Memo><![CDATA[Proceeds from sale of property at 441 Elm St — escrow release]]></tx:Memo>\n        </tx:Details>\n        <tx:Counterparty>\n          <tx:Name>Pacific Title &amp; Escrow Inc.</tx:Name>\n          <tx:RoutingNumber>122000247</tx:RoutingNumber>\n          <tx:AccountNum>****6601</tx:AccountNum>\n        </tx:Counterparty>\n        <tx:Compliance>\n          <tx:AMLFlag>true</tx:AMLFlag>\n          <tx:RiskScore>HIGH</tx:RiskScore>\n          <tx:ReviewRequired>true</tx:ReviewRequired>\n          <tx:Notes>Large incoming wire > $200K triggers enhanced due diligence review.</tx:Notes>\n        </tx:Compliance>\n      </tx:Transaction>\n    </tx:TransactionResponse>\n  </soap:Body>\n</soap:Envelope>",
+
+        "<?xml version=\"1.0\"?>\n<TransactionResponse xmlns=\"http://legacy.finco.com/transactions/v2\">\n  <Transaction>\n    <TransactionID>TXN-2024-00853</TransactionID>\n    <Account>\n      <HolderName>Maria Elena Gutierrez</HolderName>\n      <Number>8827-3341-0092</Number>\n      <Type>PERSONAL_SAVINGS</Type>\n    </Account>\n    <Amount>2340.00</Amount>\n    <Currency>USD</Currency>\n    <Fee>0</Fee>\n    <Date>Feb 15, 2024 3:45 PM</Date>\n    <SettleDate/>\n    <TransType>ACH_CREDIT</TransType>\n    <Description>AMENDMENT TO TXN-2024-00848: Corrected payroll deposit - Acme Corp (was double-counted, actual amount is $2,340.00 net after tax adjustment)</Description>\n    <Status>COMPLETED</Status>\n    <Recipient>\n      <Name/>\n      <Routing>N/A</Routing>\n      <AcctLast4/>\n    </Recipient>\n    <AML>false</AML>\n    <Risk>LOW</Risk>\n  </Transaction>\n</TransactionResponse>",
+
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tx=\"http://legacy.finco.com/transactions/v3\">\n  <soap:Body>\n    <tx:TransactionResponse>\n      <tx:Transaction id=\"TXN-2024-00854\" version=\"3.1\">\n        <tx:AccountHolder>\n          <tx:Name>Greenfield Organic Farms Inc.</tx:Name>\n          <tx:AccountNum>2290-4471-8803</tx:AccountNum>\n          <tx:AccountType type=\"business\">BIZ_SAV</tx:AccountType>\n        </tx:AccountHolder>\n        <tx:Details>\n          <tx:Amount currency=\"USD\" precision=\"2\">8420.75</tx:Amount>\n          <tx:Fee currency=\"USD\">0.00</tx:Fee>\n          <tx:TransactionDate format=\"legacy\">02/16/2024 09:15:33 EST</tx:TransactionDate>\n          <tx:SettlementDate>2024-02-16T14:15:33Z</tx:SettlementDate>\n          <tx:Type code=\"ACH_CREDIT\">ACH Credit</tx:Type>\n          <tx:Status>COMPLETED</tx:Status>\n          <tx:Memo><![CDATA[Wholesale produce payment — PO #GF-2024-0088 from RestaurantDepot]]></tx:Memo>\n        </tx:Details>\n        <tx:Counterparty>\n          <tx:Name>RestaurantDepot LLC</tx:Name>\n          <tx:RoutingNumber>026009593</tx:RoutingNumber>\n          <tx:AccountNum>****5540</tx:AccountNum>\n        </tx:Counterparty>\n        <tx:Compliance>\n          <tx:AMLFlag>false</tx:AMLFlag>\n          <tx:RiskScore>LOW</tx:RiskScore>\n        </tx:Compliance>\n      </tx:Transaction>\n    </tx:TransactionResponse>\n  </soap:Body>\n</soap:Envelope>",
+
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tx=\"http://legacy.finco.com/transactions/v3\">\n  <soap:Body>\n    <tx:TransactionResponse>\n      <tx:Transaction id=\"TXN-2024-00855\" version=\"3.1\">\n        <tx:AccountHolder>\n          <tx:Name><![CDATA[O'Brien & Associates LLC]]></tx:Name>\n          <tx:AccountNum>4829-1847-2938</tx:AccountNum>\n          <tx:AccountType type=\"business\">COMMERCIAL_CHECKING</tx:AccountType>\n        </tx:AccountHolder>\n        <tx:Details>\n          <tx:Amount currency=\"USD\" precision=\"2\">14750.00</tx:Amount>\n          <tx:Fee currency=\"USD\">35.00</tx:Fee>\n          <tx:TransactionDate format=\"legacy\">02/15/2024 15:00:00 EST</tx:TransactionDate>\n          <tx:SettlementDate>2024-02-16T00:00:00Z</tx:SettlementDate>\n          <tx:Type code=\"WIRE_OUT\">Outgoing Wire Transfer</tx:Type>\n          <tx:Status>VOIDED</tx:Status>\n          <tx:Memo><![CDATA[VOID — duplicate of TXN-2024-00847, system error caused double-post]]></tx:Memo>\n        </tx:Details>\n        <tx:Counterparty>\n          <tx:Name>Meridian Consulting Group</tx:Name>\n          <tx:RoutingNumber>021000089</tx:RoutingNumber>\n          <tx:AccountNum>****7721</tx:AccountNum>\n        </tx:Counterparty>\n        <tx:Compliance>\n          <tx:AMLFlag>false</tx:AMLFlag>\n          <tx:RiskScore>LOW</tx:RiskScore>\n        </tx:Compliance>\n      </tx:Transaction>\n    </tx:TransactionResponse>\n  </soap:Body>\n</soap:Envelope>",
+
+        "<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n<soap:Body>\n<ns1:TransactionResponse xmlns:ns1=\"http://legacy.finco.com/transactions/v3\">\n  <ns1:Transaction id=\"SANDBOX-TXN-00100\">\n    <ns1:AccountHolder>\n      <ns1:Name>QA Sandbox User</ns1:Name>\n      <ns1:AccountNum>0000-0000-0100</ns1:AccountNum>\n      <ns1:AccountType type=\"personal\">PERSONAL_CHECKING</ns1:AccountType>\n    </ns1:AccountHolder>\n    <ns1:Details>\n      <ns1:Amount currency=\"USD\" precision=\"2\">500.00</ns1:Amount>\n      <ns1:Fee currency=\"USD\">5.00</ns1:Fee>\n      <ns1:TransactionDate format=\"iso\">2024-02-15T00:00:00Z</ns1:TransactionDate>\n      <ns1:SettlementDate>2024-02-15T00:00:00Z</ns1:SettlementDate>\n      <ns1:Type code=\"ACH_DEBIT\">ACH Debit</ns1:Type>\n      <ns1:Status>COMPLETED</ns1:Status>\n      <ns1:Memo>Sandbox test — integration suite run #447</ns1:Memo>\n    </ns1:Details>\n    <ns1:Counterparty>\n      <ns1:Name>Sandbox Vendor</ns1:Name>\n      <ns1:RoutingNumber>000000000</ns1:RoutingNumber>\n      <ns1:AccountNum>****0000</ns1:AccountNum>\n    </ns1:Counterparty>\n    <ns1:Compliance>\n      <ns1:AMLFlag>false</ns1:AMLFlag>\n      <ns1:RiskScore>LOW</ns1:RiskScore>\n    </ns1:Compliance>\n  </ns1:Transaction>\n</ns1:TransactionResponse>\n</soap:Body>\n</soap:Envelope>",
+
+        "<?xml version=\"1.0\"?>\n<TransactionResponse xmlns=\"http://legacy.finco.com/transactions/v2\">\n  <Transaction>\n    <TransactionID>TXN-2024-00856</TransactionID>\n    <Account>\n      <HolderName>  </HolderName>\n      <Number>1100-5599-3327</Number>\n      <Type>PERSONAL_CHECKING</Type>\n    </Account>\n    <Amount>47.82</Amount>\n    <Currency>USD</Currency>\n    <Fee>0</Fee>\n    <Date>2024-02-16 08:30:00</Date>\n    <SettleDate>2024-02-16</SettleDate>\n    <TransType>ACH_DEBIT</TransType>\n    <Description>Netflix monthly subscription</Description>\n    <Status>REVERSED</Status>\n    <Recipient>\n      <Name>Netflix Inc.</Name>\n      <Routing>none</Routing>\n      <AcctLast4>8812</AcctLast4>\n    </Recipient>\n    <AML>false</AML>\n    <Risk>LOW</Risk>\n  </Transaction>\n</TransactionResponse>",
+
+        "<?xml version=\"1.0\"?>\n<TransactionResponse xmlns=\"http://legacy.finco.com/transactions/v1\">\n  <Transaction>\n    <TransactionID>TXN-2024-00857</TransactionID>\n    <Account>\n      <HolderName>Élise Moreau-Dupont</HolderName>\n      <Number>9901-2233-4455</Number>\n      <Type>PERSONAL_SAVINGS</Type>\n    </Account>\n    <Amount>15000.00</Amount>\n    <Currency>EUR</Currency>\n    <Fee>45.00</Fee>\n    <Date>16/02/2024 10:15:00 CET</Date>\n    <SettleDate>2024-02-20</SettleDate>\n    <TransType>INTL_WIRE_OUT</TransType>\n    <Description>Transfer to Crédit Agricole — apartment down payment</Description>\n    <Status>PENDING</Status>\n    <Recipient>\n      <Name><![CDATA[Crédit Agricole S.A.]]></Name>\n      <SWIFT>AGRIFRPP</SWIFT>\n      <AcctLast4>2209</AcctLast4>\n    </Recipient>\n    <AML>false</AML>\n    <Risk>MEDIUM</Risk>\n  </Transaction>\n</TransactionResponse>"
+      ],
+      "target_schema": {
+        "transaction_id": "string",
+        "account_holder_name": "string",
+        "account_number": "string",
+        "account_type": "string (personal_savings | commercial_checking | personal_checking)",
+        "amount": "number",
+        "currency": "string (ISO 4217)",
+        "fee": "number",
+        "transaction_date": "string (ISO 8601: YYYY-MM-DDTHH:mm:ssZ)",
+        "settlement_date": "string (ISO 8601) or null",
+        "transaction_type": "string (wire_out | wire_in | ach_credit | ach_debit | intl_wire_out | intl_wire_in)",
+        "status": "string (completed | pending | under_review | failed)",
+        "memo": "string or null",
+        "counterparty_name": "string or null",
+        "counterparty_routing": "string or null",
+        "counterparty_account_last4": "string or null",
+        "aml_flagged": "boolean",
+        "risk_score": "string (low | medium | high)"
+      }
+    },
+    "ground_truth": [
+      {
+        "transaction_id": "TXN-2024-00847",
+        "account_holder_name": "O'Brien & Associates LLC",
+        "account_number": "4829-1847-2938",
+        "account_type": "commercial_checking",
+        "amount": 14750.00,
+        "currency": "USD",
+        "fee": 35.00,
+        "transaction_date": "2024-02-15T19:30:22Z",
+        "settlement_date": "2024-02-16T00:00:00Z",
+        "transaction_type": "wire_out",
+        "status": "completed",
+        "memo": "Payment for Invoice #INV-2024-0392 — Q1 consulting services\nNote: includes $750 expense reimbursement",
+        "counterparty_name": "Meridian Consulting Group",
+        "counterparty_routing": "021000089",
+        "counterparty_account_last4": "7721",
+        "aml_flagged": false,
+        "risk_score": "low"
+      },
+      {
+        "transaction_id": "TXN-2024-00848",
+        "account_holder_name": "Maria Elena Gutierrez",
+        "account_number": "8827-3341-0092",
+        "account_type": "personal_savings",
+        "amount": 2340.00,
+        "currency": "USD",
+        "fee": 0.00,
+        "transaction_date": "2024-02-15T15:45:00Z",
+        "settlement_date": null,
+        "transaction_type": "ach_credit",
+        "status": "completed",
+        "memo": "AMENDMENT TO TXN-2024-00848: Corrected payroll deposit - Acme Corp (was double-counted, actual amount is $2,340.00 net after tax adjustment)",
+        "counterparty_name": null,
+        "counterparty_routing": null,
+        "counterparty_account_last4": null,
+        "aml_flagged": false,
+        "risk_score": "low"
+      },
+      {
+        "transaction_id": "TXN-2024-00849",
+        "account_holder_name": "Zhang Wei International Trading Co., Ltd.",
+        "account_number": "6612-0094-8837",
+        "account_type": "commercial_checking",
+        "amount": 89200.00,
+        "currency": "EUR",
+        "fee": 125.00,
+        "transaction_date": "2024-02-15T08:12:00Z",
+        "settlement_date": "2024-02-19T00:00:00Z",
+        "transaction_type": "intl_wire_out",
+        "status": "under_review",
+        "memo": "Payment to supplier — PO #ZW-2024-1847",
+        "counterparty_name": "Shenzhen Huawei Electronics & Components Co.",
+        "counterparty_routing": null,
+        "counterparty_account_last4": "4419",
+        "aml_flagged": true,
+        "risk_score": "high"
+      },
+      {
+        "transaction_id": "TXN-2024-00850",
+        "account_holder_name": "Robert \"Bobby\" McFarlane Jr.",
+        "account_number": "3310-8827-4451",
+        "account_type": "personal_checking",
+        "amount": 875.50,
+        "currency": "USD",
+        "fee": 15.00,
+        "transaction_date": "2024-02-15T22:22:00Z",
+        "settlement_date": "2024-02-16T00:00:00Z",
+        "transaction_type": "wire_out",
+        "status": "completed",
+        "memo": "Rent payment Feb 2024",
+        "counterparty_name": "Oakwood Property Management",
+        "counterparty_routing": "071000013",
+        "counterparty_account_last4": "3382",
+        "aml_flagged": false,
+        "risk_score": "low"
+      },
+      {
+        "transaction_id": "TXN-2024-00851",
+        "account_holder_name": "Nakamura Electronics K.K.",
+        "account_number": "7744-2200-1398",
+        "account_type": "commercial_checking",
+        "amount": 4850000,
+        "currency": "JPY",
+        "fee": 3500,
+        "transaction_date": "2024-02-15T17:30:00Z",
+        "settlement_date": "2024-02-20T00:00:00Z",
+        "transaction_type": "intl_wire_in",
+        "status": "completed",
+        "memo": "Q4-2023 component supply invoice — JPY settlement",
+        "counterparty_name": "Tokyo Semiconductor Supply Co.",
+        "counterparty_routing": null,
+        "counterparty_account_last4": "8810",
+        "aml_flagged": false,
+        "risk_score": "medium"
+      },
+      {
+        "transaction_id": "TXN-2024-00852",
+        "account_holder_name": "Sarah & David Chen Family Trust",
+        "account_number": "5501-3928-7710",
+        "account_type": "personal_savings",
+        "amount": 250000.00,
+        "currency": "USD",
+        "fee": 75.00,
+        "transaction_date": "2024-02-15T19:00:00Z",
+        "settlement_date": null,
+        "transaction_type": "wire_in",
+        "status": "under_review",
+        "memo": "Proceeds from sale of property at 441 Elm St — escrow release",
+        "counterparty_name": "Pacific Title & Escrow Inc.",
+        "counterparty_routing": "122000247",
+        "counterparty_account_last4": "6601",
+        "aml_flagged": true,
+        "risk_score": "high"
+      },
+      {
+        "transaction_id": "TXN-2024-00854",
+        "account_holder_name": "Greenfield Organic Farms Inc.",
+        "account_number": "2290-4471-8803",
+        "account_type": "commercial_checking",
+        "amount": 8420.75,
+        "currency": "USD",
+        "fee": 0.00,
+        "transaction_date": "2024-02-16T14:15:33Z",
+        "settlement_date": "2024-02-16T14:15:33Z",
+        "transaction_type": "ach_credit",
+        "status": "completed",
+        "memo": "Wholesale produce payment — PO #GF-2024-0088 from RestaurantDepot",
+        "counterparty_name": "RestaurantDepot LLC",
+        "counterparty_routing": "026009593",
+        "counterparty_account_last4": "5540",
+        "aml_flagged": false,
+        "risk_score": "low"
+      },
+      {
+        "transaction_id": "TXN-2024-00857",
+        "account_holder_name": "Élise Moreau-Dupont",
+        "account_number": "9901-2233-4455",
+        "account_type": "personal_savings",
+        "amount": 15000.00,
+        "currency": "EUR",
+        "fee": 45.00,
+        "transaction_date": "2024-02-16T09:15:00Z",
+        "settlement_date": "2024-02-20T00:00:00Z",
+        "transaction_type": "intl_wire_out",
+        "status": "pending",
+        "memo": "Transfer to Crédit Agricole — apartment down payment",
+        "counterparty_name": "Crédit Agricole S.A.",
+        "counterparty_routing": null,
+        "counterparty_account_last4": "2209",
+        "aml_flagged": false,
+        "risk_score": "medium"
+      }
+    ],
+    "files": {}
+  }
+}

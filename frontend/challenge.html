@@ -1,0 +1,1623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PromptCode — Claims Parser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<script type="module">
+try {
+  const [
+    {EditorView, basicSetup},
+    {EditorState},
+    {python: pythonLang},
+    {javascript: jsLang},
+    {java: javaLang},
+    {cpp: cppLang},
+    {rust: rustLang},
+    {oneDark},
+    {keymap},
+    {indentWithTab},
+  ] = await Promise.all([
+    import('https://esm.sh/codemirror@6.0.1'),
+    import('https://esm.sh/@codemirror/state@6.5.2'),
+    import('https://esm.sh/@codemirror/lang-python@6.1.6'),
+    import('https://esm.sh/@codemirror/lang-javascript@6.2.2'),
+    import('https://esm.sh/@codemirror/lang-java@6.0.1'),
+    import('https://esm.sh/@codemirror/lang-cpp@6.0.2'),
+    import('https://esm.sh/@codemirror/lang-rust@6.0.2'),
+    import('https://esm.sh/@codemirror/theme-one-dark@6.1.2'),
+    import('https://esm.sh/@codemirror/view@6.36.5'),
+    import('https://esm.sh/@codemirror/commands@6.8.0'),
+  ]);
+
+  window._CM = {
+    langExtensions: {
+      python: () => pythonLang(),
+      javascript: () => jsLang(),
+      typescript: () => jsLang({typescript: true}),
+      java: () => javaLang(),
+      cpp: () => cppLang(),
+      c: () => cppLang(),
+      rust: () => rustLang(),
+      go: () => jsLang(),
+    },
+    customTheme: EditorView.theme({
+      '&': { height: '100%', fontSize: '12.5px', fontFamily: "'DM Mono', monospace", backgroundColor: '#080807' },
+      '.cm-content': { caretColor: '#c8f060', padding: '18px 18px 18px 8px', lineHeight: '1.75' },
+      '.cm-gutters': { backgroundColor: '#080807', borderRight: 'none', color: '#2a2a27', minWidth: '44px', fontFamily: "'DM Mono', monospace", fontSize: '11px' },
+      '.cm-activeLineGutter': { backgroundColor: 'transparent', color: '#555' },
+      '.cm-activeLine': { backgroundColor: 'rgba(255,255,255,0.02)' },
+      '.cm-cursor': { borderLeftColor: '#c8f060' },
+      '.cm-selectionBackground': { backgroundColor: 'rgba(200,240,96,0.12) !important' },
+      '&.cm-focused .cm-selectionBackground': { backgroundColor: 'rgba(200,240,96,0.18) !important' },
+      '.cm-scroller': { overflow: 'auto' },
+    }),
+    EditorView, EditorState, basicSetup, oneDark, keymap, indentWithTab,
+  };
+} catch (e) {
+  console.warn('CodeMirror failed to load, using textarea fallback:', e);
+  window._cmFailed = true;
+}
+
+if (typeof window._cmReadyCallback === 'function') {
+  window._cmReadyCallback();
+} else {
+  window._cmReady = true;
+}
+</script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0a0a09;
+  --surface: #111110;
+  --surface2: #141412;
+  --border: #1f1f1d;
+  --border-light: #2a2a27;
+  --text: #e8e6e0;
+  --muted: #6b6b65;
+  --accent: #c8f060;
+  --accent-dim: rgba(200,240,96,0.12);
+  --warn: #f0a060;
+  --danger: #f06060;
+  --success: #60d4a8;
+  --radius: 6px;
+  --nav-h: 50px;
+}
+
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ── NAV ── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  height: var(--nav-h);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(10,10,9,0.95);
+  backdrop-filter: blur(16px);
+}
+
+.nav-left { display: flex; align-items: center; gap: 0; }
+
+/* Hamburger / squiggle button */
+.menu-btn {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  border-radius: var(--radius);
+  border: none; background: transparent;
+  transition: background 0.15s;
+  color: var(--muted);
+  flex-shrink: 0;
+  margin-right: 8px;
+}
+.menu-btn:hover { background: var(--surface); color: var(--text); }
+.menu-btn svg { width: 18px; height: 18px; }
+
+.nav-logo {
+  display: flex; align-items: center; gap: 7px;
+  font-family: 'Instrument Serif', serif;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  text-decoration: none;
+  margin-right: 20px;
+}
+.nav-logo .dot {
+  width: 6px; height: 6px;
+  background: var(--accent); border-radius: 50%;
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.7)} }
+
+.challenge-crumb {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--muted);
+}
+.challenge-crumb .sep { opacity: 0.3; }
+.challenge-crumb .name { color: var(--text); }
+.diff-badge {
+  font-size: 9px; padding: 1px 6px;
+  border-radius: 3px; letter-spacing: 0.05em;
+}
+.diff-med { background: rgba(240,160,96,0.15); color: var(--warn); }
+.diff-easy { background: rgba(96,212,168,0.15); color: var(--success); }
+.diff-hard { background: rgba(240,96,96,0.15); color: var(--danger); }
+
+.nav-right { display: flex; align-items: center; gap: 10px; }
+.nav-links { display: flex; gap: 24px; margin-right: 8px; }
+.nav-links a { color: var(--muted); text-decoration: none; font-size: 11px; letter-spacing: 0.04em; transition: color 0.2s; }
+.nav-links a:hover { color: var(--text); }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: var(--radius);
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  cursor: pointer; transition: all 0.15s;
+  text-decoration: none; border: 1px solid transparent;
+}
+.btn-ghost { background: transparent; border-color: var(--border-light); color: var(--muted); }
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-primary { background: var(--accent); color: var(--bg); font-weight: 500; border-color: var(--accent); }
+.btn-primary:hover { background: #d4f870; }
+.btn-run { background: transparent; border-color: var(--border-light); color: var(--text); }
+.btn-run:hover { border-color: var(--text); }
+
+/* ── DRAWER OVERLAY ── */
+.drawer-overlay {
+  position: fixed; inset: 0; z-index: 150;
+  background: rgba(0,0,0,0.6);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s;
+  backdrop-filter: blur(2px);
+}
+.drawer-overlay.open { opacity: 1; pointer-events: all; }
+
+.drawer {
+  position: fixed; top: var(--nav-h); left: 0; bottom: 0; z-index: 160;
+  width: 260px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  transform: translateX(-100%);
+  transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+  overflow-y: auto;
+  padding: 16px 0;
+}
+.drawer.open { transform: translateX(0); }
+
+.drawer-section { margin-bottom: 20px; }
+.drawer-label {
+  padding: 0 18px 7px;
+  font-size: 9px; letter-spacing: 0.12em;
+  color: var(--muted); text-transform: uppercase;
+}
+.challenge-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 18px;
+  cursor: pointer; transition: background 0.12s;
+  border-left: 2px solid transparent;
+  color: var(--muted); font-size: 12px;
+  text-decoration: none;
+}
+.challenge-item:hover { background: rgba(255,255,255,0.03); color: var(--text); }
+.challenge-item.active { border-left-color: var(--accent); background: rgba(200,240,96,0.05); color: var(--text); }
+.solved-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+.unsolved-dot { width: 5px; height: 5px; flex-shrink: 0; }
+.ci-name { flex: 1; }
+.drawer-divider { height: 1px; background: var(--border); margin: 4px 18px 16px; }
+
+/* ── MAIN LAYOUT: 3 columns ── */
+.workspace {
+  position: fixed;
+  top: var(--nav-h); left: 0; right: 0; bottom: 0;
+  display: grid;
+  grid-template-columns: 340px 1fr 300px;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+}
+
+/* ── LEFT: PROBLEM PANE ── */
+.problem-pane {
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  background: var(--surface2);
+}
+
+.pane-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px;
+  height: 40px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--surface);
+}
+.pane-label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+.problem-scroll { flex: 1; overflow-y: auto; padding: 22px 20px; }
+
+.problem-title {
+  font-family: 'Instrument Serif', serif;
+  font-size: 22px; letter-spacing: -0.02em;
+  line-height: 1.2; margin-bottom: 8px;
+}
+.problem-meta {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 18px; font-size: 11px; color: var(--muted);
+  flex-wrap: wrap;
+}
+.tag {
+  padding: 2px 7px; border: 1px solid var(--border-light);
+  border-radius: 3px; font-size: 10px; color: var(--muted);
+}
+
+.problem-body p { margin-bottom: 12px; color: #b0aea8; line-height: 1.75; font-size: 12.5px; }
+.problem-body h3 {
+  font-family: 'Instrument Serif', serif;
+  font-size: 13px; color: var(--text);
+  margin: 18px 0 8px; font-style: italic;
+}
+
+.code-snippet {
+  background: #080807; border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 14px;
+  margin: 10px 0; font-size: 11.5px; line-height: 1.75;
+  color: #9ab0cc; overflow-x: auto;
+}
+.code-snippet .kw { color: #b060e8; }
+.code-snippet .fn { color: var(--accent); }
+.code-snippet .str { color: #e8b040; }
+.code-snippet .cm { color: #3a3a35; font-style: italic; }
+.code-snippet .num { color: #60c8f0; }
+
+.sample-box {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden; margin: 10px 0;
+}
+.sample-hdr {
+  padding: 6px 12px; background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 10px; color: var(--muted); letter-spacing: 0.05em;
+}
+.sample-body { padding: 10px 12px; font-size: 11.5px; color: #7a9870; line-height: 1.7; }
+.sample-out { color: var(--accent); }
+
+.warn-box {
+  padding: 11px 13px;
+  border: 1px solid rgba(240,160,96,0.25);
+  border-radius: var(--radius); background: rgba(240,160,96,0.04);
+  font-size: 11.5px; color: #8a7a60; line-height: 1.65;
+  margin-top: 14px;
+}
+.warn-box .warn-title { font-size: 10px; color: var(--warn); margin-bottom: 5px; letter-spacing: 0.04em; }
+
+/* ── CENTER: EDITOR + AI CHAT ── */
+.center-pane {
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+}
+
+/* Editor top section */
+.editor-section {
+  flex: 1;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.editor-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 14px;
+  height: 40px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.toolbar-left { display: flex; align-items: center; gap: 10px; }
+.toolbar-right { display: flex; align-items: center; gap: 8px; }
+
+.lang-select {
+  background: transparent; border: 1px solid var(--border-light);
+  color: var(--muted); padding: 3px 8px;
+  border-radius: var(--radius); font-family: 'DM Mono', monospace;
+  font-size: 10px; cursor: pointer;
+}
+
+.editor-body {
+  flex: 1; overflow: hidden;
+  background: #080807;
+  position: relative;
+}
+.editor-body .cm-editor { height: 100%; }
+.editor-body .cm-scroller { overflow: auto; }
+
+/* Resize handle */
+.resize-handle {
+  height: 4px; flex-shrink: 0;
+  background: var(--border);
+  cursor: ns-resize; position: relative;
+  transition: background 0.15s;
+  display: flex; align-items: center; justify-content: center;
+}
+.resize-handle:hover { background: var(--accent); }
+.resize-handle::after {
+  content: ''; width: 32px; height: 2px;
+  background: var(--border-light); border-radius: 2px;
+}
+
+/* AI Chat section */
+.chat-section {
+  height: 280px; flex-shrink: 0;
+  display: flex; flex-direction: column;
+  border-top: 1px solid var(--border);
+  background: #090908;
+  transition: height 0.2s;
+}
+
+.chat-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 14px;
+  height: 38px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--surface);
+}
+.chat-title {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.ai-indicator {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 2s ease-in-out infinite;
+}
+.chat-model { font-size: 10px; color: var(--muted); }
+
+.chat-messages {
+  flex: 1; overflow-y: auto;
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+.msg {
+  display: flex; gap: 9px;
+  animation: fadeUp 0.25s ease forwards;
+}
+@keyframes fadeUp { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+
+.msg-avatar {
+  width: 22px; height: 22px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; flex-shrink: 0; margin-top: 1px;
+}
+.msg-avatar.user { background: var(--border-light); color: var(--muted); }
+.msg-avatar.ai { background: var(--accent-dim); color: var(--accent); font-size: 10px; }
+
+.msg-body { flex: 1; }
+.msg-sender { font-size: 10px; color: var(--muted); margin-bottom: 3px; letter-spacing: 0.04em; }
+.msg-text { font-size: 12px; color: #b0aea8; line-height: 1.65; }
+.msg-text code {
+  background: var(--surface2); padding: 1px 5px;
+  border-radius: 3px; font-size: 11px; color: var(--accent);
+}
+.msg-text .highlight { color: var(--text); }
+
+.chat-input-area {
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.chat-input-row {
+  display: flex; gap: 8px; align-items: flex-end;
+}
+.chat-input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px; color: var(--text);
+  resize: none; outline: none;
+  line-height: 1.5;
+  max-height: 80px;
+  transition: border-color 0.15s;
+}
+.chat-input:focus { border-color: var(--accent); }
+.chat-input::placeholder { color: var(--muted); }
+
+.send-btn {
+  width: 32px; height: 32px;
+  background: var(--accent); border: none;
+  border-radius: var(--radius); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s; flex-shrink: 0;
+  color: var(--bg);
+}
+.send-btn:hover { background: #d4f870; }
+.send-btn svg { width: 14px; height: 14px; }
+
+.chat-hint { font-size: 10px; color: var(--muted); margin-top: 5px; }
+
+/* ── RIGHT: TRACKING PANEL ── */
+.tracking-pane {
+  display: flex; flex-direction: column;
+  background: var(--surface2);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tracking-scroll {
+  flex: 1 1 0;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex; flex-direction: column; gap: 12px;
+  min-height: 0;
+  max-height: 100%;
+}
+
+.panel-card {
+  border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+}
+.card-hdr {
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.card-title { font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+.card-val { font-family: 'Instrument Serif', serif; font-size: 18px; color: var(--accent); }
+.card-body { padding: 12px; }
+
+.score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.score-cell {
+  background: #0c0c0b; border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px;
+}
+.sc-label { font-size: 9px; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 2px; }
+.sc-val { font-family: 'Instrument Serif', serif; font-size: 20px; color: var(--text); }
+.sc-bar { height: 2px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 5px; }
+.sc-fill { height: 100%; border-radius: 2px; }
+.fill-g { background: var(--accent); }
+.fill-w { background: var(--warn); }
+.fill-d { background: var(--danger); }
+.fill-b { background: #60b8f0; }
+
+.metric-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 11.5px;
+}
+.metric-row:last-child { border-bottom: none; }
+.mk { color: var(--muted); }
+.mv { color: var(--text); }
+.mv.ac { color: var(--accent); }
+.mv.wn { color: var(--warn); }
+.mv.dn { color: var(--danger); }
+
+/* Leaderboard */
+.lb-row {
+  display: grid; grid-template-columns: 20px 1fr 52px 52px;
+  gap: 6px; align-items: center;
+  padding: 6px 0; border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.lb-row:last-child { border-bottom: none; }
+.lb-rank { color: var(--muted); text-align: right; font-size: 10px; }
+.lb-rank.gold { color: #f0c060; }
+.lb-rank.silver { color: #a8b8c8; }
+.lb-rank.bronze { color: #c87840; }
+.lb-user { display: flex; align-items: center; gap: 5px; color: var(--text); }
+.lb-user.you { color: var(--accent); }
+.lb-score { text-align: right; color: var(--accent); font-size: 11px; }
+.lb-cost { text-align: right; color: var(--muted); font-size: 11px; }
+.avatar {
+  width: 18px; height: 18px; border-radius: 3px;
+  background: var(--border-light); display: flex; align-items: center; justify-content: center;
+  font-size: 8px; color: var(--muted); flex-shrink: 0;
+}
+.avatar.you { border: 1px solid var(--accent); color: var(--accent); background: transparent; }
+
+/* Tips */
+.tip-item {
+  padding: 7px 0; border-bottom: 1px solid var(--border);
+  font-size: 11.5px; color: var(--muted); line-height: 1.55;
+  display: flex; gap: 7px;
+}
+.tip-item:last-child { border-bottom: none; }
+.tip-arrow { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
+
+/* Status bar */
+.status-bar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 0 14px;
+  height: 32px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 10px; color: var(--muted);
+  flex-shrink: 0;
+}
+.status-dot { width: 5px; height: 5px; border-radius: 50%; }
+.status-dot.done { background: var(--success); }
+.status-dot.idle { background: var(--border-light); }
+.status-item { display: flex; align-items: center; gap: 5px; }
+.status-item b { color: var(--text); }
+
+/* Run actions bar */
+.run-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 14px;
+  height: 40px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.run-stats { display: flex; gap: 14px; font-size: 10px; color: var(--muted); }
+.run-stats b { color: var(--text); }
+.run-actions { display: flex; gap: 8px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+
+/* Notif */
+.notif {
+  position: fixed; bottom: 20px; right: 20px; z-index: 300;
+  background: var(--surface); border: 1px solid var(--accent);
+  border-radius: var(--radius); padding: 9px 13px;
+  font-size: 11.5px; display: flex; align-items: center; gap: 7px;
+  animation: slideIn 0.25s ease;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.notif.hidden { display: none; }
+@keyframes slideIn { from{opacity:0;transform:translateX(16px)} to{opacity:1;transform:translateX(0)} }
+.notif-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+
+/* Fade in util */
+.fade-in { animation: fadeUp 0.35s ease both; }
+.d1 { animation-delay: 0.05s; }
+.d2 { animation-delay: 0.10s; }
+.d3 { animation-delay: 0.15s; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-left">
+    <button class="menu-btn" onclick="toggleDrawer()" title="challenges">
+      <!-- squiggle / wavy lines svg -->
+      <svg viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+        <path d="M1 2 C3.5 2 3.5 4.5 6 4.5 C8.5 4.5 8.5 2 11 2 C13.5 2 13.5 4.5 16 4.5 M1 7 C3.5 7 3.5 9.5 6 9.5 C8.5 9.5 8.5 7 11 7 C13.5 7 13.5 9.5 16 9.5 M1 12 C3.5 12 3.5 12 6 12 C8.5 12 8.5 12 11 12 C13.5 12 13.5 12 16 12"/>
+      </svg>
+    </button>
+    <a class="nav-logo" href="/index.html">
+      <div class="dot"></div>
+      PromptCode
+    </a>
+    <div class="challenge-crumb">
+      <span class="sep">/</span>
+      <span>extraction</span>
+      <span class="sep">/</span>
+      <span class="name">Claims Parser</span>
+      <span class="diff-badge diff-med">med</span>
+    </div>
+  </div>
+  <div class="nav-right">
+    <div class="nav-links">
+      <a href="/leaderboard.html">leaderboard</a>
+      <a href="/playground.html">playground</a>
+    </div>
+    <a class="btn btn-ghost" href="/login.html" data-noauth-show>sign in</a>
+    <a class="btn btn-primary" href="/signup.html" data-noauth-show>start free</a>
+    <a data-auth-show href="/profile.html" style="display:flex;width:28px;height:28px;border-radius:5px;background:var(--accent-dim);border:1px solid rgba(200,240,96,0.3);align-items:center;justify-content:center;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:none" data-user-initials></a>
+  </div>
+</nav>
+
+<!-- DRAWER OVERLAY -->
+<div class="drawer-overlay" id="overlay" onclick="toggleDrawer()"></div>
+
+<!-- DRAWER -->
+<div class="drawer" id="drawer">
+  <div class="drawer-section" id="drawerChallenges">
+    <div class="drawer-label">extraction</div>
+    <a class="challenge-item active" href="/challenges.html">
+      <div class="solved-dot"></div>
+      <span class="ci-name">Claims Parser</span>
+      <span class="diff-badge diff-med">med</span>
+    </a>
+    <a class="challenge-item" href="/challenges.html">
+      <div class="unsolved-dot"></div>
+      <span class="ci-name">Invoice OCR</span>
+      <span class="diff-badge diff-easy">easy</span>
+    </a>
+    <a class="challenge-item" href="/challenges.html">
+      <div class="unsolved-dot"></div>
+      <span class="ci-name">Log Triage</span>
+      <span class="diff-badge diff-hard">hard</span>
+    </a>
+  </div>
+  <div class="drawer-section">
+    <div class="drawer-label">classification</div>
+    <a class="challenge-item" href="/challenges.html">
+      <div class="unsolved-dot"></div>
+      <span class="ci-name">Ticket Router</span>
+      <span class="diff-badge diff-easy">easy</span>
+    </a>
+    <a class="challenge-item" href="/challenges.html">
+      <div class="unsolved-dot"></div>
+      <span class="ci-name">Sentiment Chain</span>
+      <span class="diff-badge diff-med">med</span>
+    </a>
+  </div>
+  <div class="drawer-section">
+    <div class="drawer-label">generation</div>
+    <a class="challenge-item" href="/challenges.html">
+      <div class="unsolved-dot"></div>
+      <span class="ci-name">Report Writer</span>
+      <span class="diff-badge diff-hard">hard</span>
+    </a>
+    <a class="challenge-item" href="/challenges.html">
+      <div class="unsolved-dot"></div>
+      <span class="ci-name">SQL Narrator</span>
+      <span class="diff-badge diff-med">med</span>
+    </a>
+  </div>
+  <div class="drawer-divider"></div>
+  <div style="padding:0 18px">
+    <div style="font-size:10px;color:var(--muted);margin-bottom:6px">progress</div>
+    <div style="height:2px;background:var(--border);border-radius:2px;overflow:hidden">
+      <div style="height:100%;width:43%;background:var(--accent);border-radius:2px"></div>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:5px">3 / 7 solved</div>
+  </div>
+</div>
+
+<!-- WORKSPACE -->
+<div class="workspace">
+
+  <!-- ── LEFT: PROBLEM ── -->
+  <div class="problem-pane">
+    <div class="pane-header">
+      <span class="pane-label">problem</span>
+      <span style="font-size:10px;color:var(--muted)">#04</span>
+    </div>
+    <div class="problem-scroll">
+      <div class="fade-in">
+        <div class="problem-title">Claims Parser</div>
+        <div class="problem-meta">
+          <span class="diff-badge diff-med">medium</span>
+          <span class="tag">extraction</span>
+          <span class="tag">structured output</span>
+        </div>
+      </div>
+
+      <div class="problem-body fade-in d1" id="problemBody">
+        <div id="problemDescription"></div>
+
+        <div id="problemConstraints" style="display:none">
+          <h3>Constraints</h3>
+          <div id="constraintsList"></div>
+        </div>
+
+        <div id="problemSampleInput" style="display:none" class="sample-box fade-in d2">
+          <div class="sample-hdr">sample input</div>
+          <div class="sample-body" id="sampleInputBody"></div>
+        </div>
+        <div id="problemSampleOutput" style="display:none" class="sample-box">
+          <div class="sample-hdr">expected output</div>
+          <div class="sample-body sample-out" id="sampleOutputBody"></div>
+        </div>
+
+        <div class="warn-box fade-in d3">
+          <div class="warn-title">scoring note</div>
+          Your solution is evaluated on accuracy, token efficiency, reliability (consistency across runs), and orchestration.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CENTER: EDITOR + CHAT ── -->
+  <div class="center-pane">
+
+    <!-- Editor -->
+    <div class="editor-section">
+      <div class="editor-toolbar">
+        <div class="toolbar-left">
+          <select class="lang-select" id="langSelect" onchange="switchLanguage(this.value)">
+            <option value="python">Python 3.12</option>
+            <option value="javascript">JavaScript (Node)</option>
+            <option value="typescript">TypeScript</option>
+            <option value="java">Java 21</option>
+            <option value="cpp">C++ 17</option>
+            <option value="c">C</option>
+            <option value="rust">Rust</option>
+            <option value="go">Go</option>
+          </select>
+          <span style="font-size:11px;color:var(--muted)" id="entrypointLabel">main.py</span>
+        </div>
+        <div class="toolbar-right">
+          <span style="font-size:10px;color:var(--muted)">auto-save</span>
+        </div>
+      </div>
+
+      <div class="editor-body" id="editorBody"></div>
+    </div>
+
+    <!-- Run bar -->
+    <div class="run-bar">
+      <div class="run-stats" id="runStats">
+        <span>tokens: <b id="runTokens">—</b></span>
+        <span>cost: <b id="runCost">—</b></span>
+        <span>calls: <b id="runCalls">—</b></span>
+        <span>latency: <b id="runLatency">—</b></span>
+      </div>
+      <div class="run-actions">
+        <button class="btn btn-run" onclick="showNotif('Running evaluation...')">▶ run</button>
+        <button class="btn btn-primary" onclick="handleSubmit()">submit →</button>
+      </div>
+    </div>
+
+    <!-- Resize handle -->
+    <div class="resize-handle" id="resizeHandle" title="drag to resize"></div>
+
+    <!-- AI Chat -->
+    <div class="chat-section" id="chatSection">
+      <div class="chat-header">
+        <div class="chat-title">
+          <div class="ai-indicator"></div>
+          AI assistant
+        </div>
+        <span class="chat-model">gpt-4o · sdk required</span>
+      </div>
+
+      <div class="chat-messages" id="chatMessages">
+        <div class="msg">
+          <div class="msg-avatar ai">✦</div>
+          <div class="msg-body">
+            <div class="msg-sender">assistant</div>
+            <div class="msg-text">I can help you build your solution. Ask me anything about prompt design, parsing strategy, or how scoring works.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-input-area">
+        <div class="chat-input-row">
+          <textarea class="chat-input" id="chatInput" rows="1" placeholder="ask about prompts, logic, scoring..." onkeydown="handleKey(event)"></textarea>
+          <button class="send-btn" onclick="sendMsg()">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 7H2M8 3l4 4-4 4"/>
+            </svg>
+          </button>
+        </div>
+        <div class="chat-hint">shift+enter for newline · enter to send</div>
+      </div>
+    </div>
+
+    <!-- Status bar -->
+    <div class="status-bar">
+      <div class="status-item" id="statusLastRun"><div class="status-dot idle" id="statusRunDot"></div>last run: <b id="statusLastRunTime">—</b></div>
+      <div class="status-item">passes: <b id="statusPasses">—</b></div>
+      <div class="status-item">sdk: <b>v0.4.1</b></div>
+      <div style="margin-left:auto;color:var(--muted)" id="statusEncoding">utf-8</div>
+    </div>
+  </div>
+
+  <!-- ── RIGHT: TRACKING ── -->
+  <div class="tracking-pane">
+    <div class="pane-header">
+      <span class="pane-label">tracking</span>
+      <div class="status-item" id="trackingStatus" style="font-size:10px;display:flex;align-items:center;gap:5px;">
+        <div class="status-dot idle" id="trackingStatusDot"></div>
+        <span style="color:var(--muted)" id="trackingStatusText">no submissions</span>
+      </div>
+    </div>
+
+    <div class="tracking-scroll">
+
+      <!-- Score summary -->
+      <div class="panel-card fade-in">
+        <div class="card-hdr">
+          <div class="card-title">your best</div>
+          <div class="card-val" id="bestScore">—</div>
+        </div>
+        <div class="card-body">
+          <div class="score-grid" id="scoreGrid">
+            <div class="score-cell">
+              <div class="sc-label">accuracy</div>
+              <div class="sc-val" id="scoreAccuracy">—</div>
+              <div class="sc-bar"><div class="sc-fill fill-g" id="barAccuracy" style="width:0%"></div></div>
+            </div>
+            <div class="score-cell">
+              <div class="sc-label">efficiency</div>
+              <div class="sc-val" id="scoreEfficiency">—</div>
+              <div class="sc-bar"><div class="sc-fill fill-w" id="barEfficiency" style="width:0%"></div></div>
+            </div>
+            <div class="score-cell">
+              <div class="sc-label">reliability</div>
+              <div class="sc-val" id="scoreReliability">—</div>
+              <div class="sc-bar"><div class="sc-fill fill-g" id="barReliability" style="width:0%"></div></div>
+            </div>
+            <div class="score-cell">
+              <div class="sc-label">orchestration</div>
+              <div class="sc-val" id="scoreOrchestration">—</div>
+              <div class="sc-bar"><div class="sc-fill fill-d" id="barOrchestration" style="width:0%"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SDK metrics -->
+      <div class="panel-card fade-in d1">
+        <div class="card-hdr"><div class="card-title">sdk · last run</div></div>
+        <div class="card-body" id="sdkMetrics">
+          <div class="metric-row"><span class="mk">prompt tokens</span><span class="mv" id="metricPromptTokens">—</span></div>
+          <div class="metric-row"><span class="mk">completion tokens</span><span class="mv" id="metricCompletionTokens">—</span></div>
+          <div class="metric-row"><span class="mk">total tokens</span><span class="mv" id="metricTotalTokens">—</span></div>
+          <div class="metric-row"><span class="mk">llm calls</span><span class="mv" id="metricLlmCalls">—</span></div>
+          <div class="metric-row"><span class="mk">retries</span><span class="mv" id="metricRetries">—</span></div>
+          <div class="metric-row"><span class="mk">cost</span><span class="mv" id="metricCost">—</span></div>
+          <div class="metric-row"><span class="mk">latency</span><span class="mv" id="metricLatency">—</span></div>
+        </div>
+      </div>
+
+      <!-- Leaderboard -->
+      <div class="panel-card fade-in d2">
+        <div class="card-hdr">
+          <div class="card-title">leaderboard</div>
+          <span style="font-size:10px;color:var(--muted)" id="leaderboardCount">—</span>
+        </div>
+        <div class="card-body" style="padding:8px 12px" id="trackingLeaderboard">
+          <div class="lb-row" style="font-size:9px;color:var(--muted);padding-bottom:4px;border-bottom-color:var(--border-light)">
+            <span>#</span><span>user</span><span style="text-align:right">score</span><span style="text-align:right">cost</span>
+          </div>
+          <div style="padding:12px 0;text-align:center;font-size:11px;color:var(--muted)">loading...</div>
+        </div>
+      </div>
+
+      <!-- Tips -->
+      <div class="panel-card fade-in d3">
+        <div class="card-hdr"><div class="card-title">efficiency tips</div></div>
+        <div class="card-body" style="padding:8px 12px">
+          <div class="tip-item">
+            <span class="tip-arrow">→</span>
+            Batch all claims in one prompt with JSON array output to reduce from 6 calls to 1
+          </div>
+          <div class="tip-item">
+            <span class="tip-arrow">→</span>
+            Use <code style="font-size:10px;color:var(--accent);background:var(--surface2);padding:1px 4px;border-radius:2px">response_format</code> for structured output — eliminates parse errors
+          </div>
+          <div class="tip-item">
+            <span class="tip-arrow">→</span>
+            temperature=0 gives the highest consistency score across adversarial runs
+          </div>
+          <div class="tip-item" style="border-bottom:none">
+            <span class="tip-arrow">→</span>
+            Top solution uses 1 call, 420 tokens, $0.04 — aim for that benchmark
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- NOTIF -->
+<div class="notif hidden" id="notif">
+  <div class="notif-dot"></div>
+  <span id="notifText"></span>
+</div>
+
+<script src="/static/api.js"></script>
+<script>
+  let cmView = null;
+  let currentLang = 'python';
+  const chatHistory = [];
+
+  const LANG_META = {
+    python:     { entrypoint: 'main.py',   ext: 'py' },
+    javascript: { entrypoint: 'main.js',   ext: 'js' },
+    typescript: { entrypoint: 'main.ts',   ext: 'ts' },
+    java:       { entrypoint: 'Main.java', ext: 'java' },
+    cpp:        { entrypoint: 'main.cpp',  ext: 'cpp' },
+    c:          { entrypoint: 'main.c',    ext: 'c' },
+    rust:       { entrypoint: 'main.rs',   ext: 'rs' },
+    go:         { entrypoint: 'main.go',   ext: 'go' },
+  };
+
+  function getStarterCode(lang, title) {
+    const t = title || 'this challenge';
+    const starters = {
+      python: `from promptcode import llm
+import json
+
+def solve(input_data):
+    """Your solution for: ${t}"""
+    result = llm.call(
+        model="gpt-4o",
+        prompt=f"Process this data:\\n\\n{input_data}",
+        temperature=0
+    )
+    return json.loads(result)
+`,
+      javascript: `const { llm } = require('promptcode');
+
+async function solve(inputData) {
+  // Your solution for: ${t}
+  const result = await llm.call({
+    model: 'gpt-4o',
+    prompt: \`Process this data:\\n\\n\${inputData}\`,
+    temperature: 0,
+  });
+  return JSON.parse(result);
+}
+
+module.exports = { solve };
+`,
+      typescript: `import { llm } from 'promptcode';
+
+async function solve(inputData: string): Promise<Record<string, unknown>> {
+  // Your solution for: ${t}
+  const result = await llm.call({
+    model: 'gpt-4o',
+    prompt: \`Process this data:\\n\\n\${inputData}\`,
+    temperature: 0,
+  });
+  return JSON.parse(result);
+}
+
+export { solve };
+`,
+      java: `import com.promptcode.LLM;
+import org.json.JSONArray;
+
+public class Main {
+    // Your solution for: ${t}
+    public static String solve(String inputData) throws Exception {
+        String result = LLM.call(
+            "gpt-4o",
+            "Process this data:\\n\\n" + inputData,
+            0.0
+        );
+        return result;
+    }
+
+    public static void main(String[] args) throws Exception {
+        String input = new String(System.in.readAllBytes());
+        System.out.println(solve(input));
+    }
+}
+`,
+      cpp: `#include <iostream>
+#include <string>
+#include "promptcode/llm.h"
+
+// Your solution for: ${t}
+std::string solve(const std::string& input_data) {
+    auto result = llm::call(
+        "gpt-4o",
+        "Process this data:\\n\\n" + input_data,
+        0.0
+    );
+    return result;
+}
+
+int main() {
+    std::string input(
+        (std::istreambuf_iterator<char>(std::cin)),
+        std::istreambuf_iterator<char>()
+    );
+    std::cout << solve(input) << std::endl;
+    return 0;
+}
+`,
+      c: `#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "promptcode/llm.h"
+
+/* Your solution for: ${t} */
+char* solve(const char* input_data) {
+    char prompt[4096];
+    snprintf(prompt, sizeof(prompt),
+        "Process this data:\\n\\n%s", input_data);
+    return llm_call("gpt-4o", prompt, 0.0);
+}
+
+int main() {
+    char input[65536];
+    size_t len = fread(input, 1, sizeof(input)-1, stdin);
+    input[len] = '\\0';
+    char* result = solve(input);
+    printf("%s\\n", result);
+    free(result);
+    return 0;
+}
+`,
+      rust: `use promptcode::llm;
+use serde_json::Value;
+
+/// Your solution for: ${t}
+fn solve(input_data: &str) -> Result<Value, Box<dyn std::error::Error>> {
+    let result = llm::call(
+        "gpt-4o",
+        &format!("Process this data:\\n\\n{}", input_data),
+        0.0,
+    )?;
+    let parsed: Value = serde_json::from_str(&result)?;
+    Ok(parsed)
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+    let output = solve(&input)?;
+    println!("{}", serde_json::to_string_pretty(&output)?);
+    Ok(())
+}
+`,
+      go: `package main
+
+import (
+\t"encoding/json"
+\t"fmt"
+\t"io"
+\t"os"
+
+\t"promptcode/llm"
+)
+
+// Your solution for: ${t}
+func solve(inputData string) (interface{}, error) {
+\tresult, err := llm.Call(
+\t\t"gpt-4o",
+\t\tfmt.Sprintf("Process this data:\\n\\n%s", inputData),
+\t\t0.0,
+\t)
+\tif err != nil {
+\t\treturn nil, err
+\t}
+\tvar parsed interface{}
+\terr = json.Unmarshal([]byte(result), &parsed)
+\treturn parsed, err
+}
+
+func main() {
+\tdata, _ := io.ReadAll(os.Stdin)
+\tresult, err := solve(string(data))
+\tif err != nil {
+\t\tfmt.Fprintf(os.Stderr, "Error: %v\\n", err)
+\t\tos.Exit(1)
+\t}
+\tout, _ := json.MarshalIndent(result, "", "  ")
+\tfmt.Println(string(out))
+}
+`,
+    };
+    return starters[lang] || starters.python;
+  }
+
+  let fallbackTextarea = null;
+
+  function getEditorCode() {
+    if (cmView) return cmView.state.doc.toString();
+    if (fallbackTextarea) return fallbackTextarea.value;
+    return '';
+  }
+
+  function setEditorCode(code) {
+    if (cmView) {
+      cmView.dispatch({ changes: { from: 0, to: cmView.state.doc.length, insert: code } });
+    } else if (fallbackTextarea) {
+      fallbackTextarea.value = code;
+    }
+  }
+
+  function initCodeMirror(code, lang) {
+    const parent = document.getElementById('editorBody');
+    if (!parent) return;
+    parent.innerHTML = '';
+    cmView = null;
+    fallbackTextarea = null;
+
+    const CM = window._CM;
+    if (!CM || window._cmFailed) {
+      const ta = document.createElement('textarea');
+      ta.spellcheck = false;
+      ta.value = code || '';
+      ta.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;padding:18px;font-family:"DM Mono",monospace;font-size:12.5px;line-height:1.75;color:#9ab0cc;background:#080807;border:none;outline:none;resize:none;white-space:pre;tab-size:4;caret-color:#c8f060;';
+      ta.addEventListener('keydown', e => {
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          const s = ta.selectionStart, en = ta.selectionEnd;
+          ta.value = ta.value.substring(0, s) + '    ' + ta.value.substring(en);
+          ta.selectionStart = ta.selectionEnd = s + 4;
+        }
+      });
+      parent.appendChild(ta);
+      fallbackTextarea = ta;
+      return;
+    }
+
+    const langExt = CM.langExtensions[lang] || CM.langExtensions.python;
+    cmView = new CM.EditorView({
+      state: CM.EditorState.create({
+        doc: code || '',
+        extensions: [
+          CM.basicSetup,
+          CM.keymap.of([CM.indentWithTab]),
+          langExt(),
+          CM.oneDark,
+          CM.customTheme,
+        ],
+      }),
+      parent,
+    });
+  }
+
+  function switchLanguage(lang) {
+    currentLang = lang;
+    const meta = LANG_META[lang] || LANG_META.python;
+    document.getElementById('entrypointLabel').textContent = meta.entrypoint;
+    const title = window._challengeTitle || 'this challenge';
+    const code = getStarterCode(lang, title);
+    initCodeMirror(code, lang);
+  }
+
+  function populateChallenge(c) {
+    document.querySelector('.problem-title').textContent = c.title;
+    document.querySelector('.challenge-crumb .name').textContent = c.title;
+    document.title = `PromptCode — ${c.title}`;
+
+    const diffMap = { easy: 'diff-easy', medium: 'diff-med', hard: 'diff-hard' };
+    const badge = document.querySelector('.challenge-crumb .diff-badge');
+    if (badge) {
+      badge.className = `diff-badge ${diffMap[c.difficulty] || 'diff-med'}`;
+      badge.textContent = c.difficulty.substring(0, 3);
+    }
+    const metaBadge = document.querySelector('.problem-meta .diff-badge');
+    if (metaBadge) {
+      metaBadge.className = `diff-badge ${diffMap[c.difficulty] || 'diff-med'}`;
+      metaBadge.textContent = c.difficulty;
+    }
+    const tags = document.querySelector('.problem-meta');
+    if (tags && c.tags) {
+      tags.querySelectorAll('.tag').forEach(t => t.remove());
+      c.tags.forEach(tag => {
+        const span = document.createElement('span');
+        span.className = 'tag';
+        span.textContent = tag;
+        tags.appendChild(span);
+      });
+    }
+
+    if (c.description) {
+      const descEl = document.getElementById('problemDescription');
+      const paragraphs = c.description.split('\n\n').filter(Boolean);
+      descEl.innerHTML = paragraphs.map(p => {
+        if (p.trim().startsWith('from promptcode') || p.trim().startsWith('    ')) {
+          return `<div class="code-snippet">${escapeHtml(p.trim())}</div>`;
+        }
+        const lines = p.split('\n');
+        if (lines.length > 1 && /^\d+\./.test(lines[0].trim())) {
+          return '<ol style="padding-left:18px;margin:8px 0">' +
+            lines.map(l => `<li style="margin-bottom:4px">${escapeHtml(l.replace(/^\d+\.\s*/, ''))}</li>`).join('') +
+            '</ol>';
+        }
+        return `<p>${escapeHtml(p)}</p>`;
+      }).join('');
+    }
+
+    if (c.constraints) {
+      const box = document.getElementById('problemConstraints');
+      const list = document.getElementById('constraintsList');
+      box.style.display = '';
+      list.innerHTML = Object.entries(c.constraints)
+        .map(([k, v]) => `<p style="margin:4px 0"><code style="background:var(--surface);padding:1px 5px;border-radius:3px;font-size:11px;color:var(--accent)">${k}</code>: ${escapeHtml(String(v))}</p>`)
+        .join('');
+    }
+
+    if (c.sample_input) {
+      document.getElementById('problemSampleInput').style.display = '';
+      const txt = typeof c.sample_input === 'string' ? c.sample_input : JSON.stringify(c.sample_input, null, 2);
+      document.getElementById('sampleInputBody').textContent = txt;
+    }
+    if (c.sample_output) {
+      document.getElementById('problemSampleOutput').style.display = '';
+      const txt = typeof c.sample_output === 'string' ? c.sample_output : JSON.stringify(c.sample_output, null, 2);
+      document.getElementById('sampleOutputBody').textContent = txt;
+    }
+
+    window._challengeTitle = c.title;
+    const starter = getStarterCode(currentLang, c.title);
+    initCodeMirror(starter, currentLang);
+  }
+
+  function escapeHtml(s) {
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  async function populateDrawer(challengeId) {
+    try {
+      const allChallenges = await PromptCodeAPI.getChallenges();
+      if (!allChallenges || !allChallenges.length) return;
+      const drawer = document.getElementById('drawer');
+      const sections = drawer.querySelectorAll('.drawer-section');
+      sections.forEach(s => s.remove());
+      const divider = drawer.querySelector('.drawer-divider');
+      const categories = {};
+      allChallenges.forEach(c => {
+        if (!categories[c.category]) categories[c.category] = [];
+        categories[c.category].push(c);
+      });
+      const diffMap = { easy: 'diff-easy', medium: 'diff-med', hard: 'diff-hard' };
+      const diffLabel = { easy: 'easy', medium: 'med', hard: 'hard' };
+      Object.entries(categories).forEach(([cat, items]) => {
+        const section = document.createElement('div');
+        section.className = 'drawer-section';
+        section.innerHTML = `<div class="drawer-label">${cat}</div>`;
+        items.forEach(c => {
+          const isActive = c.id === challengeId;
+          const a = document.createElement('a');
+          a.className = 'challenge-item' + (isActive ? ' active' : '');
+          a.href = `/challenge.html?id=${c.id}`;
+          a.innerHTML = `<div class="${isActive ? 'solved-dot' : 'unsolved-dot'}"></div><span class="ci-name">${c.title}</span><span class="diff-badge ${diffMap[c.difficulty] || 'diff-med'}">${diffLabel[c.difficulty] || c.difficulty}</span>`;
+          section.appendChild(a);
+        });
+        if (divider) drawer.insertBefore(section, divider);
+        else drawer.appendChild(section);
+      });
+    } catch (e) {
+      console.log('Drawer: using static data');
+    }
+  }
+
+  function formatNumber(n) {
+    if (n == null || isNaN(n)) return '—';
+    return Number(n).toLocaleString();
+  }
+
+  function timeAgo(dateStr) {
+    if (!dateStr) return '—';
+    const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  }
+
+  function fillColor(val) {
+    if (val >= 0.8) return 'fill-g';
+    if (val >= 0.6) return 'fill-w';
+    return 'fill-d';
+  }
+
+  function setMetricStyle(el, val, thresholds) {
+    if (!el) return;
+    el.className = 'mv';
+    if (val === '—' || val == null) return;
+    const num = typeof val === 'number' ? val : parseFloat(String(val).replace(/[$,]/g, ''));
+    if (isNaN(num)) return;
+    if (thresholds && thresholds.warn != null && num >= thresholds.warn) el.classList.add('wn');
+    if (thresholds && thresholds.danger != null && num >= thresholds.danger) { el.classList.remove('wn'); el.classList.add('dn'); }
+  }
+
+  async function loadTrackingData(challengeId) {
+    const currentUser = PromptCodeAPI.getUser();
+    const currentUsername = currentUser ? currentUser.username : null;
+
+    // --- Leaderboard ---
+    try {
+      const lb = await PromptCodeAPI.getLeaderboard(challengeId, 5);
+      const entries = Array.isArray(lb) ? lb : (lb.entries || lb.results || []);
+      const total = lb.total_count || lb.total || entries.length;
+      document.getElementById('leaderboardCount').textContent = `${formatNumber(total)} submissions`;
+
+      const container = document.getElementById('trackingLeaderboard');
+      const header = container.querySelector('.lb-row');
+      container.innerHTML = '';
+      if (header) container.appendChild(header);
+
+      if (entries.length === 0) {
+        container.insertAdjacentHTML('beforeend', '<div style="padding:12px 0;text-align:center;font-size:11px;color:var(--muted)">no entries yet</div>');
+      } else {
+        const rankClasses = ['gold', 'silver', 'bronze'];
+        entries.forEach(entry => {
+          const rank = entry.rank;
+          const isMe = currentUsername && entry.username === currentUsername;
+          const initials = (entry.username || '??').substring(0, 2).toLowerCase();
+          const rankClass = rank <= 3 ? rankClasses[rank - 1] : '';
+          const row = document.createElement('div');
+          row.className = 'lb-row';
+          if (isMe) {
+            row.style.cssText = 'background:rgba(200,240,96,0.04);margin:0 -12px;padding:6px 12px';
+          }
+          row.innerHTML =
+            `<span class="lb-rank ${isMe ? '' : rankClass}" ${isMe ? 'style="color:var(--accent)"' : ''}>${rank}</span>` +
+            `<span class="lb-user ${isMe ? 'you' : ''}"><div class="avatar ${isMe ? 'you' : ''}">${isMe ? 'me' : initials}</div>${isMe ? 'you' : escapeHtml(entry.username)}</span>` +
+            `<span class="lb-score">${entry.score_overall != null ? entry.score_overall.toFixed(2) : '—'}</span>` +
+            `<span class="lb-cost">${entry.total_cost_usd != null ? '$' + entry.total_cost_usd.toFixed(2) : '—'}</span>`;
+          container.appendChild(row);
+        });
+      }
+    } catch (e) {
+      console.log('Leaderboard load failed:', e.message);
+      document.getElementById('leaderboardCount').textContent = '—';
+      const container = document.getElementById('trackingLeaderboard');
+      const header = container.querySelector('.lb-row');
+      container.innerHTML = '';
+      if (header) container.appendChild(header);
+      container.insertAdjacentHTML('beforeend', '<div style="padding:12px 0;text-align:center;font-size:11px;color:var(--muted)">unable to load</div>');
+    }
+
+    // --- User submissions (best score + SDK metrics + status) ---
+    if (!PromptCodeAPI.isLoggedIn()) {
+      document.getElementById('trackingStatusDot').className = 'status-dot idle';
+      document.getElementById('trackingStatusText').textContent = 'sign in to track';
+      return;
+    }
+
+    try {
+      const subs = await PromptCodeAPI.getMySubmissions(challengeId);
+      if (!subs || subs.length === 0) {
+        document.getElementById('trackingStatusDot').className = 'status-dot idle';
+        document.getElementById('trackingStatusText').textContent = 'no submissions';
+        return;
+      }
+
+      document.getElementById('trackingStatusDot').className = 'status-dot done';
+      document.getElementById('trackingStatusText').textContent = 'evaluated';
+
+      const best = subs.reduce((a, b) => ((a.score_overall || 0) >= (b.score_overall || 0) ? a : b), subs[0]);
+      const latest = subs.reduce((a, b) => (new Date(a.created_at || 0) > new Date(b.created_at || 0) ? a : b), subs[0]);
+
+      // Best scores
+      const overall = best.score_overall;
+      document.getElementById('bestScore').textContent = overall != null ? overall.toFixed(2) : '—';
+
+      const scores = [
+        { id: 'Accuracy', key: 'score_accuracy' },
+        { id: 'Efficiency', key: 'score_efficiency' },
+        { id: 'Reliability', key: 'score_reliability' },
+        { id: 'Orchestration', key: 'score_orchestration' },
+      ];
+      scores.forEach(({ id, key }) => {
+        const val = best[key];
+        const el = document.getElementById('score' + id);
+        const bar = document.getElementById('bar' + id);
+        if (el) el.textContent = val != null ? val.toFixed(2) : '—';
+        if (bar && val != null) {
+          bar.style.width = (val * 100).toFixed(0) + '%';
+          bar.className = 'sc-fill ' + fillColor(val);
+        }
+      });
+
+      // Status bar
+      document.getElementById('statusRunDot').className = 'status-dot done';
+      document.getElementById('statusLastRunTime').textContent = timeAgo(latest.created_at);
+
+      // Try to load report from the latest submission for SDK metrics + passes
+      try {
+        const report = await PromptCodeAPI.getSubmissionReport(latest.id);
+        const m = report.metrics || report;
+
+        const promptTok = m.prompt_tokens;
+        const completionTok = m.completion_tokens;
+        const totalTok = (promptTok != null && completionTok != null) ? promptTok + completionTok : m.total_tokens;
+
+        document.getElementById('metricPromptTokens').textContent = formatNumber(promptTok);
+        document.getElementById('metricCompletionTokens').textContent = formatNumber(completionTok);
+
+        const totalEl = document.getElementById('metricTotalTokens');
+        totalEl.textContent = formatNumber(totalTok);
+        setMetricStyle(totalEl, totalTok, { warn: 2000 });
+
+        const callsEl = document.getElementById('metricLlmCalls');
+        callsEl.textContent = formatNumber(m.llm_calls);
+        setMetricStyle(callsEl, m.llm_calls, { warn: 4 });
+
+        const retriesEl = document.getElementById('metricRetries');
+        retriesEl.textContent = formatNumber(m.retries != null ? m.retries : m.retry_count);
+        setMetricStyle(retriesEl, m.retries || m.retry_count, { danger: 1 });
+
+        const cost = m.cost_usd != null ? m.cost_usd : m.total_cost_usd;
+        document.getElementById('metricCost').textContent = cost != null ? '$' + cost.toFixed(2) : '—';
+
+        const latency = m.latency_ms != null ? m.latency_ms : m.latency;
+        document.getElementById('metricLatency').textContent = latency != null ? formatNumber(Math.round(latency)) + 'ms' : '—';
+
+        // Run bar (reflects latest run)
+        document.getElementById('runTokens').textContent = formatNumber(totalTok);
+        document.getElementById('runCost').textContent = cost != null ? '$' + cost.toFixed(3) : '—';
+        document.getElementById('runCalls').textContent = m.llm_calls != null ? m.llm_calls : '—';
+        document.getElementById('runLatency').textContent = latency != null ? (latency / 1000).toFixed(1) + 's' : '—';
+
+        // Passes
+        const passes = m.tests_passed != null ? m.tests_passed : m.passes;
+        const total = m.tests_total != null ? m.tests_total : m.total_tests;
+        if (passes != null && total != null) {
+          document.getElementById('statusPasses').textContent = `${passes} / ${total}`;
+        }
+      } catch (re) {
+        console.log('Report load failed:', re.message);
+      }
+    } catch (e) {
+      console.log('Submissions load failed:', e.message);
+    }
+  }
+
+  function waitForCM() {
+    return new Promise(resolve => {
+      if (window._CM || window._cmReady || window._cmFailed) { resolve(); return; }
+      const timeout = setTimeout(() => {
+        console.warn('CodeMirror load timed out, using textarea fallback');
+        window._cmFailed = true;
+        resolve();
+      }, 10000);
+      window._cmReadyCallback = () => { clearTimeout(timeout); resolve(); };
+    });
+  }
+
+  async function bootEditor() {
+    await waitForCM();
+
+    const params = new URLSearchParams(window.location.search);
+    const challengeId = params.get('id');
+    if (challengeId) {
+      window._challengeId = challengeId;
+      try {
+        const c = await PromptCodeAPI.getChallenge(challengeId);
+        populateChallenge(c);
+      } catch (e) {
+        console.log('Challenge load failed:', e.message);
+        initCodeMirror(getStarterCode('python', 'this challenge'), 'python');
+      }
+      populateDrawer(challengeId);
+      loadTrackingData(challengeId);
+    } else {
+      initCodeMirror(getStarterCode('python', 'this challenge'), 'python');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    PromptCodeAPI.updateNavAuth();
+    bootEditor();
+  });
+
+  function toggleDrawer() {
+    document.getElementById('drawer').classList.toggle('open');
+    document.getElementById('overlay').classList.toggle('open');
+  }
+
+  function showNotif(msg) {
+    const n = document.getElementById('notif');
+    document.getElementById('notifText').textContent = msg;
+    n.classList.remove('hidden');
+    clearTimeout(n._t);
+    n._t = setTimeout(() => n.classList.add('hidden'), 3000);
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+  }
+
+  let chatBusy = false;
+
+  async function sendMsg() {
+    if (chatBusy) return;
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    const msgs = document.getElementById('chatMessages');
+
+    const userMsg = document.createElement('div');
+    userMsg.className = 'msg';
+    userMsg.innerHTML = `<div class="msg-avatar user">me</div><div class="msg-body"><div class="msg-sender">you</div><div class="msg-text">${escapeHtml(text)}</div></div>`;
+    msgs.appendChild(userMsg);
+    input.value = '';
+
+    chatHistory.push({ role: 'user', content: text });
+
+    const typing = document.createElement('div');
+    typing.className = 'msg';
+    typing.id = 'typingIndicator';
+    typing.innerHTML = `<div class="msg-avatar ai">✦</div><div class="msg-body"><div class="msg-sender">assistant</div><div class="msg-text" style="color:var(--muted)">thinking...</div></div>`;
+    msgs.appendChild(typing);
+    msgs.scrollTop = msgs.scrollHeight;
+
+    chatBusy = true;
+    const challengeId = window._challengeId;
+
+    try {
+      const code = getEditorCode();
+      const resp = await PromptCodeAPI.chatWithAssistant(challengeId, chatHistory, code);
+      typing.remove();
+
+      const reply = resp.reply || 'No response.';
+      chatHistory.push({ role: 'assistant', content: reply });
+
+      const aiMsg = document.createElement('div');
+      aiMsg.className = 'msg';
+      const formatted = reply.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\n/g, '<br>');
+      aiMsg.innerHTML = `<div class="msg-avatar ai">✦</div><div class="msg-body"><div class="msg-sender">assistant</div><div class="msg-text">${formatted}</div></div>`;
+      msgs.appendChild(aiMsg);
+      msgs.scrollTop = msgs.scrollHeight;
+    } catch (e) {
+      typing.remove();
+      const errMsg = document.createElement('div');
+      errMsg.className = 'msg';
+      errMsg.innerHTML = `<div class="msg-avatar ai">✦</div><div class="msg-body"><div class="msg-sender">assistant</div><div class="msg-text" style="color:#e06050">${escapeHtml(e.message || 'Failed to get response')}</div></div>`;
+      msgs.appendChild(errMsg);
+      msgs.scrollTop = msgs.scrollHeight;
+    } finally {
+      chatBusy = false;
+    }
+  }
+
+  async function handleSubmit() {
+    if (!PromptCodeAPI.isLoggedIn()) {
+      showNotif('Please sign in to submit');
+      setTimeout(() => window.location.href = '/login.html', 1200);
+      return;
+    }
+    const code = getEditorCode();
+    const challengeId = window._challengeId;
+    if (!challengeId) {
+      showNotif('No challenge selected');
+      return;
+    }
+    if (!code.trim()) {
+      showNotif('Write some code first');
+      return;
+    }
+    const entrypoint = (LANG_META[currentLang] || LANG_META.python).entrypoint;
+    try {
+      showNotif('Submitting...');
+      const submission = await PromptCodeAPI.submitSolution(challengeId, code, entrypoint);
+      showNotif('Submitted! Generating report...');
+      loadTrackingData(challengeId);
+      setTimeout(() => {
+        window.location.href = `/submission.html?id=${submission.id}`;
+      }, 1500);
+    } catch (e) {
+      showNotif(e.message || 'Submission failed');
+    }
+  }
+
+  const handle = document.getElementById('resizeHandle');
+  const chatSection = document.getElementById('chatSection');
+  let dragging = false, startY = 0, startH = 0;
+
+  handle.addEventListener('mousedown', e => {
+    dragging = true; startY = e.clientY;
+    startH = chatSection.offsetHeight;
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const delta = startY - e.clientY;
+    const newH = Math.max(140, Math.min(480, startH + delta));
+    chatSection.style.height = newH + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    dragging = false;
+    document.body.style.userSelect = '';
+  });
+</script>
+</body>
+</html>

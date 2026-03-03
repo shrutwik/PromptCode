@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Submission Report — PromptCode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0a09; --surface: #111110; --surface2: #141412;
+  --border: #1f1f1d; --border-light: #2a2a27;
+  --text: #e8e6e0; --muted: #6b6b65;
+  --accent: #c8f060; --accent-dim: rgba(200,240,96,0.10);
+  --warn: #f0a060; --danger: #f06060; --success: #60d4a8;
+  --radius: 6px; --nav-h: 52px;
+}
+html { scroll-behavior: smooth; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; line-height: 1.6; min-height: 100vh; }
+::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.7)} }
+@keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+@keyframes scoreReveal { from{opacity:0;transform:scale(0.85)} to{opacity:1;transform:scale(1)} }
+@keyframes barGrow { from{width:0} to{width:var(--w)} }
+@keyframes ringFill { from{stroke-dashoffset:283} to{stroke-dashoffset:var(--offset)} }
+.fade-in { animation: fadeUp 0.45s ease both; }
+.d1{animation-delay:.07s;opacity:0} .d2{animation-delay:.14s;opacity:0}
+.d3{animation-delay:.21s;opacity:0} .d4{animation-delay:.28s;opacity:0}
+.d5{animation-delay:.35s;opacity:0} .d6{animation-delay:.42s;opacity:0}
+
+/* NAV */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: var(--nav-h); display: flex; align-items: center; justify-content: space-between;
+  padding: 0 28px; border-bottom: 1px solid var(--border);
+  background: rgba(10,10,9,0.94); backdrop-filter: blur(16px);
+}
+.nav-logo { display: flex; align-items: center; gap: 8px; font-family: 'Instrument Serif', serif; font-size: 18px; letter-spacing: -0.02em; color: var(--text); text-decoration: none; }
+.nav-logo .dot { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; animation: pulse 2.4s ease-in-out infinite; }
+.nav-links { display: flex; gap: 26px; }
+.nav-links a { color: var(--muted); text-decoration: none; font-size: 12px; letter-spacing: 0.04em; transition: color 0.2s; }
+.nav-links a:hover { color: var(--text); }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 12px; cursor: pointer; transition: all 0.15s; text-decoration: none; border: 1px solid transparent; }
+.btn-ghost { background: transparent; border-color: var(--border-light); color: var(--muted); }
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-primary { background: var(--accent); color: var(--bg); font-weight: 500; }
+.btn-primary:hover { background: #d4f870; }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+
+/* LAYOUT */
+.page { max-width: 1000px; margin: 0 auto; padding: calc(var(--nav-h) + 32px) 28px 60px; }
+
+/* BREADCRUMB */
+.breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); margin-bottom: 24px; }
+.breadcrumb a { color: var(--muted); text-decoration: none; transition: color 0.2s; }
+.breadcrumb a:hover { color: var(--text); }
+.breadcrumb .sep { opacity: 0.4; }
+.breadcrumb .current { color: var(--text); }
+
+/* HERO SCORE */
+.result-hero {
+  display: grid; grid-template-columns: auto 1fr auto;
+  gap: 28px; align-items: center;
+  padding: 28px 32px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface2);
+  margin-bottom: 28px;
+  position: relative; overflow: hidden;
+}
+.result-hero::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+}
+
+/* Score ring */
+.score-ring-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.score-ring { width: 90px; height: 90px; position: relative; animation: scoreReveal 0.6s 0.2s ease both; opacity: 0; }
+.score-ring svg { transform: rotate(-90deg); }
+.ring-bg { fill: none; stroke: var(--border); stroke-width: 6; }
+.ring-fill { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; stroke-dasharray: 283; stroke-dashoffset: var(--offset); animation: ringFill 1.2s 0.4s ease forwards; }
+.ring-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.ring-score { font-family: 'Instrument Serif', serif; font-size: 22px; color: var(--accent); line-height: 1; }
+.ring-sub { font-size: 9px; color: var(--muted); letter-spacing: 0.04em; }
+
+.result-info { }
+.result-challenge { font-size: 11px; color: var(--muted); margin-bottom: 4px; letter-spacing: 0.04em; }
+.result-title { font-family: 'Instrument Serif', serif; font-size: 26px; letter-spacing: -0.02em; margin-bottom: 6px; }
+.result-meta { display: flex; align-items: center; gap: 12px; font-size: 11px; color: var(--muted); }
+.result-meta .sep { opacity: 0.3; }
+.status-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 10px; }
+.status-pass { background: rgba(96,212,168,0.12); color: var(--success); border: 1px solid rgba(96,212,168,0.25); }
+.status-fail { background: rgba(240,96,96,0.12); color: var(--danger); border: 1px solid rgba(240,96,96,0.25); }
+.status-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+.result-actions { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+.rank-badge { text-align: right; }
+.rank-badge .num { font-family: 'Instrument Serif', serif; font-size: 32px; color: var(--accent); line-height: 1; }
+.rank-badge .lbl { font-size: 10px; color: var(--muted); }
+
+/* SCORE GRID */
+.score-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
+.score-cell {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px; background: var(--surface2);
+  position: relative; overflow: hidden;
+  transition: border-color 0.2s;
+}
+.score-cell:hover { border-color: var(--border-light); }
+.score-cell::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+}
+.score-cell.good::after { background: var(--accent); }
+.score-cell.warn::after { background: var(--warn); }
+.score-cell.bad::after { background: var(--danger); }
+.sc-icon { font-size: 14px; margin-bottom: 8px; }
+.sc-label { font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px; }
+.sc-val { font-family: 'Instrument Serif', serif; font-size: 28px; letter-spacing: -0.02em; line-height: 1; }
+.sc-val.good { color: var(--accent); }
+.sc-val.warn { color: var(--warn); }
+.sc-val.bad { color: var(--danger); }
+.sc-bar { height: 2px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+.sc-fill { height: 100%; border-radius: 2px; --w: 0; animation: barGrow 1s ease forwards; width: var(--w); }
+
+/* MAIN CONTENT GRID */
+.content-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
+.left-col { display: flex; flex-direction: column; gap: 20px; }
+.right-col { display: flex; flex-direction: column; gap: 16px; position: sticky; top: calc(var(--nav-h) + 20px); }
+
+/* CARD */
+.card { border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); overflow: hidden; }
+.card-hdr { padding: 11px 16px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between; }
+.card-title { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.card-body { padding: 16px; }
+
+/* RUN PASSES TABLE */
+.passes-table { width: 100%; border-collapse: collapse; }
+.passes-table th { padding: 7px 12px; font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; border-bottom: 1px solid var(--border); text-align: left; font-weight: normal; }
+.passes-table td { padding: 11px 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.passes-table tr:last-child td { border-bottom: none; }
+.passes-table tr:hover td { background: rgba(255,255,255,0.015); }
+.pass-type { display: flex; align-items: center; gap: 7px; }
+.pass-badge { font-size: 9px; padding: 2px 6px; border-radius: 3px; }
+.pass-clean { background: rgba(96,212,168,0.12); color: var(--success); }
+.pass-perturbed { background: rgba(240,160,96,0.12); color: var(--warn); }
+.pass-adversarial { background: rgba(240,96,96,0.12); color: var(--danger); }
+.pass-score { color: var(--accent); font-size: 13px; }
+.pass-score.warn { color: var(--warn); }
+.pass-score.bad { color: var(--danger); }
+.pass-tokens { color: var(--muted); font-size: 11px; }
+.pass-cost { color: var(--muted); font-size: 11px; }
+.pass-lat { color: var(--muted); font-size: 11px; }
+.pass-status { }
+
+/* DIFF VIEW */
+.diff-view { font-size: 11.5px; line-height: 1.8; }
+.diff-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; }
+.diff-col { }
+.diff-col-hdr { padding: 7px 12px; font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; border-bottom: 1px solid var(--border); background: var(--surface); }
+.diff-line { padding: 4px 12px; font-size: 11px; line-height: 1.7; font-family: 'DM Mono', monospace; }
+.diff-line.match { color: var(--muted); }
+.diff-line.miss { background: rgba(240,96,96,0.08); color: var(--danger); }
+.diff-line.add { background: rgba(96,212,168,0.08); color: var(--success); }
+.diff-line.warn { background: rgba(240,160,96,0.08); color: var(--warn); }
+
+/* JSON report */
+.json-report { background: #060605; border-radius: var(--radius); padding: 18px; font-size: 12px; line-height: 2; }
+.jk { color: #a8b8d0; }
+.jv-g { color: var(--accent); }
+.jv-w { color: var(--warn); }
+.jv-b { color: #60c8f0; }
+.jv-r { color: var(--danger); }
+
+/* IMPROVEMENT TIPS */
+.tip-list { display: flex; flex-direction: column; gap: 1px; }
+.tip-item { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.tip-item:last-child { border-bottom: none; }
+.tip-header { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.tip-priority { font-size: 9px; padding: 2px 7px; border-radius: 3px; letter-spacing: 0.04em; }
+.tip-p-high { background: rgba(240,96,96,0.12); color: var(--danger); }
+.tip-p-med { background: rgba(240,160,96,0.12); color: var(--warn); }
+.tip-p-low { background: rgba(200,240,96,0.12); color: var(--accent); }
+.tip-title { font-size: 12px; color: var(--text); }
+.tip-desc { font-size: 11.5px; color: var(--muted); line-height: 1.6; }
+.tip-impact { font-size: 10px; color: var(--accent); margin-top: 4px; }
+
+/* METRIC ROWS */
+.metric-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.metric-row:last-child { border-bottom: none; }
+.mk { color: var(--muted); }
+.mv { color: var(--text); }
+.mv.ac { color: var(--accent); }
+.mv.wn { color: var(--warn); }
+.mv.dn { color: var(--danger); }
+
+/* NEXT STEPS */
+.next-card { border: 1px solid rgba(200,240,96,0.25); border-radius: 8px; background: rgba(200,240,96,0.03); padding: 16px; }
+.next-title { font-size: 11px; color: var(--accent); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 10px; }
+.next-actions { display: flex; flex-direction: column; gap: 8px; }
+
+/* Diff badge */
+.diff-badge { font-size: 9px; padding: 2px 6px; border-radius: 3px; letter-spacing: 0.04em; }
+.diff-easy { background: rgba(96,212,168,0.15); color: var(--success); }
+.diff-med { background: rgba(240,160,96,0.15); color: var(--warn); }
+.diff-hard { background: rgba(240,96,96,0.15); color: var(--danger); }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="/index.html"><div class="dot"></div>PromptCode</a>
+  <div class="nav-links">
+    <a href="/challenges.html">challenges</a>
+    <a href="/leaderboard.html">leaderboard</a>
+    <a href="/playground.html">playground</a>
+  </div>
+  <div class="btn-right" style="display:flex;align-items:center;gap:10px">
+    <a class="btn btn-ghost" id="backToChallenge" href="/challenges.html">← back to challenge</a>
+    <a href="/profile.html" style="width:28px;height:28px;border-radius:5px;background:var(--accent-dim);border:1px solid rgba(200,240,96,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:none" data-user-initials>jl</a>
+  </div>
+</nav>
+
+<div class="page">
+
+  <!-- BREADCRUMB -->
+  <div class="breadcrumb fade-in">
+    <a href="/challenges.html">challenges</a>
+    <span class="sep">/</span>
+    <a id="breadcrumbChallenge" href="/challenges.html">Loading...</a>
+    <span class="sep">/</span>
+    <span class="current" id="breadcrumbSubmission">submission</span>
+  </div>
+
+  <!-- HERO -->
+  <div class="result-hero fade-in d1">
+    <div class="score-ring-wrap">
+      <div class="score-ring">
+        <svg width="90" height="90" viewBox="0 0 90 90">
+          <circle class="ring-bg" cx="45" cy="45" r="38"/>
+          <circle class="ring-fill" id="ringFillCircle" cx="45" cy="45" r="38" style="--offset:283"/>
+        </svg>
+        <div class="ring-label">
+          <div class="ring-score" id="heroScore">...</div>
+          <div class="ring-sub" id="heroScoreSub">loading</div>
+        </div>
+      </div>
+    </div>
+    <div class="result-info">
+      <div class="result-challenge" id="heroChallengeLine">Loading...</div>
+      <div class="result-title">Submission Report</div>
+      <div class="result-meta" id="heroMeta">
+        <span id="heroPassPill" class="status-pill status-pass"><span class="status-dot"></span> <span id="heroPassCount">—</span></span>
+        <span class="sep">·</span>
+        <span id="heroDiffBadge"></span>
+        <span class="sep">·</span>
+        <span id="heroSubmittedTime">—</span>
+        <span class="sep">·</span>
+        <span id="heroLatency">—</span>
+      </div>
+    </div>
+    <div class="result-actions">
+      <div class="rank-badge">
+        <div class="num" id="heroRank">—</div>
+        <div class="lbl">your rank</div>
+      </div>
+      <a class="btn btn-primary" id="improveBtn" href="/challenges.html">improve →</a>
+      <a class="btn btn-ghost btn-sm" href="javascript:void(0)" onclick="navigator.clipboard.writeText(window.location.href);this.textContent='link copied!';setTimeout(()=>this.textContent='share report',2000)">share report</a>
+    </div>
+  </div>
+
+  <!-- SCORE GRID -->
+  <div class="score-grid fade-in d2" id="scoreGrid">
+    <div class="score-cell" id="cell-accuracy">
+      <div class="sc-icon">◎</div>
+      <div class="sc-label">accuracy</div>
+      <div class="sc-val">—</div>
+      <div class="sc-bar"><div class="sc-fill" style="--w:0%"></div></div>
+    </div>
+    <div class="score-cell" id="cell-efficiency">
+      <div class="sc-icon">⟡</div>
+      <div class="sc-label">efficiency</div>
+      <div class="sc-val">—</div>
+      <div class="sc-bar"><div class="sc-fill" style="--w:0%"></div></div>
+    </div>
+    <div class="score-cell" id="cell-reliability">
+      <div class="sc-icon">◈</div>
+      <div class="sc-label">reliability</div>
+      <div class="sc-val">—</div>
+      <div class="sc-bar"><div class="sc-fill" style="--w:0%"></div></div>
+    </div>
+    <div class="score-cell" id="cell-orchestration">
+      <div class="sc-icon">⬡</div>
+      <div class="sc-label">orchestration</div>
+      <div class="sc-val">—</div>
+      <div class="sc-bar"><div class="sc-fill" style="--w:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="content-grid">
+    <div class="left-col">
+
+      <!-- RUN PASSES -->
+      <div class="card fade-in d3" id="passesCard">
+        <div class="card-hdr">
+          <span class="card-title">evaluation passes</span>
+          <span id="passesCount" style="font-size:11px;color:var(--muted)">loading...</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="passes-table">
+            <thead>
+              <tr>
+                <th>pass</th>
+                <th>type</th>
+                <th>score</th>
+                <th>tokens</th>
+                <th>cost</th>
+                <th>latency</th>
+                <th>status</th>
+              </tr>
+            </thead>
+            <tbody id="passesBody">
+              <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">Loading evaluation data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- OUTPUT DIFF / FEEDBACK -->
+      <div class="card fade-in d4" id="feedbackCard" style="display:none">
+        <div class="card-hdr">
+          <span class="card-title" id="feedbackTitle">feedback</span>
+        </div>
+        <div class="card-body" id="feedbackBody" style="font-size:12px;line-height:1.7;color:var(--muted)"></div>
+      </div>
+
+      <!-- IMPROVEMENT TIPS -->
+      <div class="card fade-in d5" id="tipsCard" style="display:none">
+        <div class="card-hdr"><span class="card-title">improvement suggestions</span></div>
+        <div class="tip-list" id="tipsList"></div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div class="right-col">
+
+      <!-- JSON REPORT -->
+      <div class="card fade-in d2">
+        <div class="card-hdr">
+          <span class="card-title">prompt efficiency report</span>
+          <button class="btn btn-ghost btn-sm" onclick="copyJSON()">copy</button>
+        </div>
+        <div class="card-body" style="padding:14px">
+          <div class="json-report" id="jsonReport" style="color:var(--muted)">Loading report...</div>
+        </div>
+      </div>
+
+      <!-- SDK BREAKDOWN -->
+      <div class="card fade-in d3">
+        <div class="card-hdr"><span class="card-title">sdk usage</span></div>
+        <div class="card-body" style="padding:10px 14px" id="sdkUsageBody">
+          <div style="color:var(--muted);font-size:11px;padding:8px 0">Loading...</div>
+        </div>
+      </div>
+
+      <!-- VS BEST -->
+      <div class="card fade-in d4">
+        <div class="card-hdr"><span class="card-title">vs. top solution</span></div>
+        <div class="card-body" style="padding:10px 14px">
+          <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;font-size:10px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;padding-bottom:5px;border-bottom:1px solid var(--border);margin-bottom:2px">
+            <span></span><span>you</span><span>#1</span>
+          </div>
+          <div class="metric-row"><span class="mk">overall</span><span style="color:var(--warn);font-size:12px">0.81</span><span style="color:var(--accent);font-size:12px">0.97</span></div>
+          <div class="metric-row"><span class="mk">llm calls</span><span class="mv wn">6</span><span class="mv ac">1</span></div>
+          <div class="metric-row"><span class="mk">tokens</span><span class="mv wn">2,864</span><span class="mv ac">420</span></div>
+          <div class="metric-row"><span class="mk">cost</span><span class="mv wn">$0.14</span><span class="mv ac">$0.04</span></div>
+          <div class="metric-row"><span class="mk">retries</span><span class="mv dn">2</span><span class="mv ac">0</span></div>
+        </div>
+      </div>
+
+      <!-- NEXT STEPS -->
+      <div class="next-card fade-in d5">
+        <div class="next-title">next steps</div>
+        <div class="next-actions">
+          <a class="btn btn-primary" id="improveBtn2" href="/challenges.html" style="justify-content:center">→ improve this solution</a>
+          <a class="btn btn-ghost" href="/challenges.html" style="justify-content:center">browse challenges</a>
+          <a class="btn btn-ghost" href="/leaderboard.html" style="justify-content:center">view leaderboard</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/static/api.js"></script>
+<script>
+  let _reportCache = null;
+
+  function fmtNum(n) { return n == null ? '—' : n.toLocaleString(); }
+  function fmtScore(n) { return n == null ? '—' : n.toFixed(2); }
+  function fmtCost(n) { return n == null ? '—' : '$' + n.toFixed(4); }
+  function fmtMs(n) { return n == null ? '—' : fmtNum(Math.round(n)) + 'ms'; }
+
+  function scoreClass(v) {
+    if (v == null) return '';
+    if (v >= 0.8) return 'good';
+    if (v >= 0.65) return 'warn';
+    return 'bad';
+  }
+
+  function scoreCSSColor(cls) {
+    if (cls === 'good') return 'var(--accent)';
+    if (cls === 'warn') return 'var(--warn)';
+    return 'var(--danger)';
+  }
+
+  function timeAgo(dateStr) {
+    if (!dateStr) return '—';
+    const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + ' minutes ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + ' hours ago';
+    return Math.floor(diff / 86400) + ' days ago';
+  }
+
+  function updateScoreCell(id, value) {
+    const cell = document.getElementById(id);
+    if (!cell) return;
+    const cls = scoreClass(value);
+    cell.className = 'score-cell' + (cls ? ' ' + cls : '');
+    const valEl = cell.querySelector('.sc-val');
+    valEl.textContent = fmtScore(value);
+    valEl.className = 'sc-val' + (cls ? ' ' + cls : '');
+    const fill = cell.querySelector('.sc-fill');
+    const pct = value != null ? (value * 100) + '%' : '0%';
+    fill.style.setProperty('--w', pct);
+    fill.style.background = scoreCSSColor(cls);
+  }
+
+  function updateHeroRing(overall) {
+    const el = document.getElementById('heroScore');
+    const sub = document.getElementById('heroScoreSub');
+    const circle = document.getElementById('ringFillCircle');
+    if (el) el.textContent = fmtScore(overall);
+    if (sub) sub.textContent = 'overall';
+    if (circle && overall != null) {
+      const offset = 283 - (283 * overall);
+      circle.style.setProperty('--offset', Math.round(offset));
+    }
+  }
+
+  function buildPassRow(run, idx) {
+    const type = (run.run_type || 'clean').toLowerCase();
+    let badgeClass = 'pass-clean';
+    if (type.includes('perturb')) badgeClass = 'pass-perturbed';
+    else if (type.includes('advers')) badgeClass = 'pass-adversarial';
+
+    const sc = run.accuracy;
+    const scCls = scoreClass(sc);
+    const passed = run.status === 'passed' || run.status === 'pass';
+
+    return `<tr>
+      <td style="color:var(--muted);font-size:11px">${idx + 1}</td>
+      <td><div class="pass-type"><span class="pass-badge ${badgeClass}">${type}</span></div></td>
+      <td class="pass-score${scCls !== 'good' ? ' ' + scCls : ''}">${fmtScore(sc)}</td>
+      <td class="pass-tokens">${fmtNum(run.tokens_total)}</td>
+      <td class="pass-cost">${fmtCost(run.cost_usd)}</td>
+      <td class="pass-lat">${fmtMs(run.latency_ms)}</td>
+      <td>${passed
+        ? '<span style="color:var(--success);font-size:11px">✓ pass</span>'
+        : '<span style="color:var(--warn);font-size:11px">⚠ ' + (run.status || 'partial') + '</span>'
+      }</td>
+    </tr>`;
+  }
+
+  function renderJsonReport(report) {
+    const el = document.getElementById('jsonReport');
+    if (!el) return;
+    const fields = {
+      accuracy: report.accuracy,
+      efficiency: report.efficiency,
+      reliability: report.reliability,
+      orchestration: report.orchestration,
+      overall: report.overall,
+      cost_usd: report.cost_usd,
+      latency_ms: report.latency_ms,
+      llm_calls: report.llm_calls,
+    };
+    function valColor(k, v) {
+      if (typeof v === 'number' && v <= 1) {
+        const cls = scoreClass(v);
+        if (cls === 'good') return 'jv-g';
+        if (cls === 'warn') return 'jv-w';
+        return 'jv-r';
+      }
+      return 'jv-b';
+    }
+    let html = '{\n';
+    const keys = Object.keys(fields);
+    keys.forEach((k, i) => {
+      const v = fields[k];
+      const disp = v != null ? (typeof v === 'number' && v <= 1 ? v.toFixed(2) : v) : 'null';
+      html += `&nbsp;&nbsp;<span class="jk">"${k}"</span>: <span class="${valColor(k, v)}">${disp}</span>${i < keys.length - 1 ? ',' : ''}\n`;
+    });
+    html += '}';
+    el.innerHTML = html.replace(/\n/g, '<br>');
+  }
+
+  function renderSDKUsage(report, sub) {
+    const el = document.getElementById('sdkUsageBody');
+    if (!el) return;
+    const calls = report.llm_calls || 0;
+    const latMs = report.latency_ms || 0;
+    const avgLat = calls > 0 ? Math.round(latMs / calls) : 0;
+    const runs = report.runs || [];
+    let totalTokens = 0;
+    runs.forEach(r => { totalTokens += (r.tokens_total || 0); });
+    if (totalTokens === 0 && report.llm_calls) totalTokens = report.llm_calls * 400;
+
+    const rows = [
+      ['total calls', fmtNum(calls), calls > 3 ? 'wn' : ''],
+      ['total tokens', fmtNum(totalTokens), totalTokens > 2000 ? 'wn' : ''],
+      ['avg call latency', fmtMs(calls > 0 ? latMs / calls : 0), ''],
+      ['total latency', fmtMs(latMs), ''],
+      ['total cost', fmtCost(report.cost_usd), ''],
+    ];
+    el.innerHTML = rows.map(([k, v, cls]) =>
+      `<div class="metric-row"><span class="mk">${k}</span><span class="mv${cls ? ' ' + cls : ''}">${v}</span></div>`
+    ).join('');
+  }
+
+  function generateTips(report) {
+    const tips = [];
+    if (report.efficiency != null && report.efficiency < 0.75) {
+      tips.push({ priority: 'high', title: 'Improve efficiency', desc: `Your efficiency score is ${fmtScore(report.efficiency)}. Consider batching LLM calls or reducing token usage to lower cost and latency.`, impact: '↑ efficiency score' });
+    }
+    if (report.accuracy != null && report.accuracy < 0.85) {
+      tips.push({ priority: 'high', title: 'Improve accuracy', desc: `Accuracy is ${fmtScore(report.accuracy)}. Review failing passes and add stricter output formatting instructions to your prompt.`, impact: '↑ accuracy score' });
+    }
+    if (report.reliability != null && report.reliability < 0.85) {
+      tips.push({ priority: 'med', title: 'Improve reliability', desc: `Reliability is ${fmtScore(report.reliability)}. Ensure consistent outputs under perturbed inputs by constraining the output schema.`, impact: '↑ reliability score' });
+    }
+    if (report.orchestration != null && report.orchestration < 0.75) {
+      tips.push({ priority: 'med', title: 'Improve orchestration', desc: `Orchestration score is ${fmtScore(report.orchestration)}. Reduce retries and redundant calls. Use structured output formats to avoid parse failures.`, impact: '↑ orchestration score' });
+    }
+    const runs = report.runs || [];
+    const failedRuns = runs.filter(r => r.status !== 'passed' && r.status !== 'pass');
+    if (failedRuns.length > 0) {
+      tips.push({ priority: 'high', title: `${failedRuns.length} pass${failedRuns.length > 1 ? 'es' : ''} did not fully pass`, desc: `Review the evaluation passes table — runs of type "${failedRuns.map(r => r.run_type).join(', ')}" need attention.`, impact: '↑ overall score' });
+    }
+    return tips;
+  }
+
+  function renderTips(report) {
+    const tips = generateTips(report);
+    const card = document.getElementById('tipsCard');
+    const list = document.getElementById('tipsList');
+    if (!tips.length) { card.style.display = 'none'; return; }
+    card.style.display = '';
+    list.innerHTML = tips.map(t => {
+      const pClass = t.priority === 'high' ? 'tip-p-high' : t.priority === 'med' ? 'tip-p-med' : 'tip-p-low';
+      const pLabel = t.priority === 'high' ? 'high impact' : t.priority === 'med' ? 'medium impact' : 'low impact';
+      return `<div class="tip-item">
+        <div class="tip-header"><span class="tip-priority ${pClass}">${pLabel}</span><span class="tip-title">${t.title}</span></div>
+        <div class="tip-desc">${t.desc}</div>
+        <div class="tip-impact">${t.impact}</div>
+      </div>`;
+    }).join('');
+  }
+
+  async function loadReport(submissionId, sub) {
+    try {
+      const report = await PromptCodeAPI.getSubmissionReport(submissionId);
+      _reportCache = report;
+
+      updateHeroRing(report.overall);
+      updateScoreCell('cell-accuracy', report.accuracy);
+      updateScoreCell('cell-efficiency', report.efficiency);
+      updateScoreCell('cell-reliability', report.reliability);
+      updateScoreCell('cell-orchestration', report.orchestration);
+
+      // Hero meta
+      const runs = report.runs || [];
+      const passedCount = runs.filter(r => r.status === 'passed' || r.status === 'pass').length;
+      const pill = document.getElementById('heroPassPill');
+      const countEl = document.getElementById('heroPassCount');
+      if (countEl) countEl.textContent = `${passedCount} / ${runs.length} passes`;
+      if (pill) {
+        pill.className = 'status-pill ' + (passedCount === runs.length ? 'status-pass' : 'status-fail');
+      }
+      const latEl = document.getElementById('heroLatency');
+      if (latEl) latEl.textContent = fmtMs(report.latency_ms) + ' total';
+      const timeEl = document.getElementById('heroSubmittedTime');
+      if (timeEl && sub) timeEl.textContent = 'submitted ' + timeAgo(sub.created_at);
+
+      // Passes table
+      const tbody = document.getElementById('passesBody');
+      const countLabel = document.getElementById('passesCount');
+      if (tbody) {
+        if (runs.length) {
+          tbody.innerHTML = runs.map((r, i) => buildPassRow(r, i)).join('');
+        } else {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">No evaluation runs found</td></tr>';
+        }
+      }
+      if (countLabel) {
+        countLabel.textContent = `${passedCount} / ${runs.length} completed`;
+        countLabel.style.color = passedCount === runs.length ? 'var(--success)' : 'var(--warn)';
+      }
+
+      // Feedback card
+      const feedbackCard = document.getElementById('feedbackCard');
+      const feedbackBody = document.getElementById('feedbackBody');
+      if (report.feedback) {
+        feedbackCard.style.display = '';
+        feedbackBody.textContent = report.feedback;
+      }
+
+      // Tips
+      renderTips(report);
+
+      // JSON report
+      renderJsonReport(report);
+
+      // SDK usage
+      renderSDKUsage(report, sub);
+
+    } catch (e) {
+      console.log('Report not yet available:', e.message);
+      document.getElementById('heroScore').textContent = '—';
+      document.getElementById('heroScoreSub').textContent = 'no report';
+    }
+  }
+
+  async function pollStatus(submissionId, sub) {
+    const heroScore = document.getElementById('heroScore');
+    const heroSub = document.getElementById('heroScoreSub');
+    if (heroScore) heroScore.textContent = '...';
+    if (heroSub) heroSub.textContent = 'evaluating';
+
+    for (let i = 0; i < 60; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      try {
+        const status = await PromptCodeAPI.getSubmissionStatus(submissionId);
+        if (status.status === 'completed') {
+          if (heroSub) heroSub.textContent = 'overall';
+          await loadReport(submissionId, sub);
+          return;
+        } else if (status.status === 'failed') {
+          if (heroScore) heroScore.textContent = '✗';
+          if (heroSub) heroSub.textContent = 'failed';
+          return;
+        }
+        if (heroSub) heroSub.textContent = status.status;
+      } catch (e) {
+        console.log('Polling error:', e.message);
+      }
+    }
+    if (heroSub) heroSub.textContent = 'timeout';
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    PromptCodeAPI.updateNavAuth();
+    const params = new URLSearchParams(window.location.search);
+    const submissionId = params.get('id');
+    if (!submissionId) return;
+
+    try {
+      const sub = await PromptCodeAPI.getSubmission(submissionId);
+      const challengeUrl = `/challenge.html?id=${sub.challenge_id}`;
+      document.getElementById('backToChallenge').href = challengeUrl;
+      document.getElementById('breadcrumbChallenge').href = challengeUrl;
+      document.getElementById('improveBtn').href = challengeUrl;
+      document.getElementById('improveBtn2').href = challengeUrl;
+      document.getElementById('breadcrumbSubmission').textContent = `submission #${sub.id}`;
+      document.getElementById('heroChallengeLine').textContent = `RUN #${sub.id}`;
+
+      // Fetch challenge title for breadcrumb
+      try {
+        const challenge = await PromptCodeAPI.getChallenge(sub.challenge_id);
+        const title = challenge.title || 'Challenge';
+        document.getElementById('breadcrumbChallenge').textContent = title;
+        document.getElementById('heroChallengeLine').textContent = `${title.toUpperCase()} · RUN #${sub.id}`;
+        if (challenge.difficulty) {
+          const diffEl = document.getElementById('heroDiffBadge');
+          const d = challenge.difficulty.toLowerCase();
+          const cls = d === 'easy' ? 'diff-easy' : d === 'hard' ? 'diff-hard' : 'diff-med';
+          if (diffEl) diffEl.innerHTML = `<span class="diff-badge ${cls}">${d}</span>`;
+        }
+      } catch (_) {}
+
+      if (sub.status === 'completed') {
+        await loadReport(submissionId, sub);
+      } else if (sub.status === 'pending' || sub.status === 'running') {
+        pollStatus(submissionId, sub);
+      } else if (sub.status === 'failed') {
+        document.getElementById('heroScore').textContent = '✗';
+        document.getElementById('heroScoreSub').textContent = 'failed';
+        document.getElementById('passesBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:24px">Submission failed</td></tr>';
+        document.getElementById('passesCount').textContent = 'failed';
+        document.getElementById('passesCount').style.color = 'var(--danger)';
+      }
+    } catch (e) {
+      document.getElementById('heroScore').textContent = '✗';
+      document.getElementById('heroScoreSub').textContent = 'error';
+      console.error('Failed to load submission:', e.message);
+    }
+  });
+
+  function copyJSON() {
+    if (!_reportCache) return;
+    const { accuracy, efficiency, reliability, orchestration, overall, cost_usd, latency_ms, llm_calls } = _reportCache;
+    const json = JSON.stringify({ accuracy, efficiency, reliability, orchestration, overall, cost_usd, latency_ms, llm_calls }, null, 2);
+    navigator.clipboard.writeText(json).catch(() => {});
+    const btn = document.querySelector('.card-hdr .btn-sm');
+    if (btn) { btn.textContent = 'copied!'; setTimeout(() => btn.textContent = 'copy', 2000); }
+  }
+</script>
+</body>
+</html>

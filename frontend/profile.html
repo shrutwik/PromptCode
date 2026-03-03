@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>profile — PromptCode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0a09; --surface: #111110; --surface2: #141412;
+  --border: #1f1f1d; --border-light: #2a2a27;
+  --text: #e8e6e0; --muted: #6b6b65;
+  --accent: #c8f060; --accent-dim: rgba(200,240,96,0.10);
+  --warn: #f0a060; --danger: #f06060; --success: #60d4a8;
+  --radius: 6px; --nav-h: 52px;
+}
+html { scroll-behavior: smooth; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; line-height: 1.6; min-height: 100vh; }
+::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.7)} }
+@keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+@keyframes barGrow { from{width:0} to{width:var(--w)} }
+.fade-in { animation: fadeUp 0.45s ease both; }
+.d1{animation-delay:.07s;opacity:0} .d2{animation-delay:.14s;opacity:0}
+.d3{animation-delay:.21s;opacity:0} .d4{animation-delay:.28s;opacity:0}
+.d5{animation-delay:.35s;opacity:0}
+
+/* NAV */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: var(--nav-h); display: flex; align-items: center; justify-content: space-between;
+  padding: 0 28px; border-bottom: 1px solid var(--border);
+  background: rgba(10,10,9,0.94); backdrop-filter: blur(16px);
+}
+.nav-logo { display: flex; align-items: center; gap: 8px; font-family: 'Instrument Serif', serif; font-size: 18px; letter-spacing: -0.02em; color: var(--text); text-decoration: none; }
+.nav-logo .dot { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; animation: pulse 2.4s ease-in-out infinite; }
+.nav-links { display: flex; gap: 26px; }
+.nav-links a { color: var(--muted); text-decoration: none; font-size: 12px; letter-spacing: 0.04em; transition: color 0.2s; }
+.nav-links a:hover, .nav-links a.active { color: var(--text); }
+.nav-right { display: flex; align-items: center; gap: 10px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 12px; cursor: pointer; transition: all 0.15s; text-decoration: none; border: 1px solid transparent; }
+.btn-ghost { background: transparent; border-color: var(--border-light); color: var(--muted); }
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-primary { background: var(--accent); color: var(--bg); font-weight: 500; }
+.btn-primary:hover { background: #d4f870; }
+
+/* LAYOUT */
+.page { max-width: 1060px; margin: 0 auto; padding: calc(var(--nav-h) + 36px) 28px 60px; }
+
+/* PROFILE HEADER */
+.profile-header {
+  display: grid; grid-template-columns: auto 1fr auto;
+  gap: 24px; align-items: start;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 32px;
+}
+
+.avatar-wrap { position: relative; }
+.avatar-lg {
+  width: 72px; height: 72px; border-radius: 12px;
+  background: var(--accent-dim); border: 1px solid rgba(200,240,96,0.3);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Instrument Serif', serif; font-size: 26px; color: var(--accent);
+}
+.online-dot {
+  position: absolute; bottom: -2px; right: -2px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--success); border: 2px solid var(--bg);
+}
+
+.profile-info { display: flex; flex-direction: column; gap: 4px; }
+.profile-handle { font-family: 'Instrument Serif', serif; font-size: 28px; letter-spacing: -0.02em; line-height: 1; }
+.profile-name { font-size: 13px; color: var(--muted); }
+.profile-bio { font-size: 12px; color: var(--muted); margin-top: 6px; max-width: 440px; line-height: 1.6; }
+.profile-tags { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.ptag { padding: 2px 9px; border: 1px solid var(--border-light); border-radius: 20px; font-size: 10px; color: var(--muted); }
+
+.profile-stats { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+.rank-display { text-align: right; }
+.rank-num { font-family: 'Instrument Serif', serif; font-size: 42px; letter-spacing: -0.04em; color: var(--accent); line-height: 1; }
+.rank-label { font-size: 10px; color: var(--muted); letter-spacing: 0.06em; }
+.rank-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.streak-pill { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border-light); border-radius: 20px; font-size: 11px; color: var(--muted); }
+
+/* STATS ROW */
+.stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 28px; }
+.stat-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; background: var(--surface2); }
+.stat-val { font-family: 'Instrument Serif', serif; font-size: 26px; letter-spacing: -0.02em; color: var(--text); line-height: 1; }
+.stat-lbl { font-size: 10px; color: var(--muted); margin-top: 4px; letter-spacing: 0.04em; }
+.stat-delta { font-size: 10px; color: var(--success); margin-top: 3px; }
+.stat-delta.neg { color: var(--warn); }
+
+/* MAIN GRID */
+.main-grid { display: grid; grid-template-columns: 1fr 300px; gap: 24px; align-items: start; }
+
+/* LEFT COLUMN */
+.left-col { display: flex; flex-direction: column; gap: 20px; }
+
+/* ACTIVITY CHART */
+.card { border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); overflow: hidden; }
+.card-header { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between; }
+.card-title { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.card-body { padding: 16px; }
+
+/* Activity grid (github style) */
+.activity-grid { display: flex; flex-direction: column; gap: 6px; }
+.activity-months { display: flex; gap: 0; font-size: 10px; color: var(--muted); margin-bottom: 4px; padding-left: 24px; }
+.activity-months span { flex: 1; text-align: center; }
+.activity-row { display: flex; align-items: center; gap: 3px; }
+.activity-day-label { width: 20px; font-size: 9px; color: var(--muted); text-align: right; flex-shrink: 0; }
+.activity-cells { display: flex; gap: 3px; flex: 1; }
+.cell {
+  width: 12px; height: 12px; border-radius: 2px;
+  background: var(--border); flex-shrink: 0; cursor: pointer;
+  transition: transform 0.1s;
+}
+.cell:hover { transform: scale(1.3); }
+.cell.l1 { background: rgba(200,240,96,0.2); }
+.cell.l2 { background: rgba(200,240,96,0.45); }
+.cell.l3 { background: rgba(200,240,96,0.7); }
+.cell.l4 { background: var(--accent); }
+.activity-legend { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 10px; color: var(--muted); justify-content: flex-end; }
+.legend-cell { width: 10px; height: 10px; border-radius: 2px; }
+
+/* SCORE HISTORY */
+.score-history { display: flex; flex-direction: column; gap: 1px; }
+.sh-row {
+  display: grid; grid-template-columns: 1fr 80px 80px 80px;
+  gap: 10px; align-items: center; padding: 11px 14px;
+  border-bottom: 1px solid var(--border); font-size: 12px;
+  cursor: pointer; transition: background 0.12s; text-decoration: none; color: var(--text);
+}
+.sh-row:hover { background: rgba(255,255,255,0.02); }
+.sh-row:last-child { border-bottom: none; }
+.sh-name { color: var(--text); font-size: 12px; }
+.sh-desc { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.sh-score { color: var(--accent); font-size: 13px; text-align: right; }
+.sh-val { color: var(--muted); font-size: 12px; text-align: right; }
+.sh-time { font-size: 10px; color: var(--muted); text-align: right; }
+.diff-badge { font-size: 9px; padding: 2px 6px; border-radius: 3px; letter-spacing: 0.04em; }
+.diff-easy { background: rgba(96,212,168,0.15); color: var(--success); }
+.diff-med { background: rgba(240,160,96,0.15); color: var(--warn); }
+.diff-hard { background: rgba(240,96,96,0.15); color: var(--danger); }
+
+/* SCORE BREAKDOWN BARS */
+.breakdown-list { display: flex; flex-direction: column; gap: 12px; }
+.breakdown-item { }
+.breakdown-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+.breakdown-label { font-size: 12px; color: var(--text); }
+.breakdown-val { font-size: 12px; color: var(--accent); }
+.bar-track { height: 4px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; --w: 0%; animation: barGrow 1s ease forwards; width: var(--w); }
+.fill-a { background: var(--accent); }
+.fill-b { background: #60b8f0; }
+.fill-c { background: var(--warn); }
+.fill-d { background: var(--success); }
+
+/* BADGES */
+.badges-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.badge-item {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 10px; text-align: center; background: #0c0c0b;
+  transition: border-color 0.15s;
+}
+.badge-item:hover { border-color: var(--border-light); }
+.badge-item.earned { border-color: rgba(200,240,96,0.25); background: rgba(200,240,96,0.03); }
+.badge-icon { font-size: 20px; margin-bottom: 5px; }
+.badge-name { font-size: 10px; color: var(--text); margin-bottom: 2px; }
+.badge-desc { font-size: 9px; color: var(--muted); line-height: 1.4; }
+.badge-item:not(.earned) { opacity: 0.35; }
+
+/* RIGHT COLUMN */
+.right-col { display: flex; flex-direction: column; gap: 16px; }
+
+/* SOLVED LIST */
+.solved-list { display: flex; flex-direction: column; gap: 1px; }
+.solved-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px; border-bottom: 1px solid var(--border);
+  font-size: 12px; transition: background 0.12s; cursor: pointer;
+  text-decoration: none; color: var(--text);
+}
+.solved-item:hover { background: rgba(255,255,255,0.02); }
+.solved-item:last-child { border-bottom: none; }
+.solved-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+.solved-name { flex: 1; }
+.solved-score { font-size: 12px; color: var(--accent); }
+
+/* RANK HISTORY sparkline */
+.sparkline-wrap { padding: 8px 0; }
+.sparkline { display: flex; align-items: flex-end; gap: 3px; height: 48px; }
+.spark-bar { flex: 1; border-radius: 2px 2px 0 0; background: var(--border-light); transition: background 0.2s; position: relative; }
+.spark-bar:hover { background: var(--accent); }
+.spark-bar.current { background: var(--accent); }
+.spark-label { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 5px; }
+
+/* COMPARE */
+.compare-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 11.5px; }
+.compare-row:last-child { border-bottom: none; }
+.cr-label { color: var(--muted); }
+.cr-you { color: var(--accent); }
+.cr-avg { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="/index.html"><div class="dot"></div>PromptCode</a>
+  <div class="nav-links">
+    <a href="/challenges.html">challenges</a>
+    <a href="/leaderboard.html">leaderboard</a>
+    <a href="/playground.html">playground</a>
+  </div>
+  <div class="nav-right">
+    <a class="btn btn-ghost" href="/challenges.html">← challenges</a>
+    <a href="javascript:void(0)" onclick="PromptCodeAPI.logout()" style="width:28px;height:28px;border-radius:5px;background:var(--accent-dim);border:1px solid rgba(200,240,96,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:none" title="sign out" data-user-initials></a>
+  </div>
+</nav>
+
+<div class="page">
+
+  <!-- PROFILE HEADER -->
+  <div class="profile-header fade-in">
+    <div class="avatar-wrap">
+      <div class="avatar-lg" id="profileAvatar">—</div>
+      <div class="online-dot"></div>
+    </div>
+    <div class="profile-info">
+      <div class="profile-handle" id="profileHandle">—</div>
+      <div class="profile-name" id="profileName">loading...</div>
+      <div class="profile-bio" id="profileBio"></div>
+      <div class="profile-tags" id="profileTags"></div>
+    </div>
+    <div class="profile-stats">
+      <div class="rank-display">
+        <div class="rank-num" id="profileRank">—</div>
+        <div class="rank-label">global rank</div>
+        <div class="rank-sub" id="profileRankSub">not yet ranked</div>
+      </div>
+      <a class="btn btn-ghost" href="javascript:void(0)" onclick="editProfile()" id="editProfileBtn" style="display:none">edit profile</a>
+      <a class="btn btn-ghost" href="javascript:void(0)" onclick="PromptCodeAPI.logout()" id="signOutBtn" style="display:none;border-color:rgba(240,96,96,0.3);color:var(--danger)">sign out</a>
+    </div>
+  </div>
+
+  <!-- STATS ROW -->
+  <div class="stats-row fade-in d1">
+    <div class="stat-card">
+      <div class="stat-val" id="statAvgScore">—</div>
+      <div class="stat-lbl">avg score</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="statSolved">—</div>
+      <div class="stat-lbl" id="statSolvedLbl">solved</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="statSubmissions">—</div>
+      <div class="stat-lbl">submissions</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="statCost">—</div>
+      <div class="stat-lbl">total sdk cost</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="statLatency">—</div>
+      <div class="stat-lbl">avg latency ms</div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <div class="left-col">
+
+      <!-- ACTIVITY -->
+      <div class="card fade-in d2">
+        <div class="card-header">
+          <span class="card-title">submission activity</span>
+        </div>
+        <div class="card-body" style="padding:28px 16px;text-align:center">
+          <span style="font-size:12px;color:var(--muted)">activity tracking coming soon</span>
+        </div>
+      </div>
+
+      <!-- SCORE HISTORY -->
+      <div class="card fade-in d3">
+        <div class="card-header">
+          <span class="card-title">submission history</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-ghost" style="padding:3px 10px;font-size:10px" onclick="filterHistory('all',this)">all</button>
+            <button class="btn btn-ghost" style="padding:3px 10px;font-size:10px" onclick="filterHistory('solved',this)">solved</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 80px 80px 80px;gap:10px;padding:7px 14px;font-size:10px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;border-bottom:1px solid var(--border)">
+          <span>challenge</span><span style="text-align:right">score</span><span style="text-align:right">cost</span><span style="text-align:right">when</span>
+        </div>
+        <div class="score-history" id="historyList">
+          <div style="padding:24px 14px;text-align:center;font-size:12px;color:var(--muted)">loading submissions...</div>
+        </div>
+      </div>
+
+      <!-- SCORE BREAKDOWN -->
+      <div class="card fade-in d4">
+        <div class="card-header"><span class="card-title">avg score breakdown</span></div>
+        <div class="card-body">
+          <div class="breakdown-list" id="breakdownList">
+            <div class="breakdown-item">
+              <div class="breakdown-top"><span class="breakdown-label">accuracy</span><span class="breakdown-val" id="bdAccuracy">—</span></div>
+              <div class="bar-track"><div class="bar-fill fill-a" id="bdAccuracyBar" style="--w:0%"></div></div>
+            </div>
+            <div class="breakdown-item">
+              <div class="breakdown-top"><span class="breakdown-label">reliability</span><span class="breakdown-val" id="bdReliability">—</span></div>
+              <div class="bar-track"><div class="bar-fill fill-d" id="bdReliabilityBar" style="--w:0%"></div></div>
+            </div>
+            <div class="breakdown-item">
+              <div class="breakdown-top"><span class="breakdown-label">efficiency</span><span class="breakdown-val" id="bdEfficiency">—</span></div>
+              <div class="bar-track"><div class="bar-fill fill-c" id="bdEfficiencyBar" style="--w:0%"></div></div>
+            </div>
+            <div class="breakdown-item">
+              <div class="breakdown-top"><span class="breakdown-label">orchestration</span><span class="breakdown-val" id="bdOrchestration">—</span></div>
+              <div class="bar-track"><div class="bar-fill" id="bdOrchestrationBar" style="--w:0%;background:var(--danger)"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div class="right-col">
+
+      <!-- BADGES -->
+      <div class="card fade-in d2">
+        <div class="card-header"><span class="card-title">badges</span></div>
+        <div class="card-body" style="padding:28px 16px;text-align:center">
+          <span style="font-size:12px;color:var(--muted)">badges coming soon</span>
+        </div>
+      </div>
+
+      <!-- SOLVED CHALLENGES -->
+      <div class="card fade-in d3">
+        <div class="card-header"><span class="card-title">solved challenges</span><span style="font-size:11px;color:var(--muted)" id="solvedCount"></span></div>
+        <div class="solved-list" id="solvedList">
+          <div style="padding:18px 14px;text-align:center;font-size:12px;color:var(--muted)">loading...</div>
+        </div>
+        <div style="padding:10px 14px;border-top:1px solid var(--border)">
+          <a href="/challenges.html" style="font-size:11px;color:var(--accent);text-decoration:none">browse all challenges →</a>
+        </div>
+      </div>
+
+      <!-- YOUR SCORES -->
+      <div class="card fade-in d4">
+        <div class="card-header"><span class="card-title">your scores</span></div>
+        <div class="card-body" style="padding:10px 14px" id="yourScoresBody">
+          <div class="compare-row"><span class="cr-label">overall</span><span class="cr-you" id="ysOverall">—</span></div>
+          <div class="compare-row"><span class="cr-label">accuracy</span><span class="cr-you" id="ysAccuracy">—</span></div>
+          <div class="compare-row"><span class="cr-label">efficiency</span><span class="cr-you" id="ysEfficiency">—</span></div>
+          <div class="compare-row"><span class="cr-label">reliability</span><span class="cr-you" id="ysReliability">—</span></div>
+          <div class="compare-row"><span class="cr-label">orchestration</span><span class="cr-you" id="ysOrchestration">—</span></div>
+        </div>
+      </div>
+
+      <!-- RANK TREND -->
+      <div class="card fade-in d5">
+        <div class="card-header"><span class="card-title">rank trend</span></div>
+        <div class="card-body" style="padding:28px 16px;text-align:center">
+          <span style="font-size:12px;color:var(--muted)">rank history coming soon</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/static/api.js"></script>
+<script>
+  function timeAgo(dateStr) {
+    const now = Date.now();
+    const then = new Date(dateStr).getTime();
+    const diff = now - then;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    const days = Math.floor(hrs / 24);
+    if (days < 30) return days + 'd ago';
+    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function fmt(v, decimals = 2) {
+    if (v == null) return '—';
+    return Number(v).toFixed(decimals);
+  }
+
+  function statusClass(status) {
+    if (!status) return '';
+    const s = status.toLowerCase();
+    if (s === 'completed' || s === 'passed') return 'diff-easy';
+    if (s === 'failed') return 'diff-hard';
+    return 'diff-med';
+  }
+
+  function escHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str || '';
+    return d.innerHTML;
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    PromptCodeAPI.updateNavAuth();
+
+    const localUser = PromptCodeAPI.getUser();
+    if (!localUser) {
+      window.location.href = '/login.html';
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const targetUsername = params.get('user') || localUser.username;
+    const isOwnProfile = targetUsername === localUser.username;
+
+    const editBtn = document.getElementById('editProfileBtn');
+    const signOutBtn = document.getElementById('signOutBtn');
+    if (isOwnProfile) {
+      if (editBtn) editBtn.style.display = '';
+      if (signOutBtn) signOutBtn.style.display = '';
+    }
+
+    const $ = id => document.getElementById(id);
+
+    // Header placeholders from local user while API loads
+    $('profileHandle').textContent = targetUsername;
+    document.title = targetUsername + ' — PromptCode';
+
+    let profile;
+    try {
+      profile = await PromptCodeAPI.getUserProfile(targetUsername);
+    } catch (e) {
+      $('profileName').textContent = 'could not load profile';
+      console.error('Profile load failed:', e.message);
+      return;
+    }
+
+    const user = profile.user || {};
+    const stats = profile.stats || {};
+    const subs = profile.recent_submissions || [];
+
+    // --- Profile header ---
+    const initials = ((user.first_name?.[0] || '') + (user.last_name?.[0] || '') || user.username?.substring(0,2) || '??').toUpperCase();
+    $('profileAvatar').textContent = initials;
+    $('profileHandle').textContent = user.username || targetUsername;
+    document.title = (user.username || targetUsername) + ' — PromptCode';
+
+    const nameParts = [user.first_name, user.last_name].filter(Boolean).join(' ');
+    const joinDate = user.created_at
+      ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+      : '';
+    $('profileName').textContent = [nameParts, joinDate ? 'joined ' + joinDate : ''].filter(Boolean).join(' · ') || user.username;
+
+    if (user.bio) {
+      $('profileBio').textContent = user.bio;
+    } else {
+      $('profileBio').style.display = 'none';
+    }
+    $('profileTags').style.display = 'none';
+
+    // --- Stats row ---
+    $('statAvgScore').textContent = fmt(stats.avg_score);
+    $('statSolved').textContent = stats.challenges_solved ?? '—';
+    $('statSolvedLbl').textContent = stats.total_challenges
+      ? `solved / ${stats.total_challenges}`
+      : 'solved';
+    $('statSubmissions').textContent = stats.total_submissions ?? '—';
+    $('statCost').textContent = stats.total_cost_usd != null ? '$' + fmt(stats.total_cost_usd) : '—';
+    $('statLatency').textContent = stats.avg_latency_ms != null ? Math.round(stats.avg_latency_ms).toLocaleString() : '—';
+
+    // --- Score breakdown bars ---
+    const breakdownMap = {
+      Accuracy:      { val: stats.avg_accuracy,      el: 'bdAccuracy',      bar: 'bdAccuracyBar' },
+      Reliability:   { val: stats.avg_reliability,    el: 'bdReliability',   bar: 'bdReliabilityBar' },
+      Efficiency:    { val: stats.avg_efficiency,     el: 'bdEfficiency',    bar: 'bdEfficiencyBar' },
+      Orchestration: { val: stats.avg_orchestration,  el: 'bdOrchestration', bar: 'bdOrchestrationBar' },
+    };
+    for (const [, cfg] of Object.entries(breakdownMap)) {
+      const v = cfg.val;
+      $(cfg.el).textContent = fmt(v);
+      if (v != null) {
+        $(cfg.bar).style.setProperty('--w', Math.round(v * 100) + '%');
+      }
+    }
+
+    // --- Your scores sidebar ---
+    $('ysOverall').textContent = fmt(stats.avg_score);
+    $('ysAccuracy').textContent = fmt(stats.avg_accuracy);
+    $('ysEfficiency').textContent = fmt(stats.avg_efficiency);
+    $('ysReliability').textContent = fmt(stats.avg_reliability);
+    $('ysOrchestration').textContent = fmt(stats.avg_orchestration);
+
+    // --- Submission history ---
+    const histList = $('historyList');
+    if (subs.length === 0) {
+      histList.innerHTML = '<div style="padding:24px 14px;text-align:center;font-size:12px;color:var(--muted)">no submissions yet</div>';
+    } else {
+      histList.innerHTML = '';
+      subs.forEach(s => {
+        const a = document.createElement('a');
+        a.className = 'sh-row';
+        a.href = `/submission.html?id=${s.id}`;
+        a.style.gridTemplateColumns = '1fr 80px 80px 80px';
+        a.innerHTML = `
+          <div><div class="sh-name">${escHtml(s.challenge_title || 'Challenge #' + s.challenge_id)}</div><div class="sh-desc"><span class="diff-badge ${statusClass(s.status)}">${escHtml(s.status)}</span></div></div>
+          <span class="sh-score">${s.score_overall != null ? fmt(s.score_overall) : '—'}</span>
+          <span class="sh-val">${s.total_cost_usd != null ? '$' + fmt(s.total_cost_usd) : '—'}</span>
+          <span class="sh-time">${s.created_at ? timeAgo(s.created_at) : '—'}</span>
+        `;
+        histList.appendChild(a);
+      });
+    }
+
+    // --- Solved challenges sidebar ---
+    const solvedMap = new Map();
+    subs.forEach(s => {
+      const key = s.challenge_id;
+      if (!solvedMap.has(key) || (s.score_overall || 0) > (solvedMap.get(key).score_overall || 0)) {
+        solvedMap.set(key, s);
+      }
+    });
+    const solved = [...solvedMap.values()].filter(s => {
+      const st = (s.status || '').toLowerCase();
+      return st === 'completed' || st === 'passed' || (s.score_overall && s.score_overall > 0);
+    }).sort((a, b) => (b.score_overall || 0) - (a.score_overall || 0));
+
+    $('solvedCount').textContent = solved.length > 0
+      ? solved.length + (stats.total_challenges ? ' / ' + stats.total_challenges : '')
+      : '';
+
+    const solvedList = $('solvedList');
+    if (solved.length === 0) {
+      solvedList.innerHTML = '<div style="padding:18px 14px;text-align:center;font-size:12px;color:var(--muted)">no solved challenges yet</div>';
+    } else {
+      solvedList.innerHTML = '';
+      solved.forEach(s => {
+        const a = document.createElement('a');
+        a.className = 'solved-item';
+        a.href = `/submission.html?id=${s.id}`;
+        const score = s.score_overall || 0;
+        const color = score >= 0.9 ? 'var(--success)' : score >= 0.75 ? 'var(--accent)' : 'var(--warn)';
+        a.innerHTML = `
+          <div class="solved-dot" style="background:${color}"></div>
+          <span class="solved-name">${escHtml(s.challenge_title || 'Challenge #' + s.challenge_id)}</span>
+          <span class="solved-score" style="color:${color}">${fmt(score)}</span>
+        `;
+        solvedList.appendChild(a);
+      });
+    }
+
+    // --- Filter history buttons ---
+    window._allHistorySubs = subs;
+  });
+
+  function filterHistory(mode, btn) {
+    document.querySelectorAll('.card-header .btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const subs = window._allHistorySubs || [];
+    const histList = document.getElementById('historyList');
+    if (!histList) return;
+
+    const filtered = mode === 'solved'
+      ? subs.filter(s => { const st = (s.status||'').toLowerCase(); return st === 'completed' || st === 'passed'; })
+      : subs;
+
+    if (filtered.length === 0) {
+      histList.innerHTML = '<div style="padding:24px 14px;text-align:center;font-size:12px;color:var(--muted)">no matching submissions</div>';
+      return;
+    }
+    histList.innerHTML = '';
+    filtered.forEach(s => {
+      const a = document.createElement('a');
+      a.className = 'sh-row';
+      a.href = `/submission.html?id=${s.id}`;
+      a.style.gridTemplateColumns = '1fr 80px 80px 80px';
+      a.innerHTML = `
+        <div><div class="sh-name">${escHtml(s.challenge_title || 'Challenge #' + s.challenge_id)}</div><div class="sh-desc"><span class="diff-badge ${statusClass(s.status)}">${escHtml(s.status)}</span></div></div>
+        <span class="sh-score">${s.score_overall != null ? fmt(s.score_overall) : '—'}</span>
+        <span class="sh-val">${s.total_cost_usd != null ? '$' + fmt(s.total_cost_usd) : '—'}</span>
+        <span class="sh-time">${s.created_at ? timeAgo(s.created_at) : '—'}</span>
+      `;
+      histList.appendChild(a);
+    });
+  }
+
+  function editProfile() {
+    const user = PromptCodeAPI.getUser();
+    if (!user) return;
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
+    overlay.innerHTML = `
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:24px;width:380px;max-width:90vw">
+        <div style="font-family:'Instrument Serif',serif;font-size:20px;margin-bottom:16px">edit profile</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <label style="font-size:11px;color:var(--muted)">first name
+            <input id="editFirst" type="text" value="${user.first_name || ''}" style="width:100%;margin-top:4px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'DM Mono',monospace;font-size:12px">
+          </label>
+          <label style="font-size:11px;color:var(--muted)">last name
+            <input id="editLast" type="text" value="${user.last_name || ''}" style="width:100%;margin-top:4px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'DM Mono',monospace;font-size:12px">
+          </label>
+          <label style="font-size:11px;color:var(--muted)">bio
+            <textarea id="editBio" rows="3" style="width:100%;margin-top:4px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'DM Mono',monospace;font-size:12px;resize:vertical">${user.bio || ''}</textarea>
+          </label>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+          <button id="editCancel" class="btn btn-ghost">cancel</button>
+          <button id="editSave" class="btn btn-primary">save</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('editCancel').addEventListener('click', () => overlay.remove());
+    document.getElementById('editSave').addEventListener('click', async () => {
+      const btn = document.getElementById('editSave');
+      btn.textContent = 'saving...';
+      btn.disabled = true;
+      try {
+        const updated = await PromptCodeAPI.updateMe({
+          first_name: document.getElementById('editFirst').value,
+          last_name: document.getElementById('editLast').value,
+          bio: document.getElementById('editBio').value,
+        });
+        localStorage.setItem('pc_user', JSON.stringify(updated));
+        overlay.remove();
+        location.reload();
+      } catch (e) {
+        btn.textContent = 'error — retry';
+        btn.disabled = false;
+      }
+    });
+  }
+</script>
+</body>
+</html>

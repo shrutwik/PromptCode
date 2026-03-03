@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Challenges — PromptCode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0a09; --surface: #111110; --surface2: #141412;
+  --border: #1f1f1d; --border-light: #2a2a27;
+  --text: #e8e6e0; --muted: #6b6b65;
+  --accent: #c8f060; --accent-dim: rgba(200,240,96,0.10);
+  --warn: #f0a060; --danger: #f06060; --success: #60d4a8;
+  --radius: 6px; --nav-h: 52px;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; line-height: 1.6; overflow-x: hidden; }
+::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #2a2a27; border-radius: 3px; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.7)} }
+@keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+.fade-in { animation: fadeUp 0.4s ease both; }
+.d1{animation-delay:.06s;opacity:0} .d2{animation-delay:.12s;opacity:0} .d3{animation-delay:.18s;opacity:0}
+.d4{animation-delay:.24s;opacity:0} .d5{animation-delay:.30s;opacity:0}
+
+/* NAV */
+nav { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--nav-h); display:flex; align-items:center; justify-content:space-between; padding:0 24px; border-bottom:1px solid var(--border); background:rgba(10,10,9,0.94); backdrop-filter:blur(16px); }
+.nav-logo { display:flex; align-items:center; gap:8px; font-family:'Instrument Serif',serif; font-size:18px; letter-spacing:-0.02em; color:var(--text); text-decoration:none; }
+.nav-logo .dot { width:7px; height:7px; background:var(--accent); border-radius:50%; animation:pulse 2.4s ease-in-out infinite; }
+.nav-links { display:flex; gap:24px; }
+.nav-links a { color:var(--muted); text-decoration:none; font-size:12px; letter-spacing:0.04em; transition:color 0.2s; }
+.nav-links a:hover { color:var(--text); }
+.nav-links a.active { color:var(--text); }
+.nav-right { display:flex; align-items:center; gap:10px; }
+.btn { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:var(--radius); font-family:'DM Mono',monospace; font-size:12px; cursor:pointer; transition:all 0.15s; text-decoration:none; border:1px solid transparent; }
+.btn-ghost { background:transparent; border-color:var(--border-light); color:var(--muted); }
+.btn-ghost:hover { border-color:var(--accent); color:var(--accent); }
+.btn-primary { background:var(--accent); color:var(--bg); font-weight:500; }
+.btn-primary:hover { background:#d4f870; }
+
+/* LAYOUT */
+.layout { display:grid; grid-template-columns:220px 1fr; min-height:calc(100vh - var(--nav-h)); margin-top:var(--nav-h); }
+
+/* SIDEBAR */
+.sidebar { border-right:1px solid var(--border); padding:20px 0; background:var(--surface); position:sticky; top:var(--nav-h); height:calc(100vh - var(--nav-h)); overflow-y:auto; }
+
+.sidebar-user { padding:16px 18px 20px; border-bottom:1px solid var(--border); margin-bottom:16px; }
+.user-avatar { width:36px; height:36px; border-radius:6px; background:var(--accent-dim); border:1px solid rgba(200,240,96,0.3); display:flex; align-items:center; justify-content:center; font-size:13px; color:var(--accent); margin-bottom:8px; }
+.user-name { font-size:13px; color:var(--text); margin-bottom:2px; }
+.user-rank { font-size:11px; color:var(--muted); }
+
+.sidebar-section { margin-bottom:20px; }
+.sidebar-label { padding:0 18px 8px; font-size:9px; letter-spacing:0.12em; color:var(--muted); text-transform:uppercase; }
+.sidebar-link { display:flex; align-items:center; gap:9px; padding:7px 18px; cursor:pointer; transition:background 0.12s; color:var(--muted); font-size:12px; text-decoration:none; border-left:2px solid transparent; }
+.sidebar-link:hover { background:rgba(255,255,255,0.025); color:var(--text); }
+.sidebar-link.active { border-left-color:var(--accent); background:var(--accent-dim); color:var(--text); }
+.sidebar-link svg { width:14px; height:14px; flex-shrink:0; }
+.sidebar-badge { margin-left:auto; font-size:10px; padding:1px 6px; border-radius:3px; background:var(--border-light); color:var(--muted); }
+.sidebar-badge.new { background:rgba(200,240,96,0.15); color:var(--accent); }
+
+.progress-section { padding:16px 18px; border-top:1px solid var(--border); margin-top:auto; }
+.prog-label { font-size:10px; color:var(--muted); margin-bottom:6px; }
+.prog-track { height:3px; background:var(--border); border-radius:3px; overflow:hidden; margin-bottom:5px; }
+.prog-fill { height:100%; background:var(--accent); border-radius:3px; width:0%; }
+.prog-sub { font-size:10px; color:var(--muted); }
+
+/* MAIN CONTENT */
+.main { padding:28px 32px; }
+
+/* Header row */
+.page-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:28px; }
+.page-title { font-family:'Instrument Serif',serif; font-size:28px; letter-spacing:-0.02em; margin-bottom:4px; }
+.page-sub { font-size:12px; color:var(--muted); }
+.header-actions { display:flex; gap:8px; align-items:center; }
+
+/* Stats bar */
+.stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:28px; }
+.stat-card { border:1px solid var(--border); border-radius:var(--radius); padding:16px; background:var(--surface2); }
+.stat-card-num { font-family:'Instrument Serif',serif; font-size:28px; letter-spacing:-0.02em; color:var(--text); }
+.stat-card-label { font-size:11px; color:var(--muted); margin-top:2px; }
+.stat-card-delta { font-size:10px; color:var(--success); margin-top:4px; }
+
+/* Filters */
+.filters { display:flex; align-items:center; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
+.filter-btn { padding:5px 12px; border:1px solid var(--border-light); border-radius:20px; font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); cursor:pointer; transition:all 0.15s; background:transparent; }
+.filter-btn:hover { border-color:var(--text); color:var(--text); }
+.filter-btn.active { border-color:var(--accent); color:var(--accent); background:var(--accent-dim); }
+.search-input { background:var(--surface); border:1px solid var(--border-light); border-radius:var(--radius); padding:6px 12px; font-family:'DM Mono',monospace; font-size:12px; color:var(--text); outline:none; transition:border-color 0.15s; margin-left:auto; width:200px; }
+.search-input:focus { border-color:var(--accent); }
+.search-input::placeholder { color:var(--muted); }
+
+/* Table header */
+.table-header { display:grid; grid-template-columns:28px 1fr 100px 80px 90px 90px 50px; gap:12px; padding:8px 16px; font-size:10px; color:var(--muted); letter-spacing:0.07em; text-transform:uppercase; border-bottom:1px solid var(--border); }
+
+/* Challenge rows */
+.challenge-row {
+  display:grid; grid-template-columns:28px 1fr 100px 80px 90px 90px 50px;
+  gap:12px; align-items:center;
+  padding:14px 16px;
+  border-bottom:1px solid var(--border);
+  transition:background 0.12s;
+  cursor:pointer; text-decoration:none; color:var(--text);
+}
+.challenge-row:hover { background:var(--surface2); }
+.challenge-row:last-child { border-bottom:none; }
+
+.row-num { font-size:11px; color:var(--muted); }
+.row-info { display:flex; flex-direction:column; gap:2px; }
+.row-name { font-size:13px; color:var(--text); }
+.row-desc { font-size:11px; color:var(--muted); }
+.row-cat { font-size:11px; color:var(--muted); }
+.row-solved { font-size:11px; color:var(--muted); text-align:center; }
+.row-score { font-size:12px; color:var(--accent); text-align:right; }
+.row-status { text-align:center; }
+
+.diff-badge { font-size:9px; padding:2px 7px; border-radius:3px; letter-spacing:0.05em; font-weight:500; }
+.diff-easy { background:rgba(96,212,168,0.15); color:var(--success); }
+.diff-med { background:rgba(240,160,96,0.15); color:var(--warn); }
+.diff-hard { background:rgba(240,96,96,0.15); color:var(--danger); }
+
+.status-dot { width:7px; height:7px; border-radius:50%; display:inline-block; }
+.status-solved { background:var(--success); }
+.status-attempted { background:var(--warn); }
+.status-new { background:var(--border-light); }
+.status-locked { background:var(--border); opacity:0.4; }
+
+/* Section divider */
+.section-divider { padding:10px 16px 6px; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--border); background:var(--surface); }
+
+/* Challenges table */
+.challenges-table { border:1px solid var(--border); border-radius:8px; overflow:hidden; background:var(--surface2); }
+
+/* Weekly challenge banner */
+.weekly-banner {
+  border:1px solid rgba(200,240,96,0.3); border-radius:8px;
+  padding:20px 24px; background:rgba(200,240,96,0.04);
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:20px;
+}
+.wb-left { display:flex; flex-direction:column; gap:4px; }
+.wb-tag { font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:var(--accent); }
+.wb-title { font-family:'Instrument Serif',serif; font-size:18px; color:var(--text); }
+.wb-desc { font-size:11px; color:var(--muted); }
+.wb-right { display:flex; align-items:center; gap:12px; }
+.wb-timer { font-size:11px; color:var(--muted); }
+.wb-timer b { color:var(--warn); }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="/index.html"><div class="dot"></div>PromptCode</a>
+  <div class="nav-links">
+    <a href="/challenges.html" class="active">challenges</a>
+    <a href="/leaderboard.html">leaderboard</a>
+    <a href="/playground.html">playground</a>
+  </div>
+  <div class="nav-right">
+    <span style="font-size:11px;color:var(--muted)">sdk v0.4.1</span>
+    <a data-noauth-show class="btn btn-ghost" href="/login.html">sign in</a>
+    <a data-noauth-show class="btn btn-primary" href="/signup.html">get started →</a>
+    <a data-auth-show href="/profile.html" style="width:28px;height:28px;border-radius:5px;background:var(--accent-dim);border:1px solid rgba(200,240,96,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:none" data-user-initials>jl</a>
+  </div>
+</nav>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-user" data-auth-show>
+      <a href="/profile.html" style="text-decoration:none">
+        <div class="user-avatar" data-user-initials>jl</div>
+        <div class="user-name" data-user-name>jordan_lee</div>
+      </a>
+      <div class="user-rank" id="sidebarUserRank">—</div>
+    </div>
+    <div class="sidebar-user" data-noauth-show style="text-align:center">
+      <a class="btn btn-primary" href="/signup.html" style="width:100%;justify-content:center;margin-bottom:6px">get started →</a>
+      <a href="/login.html" style="font-size:11px;color:var(--muted);text-decoration:none">or sign in</a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">navigate</div>
+      <a class="sidebar-link active" href="/challenges.html">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
+        challenges
+        <span class="sidebar-badge" id="sidebarChallengeCount">—</span>
+      </a>
+      <a class="sidebar-link" href="/leaderboard.html">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2v12M4 6v8M12 4v10"/></svg>
+        leaderboard
+      </a>
+      <a class="sidebar-link" href="/profile.html">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5"/><path d="M8 5v3l2 2"/></svg>
+        my submissions
+        <span class="sidebar-badge" id="sidebarSubmissionCount">—</span>
+      </a>
+      <a class="sidebar-link" href="/playground.html">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M2 8h8M2 12h10"/></svg>
+        playground
+        <span class="sidebar-badge new">new</span>
+      </a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">categories</div>
+      <a class="sidebar-link" href="javascript:void(0)" onclick="filterCat('all')">all challenges</a>
+      <a class="sidebar-link" href="javascript:void(0)" onclick="filterCat('extraction')">extraction</a>
+      <a class="sidebar-link" href="javascript:void(0)" onclick="filterCat('classification')">classification</a>
+      <a class="sidebar-link" href="javascript:void(0)" onclick="filterCat('generation')">generation</a>
+      <a class="sidebar-link" href="javascript:void(0)" onclick="filterCat('orchestration')">orchestration</a>
+    </div>
+
+    <div style="padding:0 18px;margin-top:16px" data-auth-show>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:6px">your progress</div>
+      <div class="prog-track"><div class="prog-fill" id="sidebarProgFill"></div></div>
+      <div style="font-size:10px;color:var(--muted)" id="sidebarProgText">— / — solved</div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <div class="page-header fade-in">
+      <div>
+        <div class="page-title">Challenges</div>
+        <div class="page-sub" id="pageSubtitle">loading challenges…</div>
+      </div>
+      <div class="header-actions">
+        
+        <a class="btn btn-primary" href="/challenge.html">start a challenge →</a>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="stats-row fade-in d1" id="statsRow" data-auth-show>
+      <div class="stat-card">
+        <div class="stat-card-num" id="statSolved">—</div>
+        <div class="stat-card-label">solved</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-num" id="statAvgScore">—</div>
+        <div class="stat-card-label">avg score</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-num" id="statRank">—</div>
+        <div class="stat-card-label">global rank</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-num" id="statCost">—</div>
+        <div class="stat-card-label">total sdk cost</div>
+      </div>
+    </div>
+
+    <!-- WEEKLY CHALLENGE -->
+    <div class="weekly-banner fade-in d2">
+      <div class="wb-left">
+        <div class="wb-tag">⚡ weekly challenge</div>
+        <div class="wb-title">Multi-Doc Synthesizer</div>
+        <div class="wb-desc">Extract and merge data across 10 inconsistent documents into a single report</div>
+      </div>
+      <div class="wb-right">
+        <div class="wb-timer">ends in <b>2d 14h</b></div>
+        <a class="btn btn-primary" href="/challenge.html">attempt now →</a>
+      </div>
+    </div>
+
+    <!-- FILTERS -->
+    <div class="filters fade-in d2">
+      <button class="filter-btn active" onclick="setFilter(this,'all')">all</button>
+      <button class="filter-btn" onclick="setFilter(this,'easy')">easy</button>
+      <button class="filter-btn" onclick="setFilter(this,'medium')">medium</button>
+      <button class="filter-btn" onclick="setFilter(this,'hard')">hard</button>
+      <button class="filter-btn" onclick="setFilter(this,'extraction')">extraction</button>
+      <button class="filter-btn" onclick="setFilter(this,'classification')">classification</button>
+      <button class="filter-btn" onclick="setFilter(this,'generation')">generation</button>
+      <input class="search-input" placeholder="search challenges..." oninput="filterSearch(this.value)">
+    </div>
+
+    <!-- TABLE -->
+    <div class="challenges-table fade-in d3" id="challengeTable">
+      <div class="table-header">
+        <span>#</span>
+        <span>challenge</span>
+        <span>category</span>
+        <span>difficulty</span>
+        <span style="text-align:center">solved by</span>
+        <span style="text-align:right">your score</span>
+        <span style="text-align:center">status</span>
+      </div>
+
+      <div class="section-divider">extraction</div>
+
+      <a class="challenge-row" href="/challenge.html" data-cat="extraction" data-diff="medium">
+        <span class="row-num">01</span>
+        <div class="row-info">
+          <span class="row-name">Claims Parser</span>
+          <span class="row-desc">Extract structured data from noisy insurance claim reports</span>
+        </div>
+        <span class="row-cat">extraction</span>
+        <span><span class="diff-badge diff-med">med</span></span>
+        <span class="row-solved">68%</span>
+        <span class="row-score">0.81</span>
+        <span class="row-status"><span class="status-dot status-attempted" title="attempted"></span></span>
+      </a>
+
+      <a class="challenge-row" href="/challenge.html" data-cat="extraction" data-diff="easy">
+        <span class="row-num">02</span>
+        <div class="row-info">
+          <span class="row-name">Invoice OCR</span>
+          <span class="row-desc">Parse and normalize invoices from varied PDF formats</span>
+        </div>
+        <span class="row-cat">extraction</span>
+        <span><span class="diff-badge diff-easy">easy</span></span>
+        <span class="row-solved">84%</span>
+        <span class="row-score">0.94</span>
+        <span class="row-status"><span class="status-dot status-solved" title="solved"></span></span>
+      </a>
+
+      <a class="challenge-row" href="/challenge.html" data-cat="extraction" data-diff="hard">
+        <span class="row-num">03</span>
+        <div class="row-info">
+          <span class="row-name">Log Triage</span>
+          <span class="row-desc">Classify and prioritize production error logs by severity</span>
+        </div>
+        <span class="row-cat">extraction</span>
+        <span><span class="diff-badge diff-hard">hard</span></span>
+        <span class="row-solved">31%</span>
+        <span class="row-score">—</span>
+        <span class="row-status"><span class="status-dot status-new" title="not started"></span></span>
+      </a>
+
+      <div class="section-divider">classification</div>
+
+      <a class="challenge-row" href="/challenge.html" data-cat="classification" data-diff="easy">
+        <span class="row-num">04</span>
+        <div class="row-info">
+          <span class="row-name">Ticket Router</span>
+          <span class="row-desc">Route support tickets to the correct team using LLM classification</span>
+        </div>
+        <span class="row-cat">classification</span>
+        <span><span class="diff-badge diff-easy">easy</span></span>
+        <span class="row-solved">91%</span>
+        <span class="row-score">0.88</span>
+        <span class="row-status"><span class="status-dot status-solved" title="solved"></span></span>
+      </a>
+
+      <a class="challenge-row" href="/challenge.html" data-cat="classification" data-diff="medium">
+        <span class="row-num">05</span>
+        <div class="row-info">
+          <span class="row-name">Sentiment Chain</span>
+          <span class="row-desc">Multi-step sentiment analysis with confidence scoring</span>
+        </div>
+        <span class="row-cat">classification</span>
+        <span><span class="diff-badge diff-med">med</span></span>
+        <span class="row-solved">52%</span>
+        <span class="row-score">—</span>
+        <span class="row-status"><span class="status-dot status-new" title="not started"></span></span>
+      </a>
+
+      <a class="challenge-row" href="/challenge.html" data-cat="classification" data-diff="hard">
+        <span class="row-num">06</span>
+        <div class="row-info">
+          <span class="row-name">Intent Disambiguation</span>
+          <span class="row-desc">Disambiguate ambiguous user intent from sparse context</span>
+        </div>
+        <span class="row-cat">classification</span>
+        <span><span class="diff-badge diff-hard">hard</span></span>
+        <span class="row-solved">24%</span>
+        <span class="row-score">—</span>
+        <span class="row-status"><span class="status-dot status-new" title="not started"></span></span>
+      </a>
+
+      <div class="section-divider">generation</div>
+
+      <a class="challenge-row" href="/challenge.html" data-cat="generation" data-diff="hard">
+        <span class="row-num">07</span>
+        <div class="row-info">
+          <span class="row-name">Report Writer</span>
+          <span class="row-desc">Generate executive reports from structured + unstructured data</span>
+        </div>
+        <span class="row-cat">generation</span>
+        <span><span class="diff-badge diff-hard">hard</span></span>
+        <span class="row-solved">18%</span>
+        <span class="row-score">—</span>
+        <span class="row-status"><span class="status-dot status-new" title="not started"></span></span>
+      </a>
+
+      <a class="challenge-row" href="/challenge.html" data-cat="generation" data-diff="medium">
+        <span class="row-num">08</span>
+        <div class="row-info">
+          <span class="row-name">SQL Narrator</span>
+          <span class="row-desc">Translate complex SQL query results into natural language summaries</span>
+        </div>
+        <span class="row-cat">generation</span>
+        <span><span class="diff-badge diff-med">med</span></span>
+        <span class="row-solved">47%</span>
+        <span class="row-score">—</span>
+        <span class="row-status"><span class="status-dot status-new" title="not started"></span></span>
+      </a>
+
+      <div class="section-divider">orchestration</div>
+
+      <a class="challenge-row" href="/challenge.html" data-cat="orchestration" data-diff="hard" style="opacity:0.5;pointer-events:none">
+        <span class="row-num">09</span>
+        <div class="row-info">
+          <span class="row-name">Multi-Doc Synthesizer <span style="font-size:10px;color:var(--accent)">weekly</span></span>
+          <span class="row-desc">Merge data from 10 docs into a single structured report</span>
+        </div>
+        <span class="row-cat">orchestration</span>
+        <span><span class="diff-badge diff-hard">hard</span></span>
+        <span class="row-solved">—</span>
+        <span class="row-score">—</span>
+        <span class="row-status"><span class="status-dot status-locked" title="coming soon"></span></span>
+      </a>
+
+    </div>
+
+    <div style="text-align:center;padding:20px 0;font-size:11px;color:var(--muted)" id="tableFooter"></div>
+
+  </main>
+</div>
+
+<script src="/static/api.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    PromptCodeAPI.updateNavAuth();
+
+    const loggedIn = PromptCodeAPI.isLoggedIn();
+    const user = PromptCodeAPI.getUser();
+
+    // Kick off parallel fetches — challenges always, user data only if logged in
+    const challengesP = PromptCodeAPI.getChallenges().catch(() => null);
+    let profileP = Promise.resolve(null);
+    let submissionsP = Promise.resolve([]);
+    if (loggedIn && user) {
+      profileP = PromptCodeAPI.getUserProfile(user.username).catch(() => null);
+      submissionsP = PromptCodeAPI.getMySubmissions().catch(() => []);
+    }
+
+    const [challenges, profile, submissions] = await Promise.all([challengesP, profileP, submissionsP]);
+
+    // --- Build per-challenge submission lookup ---
+    // Map: challengeId -> { bestScore, status }
+    const challengeStats = {};
+    if (Array.isArray(submissions)) {
+      for (const sub of submissions) {
+        const cid = sub.challenge_id;
+        if (!challengeStats[cid]) {
+          challengeStats[cid] = { bestScore: null, status: 'attempted' };
+        }
+        const score = sub.overall_score ?? sub.score ?? null;
+        if (score != null && (challengeStats[cid].bestScore == null || score > challengeStats[cid].bestScore)) {
+          challengeStats[cid].bestScore = score;
+        }
+        if (sub.status === 'completed' || sub.status === 'graded') {
+          challengeStats[cid].status = 'solved';
+        }
+      }
+    }
+
+    const totalChallenges = challenges ? challenges.length : 0;
+    const stats = profile && profile.stats ? profile.stats : null;
+    const solved = stats ? (stats.challenges_solved || 0) : 0;
+    const avgScore = stats ? (stats.avg_score || 0) : 0;
+    const totalCost = stats ? (stats.total_cost_usd || 0) : 0;
+    const totalSubmissions = stats ? (stats.total_submissions || 0) : 0;
+
+    // --- Sidebar ---
+    const el = id => document.getElementById(id);
+    el('sidebarChallengeCount').textContent = totalChallenges || '—';
+    if (loggedIn && stats) {
+      el('sidebarSubmissionCount').textContent = totalSubmissions;
+      el('sidebarUserRank').textContent = '—';
+      const pct = totalChallenges > 0 ? Math.round((solved / totalChallenges) * 100) : 0;
+      el('sidebarProgFill').style.width = pct + '%';
+      el('sidebarProgText').textContent = `${solved} / ${totalChallenges} solved` + (avgScore ? ` · avg score ${avgScore.toFixed(2)}` : '');
+    }
+
+    // --- Stats cards ---
+    if (loggedIn && stats) {
+      el('statSolved').textContent = solved;
+      el('statAvgScore').textContent = avgScore ? avgScore.toFixed(2) : '—';
+      el('statRank').textContent = '—';
+      el('statCost').textContent = totalCost ? `$${totalCost.toFixed(2)}` : '$0.00';
+    }
+
+    // --- Page subtitle ---
+    const cats = challenges ? [...new Set(challenges.map(c => c.category))].length : 0;
+    el('pageSubtitle').textContent = totalChallenges
+      ? `${totalChallenges} problems across ${cats} ${cats === 1 ? 'category' : 'categories'}. Ranked by difficulty.`
+      : 'No challenges available yet.';
+
+    // --- Challenge table ---
+    if (challenges && challenges.length > 0) {
+      const table = document.getElementById('challengeTable');
+      const header = table.querySelector('.table-header');
+      table.innerHTML = '';
+      table.appendChild(header);
+
+      const diffMap = { easy: 'diff-easy', medium: 'diff-med', hard: 'diff-hard' };
+      const diffLabel = { easy: 'easy', medium: 'med', hard: 'hard' };
+      let currentCat = '';
+
+      challenges.forEach((c, i) => {
+        if (c.category !== currentCat) {
+          currentCat = c.category;
+          const divider = document.createElement('div');
+          divider.className = 'section-divider';
+          divider.textContent = currentCat;
+          table.appendChild(divider);
+        }
+
+        const cs = challengeStats[c.id];
+        let scoreText = '—';
+        let statusClass = 'status-new';
+        let statusTitle = 'not started';
+        if (cs) {
+          scoreText = cs.bestScore != null ? cs.bestScore.toFixed(2) : '—';
+          if (cs.status === 'solved') {
+            statusClass = 'status-solved';
+            statusTitle = 'solved';
+          } else {
+            statusClass = 'status-attempted';
+            statusTitle = 'attempted';
+          }
+        }
+
+        const row = document.createElement('a');
+        row.className = 'challenge-row';
+        row.href = `/challenge.html?id=${c.id}`;
+        row.dataset.cat = c.category;
+        row.dataset.diff = c.difficulty;
+        row.innerHTML = `
+          <span class="row-num">${String(i + 1).padStart(2, '0')}</span>
+          <div class="row-info">
+            <span class="row-name">${c.title}</span>
+            <span class="row-desc">${c.company_context || c.slug}</span>
+          </div>
+          <span class="row-cat">${c.category}</span>
+          <span><span class="diff-badge ${diffMap[c.difficulty] || 'diff-med'}">${diffLabel[c.difficulty] || c.difficulty}</span></span>
+          <span class="row-solved">—</span>
+          <span class="row-score">${scoreText}</span>
+          <span class="row-status"><span class="status-dot ${statusClass}" title="${statusTitle}"></span></span>
+        `;
+        table.appendChild(row);
+      });
+
+      el('tableFooter').textContent = `showing ${challenges.length} challenges`;
+    }
+  });
+
+  function setFilter(btn, val) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const rows = document.querySelectorAll('.challenge-row');
+    rows.forEach(row => {
+      if (val === 'all') { row.style.display = ''; return; }
+      const cat = row.dataset.cat || '';
+      const diff = row.dataset.diff || '';
+      row.style.display = (cat === val || diff === val) ? '' : 'none';
+    });
+  }
+  function filterSearch(q) {
+    const rows = document.querySelectorAll('.challenge-row');
+    rows.forEach(row => {
+      row.style.display = row.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+    });
+  }
+  function filterCat(cat) {
+    document.querySelectorAll('.filter-btn').forEach(b => {
+      if (b.textContent.trim() === cat || (cat === 'all' && b.textContent.trim() === 'all')) b.click();
+    });
+  }
+</script>
+</body>
+</html>
