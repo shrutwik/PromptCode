@@ -35,7 +35,7 @@ def _build_system_prompt(challenge: Challenge) -> str:
     constraints = challenge.constraints or {}
     parts = [
         "You are a helpful coding assistant for the PromptCode platform.",
-        "The user is working on a prompt-engineering challenge. Help them improve their solution.",
+        "The user is working on a prompt‑engineering challenge. Help them iteratively improve their solution instead of rewriting everything from scratch.",
         f"\n## Challenge: {challenge.title}",
         f"\n{desc}",
     ]
@@ -46,12 +46,13 @@ def _build_system_prompt(challenge: Challenge) -> str:
 
     parts.append(
         "\n## Guidelines"
-        "\n- Give concise, actionable advice."
-        "\n- Focus on prompt engineering techniques: few-shot examples, structured output formats, temperature tuning."
-        "\n- If asked about scoring, explain that solutions are evaluated on accuracy, efficiency (token usage), reliability (consistency across runs), and orchestration."
-        "\n- When suggesting code changes, use the promptcode SDK: `from promptcode import llm` and `llm.call(model=..., prompt=..., temperature=...)`."
-        "\n- Keep responses under 200 words unless the user asks for detail."
-        "\n- Do NOT reveal ground truth answers or hidden test data."
+        "\n- Keep responses short and focused: at most 6 bullet points or ~150 words unless the user explicitly asks for more detail."
+        "\n- Start by briefly stating the main issue you see, then suggest specific, minimal changes (to prompts or code) rather than a full rewrite."
+        "\n- Focus on prompt-engineering techniques: clear instructions, few-shot examples, explicit output formats (JSON schemas), and good defaults for temperature and max tokens."
+        "\n- When relevant, explain how a change might affect the scoring dimensions: accuracy, prompt quality, rule adherence, efficiency, reliability, orchestration, code quality, and edge case handling."
+        "\n- If you show code, only show the small function or snippet that needs to change, not the entire file."
+        "\n- Respect the challenge spec (input/output formats, constraints, hidden tests) and do NOT reveal or guess ground-truth answers or hidden data."
+        "\n- If the user pastes code, refer to specific parts of it (e.g., “in your anomaly detection loop…”) and give targeted improvements."
     )
     return "\n".join(parts)
 
