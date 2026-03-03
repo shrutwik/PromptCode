@@ -1,12 +1,14 @@
 """Evaluation engine — orchestrates multiple sandbox runs and scoring.
 
-Weight system (prompt quality is the priority signal):
-  - prompt_quality:  0.25  (the core skill being tested)
-  - accuracy:        0.25  (did they get the right answer?)
-  - efficiency:      0.15  (how cheaply?)
-  - reliability:     0.15  (how consistently?)
-  - orchestration:   0.10  (how cleanly did they call the LLM?)
-  - code_quality:    0.10  (how well-structured is their code?)
+Weight system (8 dimensions):
+  - accuracy:           0.20  (did they get the right answer?)
+  - prompt_quality:     0.20  (how well did they talk to the AI?)
+  - rule_adherence:     0.15  (did they follow challenge-specific rules?)
+  - efficiency:         0.10  (how cheaply / token-efficiently?)
+  - reliability:        0.10  (how consistently across runs?)
+  - orchestration:      0.10  (how cleanly did they call the LLM?)
+  - code_quality:       0.10  (how well-structured is their code?)
+  - edge_case_handling: 0.05  (how well do they handle noisy/adversarial input?)
 """
 
 from __future__ import annotations
@@ -32,12 +34,14 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 SCORE_WEIGHTS = {
-    "prompt_quality": 0.25,
-    "accuracy": 0.25,
-    "efficiency": 0.15,
-    "reliability": 0.15,
+    "accuracy": 0.20,
+    "prompt_quality": 0.20,
+    "rule_adherence": 0.15,
+    "efficiency": 0.10,
+    "reliability": 0.10,
     "orchestration": 0.10,
     "code_quality": 0.10,
+    "edge_case_handling": 0.05,
 }
 
 
@@ -47,10 +51,12 @@ class EvaluationResult:
         *,
         accuracy: float,
         prompt_quality: float,
+        rule_adherence: float,
         efficiency: float,
         reliability: float,
         orchestration: float,
         code_quality: float,
+        edge_case_handling: float,
         overall: float,
         cost_usd: float,
         latency_ms: float,
@@ -62,10 +68,12 @@ class EvaluationResult:
     ):
         self.accuracy = accuracy
         self.prompt_quality = prompt_quality
+        self.rule_adherence = rule_adherence
         self.efficiency = efficiency
         self.reliability = reliability
         self.orchestration = orchestration
         self.code_quality = code_quality
+        self.edge_case_handling = edge_case_handling
         self.overall = overall
         self.cost_usd = cost_usd
         self.latency_ms = latency_ms
@@ -80,10 +88,12 @@ class EvaluationResult:
             "submission_id": submission_id,
             "accuracy": self.accuracy,
             "prompt_quality": self.prompt_quality,
+            "rule_adherence": self.rule_adherence,
             "efficiency": self.efficiency,
             "reliability": self.reliability,
             "orchestration": self.orchestration,
             "code_quality": self.code_quality,
+            "edge_case_handling": self.edge_case_handling,
             "overall": self.overall,
             "cost_usd": round(self.cost_usd, 6),
             "latency_ms": round(self.latency_ms, 2),

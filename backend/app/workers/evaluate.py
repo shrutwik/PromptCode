@@ -66,6 +66,8 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
     submission.score_reliability = result.reliability
     submission.score_orchestration = result.orchestration
     submission.score_code_quality = result.code_quality
+    submission.score_rule_adherence = result.rule_adherence
+    submission.score_edge_cases = result.edge_case_handling
     submission.score_overall = result.overall
     submission.total_cost_usd = result.cost_usd
     submission.total_latency_ms = result.latency_ms
@@ -132,6 +134,8 @@ async def _upsert_leaderboard(db: AsyncSession, submission: Submission) -> None:
         entry.score_reliability = submission.score_reliability or 0.0
         entry.score_orchestration = submission.score_orchestration or 0.0
         entry.score_code_quality = submission.score_code_quality or 0.0
+        entry.score_rule_adherence = submission.score_rule_adherence or 0.0
+        entry.score_edge_cases = submission.score_edge_cases or 0.0
         entry.total_cost_usd = submission.total_cost_usd or 0.0
         entry.total_llm_calls = submission.total_llm_calls or 0
 

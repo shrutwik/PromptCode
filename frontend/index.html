@@ -163,10 +163,10 @@ nav {
 .step-accent { color: var(--accent); }
 
 /* SCORING */
-.scoring-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 56px; }
+.scoring-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 56px; }
 .score-card {
   border: 1px solid var(--border); border-radius: 8px;
-  padding: 24px; background: var(--surface2);
+  padding: 20px; background: var(--surface2);
   transition: border-color 0.2s, transform 0.2s;
 }
 .score-card:hover { border-color: var(--accent); transform: translateY(-2px); }
@@ -179,7 +179,7 @@ nav {
 /* CHALLENGES PREVIEW */
 .challenges-preview { margin-top: 56px; display: flex; flex-direction: column; gap: 1px; }
 .cp-row {
-  display: grid; grid-template-columns: 32px 1fr 100px 100px 80px;
+  display: grid; grid-template-columns: 32px 1fr 100px 80px;
   gap: 16px; align-items: center;
   padding: 16px 20px; background: var(--surface2);
   border: 1px solid transparent; border-radius: var(--radius);
@@ -242,8 +242,10 @@ footer {
     <a href="#sdk">sdk</a>
   </div>
   <div class="nav-right" id="navRight">
-    <a class="btn btn-ghost" href="/login.html">sign in</a>
-    <a class="btn btn-primary" href="/signup.html">get started →</a>
+    <a class="btn btn-ghost" href="/login.html" data-noauth-show>sign in</a>
+    <a class="btn btn-primary" href="/signup.html" data-noauth-show>get started →</a>
+    <a class="btn btn-primary" href="/challenges.html" data-auth-show style="display:none">go to challenges →</a>
+    <a data-auth-show href="/profile.html" style="display:none;width:28px;height:28px;border-radius:5px;background:var(--accent-dim);border:1px solid rgba(200,240,96,0.3);align-items:center;justify-content:center;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:none" data-user-initials></a>
   </div>
 </nav>
 
@@ -285,16 +287,16 @@ footer {
 <div class="stats-strip">
   <div class="stats-inner">
     <div class="stat-item fade-in">
-      <div class="stat-num">847</div>
-      <div class="stat-label">engineers enrolled</div>
-    </div>
-    <div class="stat-item fade-in d1">
-      <div class="stat-num">24</div>
+      <div class="stat-num" id="statChallenges">10</div>
       <div class="stat-label">real-world challenges</div>
     </div>
-    <div class="stat-item fade-in d2">
-      <div class="stat-num">4</div>
+    <div class="stat-item fade-in d1">
+      <div class="stat-num">8</div>
       <div class="stat-label">scoring dimensions</div>
+    </div>
+    <div class="stat-item fade-in d2">
+      <div class="stat-num">7x</div>
+      <div class="stat-label">runs per submission</div>
     </div>
     <div class="stat-item fade-in d3">
       <div class="stat-num">$0</div>
@@ -323,7 +325,7 @@ footer {
     <div class="step-card fade-in d4">
       <div class="step-num">03</div>
       <div class="step-title">Get your Efficiency Report</div>
-      <div class="step-desc">Your solution runs 7 times with noise and perturbations. Scored on accuracy, <span class="step-accent">token efficiency</span>, reliability, and orchestration.</div>
+      <div class="step-desc">Your code is evaluated across <span class="step-accent">8 dimensions</span>: accuracy, prompt quality, rule adherence, efficiency, reliability, orchestration, code quality, and edge case handling.</div>
     </div>
   </div>
 </section>
@@ -331,33 +333,57 @@ footer {
 <!-- SCORING -->
 <section class="section" id="scoring" style="padding-top:0">
   <div class="section-label fade-in">the scoring system</div>
-  <h2 class="section-title fade-in d1">Four dimensions.<br>One <em>efficiency score.</em></h2>
-  <p class="section-sub fade-in d2">The best engineers get the right answer with the fewest tokens. That's the game.</p>
+  <h2 class="section-title fade-in d1">Eight dimensions.<br>One <em>efficiency score.</em></h2>
+  <p class="section-sub fade-in d2">We don't just check if you got the right answer. We evaluate how you engineered the AI to get there.</p>
 
   <div class="scoring-grid">
     <div class="score-card fade-in d2">
       <div class="sc-icon">◎</div>
-      <div class="sc-name">Accuracy</div>
-      <div class="sc-desc">Output compared against ground truth across all 7 evaluation runs, including adversarial inputs.</div>
+      <div class="sc-name">Accuracy <span style="font-size:10px;color:var(--muted);font-weight:400">· 20%</span></div>
+      <div class="sc-desc">Output compared against ground truth with fuzzy matching for dates, names, numbers, and nested structures.</div>
       <div class="sc-example">correctness vs expected structured output</div>
     </div>
     <div class="score-card fade-in d3">
       <div class="sc-icon">⟡</div>
-      <div class="sc-name">AI Efficiency</div>
-      <div class="sc-desc">Lower token usage and cost equals a higher score. Verbose prompts are penalized.</div>
+      <div class="sc-name">Prompt Quality <span style="font-size:10px;color:var(--muted);font-weight:400">· 20%</span></div>
+      <div class="sc-desc">How well you talked to the AI. Scored on clarity, specificity, structure, robustness, and grounding.</div>
+      <div class="sc-example">LLM-as-judge evaluates your prompt engineering</div>
+    </div>
+    <div class="score-card fade-in d2">
+      <div class="sc-icon">◇</div>
+      <div class="sc-name">Rule Adherence <span style="font-size:10px;color:var(--muted);font-weight:400">· 15%</span></div>
+      <div class="sc-desc">Does your solution follow challenge-specific rules? Skip conditions, normalization rules, cross-references.</div>
+      <div class="sc-example">challenge rules are the grading rubric</div>
+    </div>
+    <div class="score-card fade-in d3">
+      <div class="sc-icon">⟐</div>
+      <div class="sc-name">Efficiency <span style="font-size:10px;color:var(--muted);font-weight:400">· 10%</span></div>
+      <div class="sc-desc">Lower token usage and cost = higher score. Batch calls, avoid redundant context.</div>
       <div class="sc-example"><b>1 call, 420 tokens</b> beats 6 calls, 2,864 tokens</div>
     </div>
     <div class="score-card fade-in d2">
       <div class="sc-icon">◈</div>
-      <div class="sc-name">Reliability</div>
+      <div class="sc-name">Reliability <span style="font-size:10px;color:var(--muted);font-weight:400">· 10%</span></div>
       <div class="sc-desc">Consistency across runs with noisy and perturbed inputs. Brittle solutions score low.</div>
-      <div class="sc-example">5 clean runs + 2 adversarial noise runs</div>
+      <div class="sc-example">temperature=0 + robust parsing = high reliability</div>
     </div>
     <div class="score-card fade-in d3">
       <div class="sc-icon">⬡</div>
-      <div class="sc-name">Orchestration</div>
-      <div class="sc-desc">Penalizes excessive retries, redundant calls, and missing output validation.</div>
-      <div class="sc-example">retries, redundant calls, lack of validation</div>
+      <div class="sc-name">Orchestration <span style="font-size:10px;color:var(--muted);font-weight:400">· 10%</span></div>
+      <div class="sc-desc">LLM integration quality: error handling, retry logic, output validation, separation of concerns.</div>
+      <div class="sc-example">try/except, JSON validation, modular code</div>
+    </div>
+    <div class="score-card fade-in d2">
+      <div class="sc-icon">⌬</div>
+      <div class="sc-name">Code Quality <span style="font-size:10px;color:var(--muted);font-weight:400">· 10%</span></div>
+      <div class="sc-desc">Static analysis of your code: function decomposition, error handling patterns, readability.</div>
+      <div class="sc-example">AST analysis + AI judge combined score</div>
+    </div>
+    <div class="score-card fade-in d3">
+      <div class="sc-icon">⊘</div>
+      <div class="sc-name">Edge Cases <span style="font-size:10px;color:var(--muted);font-weight:400">· 5%</span></div>
+      <div class="sc-desc">How your solution handles OCR artifacts, missing fields, format variations, and adversarial noise.</div>
+      <div class="sc-example">malformed input, encoding issues, empty records</div>
     </div>
   </div>
 </section>
@@ -367,48 +393,14 @@ footer {
   <div class="section-label fade-in">challenges</div>
   <h2 class="section-title fade-in d1">Real problems.<br><em>Messy data.</em></h2>
 
-  <div class="challenges-preview fade-in d2">
-    <div style="display:grid;grid-template-columns:32px 1fr 100px 100px 80px;gap:16px;padding:10px 20px;font-size:10px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;border-bottom:1px solid var(--border)">
-      <span>#</span><span>challenge</span><span>category</span><span>solved by</span><span>difficulty</span>
+  <div class="challenges-preview fade-in d2" id="challengesList">
+    <div style="display:grid;grid-template-columns:32px 1fr 100px 80px;gap:16px;padding:10px 20px;font-size:10px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;border-bottom:1px solid var(--border)">
+      <span>#</span><span>challenge</span><span>category</span><span>difficulty</span>
     </div>
-    <a class="cp-row" href="/challenges.html">
-      <span class="cp-num">01</span>
-      <span class="cp-name">Claims Parser <span style="font-size:10px;color:var(--muted)">— extract structured data from noisy claim reports</span></span>
-      <span class="cp-cat">extraction</span>
-      <span class="cp-solved">68%</span>
-      <span class="diff-badge diff-med">med</span>
-    </a>
-    <a class="cp-row" href="/challenges.html">
-      <span class="cp-num">02</span>
-      <span class="cp-name">Invoice OCR <span style="font-size:10px;color:var(--muted)">— parse and normalize invoices from varied formats</span></span>
-      <span class="cp-cat">extraction</span>
-      <span class="cp-solved">84%</span>
-      <span class="diff-badge diff-easy">easy</span>
-    </a>
-    <a class="cp-row" href="/challenges.html">
-      <span class="cp-num">03</span>
-      <span class="cp-name">Log Triage <span style="font-size:10px;color:var(--muted)">— classify and prioritize production error logs</span></span>
-      <span class="cp-cat">classification</span>
-      <span class="cp-solved">31%</span>
-      <span class="diff-badge diff-hard">hard</span>
-    </a>
-    <a class="cp-row" href="/challenges.html">
-      <span class="cp-num">04</span>
-      <span class="cp-name">Ticket Router <span style="font-size:10px;color:var(--muted)">— route support tickets to the right team</span></span>
-      <span class="cp-cat">classification</span>
-      <span class="cp-solved">91%</span>
-      <span class="diff-badge diff-easy">easy</span>
-    </a>
-    <a class="cp-row" href="/challenges.html" style="opacity:0.4;pointer-events:none">
-      <span class="cp-num">05</span>
-      <span class="cp-name">Report Writer <span style="font-size:10px;color:var(--muted)">— generate executive reports from raw data</span></span>
-      <span class="cp-cat">generation</span>
-      <span class="cp-solved">—</span>
-      <span class="diff-badge diff-hard" style="opacity:0.5">hard</span>
-    </a>
+    <div style="padding:24px;text-align:center;color:var(--muted);font-size:11px">loading challenges...</div>
   </div>
   <div style="text-align:center;margin-top:24px">
-    <a class="btn btn-ghost" href="/challenges.html">view all 24 challenges →</a>
+    <a class="btn btn-ghost" href="/challenges.html" id="viewAllBtn">view all challenges →</a>
   </div>
 </section>
 
@@ -453,24 +445,57 @@ footer {
 <!-- CTA -->
 <section class="cta-section">
   <h2 class="cta-title fade-in">Ready to prove you can<br><em>engineer AI?</em></h2>
-  <p class="cta-sub fade-in d1">Join 847 engineers competing on real problems. Free to start.</p>
+  <p class="cta-sub fade-in d1">Compete on real problems. 8 scoring dimensions. Free to start.</p>
   <div class="cta-actions fade-in d2">
-    <a class="btn btn-primary btn-lg" href="/signup.html">create free account</a>
-    <a class="btn btn-ghost btn-lg" href="/login.html">sign in</a>
+    <a class="btn btn-primary btn-lg" href="/signup.html" data-noauth-show>create free account</a>
+    <a class="btn btn-ghost btn-lg" href="/login.html" data-noauth-show>sign in</a>
+    <a class="btn btn-primary btn-lg" href="/challenges.html" data-auth-show style="display:none">go to challenges →</a>
   </div>
 </section>
 
 <footer>
   <div class="footer-logo"><span style="width:6px;height:6px;background:var(--accent);border-radius:50%;display:inline-block"></span> PromptCode</div>
   <div class="footer-links">
-    
-    <a href="/playground.html">sdk</a>
-    <a href="javascript:void(0)">github</a>
-    <a href="javascript:void(0)">privacy</a>
+    <a href="/challenges.html">challenges</a>
+    <a href="/playground.html">playground</a>
+    <a href="/leaderboard.html">leaderboard</a>
   </div>
-  <span>© 2025 PromptCode</span>
+  <span>© 2026 PromptCode</span>
 </footer>
 
 <script src="/static/api.js"></script>
+<script>
+(async function() {
+  PromptCodeAPI.updateNavAuth();
+
+  const diffMap = { easy: 'diff-easy', medium: 'diff-med', hard: 'diff-hard' };
+  const diffLabel = { easy: 'easy', medium: 'med', hard: 'hard' };
+
+  try {
+    const challenges = await PromptCodeAPI.getChallenges();
+    const container = document.getElementById('challengesList');
+    const header = container.querySelector('div');
+    container.innerHTML = '';
+    container.appendChild(header);
+
+    document.getElementById('statChallenges').textContent = challenges.length;
+    document.getElementById('viewAllBtn').textContent = `view all ${challenges.length} challenges →`;
+
+    challenges.slice(0, 6).forEach((c, i) => {
+      const a = document.createElement('a');
+      a.className = 'cp-row';
+      a.href = `/challenge.html?id=${c.id}`;
+      a.innerHTML =
+        `<span class="cp-num">${String(i + 1).padStart(2, '0')}</span>` +
+        `<span class="cp-name">${c.title}</span>` +
+        `<span class="cp-cat">${c.category}</span>` +
+        `<span class="diff-badge ${diffMap[c.difficulty] || 'diff-med'}">${diffLabel[c.difficulty] || c.difficulty}</span>`;
+      container.appendChild(a);
+    });
+  } catch (e) {
+    console.log('Failed to load challenges:', e);
+  }
+})();
+</script>
 </body>
 </html>

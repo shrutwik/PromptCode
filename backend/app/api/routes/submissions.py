@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user, get_optional_user
+from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.challenge import Challenge
 from app.models.submission import Submission
@@ -15,6 +15,23 @@ from app.schemas.submission import SubmissionCreate, SubmissionReport, Submissio
 from app.workers.evaluate import run_evaluation_pipeline
 
 router = APIRouter()
+
+
+@router.get("/", response_model=list[SubmissionResponse])
+async def list_submissions(
+    challenge_id: uuid.UUID | None = Query(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    query = (
+        select(Submission)
+        .where(Submission.user_id == user.id)
+        .order_by(Submission.created_at.desc())
+    )
+    if challenge_id:
+        query = query.where(Submission.challenge_id == challenge_id)
+    result = await db.execute(query)
+    return result.scalars().all()
 
 
 @router.post("/", response_model=SubmissionResponse, status_code=201)
@@ -46,22 +63,28 @@ async def create_submission(
 @router.get("/{submission_id}", response_model=SubmissionResponse)
 async def get_submission(
     submission_id: uuid.UUID,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     submission = await db.get(Submission, submission_id)
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
+    if submission.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not your submission")
     return submission
 
 
 @router.get("/{submission_id}/status")
 async def get_submission_status(
     submission_id: uuid.UUID,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     submission = await db.get(Submission, submission_id)
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
+    if submission.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not your submission")
     return {
         "id": str(submission.id),
         "status": submission.status,
@@ -73,11 +96,14 @@ async def get_submission_status(
 @router.get("/{submission_id}/report", response_model=SubmissionReport)
 async def get_report(
     submission_id: uuid.UUID,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     submission = await db.get(Submission, submission_id)
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
+    if submission.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not your submission")
     if submission.status != "completed":
         raise HTTPException(
             status_code=409,
@@ -87,21 +113,3 @@ async def get_report(
         raise HTTPException(status_code=404, detail="Report not generated yet")
 
     return SubmissionReport(**submission.report)
-
-
-@router.get("/", response_model=list[SubmissionResponse])
-async def list_submissions(
-    user_id: str | None = None,
-    challenge_id: uuid.UUID | None = None,
-    user: User | None = Depends(get_optional_user),
-    db: AsyncSession = Depends(get_db),
-):
-    query = select(Submission).order_by(Submission.created_at.desc())
-    if user_id:
-        query = query.where(Submission.user_id == uuid.UUID(user_id))
-    elif user:
-        query = query.where(Submission.user_id == user.id)
-    if challenge_id:
-        query = query.where(Submission.challenge_id == challenge_id)
-    result = await db.execute(query)
-    return result.scalars().all()

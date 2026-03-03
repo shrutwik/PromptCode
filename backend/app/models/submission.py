@@ -38,6 +38,8 @@ class Submission(Base):
     score_reliability: Mapped[float | None] = mapped_column(Float, nullable=True)
     score_orchestration: Mapped[float | None] = mapped_column(Float, nullable=True)
     score_code_quality: Mapped[float | None] = mapped_column(Float, nullable=True)
+    score_rule_adherence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    score_edge_cases: Mapped[float | None] = mapped_column(Float, nullable=True)
     score_overall: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     total_cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)

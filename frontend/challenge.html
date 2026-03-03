@@ -217,19 +217,37 @@ nav {
 .ci-name { flex: 1; }
 .drawer-divider { height: 1px; background: var(--border); margin: 4px 18px 16px; }
 
-/* ── MAIN LAYOUT: 3 columns ── */
+/* ── MAIN LAYOUT: 3 columns with draggable splitters ── */
 .workspace {
   position: fixed;
   top: var(--nav-h); left: 0; right: 0; bottom: 0;
-  display: grid;
-  grid-template-columns: 340px 1fr 300px;
-  grid-template-rows: 1fr;
+  display: flex;
   overflow: hidden;
 }
 
+/* Splitter handles */
+.splitter {
+  width: 5px; flex-shrink: 0;
+  background: var(--border);
+  cursor: col-resize;
+  position: relative;
+  z-index: 10;
+  transition: background 0.15s;
+}
+.splitter:hover, .splitter.active { background: var(--accent); }
+.splitter::after {
+  content: ''; position: absolute;
+  top: 50%; left: 50%; transform: translate(-50%,-50%);
+  width: 2px; height: 28px;
+  background: var(--border-light); border-radius: 2px;
+  transition: background 0.15s;
+}
+.splitter:hover::after, .splitter.active::after { background: rgba(200,240,96,0.4); }
+
 /* ── LEFT: PROBLEM PANE ── */
 .problem-pane {
-  border-right: 1px solid var(--border);
+  width: 340px; min-width: 200px; max-width: 600px;
+  flex-shrink: 0;
   display: flex; flex-direction: column;
   overflow: hidden;
   background: var(--surface2);
@@ -302,11 +320,11 @@ nav {
 }
 .warn-box .warn-title { font-size: 10px; color: var(--warn); margin-bottom: 5px; letter-spacing: 0.04em; }
 
-/* ── CENTER: EDITOR + AI CHAT ── */
+/* ── CENTER: EDITOR ── */
 .center-pane {
+  flex: 1; min-width: 300px;
   display: flex; flex-direction: column;
   overflow: hidden;
-  border-right: 1px solid var(--border);
 }
 
 /* Editor top section */
@@ -362,45 +380,78 @@ nav {
 }
 .fallback-editor::placeholder { color: #3a3a35; }
 
-/* Resize handle */
-.resize-handle {
-  height: 4px; flex-shrink: 0;
-  background: var(--border);
-  cursor: ns-resize; position: relative;
-  transition: background 0.15s;
-  display: flex; align-items: center; justify-content: center;
-}
-.resize-handle:hover { background: var(--accent); }
-.resize-handle::after {
-  content: ''; width: 32px; height: 2px;
-  background: var(--border-light); border-radius: 2px;
+
+/* ── RIGHT PANEL: TABS (Tracking + AI Chat) ── */
+.right-pane {
+  width: 340px; min-width: 240px; max-width: 550px;
+  flex-shrink: 0;
+  display: flex; flex-direction: column;
+  background: var(--surface2);
+  min-height: 0;
+  overflow: hidden;
 }
 
-/* AI Chat section */
+/* Tab bar */
+.right-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+  height: 40px;
+}
+.right-tab {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  border: none; background: transparent;
+  font-family: 'DM Mono', monospace;
+  transition: all 0.15s;
+  position: relative;
+}
+.right-tab:hover { color: var(--text); }
+.right-tab.active { color: var(--text); }
+.right-tab.active::after {
+  content: ''; position: absolute; bottom: -1px; left: 12px; right: 12px;
+  height: 2px; background: var(--accent); border-radius: 2px;
+}
+.right-tab .tab-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+}
+.right-tab .tab-dot.accent { background: var(--accent); animation: pulse 2s ease-in-out infinite; }
+.right-tab .tab-dot.idle { background: var(--border-light); }
+
+/* Tab panels */
+.right-tab-panel { display: none; flex: 1; flex-direction: column; overflow: hidden; min-height: 0; }
+.right-tab-panel.active { display: flex; }
+
+/* Tracking scroll */
+.tracking-scroll {
+  flex: 1 1 0;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex; flex-direction: column; gap: 12px;
+  min-height: 0;
+  max-height: 100%;
+}
+
+/* AI Chat section (now in right panel) */
 .chat-section {
-  height: 280px; flex-shrink: 0;
+  flex: 1;
   display: flex; flex-direction: column;
-  border-top: 1px solid var(--border);
   background: #090908;
-  transition: height 0.2s;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .chat-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 14px;
-  height: 38px;
+  height: 34px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   background: var(--surface);
-}
-.chat-title {
-  display: flex; align-items: center; gap: 7px;
-  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
-}
-.ai-indicator {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--accent);
-  animation: pulse 2s ease-in-out infinite;
 }
 .chat-model { font-size: 10px; color: var(--muted); }
 
@@ -408,6 +459,7 @@ nav {
   flex: 1; overflow-y: auto;
   padding: 12px 14px;
   display: flex; flex-direction: column; gap: 10px;
+  min-height: 0;
 }
 
 .msg {
@@ -424,41 +476,44 @@ nav {
 .msg-avatar.user { background: var(--border-light); color: var(--muted); }
 .msg-avatar.ai { background: var(--accent-dim); color: var(--accent); font-size: 10px; }
 
-.msg-body { flex: 1; }
+.msg-body { flex: 1; min-width: 0; }
 .msg-sender { font-size: 10px; color: var(--muted); margin-bottom: 3px; letter-spacing: 0.04em; }
-.msg-text { font-size: 12px; color: #b0aea8; line-height: 1.65; }
+.msg-text { font-size: 11.5px; color: #b0aea8; line-height: 1.6; word-break: break-word; }
 .msg-text code {
   background: var(--surface2); padding: 1px 5px;
-  border-radius: 3px; font-size: 11px; color: var(--accent);
+  border-radius: 3px; font-size: 10px; color: var(--accent);
 }
-.msg-text .highlight { color: var(--text); }
+.msg-text strong { color: var(--text); font-weight: 500; }
+.msg-text em { font-style: italic; color: #c0beb8; }
+.msg-text pre { margin: 6px 0; }
+.msg-text pre code { background: transparent; padding: 0; font-size: 10px; color: #9ab0cc; }
 
 .chat-input-area {
-  padding: 8px 12px 10px;
+  padding: 8px 10px 10px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
 .chat-input-row {
-  display: flex; gap: 8px; align-items: flex-end;
+  display: flex; gap: 6px; align-items: flex-end;
 }
 .chat-input {
   flex: 1;
   background: var(--surface);
   border: 1px solid var(--border-light);
   border-radius: var(--radius);
-  padding: 8px 12px;
+  padding: 7px 10px;
   font-family: 'DM Mono', monospace;
-  font-size: 12px; color: var(--text);
+  font-size: 11px; color: var(--text);
   resize: none; outline: none;
   line-height: 1.5;
-  max-height: 80px;
+  max-height: 72px;
   transition: border-color 0.15s;
 }
 .chat-input:focus { border-color: var(--accent); }
-.chat-input::placeholder { color: var(--muted); }
+.chat-input::placeholder { color: var(--muted); font-size: 10px; }
 
 .send-btn {
-  width: 32px; height: 32px;
+  width: 30px; height: 30px;
   background: var(--accent); border: none;
   border-radius: var(--radius); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
@@ -466,26 +521,9 @@ nav {
   color: var(--bg);
 }
 .send-btn:hover { background: #d4f870; }
-.send-btn svg { width: 14px; height: 14px; }
+.send-btn svg { width: 13px; height: 13px; }
 
-.chat-hint { font-size: 10px; color: var(--muted); margin-top: 5px; }
-
-/* ── RIGHT: TRACKING PANEL ── */
-.tracking-pane {
-  display: flex; flex-direction: column;
-  background: var(--surface2);
-  min-height: 0;
-  overflow: hidden;
-}
-
-.tracking-scroll {
-  flex: 1 1 0;
-  overflow-y: auto;
-  padding: 14px;
-  display: flex; flex-direction: column; gap: 12px;
-  min-height: 0;
-  max-height: 100%;
-}
+.chat-hint { font-size: 9px; color: var(--muted); margin-top: 4px; }
 
 .panel-card {
   border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
@@ -747,7 +785,10 @@ nav {
     </div>
   </div>
 
-  <!-- ── CENTER: EDITOR + CHAT ── -->
+  <!-- SPLITTER: left | center -->
+  <div class="splitter" id="splitterLeft"></div>
+
+  <!-- ── CENTER: EDITOR ── -->
   <div class="center-pane">
 
     <!-- Editor -->
@@ -772,7 +813,7 @@ nav {
       </div>
 
       <div class="editor-body" id="editorBody">
-        <textarea class="fallback-editor" id="fallbackEditor" spellcheck="false" placeholder="Write your solution here..."></textarea>
+        <textarea class="fallback-editor" id="fallbackEditor" spellcheck="false" placeholder="Write your solution here..." style="display:block"></textarea>
       </div>
     </div>
 
@@ -790,42 +831,6 @@ nav {
       </div>
     </div>
 
-    <!-- Resize handle -->
-    <div class="resize-handle" id="resizeHandle" title="drag to resize"></div>
-
-    <!-- AI Chat -->
-    <div class="chat-section" id="chatSection">
-      <div class="chat-header">
-        <div class="chat-title">
-          <div class="ai-indicator"></div>
-          AI assistant
-        </div>
-        <span class="chat-model">gpt-4o · sdk required</span>
-      </div>
-
-      <div class="chat-messages" id="chatMessages">
-        <div class="msg">
-          <div class="msg-avatar ai">✦</div>
-          <div class="msg-body">
-            <div class="msg-sender">assistant</div>
-            <div class="msg-text">I can help you build your solution. Ask me anything about prompt design, parsing strategy, or how scoring works.</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="chat-input-area">
-        <div class="chat-input-row">
-          <textarea class="chat-input" id="chatInput" rows="1" placeholder="ask about prompts, logic, scoring..." onkeydown="handleKey(event)"></textarea>
-          <button class="send-btn" onclick="sendMsg()">
-            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 7H2M8 3l4 4-4 4"/>
-            </svg>
-          </button>
-        </div>
-        <div class="chat-hint">shift+enter for newline · enter to send</div>
-      </div>
-    </div>
-
     <!-- Status bar -->
     <div class="status-bar">
       <div class="status-item" id="statusLastRun"><div class="status-dot idle" id="statusRunDot"></div>last run: <b id="statusLastRunTime">—</b></div>
@@ -835,102 +840,172 @@ nav {
     </div>
   </div>
 
-  <!-- ── RIGHT: TRACKING ── -->
-  <div class="tracking-pane">
-    <div class="pane-header">
-      <span class="pane-label">tracking</span>
-      <div class="status-item" id="trackingStatus" style="font-size:10px;display:flex;align-items:center;gap:5px;">
-        <div class="status-dot idle" id="trackingStatusDot"></div>
-        <span style="color:var(--muted)" id="trackingStatusText">no submissions</span>
+  <!-- SPLITTER: center | right -->
+  <div class="splitter" id="splitterRight"></div>
+
+  <!-- ── RIGHT: TABBED PANEL (Tracking + AI Chat) ── -->
+  <div class="right-pane" id="rightPane">
+
+    <!-- Tab bar -->
+    <div class="right-tabs">
+      <button class="right-tab active" data-tab="tracking" onclick="switchRightTab('tracking')">
+        <div class="tab-dot idle" id="trackingTabDot"></div>
+        tracking
+      </button>
+      <button class="right-tab" data-tab="chat" onclick="switchRightTab('chat')">
+        <div class="tab-dot accent"></div>
+        ai assistant
+      </button>
+    </div>
+
+    <!-- TRACKING PANEL -->
+    <div class="right-tab-panel active" id="panelTracking">
+      <div class="tracking-scroll">
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+          <div class="status-item" id="trackingStatus" style="font-size:10px;display:flex;align-items:center;gap:5px;">
+            <div class="status-dot idle" id="trackingStatusDot"></div>
+            <span style="color:var(--muted)" id="trackingStatusText">no submissions</span>
+          </div>
+        </div>
+
+        <!-- Score summary -->
+        <div class="panel-card fade-in">
+          <div class="card-hdr">
+            <div class="card-title">your best</div>
+            <div class="card-val" id="bestScore">—</div>
+          </div>
+          <div class="card-body">
+            <div class="score-grid" id="scoreGrid">
+              <div class="score-cell">
+                <div class="sc-label">accuracy</div>
+                <div class="sc-val" id="scoreAccuracy">—</div>
+                <div class="sc-bar"><div class="sc-fill fill-g" id="barAccuracy" style="width:0%"></div></div>
+              </div>
+              <div class="score-cell">
+                <div class="sc-label">prompt quality</div>
+                <div class="sc-val" id="scorePromptQuality">—</div>
+                <div class="sc-bar"><div class="sc-fill fill-g" id="barPromptQuality" style="width:0%"></div></div>
+              </div>
+              <div class="score-cell">
+                <div class="sc-label">rules</div>
+                <div class="sc-val" id="scoreRuleAdherence">—</div>
+                <div class="sc-bar"><div class="sc-fill fill-g" id="barRuleAdherence" style="width:0%"></div></div>
+              </div>
+              <div class="score-cell">
+                <div class="sc-label">edge cases</div>
+                <div class="sc-val" id="scoreEdgeCases">—</div>
+                <div class="sc-bar"><div class="sc-fill fill-w" id="barEdgeCases" style="width:0%"></div></div>
+              </div>
+              <div class="score-cell">
+                <div class="sc-label">efficiency</div>
+                <div class="sc-val" id="scoreEfficiency">—</div>
+                <div class="sc-bar"><div class="sc-fill fill-w" id="barEfficiency" style="width:0%"></div></div>
+              </div>
+              <div class="score-cell">
+                <div class="sc-label">reliability</div>
+                <div class="sc-val" id="scoreReliability">—</div>
+                <div class="sc-bar"><div class="sc-fill fill-g" id="barReliability" style="width:0%"></div></div>
+              </div>
+              <div class="score-cell">
+                <div class="sc-label">orchestration</div>
+                <div class="sc-val" id="scoreOrchestration">—</div>
+                <div class="sc-bar"><div class="sc-fill fill-b" id="barOrchestration" style="width:0%"></div></div>
+              </div>
+              <div class="score-cell">
+                <div class="sc-label">code quality</div>
+                <div class="sc-val" id="scoreCodeQuality">—</div>
+                <div class="sc-bar"><div class="sc-fill fill-b" id="barCodeQuality" style="width:0%"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SDK metrics -->
+        <div class="panel-card fade-in d1">
+          <div class="card-hdr"><div class="card-title">sdk · last run</div></div>
+          <div class="card-body" id="sdkMetrics">
+            <div class="metric-row"><span class="mk">prompt tokens</span><span class="mv" id="metricPromptTokens">—</span></div>
+            <div class="metric-row"><span class="mk">completion tokens</span><span class="mv" id="metricCompletionTokens">—</span></div>
+            <div class="metric-row"><span class="mk">total tokens</span><span class="mv" id="metricTotalTokens">—</span></div>
+            <div class="metric-row"><span class="mk">llm calls</span><span class="mv" id="metricLlmCalls">—</span></div>
+            <div class="metric-row"><span class="mk">retries</span><span class="mv" id="metricRetries">—</span></div>
+            <div class="metric-row"><span class="mk">cost</span><span class="mv" id="metricCost">—</span></div>
+            <div class="metric-row"><span class="mk">latency</span><span class="mv" id="metricLatency">—</span></div>
+          </div>
+        </div>
+
+        <!-- Leaderboard -->
+        <div class="panel-card fade-in d2">
+          <div class="card-hdr">
+            <div class="card-title">leaderboard</div>
+            <span style="font-size:10px;color:var(--muted)" id="leaderboardCount">—</span>
+          </div>
+          <div class="card-body" style="padding:8px 12px" id="trackingLeaderboard">
+            <div class="lb-row" style="font-size:9px;color:var(--muted);padding-bottom:4px;border-bottom-color:var(--border-light)">
+              <span>#</span><span>user</span><span style="text-align:right">score</span><span style="text-align:right">cost</span>
+            </div>
+            <div style="padding:12px 0;text-align:center;font-size:11px;color:var(--muted)">loading...</div>
+          </div>
+        </div>
+
+        <!-- Tips -->
+        <div class="panel-card fade-in d3">
+          <div class="card-hdr"><div class="card-title">efficiency tips</div></div>
+          <div class="card-body" style="padding:8px 12px">
+            <div class="tip-item">
+              <span class="tip-arrow">→</span>
+              Batch all claims in one prompt with JSON array output to reduce from 6 calls to 1
+            </div>
+            <div class="tip-item">
+              <span class="tip-arrow">→</span>
+              Use <code style="font-size:10px;color:var(--accent);background:var(--surface2);padding:1px 4px;border-radius:2px">response_format</code> for structured output — eliminates parse errors
+            </div>
+            <div class="tip-item">
+              <span class="tip-arrow">→</span>
+              temperature=0 gives the highest consistency score across adversarial runs
+            </div>
+            <div class="tip-item" style="border-bottom:none">
+              <span class="tip-arrow">→</span>
+              Top solution uses 1 call, 420 tokens, $0.04 — aim for that benchmark
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
 
-    <div class="tracking-scroll">
-
-      <!-- Score summary -->
-      <div class="panel-card fade-in">
-        <div class="card-hdr">
-          <div class="card-title">your best</div>
-          <div class="card-val" id="bestScore">—</div>
+    <!-- AI CHAT PANEL -->
+    <div class="right-tab-panel" id="panelChat">
+      <div class="chat-section">
+        <div class="chat-header">
+          <span class="chat-model">gpt-4o · sdk required</span>
         </div>
-        <div class="card-body">
-          <div class="score-grid" id="scoreGrid">
-            <div class="score-cell">
-              <div class="sc-label">accuracy</div>
-              <div class="sc-val" id="scoreAccuracy">—</div>
-              <div class="sc-bar"><div class="sc-fill fill-g" id="barAccuracy" style="width:0%"></div></div>
-            </div>
-            <div class="score-cell">
-              <div class="sc-label">efficiency</div>
-              <div class="sc-val" id="scoreEfficiency">—</div>
-              <div class="sc-bar"><div class="sc-fill fill-w" id="barEfficiency" style="width:0%"></div></div>
-            </div>
-            <div class="score-cell">
-              <div class="sc-label">reliability</div>
-              <div class="sc-val" id="scoreReliability">—</div>
-              <div class="sc-bar"><div class="sc-fill fill-g" id="barReliability" style="width:0%"></div></div>
-            </div>
-            <div class="score-cell">
-              <div class="sc-label">orchestration</div>
-              <div class="sc-val" id="scoreOrchestration">—</div>
-              <div class="sc-bar"><div class="sc-fill fill-d" id="barOrchestration" style="width:0%"></div></div>
+
+        <div class="chat-messages" id="chatMessages">
+          <div class="msg">
+            <div class="msg-avatar ai">✦</div>
+            <div class="msg-body">
+              <div class="msg-sender">assistant</div>
+              <div class="msg-text">I can help you build your solution. Ask me anything about prompt design, parsing strategy, or how scoring works.</div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- SDK metrics -->
-      <div class="panel-card fade-in d1">
-        <div class="card-hdr"><div class="card-title">sdk · last run</div></div>
-        <div class="card-body" id="sdkMetrics">
-          <div class="metric-row"><span class="mk">prompt tokens</span><span class="mv" id="metricPromptTokens">—</span></div>
-          <div class="metric-row"><span class="mk">completion tokens</span><span class="mv" id="metricCompletionTokens">—</span></div>
-          <div class="metric-row"><span class="mk">total tokens</span><span class="mv" id="metricTotalTokens">—</span></div>
-          <div class="metric-row"><span class="mk">llm calls</span><span class="mv" id="metricLlmCalls">—</span></div>
-          <div class="metric-row"><span class="mk">retries</span><span class="mv" id="metricRetries">—</span></div>
-          <div class="metric-row"><span class="mk">cost</span><span class="mv" id="metricCost">—</span></div>
-          <div class="metric-row"><span class="mk">latency</span><span class="mv" id="metricLatency">—</span></div>
+        <div class="chat-input-area">
+          <div class="chat-input-row">
+            <textarea class="chat-input" id="chatInput" rows="1" placeholder="ask about prompts, logic, scoring..." onkeydown="handleKey(event)"></textarea>
+            <button class="send-btn" onclick="sendMsg()">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 7H2M8 3l4 4-4 4"/>
+              </svg>
+            </button>
+          </div>
+          <div class="chat-hint">shift+enter for newline · enter to send</div>
         </div>
       </div>
-
-      <!-- Leaderboard -->
-      <div class="panel-card fade-in d2">
-        <div class="card-hdr">
-          <div class="card-title">leaderboard</div>
-          <span style="font-size:10px;color:var(--muted)" id="leaderboardCount">—</span>
-        </div>
-        <div class="card-body" style="padding:8px 12px" id="trackingLeaderboard">
-          <div class="lb-row" style="font-size:9px;color:var(--muted);padding-bottom:4px;border-bottom-color:var(--border-light)">
-            <span>#</span><span>user</span><span style="text-align:right">score</span><span style="text-align:right">cost</span>
-          </div>
-          <div style="padding:12px 0;text-align:center;font-size:11px;color:var(--muted)">loading...</div>
-        </div>
-      </div>
-
-      <!-- Tips -->
-      <div class="panel-card fade-in d3">
-        <div class="card-hdr"><div class="card-title">efficiency tips</div></div>
-        <div class="card-body" style="padding:8px 12px">
-          <div class="tip-item">
-            <span class="tip-arrow">→</span>
-            Batch all claims in one prompt with JSON array output to reduce from 6 calls to 1
-          </div>
-          <div class="tip-item">
-            <span class="tip-arrow">→</span>
-            Use <code style="font-size:10px;color:var(--accent);background:var(--surface2);padding:1px 4px;border-radius:2px">response_format</code> for structured output — eliminates parse errors
-          </div>
-          <div class="tip-item">
-            <span class="tip-arrow">→</span>
-            temperature=0 gives the highest consistency score across adversarial runs
-          </div>
-          <div class="tip-item" style="border-bottom:none">
-            <span class="tip-arrow">→</span>
-            Top solution uses 1 call, 420 tokens, $0.04 — aim for that benchmark
-          </div>
-        </div>
-      </div>
-
     </div>
+
   </div>
 
 </div>
@@ -1167,43 +1242,56 @@ func main() {
   function initCodeMirror(code, lang) {
     const parent = document.getElementById('editorBody');
     if (!parent) return;
-    cmView = null;
-    fallbackTextarea = initFallbackTextarea();
 
-    // Remove any previous CM host without deleting fallback textarea
+    if (!fallbackTextarea) fallbackTextarea = initFallbackTextarea();
+
     const oldHost = parent.querySelector('.cm-host');
     if (oldHost) oldHost.remove();
+    if (cmView) { cmView.destroy(); cmView = null; }
 
     const CM = window._CM;
     if (!CM || window._cmFailed) {
       if (fallbackTextarea) {
+        fallbackTextarea.style.display = '';
         fallbackTextarea.hidden = false;
         fallbackTextarea.value = code || '';
       }
       return;
     }
 
-    if (fallbackTextarea) fallbackTextarea.hidden = true;
+    if (fallbackTextarea) { fallbackTextarea.hidden = true; fallbackTextarea.style.display = 'none'; }
 
-    const host = document.createElement('div');
-    host.className = 'cm-host';
-    host.style.cssText = 'position:absolute;inset:0;';
-    parent.appendChild(host);
+    try {
+      const host = document.createElement('div');
+      host.className = 'cm-host';
+      host.style.cssText = 'position:absolute;inset:0;';
+      parent.appendChild(host);
 
-    const langExt = CM.langExtensions[lang] || CM.langExtensions.python;
-    cmView = new CM.EditorView({
-      state: CM.EditorState.create({
-        doc: code || '',
-        extensions: [
-          CM.basicSetup,
-          CM.keymap.of([CM.indentWithTab]),
-          langExt(),
-          CM.oneDark,
-          CM.customTheme,
-        ],
-      }),
-      parent: host,
-    });
+      const langExt = CM.langExtensions[lang] || CM.langExtensions.python;
+      cmView = new CM.EditorView({
+        state: CM.EditorState.create({
+          doc: code || '',
+          extensions: [
+            CM.basicSetup,
+            CM.keymap.of([CM.indentWithTab]),
+            langExt(),
+            CM.oneDark,
+            CM.customTheme,
+          ],
+        }),
+        parent: host,
+      });
+    } catch (e) {
+      console.warn('CodeMirror init failed, using textarea fallback:', e);
+      const failedHost = parent.querySelector('.cm-host');
+      if (failedHost) failedHost.remove();
+      cmView = null;
+      if (fallbackTextarea) {
+        fallbackTextarea.style.display = '';
+        fallbackTextarea.hidden = false;
+        fallbackTextarea.value = code || '';
+      }
+    }
   }
 
   function switchLanguage(lang) {
@@ -1288,6 +1376,21 @@ func main() {
     const div = document.createElement('div');
     div.textContent = s;
     return div.innerHTML;
+  }
+
+  function formatMarkdown(text) {
+    let html = escapeHtml(text);
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+      `<pre style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:8px 10px;margin:6px 0;font-size:10px;line-height:1.6;overflow-x:auto;white-space:pre-wrap"><code>${code.trim()}</code></pre>`);
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong style="color:var(--text)">$1</strong>');
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    html = html.replace(/^[-•] (.+)$/gm, '<div style="display:flex;gap:6px;margin:2px 0"><span style="color:var(--accent);flex-shrink:0">→</span><span>$1</span></div>');
+    html = html.replace(/^\d+\. (.+)$/gm, (_, item) =>
+      `<div style="display:flex;gap:6px;margin:2px 0"><span style="color:var(--muted);flex-shrink:0">•</span><span>${item}</span></div>`);
+    html = html.replace(/\n/g, '<br>');
+    html = html.replace(/(<br>){3,}/g, '<br><br>');
+    return html;
   }
 
   async function populateDrawer(challengeId) {
@@ -1430,9 +1533,13 @@ func main() {
 
       const scores = [
         { id: 'Accuracy', key: 'score_accuracy' },
+        { id: 'PromptQuality', key: 'score_prompt_quality' },
+        { id: 'RuleAdherence', key: 'score_rule_adherence' },
+        { id: 'EdgeCases', key: 'score_edge_cases' },
         { id: 'Efficiency', key: 'score_efficiency' },
         { id: 'Reliability', key: 'score_reliability' },
         { id: 'Orchestration', key: 'score_orchestration' },
+        { id: 'CodeQuality', key: 'score_code_quality' },
       ];
       scores.forEach(({ id, key }) => {
         const val = best[key];
@@ -1502,6 +1609,11 @@ func main() {
   async function bootEditor() {
     const params = new URLSearchParams(window.location.search);
     const challengeId = params.get('id');
+
+    // Show starter code immediately so the editor is never blank
+    const defaultCode = getStarterCode('python', 'this challenge');
+    initCodeMirror(defaultCode, 'python');
+
     if (challengeId) {
       window._challengeId = challengeId;
       try {
@@ -1509,31 +1621,38 @@ func main() {
         populateChallenge(c);
       } catch (e) {
         console.log('Challenge load failed:', e.message);
-        initCodeMirror(getStarterCode('python', 'this challenge'), 'python');
       }
       populateDrawer(challengeId);
       loadTrackingData(challengeId);
-    } else {
-      initCodeMirror(getStarterCode('python', 'this challenge'), 'python');
     }
   }
 
   document.addEventListener('DOMContentLoaded', () => {
     PromptCodeAPI.updateNavAuth();
-    // Ensure fallback textarea is ready immediately
     initFallbackTextarea();
-    // If CodeMirror loads later, upgrade without losing current text
+
     window._cmReadyCallback = () => {
       if (window._CM && !window._cmFailed) {
-        initCodeMirror(getEditorCode(), currentLang);
+        const existing = getEditorCode();
+        const code = existing || getStarterCode(currentLang, window._challengeTitle || 'this challenge');
+        initCodeMirror(code, currentLang);
       }
     };
-    // If it already loaded before DOMContentLoaded, upgrade now
     if (window._cmReady && window._CM && !window._cmFailed) {
       window._cmReadyCallback();
     }
     bootEditor();
   });
+
+  function switchRightTab(tab) {
+    document.querySelectorAll('.right-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    document.getElementById('panelTracking').classList.toggle('active', tab === 'tracking');
+    document.getElementById('panelChat').classList.toggle('active', tab === 'chat');
+    if (tab === 'chat') {
+      const msgs = document.getElementById('chatMessages');
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+  }
 
   function toggleDrawer() {
     document.getElementById('drawer').classList.toggle('open');
@@ -1580,6 +1699,17 @@ func main() {
     chatBusy = true;
     const challengeId = window._challengeId;
 
+    if (!challengeId) {
+      typing.remove();
+      const errMsg = document.createElement('div');
+      errMsg.className = 'msg';
+      errMsg.innerHTML = `<div class="msg-avatar ai">✦</div><div class="msg-body"><div class="msg-sender">assistant</div><div class="msg-text" style="color:#e06050">No challenge loaded. Open a challenge from the challenges page first.</div></div>`;
+      msgs.appendChild(errMsg);
+      msgs.scrollTop = msgs.scrollHeight;
+      chatBusy = false;
+      return;
+    }
+
     try {
       const code = getEditorCode();
       const resp = await PromptCodeAPI.chatWithAssistant(challengeId, chatHistory, code);
@@ -1590,7 +1720,7 @@ func main() {
 
       const aiMsg = document.createElement('div');
       aiMsg.className = 'msg';
-      const formatted = reply.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\n/g, '<br>');
+      const formatted = formatMarkdown(reply);
       aiMsg.innerHTML = `<div class="msg-avatar ai">✦</div><div class="msg-body"><div class="msg-sender">assistant</div><div class="msg-text">${formatted}</div></div>`;
       msgs.appendChild(aiMsg);
       msgs.scrollTop = msgs.scrollHeight;
@@ -1636,25 +1766,52 @@ func main() {
     }
   }
 
-  const handle = document.getElementById('resizeHandle');
-  const chatSection = document.getElementById('chatSection');
-  let dragging = false, startY = 0, startH = 0;
+  // ── Splitter drag logic ──
+  (function initSplitters() {
+    const workspace = document.querySelector('.workspace');
+    const problemPane = document.querySelector('.problem-pane');
+    const rightPane = document.getElementById('rightPane');
+    const splitterLeft = document.getElementById('splitterLeft');
+    const splitterRight = document.getElementById('splitterRight');
 
-  handle.addEventListener('mousedown', e => {
-    dragging = true; startY = e.clientY;
-    startH = chatSection.offsetHeight;
-    document.body.style.userSelect = 'none';
-  });
-  document.addEventListener('mousemove', e => {
-    if (!dragging) return;
-    const delta = startY - e.clientY;
-    const newH = Math.max(140, Math.min(480, startH + delta));
-    chatSection.style.height = newH + 'px';
-  });
-  document.addEventListener('mouseup', () => {
-    dragging = false;
-    document.body.style.userSelect = '';
-  });
+    let activeSplitter = null, startX = 0, startWidth = 0;
+
+    function onMouseDown(e, splitter, pane, direction) {
+      e.preventDefault();
+      activeSplitter = { splitter, pane, direction };
+      startX = e.clientX;
+      startWidth = pane.getBoundingClientRect().width;
+      splitter.classList.add('active');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    splitterLeft.addEventListener('mousedown', e => onMouseDown(e, splitterLeft, problemPane, 'left'));
+    splitterRight.addEventListener('mousedown', e => onMouseDown(e, splitterRight, rightPane, 'right'));
+
+    document.addEventListener('mousemove', e => {
+      if (!activeSplitter) return;
+      const { pane, direction } = activeSplitter;
+      const delta = e.clientX - startX;
+      const min = parseInt(getComputedStyle(pane).minWidth) || 200;
+      const max = parseInt(getComputedStyle(pane).maxWidth) || 600;
+      let newWidth;
+      if (direction === 'left') {
+        newWidth = Math.max(min, Math.min(max, startWidth + delta));
+      } else {
+        newWidth = Math.max(min, Math.min(max, startWidth - delta));
+      }
+      pane.style.width = newWidth + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!activeSplitter) return;
+      activeSplitter.splitter.classList.remove('active');
+      activeSplitter = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    });
+  })();
 </script>
 </body>
 </html>

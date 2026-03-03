@@ -25,6 +25,8 @@ class SubmissionResponse(BaseModel):
     score_reliability: float | None = None
     score_orchestration: float | None = None
     score_code_quality: float | None = None
+    score_rule_adherence: float | None = None
+    score_edge_cases: float | None = None
     score_overall: float | None = None
     total_cost_usd: float | None = None
     total_latency_ms: float | None = None
@@ -59,10 +61,12 @@ class SubmissionReport(BaseModel):
     submission_id: uuid.UUID
     accuracy: float
     prompt_quality: float
+    rule_adherence: float = 0.0
     efficiency: float
     reliability: float
     orchestration: float
     code_quality: float
+    edge_case_handling: float = 0.0
     overall: float
     cost_usd: float
     latency_ms: float

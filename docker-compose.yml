@@ -29,7 +29,10 @@ services:
     ports:
       - "8000:8000"
     environment:
-      PROMPTCODE_DATABASE_URL: postgresql+asyncpg://promptcode:promptcode@db:5432/promptcode
+      # Use the same database URL as configured in your .env.
+      # For Supabase, set PROMPTCODE_DATABASE_URL in .env to your Supabase Postgres URI
+      # (e.g. postgresql+asyncpg://<user>:<password>@<host>:5432/<db>?sslmode=require)
+      PROMPTCODE_DATABASE_URL: ${PROMPTCODE_DATABASE_URL}
       PROMPTCODE_OPENAI_API_KEY: ${OPENAI_API_KEY}
       PROMPTCODE_SANDBOX_IMAGE: promptcode-sandbox:latest
     depends_on:

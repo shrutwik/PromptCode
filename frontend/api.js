@@ -113,7 +113,9 @@ const PromptCodeAPI = {
         });
         if (!resp.ok) {
             const err = await resp.json();
-            throw new Error(err.detail || 'Submission failed');
+            const detail = err.detail;
+            const msg = typeof detail === 'string' ? detail : (Array.isArray(detail) ? detail.map(d => d.msg || d.message || JSON.stringify(d)).join('; ') : 'Submission failed');
+            throw new Error(msg);
         }
         return resp.json();
     },
@@ -151,7 +153,9 @@ const PromptCodeAPI = {
         });
         if (!resp.ok) {
             const err = await resp.json();
-            throw new Error(err.detail || 'Chat failed');
+            const detail = err.detail;
+            const msg = typeof detail === 'string' ? detail : (Array.isArray(detail) ? detail.map(d => d.msg || d.message || JSON.stringify(d)).join('; ') : 'Chat failed');
+            throw new Error(msg);
         }
         return resp.json();
     },
@@ -174,14 +178,26 @@ const PromptCodeAPI = {
     },
 
     updateNavAuth() {
+        const loggedIn = this.isLoggedIn();
         const user = this.getUser();
-        const loggedIn = !!user;
 
         document.querySelectorAll('[data-auth-show]').forEach(el => {
-            el.hidden = !loggedIn;
+            if (loggedIn) {
+                el.removeAttribute('hidden');
+                if (el._pcDisplay) el.style.display = el._pcDisplay;
+            } else {
+                if (!el._pcDisplay) el._pcDisplay = getComputedStyle(el).display || '';
+                el.style.display = 'none';
+            }
         });
         document.querySelectorAll('[data-noauth-show]').forEach(el => {
-            el.hidden = loggedIn;
+            if (!loggedIn) {
+                el.removeAttribute('hidden');
+                if (el._pcDisplay) el.style.display = el._pcDisplay;
+            } else {
+                if (!el._pcDisplay) el._pcDisplay = getComputedStyle(el).display || '';
+                el.style.display = 'none';
+            }
         });
         document.querySelectorAll('[data-user-initials]').forEach(el => {
             el.textContent = this.getInitials();

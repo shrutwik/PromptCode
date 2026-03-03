@@ -63,7 +63,24 @@ def _build_judge_prompt(
     constraints = challenge_config.get("constraints", {})
     processing_rules = challenge_config.get("processing_rules", {})
 
-    return f"""You are an expert code reviewer and AI prompt engineering judge for a competitive platform called PromptCode.
+    skip_conditions = processing_rules.get("skip_conditions", [])
+    cross_ref_rules = processing_rules.get("cross_reference_rules", [])
+    normalization = processing_rules.get("normalization_rules", {})
+
+    rules_section = ""
+    if skip_conditions:
+        rules_section += "\n### Skip Conditions (must exclude these from output)\n"
+        for i, rule in enumerate(skip_conditions, 1):
+            rules_section += f"{i}. {rule}\n"
+    if cross_ref_rules:
+        rules_section += "\n### Cross-Reference Rules\n"
+        for i, rule in enumerate(cross_ref_rules, 1):
+            rules_section += f"{i}. {rule}\n"
+    if normalization:
+        rules_section += "\n### Normalization Rules\n"
+        rules_section += json.dumps(normalization, indent=2)[:2000] + "\n"
+
+    return f"""You are an expert code reviewer and AI prompt engineering judge for PromptCode.
 
 ## Challenge
 {description}
@@ -71,8 +88,11 @@ def _build_judge_prompt(
 ## Constraints
 {json.dumps(constraints, indent=2) if constraints else "None specified"}
 
-## Processing Rules
-{json.dumps(processing_rules, indent=2) if processing_rules else "None specified"}
+## Challenge-Specific Processing Rules
+{rules_section if rules_section else "None specified"}
+
+## General Processing Rules
+{json.dumps(processing_rules, indent=2)[:1500] if processing_rules else "None specified"}
 
 ## Sample Input
 {sample_input}
@@ -88,55 +108,64 @@ def _build_judge_prompt(
 {code}
 ```
 
-## Your Task
+## Scoring Rubric — Score each dimension from 0.0 to 1.0
 
-Evaluate this submission across all dimensions. Score each from 0.0 to 1.0.
-
-**accuracy** — Would this code produce correct output for the given inputs? Consider:
-- Does it parse inputs correctly?
-- Does it handle the data formats described?
+**accuracy** — Would this code produce correct output?
+- Does it parse inputs correctly and handle the described data formats?
 - Would it produce output matching the ground truth structure and values?
-- Does it handle edge cases from the processing rules?
+- Does it correctly implement all field extractions/classifications?
 
-**prompt_quality** — How well did the candidate craft their LLM prompts? Consider:
-- Clarity and specificity of instructions
-- Output format constraints (JSON schema, field names)
-- Edge case handling instructions
-- Use of examples/few-shot
-- System vs user message separation
+**prompt_quality** — How well are the LLM prompts engineered?
+- Clarity and specificity of instructions to the LLM
+- Output format constraints (JSON schema, field names, types)
+- Use of examples/few-shot, system vs user message separation
+- Does the prompt anticipate failure modes?
 
-**efficiency** — How token-efficient is the approach? Consider:
-- Number of LLM calls (fewer is better for simple tasks)
-- Prompt length vs necessity
-- Whether the approach avoids redundant context
+**rule_adherence** — Does the code implement the challenge-specific rules?
+- Does it handle skip conditions (e.g., excluding VOID/TEST records)?
+- Does it implement cross-reference rules (amendments, supplements)?
+- Does it apply normalization rules (category mapping, name formatting, amount parsing)?
+- Score 0.0 if rules are completely ignored, 1.0 if all rules are addressed in code or prompts
 
-**reliability** — Would this produce consistent results across runs? Consider:
-- Temperature settings
-- Output parsing robustness
-- Error handling and retries
+**efficiency** — How token-efficient is the approach?
+- Number of LLM calls (fewer is better; batching is ideal)
+- Prompt length vs necessity; avoids redundant context
+- Estimated cost relative to task complexity
 
-**orchestration** — How cleanly is the LLM integration structured? Consider:
-- Separation of concerns
+**reliability** — Would this produce consistent results across runs?
+- Temperature settings (0 = most consistent)
+- Output parsing robustness (try/except around JSON parsing)
+- Error handling and retry logic
+
+**orchestration** — How cleanly is the LLM integration structured?
+- Separation of concerns, modular design
 - Error handling around API calls
-- Retry logic
-- Validation of LLM outputs
+- Retry logic, validation of LLM outputs before using them
 
-**code_quality** — How well-structured is the code? Consider:
-- Function decomposition
-- Error handling
+**code_quality** — How well-structured is the code?
+- Function decomposition, readability
 - Input/output validation
-- Readability
+- Error handling patterns
+
+**edge_case_handling** — How well does the code handle noisy/adversarial input?
+- Does the prompt instruct the LLM on malformed input, OCR artifacts, encoding issues?
+- Does the code handle missing fields, unexpected formats, empty inputs?
+- Does it handle date format variations, currency formatting, name normalization?
+- Score based on how many edge cases from the normalization_rules are addressed
 
 Return ONLY valid JSON:
 {{
   "accuracy": 0.0,
   "prompt_quality": 0.0,
+  "rule_adherence": 0.0,
   "efficiency": 0.0,
   "reliability": 0.0,
   "orchestration": 0.0,
   "code_quality": 0.0,
+  "edge_case_handling": 0.0,
   "feedback": "2-3 sentences of constructive feedback",
   "accuracy_reasoning": "Brief explanation of accuracy assessment",
+  "rule_adherence_details": "Which rules are addressed and which are missing",
   "estimated_llm_calls": 3,
   "estimated_cost_usd": 0.05
 }}"""
@@ -295,17 +324,19 @@ def ai_judge_evaluate(
         total_api_calls += 1
         logger.info("AI judge returned scores: %s", {
             k: v for k, v in judge_scores.items()
-            if k not in ("feedback", "accuracy_reasoning")
+            if k not in ("feedback", "accuracy_reasoning", "rule_adherence_details")
         })
     except Exception:
         logger.exception("AI judge call failed, using heuristic fallback")
         judge_scores = {
             "accuracy": 0.5,
             "prompt_quality": 0.5,
+            "rule_adherence": 0.5,
             "efficiency": 0.5,
             "reliability": 0.5,
             "orchestration": 0.5,
             "code_quality": 0.5,
+            "edge_case_handling": 0.5,
             "feedback": "AI judge unavailable — scored via heuristic fallback.",
             "estimated_llm_calls": 3,
             "estimated_cost_usd": 0.05,
@@ -352,12 +383,14 @@ def ai_judge_evaluate(
 
     acc = _clamp(judge_scores.get("accuracy", 0.5))
     pq = _clamp(pq_result.get("overall", judge_scores.get("prompt_quality", 0.5)))
+    ra = _clamp(judge_scores.get("rule_adherence", 0.5))
     eff = _clamp(judge_scores.get("efficiency", 0.5))
     rel = _clamp(judge_scores.get("reliability", 0.5))
     orch = _clamp(judge_scores.get("orchestration", 0.5))
     cq_static = _clamp(code_quality_result.get("score", 0.5))
     cq_judge = _clamp(judge_scores.get("code_quality", 0.5))
     cq = round((cq_static + cq_judge) / 2, 4)
+    ech = _clamp(judge_scores.get("edge_case_handling", 0.5))
 
     # --- Hardcode detection ---
     has_llm_usage = any(
@@ -366,17 +399,16 @@ def ai_judge_evaluate(
     )
     if not has_llm_usage and acc > 0.3:
         logger.warning("No LLM usage detected — possible hardcoded answer")
-        acc = pq = eff = rel = orch = cq = 0.0
+        acc = pq = ra = eff = rel = orch = cq = ech = 0.0
 
-    overall = round(
-        acc * SCORE_WEIGHTS["accuracy"]
-        + pq * SCORE_WEIGHTS["prompt_quality"]
-        + eff * SCORE_WEIGHTS["efficiency"]
-        + rel * SCORE_WEIGHTS["reliability"]
-        + orch * SCORE_WEIGHTS["orchestration"]
-        + cq * SCORE_WEIGHTS["code_quality"],
-        4,
-    )
+    overall = round(sum(
+        score * SCORE_WEIGHTS[dim]
+        for dim, score in [
+            ("accuracy", acc), ("prompt_quality", pq), ("rule_adherence", ra),
+            ("efficiency", eff), ("reliability", rel), ("orchestration", orch),
+            ("code_quality", cq), ("edge_case_handling", ech),
+        ]
+    ), 4)
 
     estimated_user_calls = int(judge_scores.get("estimated_llm_calls", 1))
     estimated_user_cost = float(judge_scores.get("estimated_cost_usd", 0.02))
@@ -395,6 +427,7 @@ def ai_judge_evaluate(
             "error": None,
             "feedback": judge_scores.get("feedback", ""),
             "accuracy_reasoning": judge_scores.get("accuracy_reasoning", ""),
+            "rule_adherence_details": judge_scores.get("rule_adherence_details", ""),
         },
         {
             "run_type": "prompt_quality",
@@ -415,10 +448,12 @@ def ai_judge_evaluate(
     return EvaluationResult(
         accuracy=round(acc, 4),
         prompt_quality=round(pq, 4),
+        rule_adherence=round(ra, 4),
         efficiency=round(eff, 4),
         reliability=round(rel, 4),
         orchestration=round(orch, 4),
         code_quality=round(cq, 4),
+        edge_case_handling=round(ech, 4),
         overall=overall,
         cost_usd=estimated_user_cost,
         latency_ms=round(total_latency, 1),

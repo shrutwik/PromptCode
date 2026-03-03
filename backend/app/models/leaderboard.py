@@ -38,6 +38,8 @@ class LeaderboardEntry(Base):
     score_reliability: Mapped[float] = mapped_column(Float, default=0.0)
     score_orchestration: Mapped[float] = mapped_column(Float, default=0.0)
     score_code_quality: Mapped[float] = mapped_column(Float, default=0.0)
+    score_rule_adherence: Mapped[float] = mapped_column(Float, default=0.0)
+    score_edge_cases: Mapped[float] = mapped_column(Float, default=0.0)
 
     total_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     total_llm_calls: Mapped[int] = mapped_column(Integer, default=0)

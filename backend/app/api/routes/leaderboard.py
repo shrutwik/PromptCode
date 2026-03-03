@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +17,7 @@ router = APIRouter()
 @router.get("/{challenge_id}", response_model=list[LeaderboardEntryResponse])
 async def get_leaderboard(
     challenge_id: uuid.UUID,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -27,6 +27,9 @@ async def get_leaderboard(
         .limit(limit)
     )
     entries = result.scalars().all()
+
+    if not entries:
+        return []
 
     user_ids = {e.user_id for e in entries}
     users_result = await db.execute(select(User).where(User.id.in_(user_ids)))

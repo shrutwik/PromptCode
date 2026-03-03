@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import uuid
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,26 +37,28 @@ async def get_user_profile(
     solved_ids = {s.challenge_id for s in completed if s.score_overall and s.score_overall > 0}
 
     avg_score = avg_accuracy = avg_efficiency = avg_reliability = avg_orchestration = 0.0
-    total_cost = total_latency = 0.0
+    total_cost = avg_latency = 0.0
     if completed:
-        scores = [s.score_overall for s in completed if s.score_overall]
+        scores = [s.score_overall for s in completed if s.score_overall is not None]
         avg_score = sum(scores) / len(scores) if scores else 0.0
-        acc = [s.score_accuracy for s in completed if s.score_accuracy]
+        acc = [s.score_accuracy for s in completed if s.score_accuracy is not None]
         avg_accuracy = sum(acc) / len(acc) if acc else 0.0
-        eff = [s.score_efficiency for s in completed if s.score_efficiency]
+        eff = [s.score_efficiency for s in completed if s.score_efficiency is not None]
         avg_efficiency = sum(eff) / len(eff) if eff else 0.0
-        rel = [s.score_reliability for s in completed if s.score_reliability]
+        rel = [s.score_reliability for s in completed if s.score_reliability is not None]
         avg_reliability = sum(rel) / len(rel) if rel else 0.0
-        orc = [s.score_orchestration for s in completed if s.score_orchestration]
+        orc = [s.score_orchestration for s in completed if s.score_orchestration is not None]
         avg_orchestration = sum(orc) / len(orc) if orc else 0.0
         total_cost = sum(s.total_cost_usd or 0 for s in completed)
-        total_latency = sum(s.total_latency_ms or 0 for s in completed) / len(completed)
+        avg_latency = sum(s.total_latency_ms or 0 for s in completed) / len(completed)
 
     challenge_ids = {s.challenge_id for s in submissions[:10]}
-    challenges_result = await db.execute(
-        select(Challenge).where(Challenge.id.in_(challenge_ids))
-    )
-    challenge_map = {c.id: c.title for c in challenges_result.scalars().all()}
+    challenge_map = {}
+    if challenge_ids:
+        challenges_result = await db.execute(
+            select(Challenge).where(Challenge.id.in_(challenge_ids))
+        )
+        challenge_map = {c.id: c.title for c in challenges_result.scalars().all()}
 
     return {
         "user": UserPublicResponse.model_validate(user).model_dump(),
@@ -72,7 +72,7 @@ async def get_user_profile(
             "avg_reliability": round(avg_reliability, 2),
             "avg_orchestration": round(avg_orchestration, 2),
             "total_cost_usd": round(total_cost, 4),
-            "avg_latency_ms": round(total_latency, 0),
+            "avg_latency_ms": round(avg_latency, 0),
         },
         "recent_submissions": [
             {

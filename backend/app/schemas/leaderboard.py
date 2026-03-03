@@ -17,6 +17,8 @@ class LeaderboardEntryResponse(BaseModel):
     score_reliability: float
     score_orchestration: float
     score_code_quality: float
+    score_rule_adherence: float = 0.0
+    score_edge_cases: float = 0.0
     total_cost_usd: float
     total_llm_calls: int
 
