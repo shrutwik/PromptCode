@@ -5,7 +5,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import async_session_factory
@@ -81,34 +81,34 @@ def _queue_query() -> Select[tuple[EvaluationJob]]:
 async def _claim_next_job(db: AsyncSession) -> EvaluationJob | None:
     result = await db.execute(_queue_query())
     job = result.scalar_one_or_none()
-    return await _claim_loaded_job(db, job)
+    if not job:
+        return None
+    return await _claim_job_by_id(db, job.id)
 
 
 async def _claim_job_by_id(db: AsyncSession, job_id: uuid.UUID) -> EvaluationJob | None:
     now = datetime.now(timezone.utc)
-    result = await db.execute(
-        select(EvaluationJob)
+    claim_stmt = (
+        update(EvaluationJob)
         .where(
             EvaluationJob.id == job_id,
             EvaluationJob.status.in_(("queued", "retry")),
             EvaluationJob.available_at <= now,
         )
-        .with_for_update(skip_locked=True)
-        .limit(1)
+        .values(
+            status="running",
+            started_at=now,
+            attempts=EvaluationJob.attempts + 1,
+        )
+        .returning(EvaluationJob.id)
     )
-    job = result.scalar_one_or_none()
-    return await _claim_loaded_job(db, job)
-
-
-async def _claim_loaded_job(db: AsyncSession, job: EvaluationJob | None) -> EvaluationJob | None:
-    if not job:
+    result = await db.execute(claim_stmt)
+    claimed_id = result.scalar_one_or_none()
+    if not claimed_id:
+        await db.rollback()
         return None
-    job.status = "running"
-    job.started_at = datetime.now(timezone.utc)
-    job.attempts = (job.attempts or 0) + 1
     await db.commit()
-    await db.refresh(job)
-    return job
+    return await db.get(EvaluationJob, claimed_id)
 
 
 async def _run_job(db: AsyncSession, job: EvaluationJob) -> None:

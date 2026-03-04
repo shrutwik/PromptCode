@@ -189,6 +189,7 @@ Hard gates:
 
 Reproducibility:
 - Every run includes deterministic metadata in report (`evaluation_seed`, perturbation config version, per-run seed + perturbation type)
+- Report includes `evaluation_manifest` fingerprints (`challenge_fingerprint`, run-plan hash, replay hash)
 - Hidden tests are supported via `config.hidden_tests` and excluded from public challenge payloads
 - Detailed scoring contract: `docs/SCORING_SPEC.md`
 

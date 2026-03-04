@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import random
+import hashlib
 from datetime import datetime, timezone
 from typing import Any
 
@@ -64,6 +65,7 @@ class EvaluationResult:
         evaluation_config: dict[str, Any],
         confidence_intervals: dict[str, Any] | None = None,
         audit_trail: list[dict[str, Any]] | None = None,
+        evaluation_manifest: dict[str, Any] | None = None,
         hardcoded: bool = False,
     ):
         self.accuracy = accuracy
@@ -90,6 +92,7 @@ class EvaluationResult:
         self.evaluation_config = evaluation_config
         self.confidence_intervals = confidence_intervals or {}
         self.audit_trail = audit_trail or []
+        self.evaluation_manifest = evaluation_manifest or {}
         self.hardcoded = hardcoded
 
     def to_report(self, submission_id: str) -> dict[str, Any]:
@@ -125,6 +128,7 @@ class EvaluationResult:
             "evaluation_config": self.evaluation_config,
             "confidence_intervals": self.confidence_intervals,
             "audit_trail": self.audit_trail,
+            "evaluation_manifest": self.evaluation_manifest,
             "scorecard": {
                 "accuracy": self.accuracy,
                 "robustness": self.edge_case_handling,
@@ -375,7 +379,7 @@ def evaluate_submission(
             }
         )
 
-    overall = round(
+    raw_overall = round(
         acc * SCORE_WEIGHTS["accuracy"]
         + robustness * SCORE_WEIGHTS["robustness"]
         + rel * SCORE_WEIGHTS["reliability"]
@@ -385,32 +389,18 @@ def evaluate_submission(
         + calibration * SCORE_WEIGHTS["calibration"],
         4,
     )
-
-    if acc < 0.40:
-        overall = min(overall, 0.55)
+    overall, cap_events = _apply_overall_caps(
+        raw_overall=raw_overall,
+        accuracy=acc,
+        rule_adherence=rule_adherence,
+        anti_gaming_triggered=metric_gaming["triggered"],
+    )
+    for event in cap_events:
         audit_trail.append(
             {
                 "event": "score_cap_applied",
                 "at": _now_iso(),
-                "details": {"cap": 0.55, "reason": "accuracy_below_0.40"},
-            }
-        )
-    if rule_adherence < 0.50:
-        overall = min(overall, 0.50)
-        audit_trail.append(
-            {
-                "event": "score_cap_applied",
-                "at": _now_iso(),
-                "details": {"cap": 0.50, "reason": "rule_adherence_below_0.50"},
-            }
-        )
-    if metric_gaming["triggered"]:
-        overall = min(overall, 0.45)
-        audit_trail.append(
-            {
-                "event": "score_cap_applied",
-                "at": _now_iso(),
-                "details": {"cap": 0.45, "reason": "anti_gaming_triggered"},
+                "details": event,
             }
         )
 
@@ -458,6 +448,25 @@ def evaluate_submission(
             },
         }
     )
+    evaluation_manifest = _build_evaluation_manifest(
+        entrypoint=entrypoint,
+        challenge_config=challenge_config,
+        evaluation_seed=evaluation_seed,
+        run_plan=run_plan,
+        run_records=run_records,
+        scores={
+            "accuracy": acc,
+            "robustness": robustness,
+            "reliability": rel,
+            "efficiency": eff,
+            "prompt_quality": pq,
+            "orchestration": orch,
+            "calibration": calibration,
+            "rule_adherence": rule_adherence,
+            "overall": overall,
+            "raw_overall": raw_overall,
+        },
+    )
 
     return EvaluationResult(
         accuracy=acc,
@@ -490,6 +499,7 @@ def evaluate_submission(
         },
         confidence_intervals=confidence_intervals,
         audit_trail=audit_trail,
+        evaluation_manifest=evaluation_manifest,
         hardcoded=hardcoded,
     )
 
@@ -858,3 +868,105 @@ def _proportion_confidence_interval(successes: int, total: int) -> dict[str, Any
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _apply_overall_caps(
+    *,
+    raw_overall: float,
+    accuracy: float,
+    rule_adherence: float,
+    anti_gaming_triggered: bool,
+) -> tuple[float, list[dict[str, Any]]]:
+    overall = raw_overall
+    events: list[dict[str, Any]] = []
+    if accuracy < 0.40:
+        overall = min(overall, 0.55)
+        events.append({"cap": 0.55, "reason": "accuracy_below_0.40"})
+    if rule_adherence < 0.50:
+        overall = min(overall, 0.50)
+        events.append({"cap": 0.50, "reason": "rule_adherence_below_0.50"})
+    if anti_gaming_triggered:
+        overall = min(overall, 0.45)
+        events.append({"cap": 0.45, "reason": "anti_gaming_triggered"})
+    return round(overall, 4), events
+
+
+def _build_evaluation_manifest(
+    *,
+    entrypoint: str,
+    challenge_config: dict[str, Any],
+    evaluation_seed: int,
+    run_plan: list[dict[str, Any]],
+    run_records: list[dict[str, Any]],
+    scores: dict[str, float],
+) -> dict[str, Any]:
+    challenge_fingerprint_payload = {
+        "accuracy_mode": challenge_config.get("accuracy_mode", "json"),
+        "expected_calls": challenge_config.get("expected_calls", 3),
+        "processing_rules": challenge_config.get("processing_rules", {}),
+        "budgets": {
+            "token_budget": challenge_config.get("token_budget", 12_000),
+            "cost_budget_usd": challenge_config.get("cost_budget_usd", 0.20),
+            "latency_budget_ms": challenge_config.get("latency_budget_ms", 30_000),
+            "call_budget": challenge_config.get("call_budget"),
+        },
+        "hidden_tests": challenge_config.get("hidden_tests", {}),
+    }
+    challenge_fingerprint = _hash_payload(challenge_fingerprint_payload)
+    run_plan_fingerprint = _hash_payload(
+        [
+            {
+                "run_type": spec.get("run_type"),
+                "run_index": spec.get("run_index"),
+                "meta": spec.get("meta", {}),
+            }
+            for spec in run_plan
+        ]
+    )
+    run_records_fingerprint = _hash_payload(
+        [
+            {
+                "run_type": r.get("run_type"),
+                "run_index": r.get("run_index"),
+                "status": r.get("status"),
+                "accuracy": r.get("accuracy"),
+                "schema_valid": r.get("schema_valid"),
+                "tokens_total": r.get("tokens_total"),
+                "cost_usd": r.get("cost_usd"),
+                "latency_ms": r.get("latency_ms"),
+                "llm_calls": r.get("llm_calls"),
+                "retries": r.get("retries"),
+                "meta": r.get("meta", {}),
+            }
+            for r in run_records
+        ]
+    )
+    replay_hash = _hash_payload(
+        {
+            "entrypoint": entrypoint,
+            "evaluation_seed": evaluation_seed,
+            "challenge_fingerprint": challenge_fingerprint,
+            "run_plan_fingerprint": run_plan_fingerprint,
+            "run_records_fingerprint": run_records_fingerprint,
+            "scores": scores,
+            "scoring_weights": SCORE_WEIGHTS,
+            "perturbation_config_version": PERTURBATION_CONFIG_VERSION,
+        }
+    )
+
+    return {
+        "version": 1,
+        "entrypoint": entrypoint,
+        "evaluation_seed": evaluation_seed,
+        "challenge_fingerprint": challenge_fingerprint,
+        "run_plan_fingerprint": run_plan_fingerprint,
+        "run_records_fingerprint": run_records_fingerprint,
+        "replay_hash": replay_hash,
+        "scoring_weights": SCORE_WEIGHTS,
+        "perturbation_config_version": PERTURBATION_CONFIG_VERSION,
+    }
+
+
+def _hash_payload(payload: Any) -> str:
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
