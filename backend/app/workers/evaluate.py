@@ -66,7 +66,14 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
     recent_history = await _get_recent_completed_submissions(db, submission, limit=4)
     growth = _compute_growth(previous=previous, current=result)
     mastery_state = _derive_mastery_state(current=result, history=recent_history)
+    coaching = _build_coaching(
+        result=result,
+        growth=growth,
+        mastery_state=mastery_state,
+        previous=previous,
+    )
     report["growth"] = growth
+    report["coaching"] = coaching
     report["mastery_state"] = mastery_state
 
     submission.status = "completed"
@@ -301,3 +308,64 @@ def _derive_mastery_state(*, current: Any, history: list[Submission]) -> str:
     if avg_overall >= 0.68 and avg_rel >= 0.55:
         return "proficient"
     return "practicing"
+
+
+def _build_coaching(
+    *,
+    result: Any,
+    growth: dict[str, Any],
+    mastery_state: str,
+    previous: Submission | None,
+) -> dict[str, Any]:
+    improved: list[str] = []
+    regressed: list[str] = []
+
+    metric_map = [
+        ("delta_overall", "overall"),
+        ("delta_accuracy", "accuracy"),
+        ("delta_robustness", "robustness"),
+        ("delta_efficiency", "efficiency"),
+    ]
+    for key, label in metric_map:
+        delta = growth.get(key)
+        if delta is None:
+            continue
+        if delta > 0.01:
+            improved.append(label)
+        elif delta < -0.01:
+            regressed.append(label)
+
+    next_focus = "accuracy"
+    explanation = "Tighten extraction/output constraints and validation."
+    priorities = [
+        ("accuracy", float(result.accuracy), 0.85, "Add stricter extraction instructions and deterministic output formatting."),
+        ("robustness", float(result.edge_case_handling), 0.75, "Add explicit edge-case and malformed-input handling in prompts."),
+        ("reliability", float(result.reliability), 0.75, "Reduce stochasticity and enforce stable parsing/validation."),
+        ("efficiency", float(result.efficiency), 0.70, "Batch calls and trim prompt context to improve cost/latency."),
+        ("orchestration", float(result.orchestration), 0.75, "Add retry bounds and stronger JSON validation/fallback paths."),
+    ]
+    priorities.sort(key=lambda x: x[1] - x[2])
+    worst = priorities[0]
+    next_focus = worst[0]
+    explanation = worst[3]
+
+    if growth.get("status") == "first_attempt":
+        summary = "Baseline established. Focus on consistency and robustness before optimizing cost."
+    elif regressed:
+        summary = f"Regression detected in {', '.join(regressed)}. Recover baseline before further optimization."
+    elif improved:
+        summary = f"Improved in {', '.join(improved)}. Keep this direction and target the next weakest dimension."
+    else:
+        summary = "Flat iteration. Make one targeted change and compare against this run."
+
+    trend = growth.get("status", "flat")
+    return {
+        "trend": trend,
+        "summary": summary,
+        "improved": improved,
+        "regressed": regressed,
+        "next_focus": next_focus,
+        "next_focus_explanation": explanation,
+        "mastery_state": mastery_state,
+        "previous_submission_id": str(previous.id) if previous else None,
+    }

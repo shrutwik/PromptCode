@@ -641,10 +641,20 @@ nav {
 
       // Feedback card
       const feedbackCard = document.getElementById('feedbackCard');
+      const feedbackTitle = document.getElementById('feedbackTitle');
       const feedbackBody = document.getElementById('feedbackBody');
-      if (report.feedback) {
+      const coaching = report.coaching || {};
+      if (report.feedback || coaching.summary) {
         feedbackCard.style.display = '';
-        feedbackBody.textContent = report.feedback;
+        if (feedbackTitle) feedbackTitle.textContent = coaching.summary ? 'coaching summary' : 'feedback';
+        const parts = [];
+        if (coaching.summary) parts.push(coaching.summary);
+        if (coaching.next_focus) {
+          const focus = `Next focus: ${coaching.next_focus}. ${coaching.next_focus_explanation || ''}`.trim();
+          parts.push(focus);
+        }
+        if (report.feedback) parts.push(report.feedback);
+        feedbackBody.textContent = parts.join('\n\n');
       }
 
       // Tips

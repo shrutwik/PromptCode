@@ -236,6 +236,17 @@ Recommended cadence:
 - Weekly during active rubric changes
 - Bi-weekly once stable
 
+## Growth Backfill
+
+If you added growth/mastery metrics after existing submissions were already stored,
+backfill those historical rows and reports:
+
+```bash
+cd backend
+python -m scripts.backfill_growth_metrics --dry-run
+python -m scripts.backfill_growth_metrics
+```
+
 ## Tests
 
 ```bash
