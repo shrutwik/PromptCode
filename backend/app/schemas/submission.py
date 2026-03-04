@@ -28,6 +28,12 @@ class SubmissionResponse(BaseModel):
     score_rule_adherence: float | None = None
     score_edge_cases: float | None = None
     score_overall: float | None = None
+    delta_overall: float | None = None
+    delta_accuracy: float | None = None
+    delta_robustness: float | None = None
+    delta_efficiency: float | None = None
+    growth_score: float | None = None
+    mastery_state: str | None = None
     total_cost_usd: float | None = None
     total_latency_ms: float | None = None
     total_llm_calls: int | None = None
@@ -87,5 +93,8 @@ class SubmissionReport(BaseModel):
     evaluation_config: dict[str, Any] = {}
     evaluation_manifest: dict[str, Any] = {}
     confidence_intervals: dict[str, Any] = {}
+    growth: dict[str, Any] = {}
+    coaching: dict[str, Any] = {}
+    mastery_state: str | None = None
     audit_trail: list[dict[str, Any]] = []
     runs: list[dict[str, Any]] = []

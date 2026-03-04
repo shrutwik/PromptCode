@@ -86,7 +86,7 @@ nav {
 .streak-pill { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border-light); border-radius: 20px; font-size: 11px; color: var(--muted); }
 
 /* STATS ROW */
-.stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 28px; }
+.stats-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 28px; }
 .stat-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; background: var(--surface2); }
 .stat-val { font-family: 'Instrument Serif', serif; font-size: 26px; letter-spacing: -0.02em; color: var(--text); line-height: 1; }
 .stat-lbl { font-size: 10px; color: var(--muted); margin-top: 4px; letter-spacing: 0.04em; }
@@ -260,6 +260,10 @@ nav {
       <div class="stat-lbl">submissions</div>
     </div>
     <div class="stat-card">
+      <div class="stat-val" id="statGrowth">—</div>
+      <div class="stat-lbl">avg growth score</div>
+    </div>
+    <div class="stat-card">
       <div class="stat-val" id="statCost">—</div>
       <div class="stat-lbl">total sdk cost</div>
     </div>
@@ -291,8 +295,8 @@ nav {
             <button class="btn btn-ghost" style="padding:3px 10px;font-size:10px" onclick="filterHistory('solved',this)">solved</button>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 80px 80px 80px;gap:10px;padding:7px 14px;font-size:10px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;border-bottom:1px solid var(--border)">
-          <span>challenge</span><span style="text-align:right">score</span><span style="text-align:right">cost</span><span style="text-align:right">when</span>
+        <div style="display:grid;grid-template-columns:1fr 70px 70px 80px 70px;gap:10px;padding:7px 14px;font-size:10px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;border-bottom:1px solid var(--border)">
+          <span>challenge</span><span style="text-align:right">score</span><span style="text-align:right">growth</span><span style="text-align:right">cost</span><span style="text-align:right">when</span>
         </div>
         <div class="score-history" id="historyList">
           <div style="padding:24px 14px;text-align:center;font-size:12px;color:var(--muted)">loading submissions...</div>
@@ -357,6 +361,7 @@ nav {
           <div class="compare-row"><span class="cr-label">efficiency</span><span class="cr-you" id="ysEfficiency">—</span></div>
           <div class="compare-row"><span class="cr-label">reliability</span><span class="cr-you" id="ysReliability">—</span></div>
           <div class="compare-row"><span class="cr-label">orchestration</span><span class="cr-you" id="ysOrchestration">—</span></div>
+          <div class="compare-row"><span class="cr-label">growth score</span><span class="cr-you" id="ysGrowth">—</span></div>
         </div>
       </div>
 
@@ -399,6 +404,13 @@ nav {
     if (s === 'completed' || s === 'passed') return 'diff-easy';
     if (s === 'failed') return 'diff-hard';
     return 'diff-med';
+  }
+
+  function masteryClass(state) {
+    const s = String(state || '').toLowerCase();
+    if (s === 'mastered') return 'diff-easy';
+    if (s === 'proficient') return 'diff-med';
+    return 'diff-hard';
   }
 
   function escHtml(str) {
@@ -472,6 +484,7 @@ nav {
       ? `solved / ${stats.total_challenges}`
       : 'solved';
     $('statSubmissions').textContent = stats.total_submissions ?? '—';
+    $('statGrowth').textContent = fmt(stats.avg_growth_score);
     $('statCost').textContent = stats.total_cost_usd != null ? '$' + fmt(stats.total_cost_usd) : '—';
     $('statLatency').textContent = stats.avg_latency_ms != null ? Math.round(stats.avg_latency_ms).toLocaleString() : '—';
 
@@ -496,6 +509,7 @@ nav {
     $('ysEfficiency').textContent = fmt(stats.avg_efficiency);
     $('ysReliability').textContent = fmt(stats.avg_reliability);
     $('ysOrchestration').textContent = fmt(stats.avg_orchestration);
+    $('ysGrowth').textContent = fmt(stats.avg_growth_score);
 
     // --- Submission history ---
     const histList = $('historyList');
@@ -507,10 +521,13 @@ nav {
         const a = document.createElement('a');
         a.className = 'sh-row';
         a.href = `/submission.html?id=${s.id}`;
-        a.style.gridTemplateColumns = '1fr 80px 80px 80px';
+        a.style.gridTemplateColumns = '1fr 70px 70px 80px 70px';
+        const growth = s.growth_score != null ? fmt(s.growth_score) : '—';
+        const mastery = s.mastery_state ? `<span class="diff-badge ${masteryClass(s.mastery_state)}">${escHtml(s.mastery_state)}</span>` : '';
         a.innerHTML = `
-          <div><div class="sh-name">${escHtml(s.challenge_title || 'Challenge #' + s.challenge_id)}</div><div class="sh-desc"><span class="diff-badge ${statusClass(s.status)}">${escHtml(s.status)}</span></div></div>
+          <div><div class="sh-name">${escHtml(s.challenge_title || 'Challenge #' + s.challenge_id)}</div><div class="sh-desc"><span class="diff-badge ${statusClass(s.status)}">${escHtml(s.status)}</span> ${mastery}</div></div>
           <span class="sh-score">${s.score_overall != null ? fmt(s.score_overall) : '—'}</span>
+          <span class="sh-val">${growth}</span>
           <span class="sh-val">${s.total_cost_usd != null ? '$' + fmt(s.total_cost_usd) : '—'}</span>
           <span class="sh-time">${s.created_at ? timeAgo(s.created_at) : '—'}</span>
         `;
@@ -579,10 +596,13 @@ nav {
       const a = document.createElement('a');
       a.className = 'sh-row';
       a.href = `/submission.html?id=${s.id}`;
-      a.style.gridTemplateColumns = '1fr 80px 80px 80px';
+      a.style.gridTemplateColumns = '1fr 70px 70px 80px 70px';
+      const growth = s.growth_score != null ? fmt(s.growth_score) : '—';
+      const mastery = s.mastery_state ? `<span class="diff-badge ${masteryClass(s.mastery_state)}">${escHtml(s.mastery_state)}</span>` : '';
       a.innerHTML = `
-        <div><div class="sh-name">${escHtml(s.challenge_title || 'Challenge #' + s.challenge_id)}</div><div class="sh-desc"><span class="diff-badge ${statusClass(s.status)}">${escHtml(s.status)}</span></div></div>
+        <div><div class="sh-name">${escHtml(s.challenge_title || 'Challenge #' + s.challenge_id)}</div><div class="sh-desc"><span class="diff-badge ${statusClass(s.status)}">${escHtml(s.status)}</span> ${mastery}</div></div>
         <span class="sh-score">${s.score_overall != null ? fmt(s.score_overall) : '—'}</span>
+        <span class="sh-val">${growth}</span>
         <span class="sh-val">${s.total_cost_usd != null ? '$' + fmt(s.total_cost_usd) : '—'}</span>
         <span class="sh-time">${s.created_at ? timeAgo(s.created_at) : '—'}</span>
       `;

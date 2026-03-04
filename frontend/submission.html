@@ -527,6 +527,18 @@ nav {
       ['total latency', fmtMs(latMs), ''],
       ['total cost', fmtCost(report.cost_usd), ''],
     ];
+    const growth = report.growth || {};
+    if (growth.growth_score != null) {
+      rows.push(['growth score', fmtScore(growth.growth_score), growth.growth_score >= 0.55 ? 'ac' : 'wn']);
+    }
+    if (growth.delta_overall != null) {
+      const d = Number(growth.delta_overall);
+      const sign = d > 0 ? '+' : '';
+      rows.push(['delta overall', `${sign}${d.toFixed(2)}`, d > 0 ? 'ac' : (d < 0 ? 'dn' : '')]);
+    }
+    if (report.mastery_state) {
+      rows.push(['mastery state', String(report.mastery_state), report.mastery_state === 'mastered' ? 'ac' : '']);
+    }
     el.innerHTML = rows.map(([k, v, cls]) =>
       `<div class="metric-row"><span class="mk">${k}</span><span class="mv${cls ? ' ' + cls : ''}">${v}</span></div>`
     ).join('');
@@ -534,6 +546,7 @@ nav {
 
   function generateTips(report) {
     const tips = [];
+    const growth = report.growth || {};
     if (report.efficiency != null && report.efficiency < 0.75) {
       tips.push({ priority: 'high', title: 'Improve efficiency', desc: `Your efficiency score is ${fmtScore(report.efficiency)}. Consider batching LLM calls or reducing token usage to lower cost and latency.`, impact: '↑ efficiency score' });
     }
@@ -550,6 +563,11 @@ nav {
     const failedRuns = runs.filter(r => r.status !== 'passed' && r.status !== 'pass');
     if (failedRuns.length > 0) {
       tips.push({ priority: 'high', title: `${failedRuns.length} pass${failedRuns.length > 1 ? 'es' : ''} did not fully pass`, desc: `Review the evaluation passes table — runs of type "${failedRuns.map(r => r.run_type).join(', ')}" need attention.`, impact: '↑ overall score' });
+    }
+    if (growth.delta_overall != null && growth.delta_overall < -0.02) {
+      tips.push({ priority: 'med', title: 'You regressed vs your last attempt', desc: `Overall changed by ${growth.delta_overall.toFixed(2)}. Compare your last prompt version and reintroduce the parts that improved reliability.`, impact: '↑ growth score' });
+    } else if (growth.delta_overall != null && growth.delta_overall > 0.02) {
+      tips.push({ priority: 'low', title: 'Solid iteration improvement', desc: `Overall improved by +${growth.delta_overall.toFixed(2)}. Keep the same strategy and push robustness next.`, impact: 'maintain progress' });
     }
     return tips;
   }
@@ -595,6 +613,16 @@ nav {
       if (latEl) latEl.textContent = fmtMs(report.latency_ms) + ' total';
       const timeEl = document.getElementById('heroSubmittedTime');
       if (timeEl && sub) timeEl.textContent = 'submitted ' + timeAgo(sub.created_at);
+      const heroSub = document.getElementById('heroScoreSub');
+      if (heroSub) {
+        const growth = report.growth || {};
+        if (report.mastery_state) {
+          const delta = growth.delta_overall != null ? ` · Δ ${Number(growth.delta_overall).toFixed(2)}` : '';
+          heroSub.textContent = `${String(report.mastery_state)}${delta}`;
+        } else {
+          heroSub.textContent = 'overall';
+        }
+      }
 
       // Passes table
       const tbody = document.getElementById('passesBody');

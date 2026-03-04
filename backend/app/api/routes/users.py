@@ -37,6 +37,8 @@ async def get_user_profile(
     solved_ids = {s.challenge_id for s in completed if s.score_overall and s.score_overall > 0}
 
     avg_score = avg_accuracy = avg_efficiency = avg_reliability = avg_orchestration = 0.0
+    avg_growth = 0.0
+    improving_submissions = 0
     total_cost = avg_latency = 0.0
     if completed:
         scores = [s.score_overall for s in completed if s.score_overall is not None]
@@ -49,6 +51,11 @@ async def get_user_profile(
         avg_reliability = sum(rel) / len(rel) if rel else 0.0
         orc = [s.score_orchestration for s in completed if s.score_orchestration is not None]
         avg_orchestration = sum(orc) / len(orc) if orc else 0.0
+        growth = [s.growth_score for s in completed if s.growth_score is not None]
+        avg_growth = sum(growth) / len(growth) if growth else 0.0
+        improving_submissions = sum(
+            1 for s in completed if (s.delta_overall or 0.0) > 0.01
+        )
         total_cost = sum(s.total_cost_usd or 0 for s in completed)
         avg_latency = sum(s.total_latency_ms or 0 for s in completed) / len(completed)
 
@@ -71,6 +78,9 @@ async def get_user_profile(
             "avg_efficiency": round(avg_efficiency, 2),
             "avg_reliability": round(avg_reliability, 2),
             "avg_orchestration": round(avg_orchestration, 2),
+            "avg_growth_score": round(avg_growth, 2),
+            "improving_submissions": improving_submissions,
+            "improving_rate": round((improving_submissions / len(completed)) if completed else 0.0, 2),
             "total_cost_usd": round(total_cost, 4),
             "avg_latency_ms": round(avg_latency, 0),
         },
@@ -82,6 +92,9 @@ async def get_user_profile(
                 "status": s.status,
                 "score_overall": s.score_overall,
                 "score_accuracy": s.score_accuracy,
+                "delta_overall": s.delta_overall,
+                "growth_score": s.growth_score,
+                "mastery_state": s.mastery_state,
                 "total_cost_usd": s.total_cost_usd,
                 "created_at": s.created_at.isoformat() if s.created_at else None,
             }

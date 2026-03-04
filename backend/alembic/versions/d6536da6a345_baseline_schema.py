@@ -83,6 +83,12 @@ def upgrade() -> None:
             sa.Column("score_rule_adherence", sa.Float(), nullable=True),
             sa.Column("score_edge_cases", sa.Float(), nullable=True),
             sa.Column("score_overall", sa.Float(), nullable=True),
+            sa.Column("delta_overall", sa.Float(), nullable=True),
+            sa.Column("delta_accuracy", sa.Float(), nullable=True),
+            sa.Column("delta_robustness", sa.Float(), nullable=True),
+            sa.Column("delta_efficiency", sa.Float(), nullable=True),
+            sa.Column("growth_score", sa.Float(), nullable=True),
+            sa.Column("mastery_state", sa.String(length=24), nullable=True),
             sa.Column("total_cost_usd", sa.Float(), nullable=True),
             sa.Column("total_latency_ms", sa.Float(), nullable=True),
             sa.Column("total_llm_calls", sa.Integer(), nullable=True),
@@ -91,6 +97,20 @@ def upgrade() -> None:
         )
         op.create_index("ix_submissions_challenge_id", "submissions", ["challenge_id"], unique=False)
         op.create_index("ix_submissions_user_id", "submissions", ["user_id"], unique=False)
+    else:
+        submission_columns = {c["name"] for c in inspector.get_columns("submissions")}
+        if "delta_overall" not in submission_columns:
+            op.add_column("submissions", sa.Column("delta_overall", sa.Float(), nullable=True))
+        if "delta_accuracy" not in submission_columns:
+            op.add_column("submissions", sa.Column("delta_accuracy", sa.Float(), nullable=True))
+        if "delta_robustness" not in submission_columns:
+            op.add_column("submissions", sa.Column("delta_robustness", sa.Float(), nullable=True))
+        if "delta_efficiency" not in submission_columns:
+            op.add_column("submissions", sa.Column("delta_efficiency", sa.Float(), nullable=True))
+        if "growth_score" not in submission_columns:
+            op.add_column("submissions", sa.Column("growth_score", sa.Float(), nullable=True))
+        if "mastery_state" not in submission_columns:
+            op.add_column("submissions", sa.Column("mastery_state", sa.String(length=24), nullable=True))
 
     if "runs" not in existing:
         op.create_table(

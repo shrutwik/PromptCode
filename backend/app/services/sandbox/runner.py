@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import docker
-from docker.errors import ContainerError, ImageNotFound
+from docker.errors import APIError, ContainerError, ImageNotFound
 
 from app.core.config import get_settings
 
@@ -70,6 +70,7 @@ def run_in_sandbox(
             (code_dir / fname).write_text(content)
 
         client = docker.from_env()
+        container = None
 
         try:
             container = client.containers.run(
@@ -86,13 +87,23 @@ def run_in_sandbox(
                 mem_limit=settings.sandbox_memory_limit,
                 nano_cpus=int(settings.sandbox_cpu_limit * 1e9),
                 network_disabled=False,  # needs outbound for OpenAI
-                detach=False,
+                detach=True,
                 stdout=True,
                 stderr=True,
-                remove=True,
-                timeout=settings.sandbox_timeout_seconds,
+                remove=False,
             )
-            stdout = container.decode("utf-8") if isinstance(container, bytes) else str(container)
+            wait_result = container.wait(timeout=settings.sandbox_timeout_seconds)
+            exit_code = int(wait_result.get("StatusCode", 1))
+            logs = container.logs(stdout=True, stderr=True)
+            stdout = logs.decode("utf-8", errors="replace") if isinstance(logs, (bytes, bytearray)) else str(logs)
+            if exit_code != 0:
+                raise ContainerError(
+                    container=container,
+                    exit_status=exit_code,
+                    command=f"python /workspace/{entrypoint}",
+                    image=settings.sandbox_image,
+                    stderr=stdout.encode("utf-8", errors="ignore"),
+                )
 
         except ContainerError as exc:
             logger.warning("Container exited with error: %s", exc)
@@ -100,6 +111,15 @@ def run_in_sandbox(
                 success=False,
                 output="",
                 exit_code=exc.exit_status,
+                telemetry=[],
+                error=str(exc),
+            )
+        except APIError as exc:
+            logger.warning("Container API error: %s", exc)
+            return SandboxResult(
+                success=False,
+                output="",
+                exit_code=-1,
                 telemetry=[],
                 error=str(exc),
             )
@@ -121,6 +141,12 @@ def run_in_sandbox(
                 telemetry=[],
                 error=str(exc),
             )
+        finally:
+            if container is not None:
+                try:
+                    container.remove(force=True)
+                except Exception:
+                    pass
 
         telemetry = _read_telemetry(telemetry_dir)
 

@@ -40,6 +40,12 @@ class Submission(Base):
     score_rule_adherence: Mapped[float | None] = mapped_column(Float, nullable=True)
     score_edge_cases: Mapped[float | None] = mapped_column(Float, nullable=True)
     score_overall: Mapped[float | None] = mapped_column(Float, nullable=True)
+    delta_overall: Mapped[float | None] = mapped_column(Float, nullable=True)
+    delta_accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
+    delta_robustness: Mapped[float | None] = mapped_column(Float, nullable=True)
+    delta_efficiency: Mapped[float | None] = mapped_column(Float, nullable=True)
+    growth_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mastery_state: Mapped[str | None] = mapped_column(String(24), nullable=True)
 
     total_cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     total_latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)

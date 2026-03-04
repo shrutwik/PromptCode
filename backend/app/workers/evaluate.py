@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import uuid as _uuid
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,6 +62,12 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
     )
 
     report = result.to_report(submission_id)
+    previous = await _get_previous_completed_submission(db, submission)
+    recent_history = await _get_recent_completed_submissions(db, submission, limit=4)
+    growth = _compute_growth(previous=previous, current=result)
+    mastery_state = _derive_mastery_state(current=result, history=recent_history)
+    report["growth"] = growth
+    report["mastery_state"] = mastery_state
 
     submission.status = "completed"
     submission.report = report
@@ -73,6 +80,12 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
     submission.score_rule_adherence = result.rule_adherence
     submission.score_edge_cases = result.edge_case_handling
     submission.score_overall = result.overall
+    submission.delta_overall = growth.get("delta_overall")
+    submission.delta_accuracy = growth.get("delta_accuracy")
+    submission.delta_robustness = growth.get("delta_robustness")
+    submission.delta_efficiency = growth.get("delta_efficiency")
+    submission.growth_score = growth.get("growth_score")
+    submission.mastery_state = mastery_state
     submission.total_cost_usd = result.cost_usd
     submission.total_latency_ms = result.latency_ms
     submission.total_llm_calls = result.llm_calls
@@ -176,3 +189,115 @@ async def _mark_failed(db: AsyncSession, submission_id: str) -> None:
     if submission:
         submission.status = "failed"
         await db.commit()
+
+
+async def _get_previous_completed_submission(
+    db: AsyncSession,
+    submission: Submission,
+) -> Submission | None:
+    result = await db.execute(
+        select(Submission)
+        .where(
+            Submission.user_id == submission.user_id,
+            Submission.challenge_id == submission.challenge_id,
+            Submission.status == "completed",
+            Submission.id != submission.id,
+        )
+        .order_by(Submission.completed_at.desc(), Submission.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _get_recent_completed_submissions(
+    db: AsyncSession,
+    submission: Submission,
+    *,
+    limit: int = 4,
+) -> list[Submission]:
+    result = await db.execute(
+        select(Submission)
+        .where(
+            Submission.user_id == submission.user_id,
+            Submission.challenge_id == submission.challenge_id,
+            Submission.status == "completed",
+            Submission.id != submission.id,
+        )
+        .order_by(Submission.completed_at.desc(), Submission.created_at.desc())
+        .limit(limit)
+    )
+    return result.scalars().all()
+
+
+def _compute_growth(*, previous: Submission | None, current: Any) -> dict[str, Any]:
+    if not previous:
+        return {
+            "previous_submission_id": None,
+            "delta_overall": None,
+            "delta_accuracy": None,
+            "delta_robustness": None,
+            "delta_efficiency": None,
+            "growth_score": 0.5,
+            "status": "first_attempt",
+        }
+
+    def _delta(cur: float | None, prev: float | None) -> float | None:
+        if cur is None or prev is None:
+            return None
+        return round(cur - prev, 4)
+
+    d_overall = _delta(current.overall, previous.score_overall)
+    d_accuracy = _delta(current.accuracy, previous.score_accuracy)
+    d_robustness = _delta(current.edge_case_handling, previous.score_edge_cases)
+    d_eff = _delta(current.efficiency, previous.score_efficiency)
+
+    weighted: list[tuple[float, float]] = [
+        (d_overall, 0.4),
+        (d_accuracy, 0.2),
+        (d_robustness, 0.2),
+        (d_eff, 0.2),
+    ]
+    norm_values: list[tuple[float, float]] = []
+    for delta, weight in weighted:
+        if delta is None:
+            continue
+        normalized = max(0.0, min(1.0, (delta + 0.15) / 0.30))
+        norm_values.append((normalized, weight))
+
+    if norm_values:
+        weight_sum = sum(w for _, w in norm_values)
+        growth_score = sum(v * w for v, w in norm_values) / weight_sum
+    else:
+        growth_score = 0.5
+
+    improved = any((d or 0.0) > 0 for d in [d_overall, d_accuracy, d_robustness, d_eff])
+    regressed = any((d or 0.0) < -0.02 for d in [d_overall, d_accuracy, d_robustness, d_eff])
+    status = "improved" if improved and not regressed else ("mixed" if improved and regressed else ("regressed" if regressed else "flat"))
+
+    return {
+        "previous_submission_id": str(previous.id),
+        "delta_overall": d_overall,
+        "delta_accuracy": d_accuracy,
+        "delta_robustness": d_robustness,
+        "delta_efficiency": d_eff,
+        "growth_score": round(growth_score, 4),
+        "status": status,
+    }
+
+
+def _derive_mastery_state(*, current: Any, history: list[Submission]) -> str:
+    window = [current] + history[:2]
+    overall_vals = [float(x.overall if hasattr(x, "overall") else x.score_overall or 0.0) for x in window]
+    rel_vals = [float(x.reliability if hasattr(x, "reliability") else x.score_reliability or 0.0) for x in window]
+    robust_vals = [float(x.edge_case_handling if hasattr(x, "edge_case_handling") else x.score_edge_cases or 0.0) for x in window]
+
+    n = len(window)
+    avg_overall = sum(overall_vals) / n if n else 0.0
+    avg_rel = sum(rel_vals) / n if n else 0.0
+    avg_robust = sum(robust_vals) / n if n else 0.0
+
+    if n >= 3 and avg_overall >= 0.82 and avg_rel >= 0.65 and avg_robust >= 0.75:
+        return "mastered"
+    if avg_overall >= 0.68 and avg_rel >= 0.55:
+        return "proficient"
+    return "practicing"
