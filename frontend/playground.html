@@ -657,31 +657,32 @@ Claim report:
     document.getElementById('statCost').textContent = `~$${cost}`;
   }
 
-  const SAMPLE_OUTPUTS = [
-    `{\n  "claim_id": "CLM-2024-00392",\n  "claimant_name": "J. Harrington",\n  "injury_category": "lower_extremity_injury",\n  "date_of_incident": "2024-03-14",\n  "claim_amount": 4200.00\n}`,
-    `[\n  {\n    "claim_id": "CLM-2024-00392",\n    "claimant_name": "J. Harrington",\n    "injury_category": "lower_extremity_injury",\n    "date_of_incident": "2024-03-14",\n    "claim_amount": 4200.00\n  },\n  {\n    "claim_id": "CLM-2024-00401",\n    "claimant_name": "T. Okafor",\n    "injury_category": "back_spine_injury",\n    "date_of_incident": "2024-01-22",\n    "claim_amount": 8750.00\n  }\n]`,
-    `{\n  "team": "technical",\n  "priority": "high",\n  "reason": "Authentication failure after password reset — user has time-sensitive meeting, escalate immediately"\n}`,
-    `{\n  "sometime in March, think the 14th": "2024-03-14",\n  "last Tuesday": "2024-02-27",\n  "January 22nd 2024": "2024-01-22",\n  "01/08/24": "2024-01-08",\n  "third week of Feb": "2024-02-19"\n}`,
-    `{\n  "invoice_number": "INV-2024-0892",\n  "vendor_name": "Acme Supplies Co.",\n  "invoice_date": "2024-02-08",\n  "line_items": [\n    {"description": "Office Chair", "qty": 2, "unit_price": 249.00},\n    {"description": "Standing Desk", "qty": 1, "unit_price": 599.00}\n  ],\n  "total_amount": 1097.00\n}`
-  ];
-
-  const TIPS = [
-    "Your prompt is well-structured. Consider batching multiple documents in one call to reduce API calls and improve your efficiency score.",
-    "Single batched call — excellent! This is exactly how top-ranked solutions work. Token usage per document is minimal.",
-    "Clean routing prompt. Adding confidence scores would make this more robust under adversarial inputs.",
-    "Efficient normalization prompt. Could be made even leaner by using a system prompt for instructions.",
-    "Good extraction structure. Add few-shot examples for complex invoices to boost accuracy on edge cases."
-  ];
-
-  let activePromptIdx = 0;
-
-  function getActivePromptIdx() {
-    const items = document.querySelectorAll('.saved-item');
-    for (let i = 0; i < items.length; i++) { if (items[i].classList.contains('active')) return i; }
-    return 0;
+  function _buildPlaygroundTip(usage, latencyMs) {
+    const pt = usage.prompt_tokens || 0;
+    const ct = usage.completion_tokens || 0;
+    const total = usage.total_tokens || (pt + ct);
+    if (total > 2500) return 'Prompt is heavy. Trim context or split instructions into reusable system + concise user message.';
+    if (latencyMs > 6000) return 'Latency is high. Try a smaller model or shorter context for faster iteration.';
+    if (pt > (ct * 4) && pt > 400) return 'Prompt tokens dominate usage. Compress instructions/examples to improve efficiency.';
+    return 'Run completed with real model telemetry. Iterate one change at a time and compare token/cost deltas.';
   }
 
-  function runPrompt() {
+  function _collectMessages() {
+    const messages = [];
+    const documentVar = document.getElementById('varDocument').value || '';
+    document.querySelectorAll('#messagesArea .message-block').forEach(block => {
+      const roleEl = block.querySelector('.msg-role');
+      const textEl = block.querySelector('.msg-textarea');
+      if (!roleEl || !textEl) return;
+      const role = (roleEl.textContent || '').trim().toLowerCase();
+      const content = (textEl.value || '').replaceAll('{document}', documentVar).trim();
+      if (!content) return;
+      messages.push({ role, content });
+    });
+    return messages;
+  }
+
+  async function runPrompt() {
     const btn = document.getElementById('runBtn');
     btn.textContent = '⏳ running...';
     btn.disabled = true;
@@ -693,48 +694,63 @@ Claim report:
     const model = document.getElementById('modelSelect').value;
     document.getElementById('thinkModel').textContent = model;
 
-    const idx = getActivePromptIdx();
-    const latency = 600 + Math.random() * 800;
-    const ptTokens = 160 + Math.floor(Math.random() * 80);
-    const ctTokens = 48 + Math.floor(Math.random() * 60);
-    const cost = ((ptTokens + ctTokens) * 0.000005).toFixed(4);
+    const system = document.getElementById('sysPrompt').value || '';
+    const messages = _collectMessages();
+    const temperature = Number(document.getElementById('tempInput').value || 0);
+    const maxTokens = Number(document.getElementById('maxTokensInput').value || 1000);
 
-    setTimeout(() => {
-      const output = SAMPLE_OUTPUTS[idx] || SAMPLE_OUTPUTS[0];
+    if (!messages.length) {
+      document.getElementById('outputThinking').classList.remove('visible');
+      showNotif('Add at least one user message');
+      btn.textContent = '▶ run';
+      btn.disabled = false;
+      return;
+    }
+
+    try {
+      const resp = await PromptCodeAPI.runPlayground(system, messages, {
+        model,
+        temperature,
+        max_tokens: maxTokens,
+      });
+
+      const output = resp.output || '';
+      const usage = resp.usage || {};
+      const ptTokens = Number(usage.prompt_tokens || 0);
+      const ctTokens = Number(usage.completion_tokens || 0);
+      const total = Number(usage.total_tokens || (ptTokens + ctTokens));
+      const lat = Math.round(Number(resp.latency_ms || 0));
+      const cost = Number(resp.estimated_cost_usd || 0);
+      const usedModel = resp.model || model;
+
       currentOutput = output;
-      const lat = Math.round(latency);
-
-      // Update output panel
       document.getElementById('outputThinking').classList.remove('visible');
       document.getElementById('outResponse').classList.add('visible');
       document.getElementById('outputText').textContent = output;
-      document.getElementById('lastModel').textContent = model;
+      document.getElementById('lastModel').textContent = usedModel;
       document.getElementById('lastPT').textContent = ptTokens;
       document.getElementById('lastCT').textContent = ctTokens;
       document.getElementById('lastLat').textContent = lat + 'ms';
-      document.getElementById('lastCost').textContent = '$' + cost;
+      document.getElementById('lastCost').textContent = '$' + cost.toFixed(4);
 
-      // Update meta
-      document.querySelector('#outputMeta .meta-row:nth-child(1) .meta-v').textContent = model;
+      document.querySelector('#outputMeta .meta-row:nth-child(1) .meta-v').textContent = usedModel;
       document.querySelector('#outputMeta .meta-row:nth-child(2) .meta-v').textContent = ptTokens;
       document.querySelector('#outputMeta .meta-row:nth-child(3) .meta-v').textContent = ctTokens;
-      document.querySelector('#outputMeta .meta-row:nth-child(4) .meta-v').textContent = ptTokens + ctTokens;
-      document.querySelector('#outputMeta .meta-row:nth-child(5) .meta-v').textContent = '$' + cost;
+      document.querySelector('#outputMeta .meta-row:nth-child(4) .meta-v').textContent = total;
+      document.querySelector('#outputMeta .meta-row:nth-child(5) .meta-v').textContent = '$' + cost.toFixed(4);
       document.querySelector('#outputMeta .meta-row:nth-child(6) .meta-v').textContent = lat + 'ms';
-      document.querySelector('.output-panel .panel-hdr + .tab-row + .output-body > div:nth-child(2)').querySelector('span.meta-v:last-child') ;
 
-      // Raw
       document.getElementById('rawOutput').textContent = JSON.stringify({
-        id: 'chatcmpl-' + Math.random().toString(36).substr(2,9),
-        model, created: Date.now(),
-        usage: { prompt_tokens: ptTokens, completion_tokens: ctTokens, total_tokens: ptTokens + ctTokens },
-        choices: [{ message: { role: 'assistant', content: output }, finish_reason: 'stop' }]
+        id: resp.raw_id || '',
+        model: usedModel,
+        created: Date.now(),
+        usage: { prompt_tokens: ptTokens, completion_tokens: ctTokens, total_tokens: total },
+        choices: [{ message: { role: 'assistant', content: output }, finish_reason: 'stop' }],
       }, null, 2);
 
-      // Session metrics
       sessionRuns++;
-      sessionTokens += ptTokens + ctTokens;
-      sessionCost += parseFloat(cost);
+      sessionTokens += total;
+      sessionCost += cost;
       totalLatency += lat;
 
       document.getElementById('metRuns').textContent = sessionRuns;
@@ -742,25 +758,29 @@ Claim report:
       document.getElementById('metCost').textContent = '$' + sessionCost.toFixed(4);
       document.getElementById('metLatency').textContent = Math.round(totalLatency / sessionRuns) + 'ms';
 
-      // Token bars
-      const total = ptTokens + ctTokens;
-      document.getElementById('ptBar').style.width = Math.round(ptTokens/total*100) + '%';
-      document.getElementById('ctBar').style.width = Math.round(ctTokens/total*100) + '%';
+      const denom = Math.max(1, total);
+      document.getElementById('ptBar').style.width = Math.round((ptTokens / denom) * 100) + '%';
+      document.getElementById('ctBar').style.width = Math.round((ctTokens / denom) * 100) + '%';
       document.getElementById('ptVal').textContent = ptTokens;
       document.getElementById('ctVal').textContent = ctTokens;
 
-      // Tip
-      document.getElementById('sdkTip').textContent = TIPS[idx] || TIPS[0];
+      document.getElementById('sdkTip').textContent = _buildPlaygroundTip(
+        { prompt_tokens: ptTokens, completion_tokens: ctTokens, total_tokens: total },
+        lat,
+      );
 
-      // History
-      const histItem = { prompt: document.getElementById('userPrompt').value.substring(0,60)+'...', tokens: ptTokens + ctTokens, cost, lat, output };
-      history.unshift(histItem);
+      const preview = messages[messages.length - 1].content.substring(0, 60) + '...';
+      history.unshift({ prompt: preview, tokens: total, cost: cost.toFixed(4), lat, output });
       renderHistory();
 
+      showNotif('run complete · ' + total + ' tokens · $' + cost.toFixed(4));
+    } catch (e) {
+      document.getElementById('outputThinking').classList.remove('visible');
+      showNotif(e.message || 'Run failed');
+    } finally {
       btn.textContent = '▶ run';
       btn.disabled = false;
-      showNotif('run complete · ' + (ptTokens+ctTokens) + ' tokens · $' + cost);
-    }, latency);
+    }
   }
 
   function renderHistory() {

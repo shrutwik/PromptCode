@@ -254,3 +254,10 @@ cd backend
 pip install -r requirements-dev.txt
 pytest -q
 ```
+
+## Reproducibility Gate
+
+```bash
+cd backend
+python -m scripts.run_reproducibility_gate --repeats 10 --stddev-threshold 0.03
+```

@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from app.workers.evaluate import _build_coaching
+from app.workers.evaluate import (
+    _build_coaching,
+    _build_coaching_actions,
+    _build_iteration_diff,
+)
 
 
 def _result(**overrides):
@@ -45,3 +49,42 @@ def test_build_coaching_regression_summary():
     assert "robustness" in coaching["regressed"]
     assert coaching["previous_submission_id"] == "prev"
 
+
+def test_iteration_diff_includes_code_and_prompt_changes():
+    previous = SimpleNamespace(
+        id="prev-id",
+        code='prompt = "Extract fields and return json"\nprint(prompt)\n',
+    )
+    current = SimpleNamespace(
+        id="cur-id",
+        code='prompt = "Extract fields strictly and return valid JSON only"\nprint(prompt)\nprint("done")\n',
+    )
+    growth = {
+        "status": "improved",
+        "delta_overall": 0.04,
+        "delta_accuracy": 0.03,
+        "delta_robustness": 0.02,
+        "delta_efficiency": -0.01,
+    }
+    diff = _build_iteration_diff(previous=previous, current=current, growth=growth)
+    assert diff["status"] == "improved"
+    assert diff["code_changes"]["added_lines"] >= 1
+    assert diff["prompt_changes"]["added_count"] >= 0
+    assert diff["score_deltas"]["overall"] == 0.04
+
+
+def test_coaching_actions_link_failed_runs():
+    actions = _build_coaching_actions(
+        result=SimpleNamespace(efficiency=0.6),
+        growth={"delta_overall": -0.03, "previous_submission_id": "prev"},
+        runs=[
+            {"run_type": "adversarial", "run_index": 1, "status": "fail", "accuracy": 0.42},
+            {"run_type": "clean", "run_index": 0, "status": "pass", "accuracy": 0.9},
+        ],
+        diagnostics=[
+            {"metric": "efficiency", "severity": "medium", "message": "Too many tokens used."}
+        ],
+        iteration_diff={"prompt_changes": {"added_count": 3}},
+    )
+    assert actions
+    assert actions[0]["title"].lower().startswith("fix adversarial")

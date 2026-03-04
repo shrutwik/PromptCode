@@ -18,11 +18,9 @@ import logging
 import re
 from typing import Any
 
-import openai
-
 from app.core.config import get_settings
 from app.services.evaluation.code_analysis import analyze_code, score_code_quality
-from app.services.evaluation.engine import SCORE_WEIGHTS, EvaluationResult
+from app.services.evaluation.engine import EvaluationResult, SCORE_WEIGHTS, _apply_overall_caps
 from app.services.evaluation.prompt_quality import _heuristic_score
 
 logger = logging.getLogger(__name__)
@@ -391,24 +389,49 @@ def ai_judge_evaluate(
     cq_judge = _clamp(judge_scores.get("code_quality", 0.5))
     cq = round((cq_static + cq_judge) / 2, 4)
     ech = _clamp(judge_scores.get("edge_case_handling", 0.5))
+    calibration = 0.5
+    calibration_details = {
+        "score": calibration,
+        "ece": None,
+        "brier": None,
+        "samples": 0,
+        "method": "ai_judge_default",
+    }
 
     # --- Hardcode detection ---
     has_llm_usage = any(
         kw in code.lower()
         for kw in ["llm.call", "openai", "client.chat", "completion", "llm("]
     )
+    hardcoded = False
     if not has_llm_usage and acc > 0.3:
         logger.warning("No LLM usage detected — possible hardcoded answer")
-        acc = pq = ra = eff = rel = orch = cq = ech = 0.0
+        hardcoded = True
+        acc = pq = ra = eff = rel = orch = cq = ech = calibration = 0.0
+        calibration_details = {
+            "score": calibration,
+            "ece": None,
+            "brier": None,
+            "samples": 0,
+            "method": "hardcoded_zeroed",
+        }
 
-    overall = round(sum(
-        score * SCORE_WEIGHTS[dim]
-        for dim, score in [
-            ("accuracy", acc), ("prompt_quality", pq), ("rule_adherence", ra),
-            ("efficiency", eff), ("reliability", rel), ("orchestration", orch),
-            ("code_quality", cq), ("edge_case_handling", ech),
-        ]
-    ), 4)
+    raw_overall = round(
+        acc * SCORE_WEIGHTS["accuracy"]
+        + ech * SCORE_WEIGHTS["robustness"]
+        + rel * SCORE_WEIGHTS["reliability"]
+        + eff * SCORE_WEIGHTS["efficiency"]
+        + pq * SCORE_WEIGHTS["prompt_quality"]
+        + orch * SCORE_WEIGHTS["orchestration"]
+        + calibration * SCORE_WEIGHTS["calibration"],
+        4,
+    )
+    overall, cap_events = _apply_overall_caps(
+        raw_overall=raw_overall,
+        accuracy=acc,
+        rule_adherence=ra,
+        anti_gaming_triggered=False,
+    )
 
     estimated_user_calls = int(judge_scores.get("estimated_llm_calls", 1))
     estimated_user_cost = float(judge_scores.get("estimated_cost_usd", 0.02))
@@ -418,7 +441,9 @@ def ai_judge_evaluate(
             "run_type": "code_evaluation",
             "run_index": 0,
             "success": True,
+            "status": "pass" if acc >= 0.8 and ra >= 0.5 else "fail",
             "accuracy": round(acc, 4),
+            "schema_valid": ra >= 0.5,
             "tokens_total": total_tokens,
             "cost_usd": round(estimated_user_cost, 6),
             "latency_ms": round(total_latency, 1),
@@ -433,10 +458,12 @@ def ai_judge_evaluate(
             "run_type": "prompt_quality",
             "run_index": 1,
             "success": True,
-            "accuracy": round(pq, 4),
-            "tokens_total": total_tokens,
+            "status": "pass" if pq >= 0.7 else "fail",
+            "accuracy": round(pq, 4),  # kept for run-table compatibility
+            "schema_valid": True,
+            "tokens_total": 0,
             "cost_usd": 0.0,
-            "latency_ms": round(total_latency, 1),
+            "latency_ms": 0.0,
             "llm_calls": 0,
             "retries": 0,
             "error": None,
@@ -454,12 +481,34 @@ def ai_judge_evaluate(
         orchestration=round(orch, 4),
         code_quality=round(cq, 4),
         edge_case_handling=round(ech, 4),
+        calibration=calibration,
         overall=overall,
         cost_usd=estimated_user_cost,
         latency_ms=round(total_latency, 1),
         llm_calls=total_api_calls,
+        prompt_tokens=0,
+        completion_tokens=0,
+        retries=0,
         runs=run_records,
         prompt_quality_details=pq_result,
         code_analysis_details=code_quality_result,
-        hardcoded=not has_llm_usage and acc > 0.3,
+        calibration_details=calibration_details,
+        diagnostics=[
+            {
+                "metric": "summary",
+                "severity": "low",
+                "message": str(judge_scores.get("feedback", "AI-judge evaluation completed.")),
+            }
+        ],
+        evaluation_config={
+            "mode": "ai_judge",
+            "judge_model": _get_judge_model(),
+            "score_weights": SCORE_WEIGHTS,
+            "caps_applied": cap_events,
+            "raw_overall": raw_overall,
+        },
+        confidence_intervals={},
+        audit_trail=[],
+        evaluation_manifest={},
+        hardcoded=hardcoded,
     )

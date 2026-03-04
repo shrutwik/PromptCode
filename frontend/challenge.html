@@ -1642,7 +1642,20 @@ func main() {
       window._cmReadyCallback();
     }
     bootEditor();
+    hydrateCoachPrefillFromUrl();
   });
+
+  function hydrateCoachPrefillFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const coachText = params.get('coach');
+    if (!coachText) return;
+
+    const input = document.getElementById('chatInput');
+    if (!input) return;
+    input.value = coachText;
+    switchRightTab('chat');
+    showNotif('Coach action loaded. Press Enter to send.');
+  }
 
   function switchRightTab(tab) {
     document.querySelectorAll('.right-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));

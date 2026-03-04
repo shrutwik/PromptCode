@@ -336,8 +336,14 @@ nav {
         <div class="card-body" id="feedbackBody" style="font-size:12px;line-height:1.7;color:var(--muted)"></div>
       </div>
 
+      <!-- ITERATION DELTA -->
+      <div class="card fade-in d5" id="iterationCard" style="display:none">
+        <div class="card-hdr"><span class="card-title">iteration delta</span></div>
+        <div class="card-body" id="iterationBody" style="font-size:12px;line-height:1.7;color:var(--muted)"></div>
+      </div>
+
       <!-- IMPROVEMENT TIPS -->
-      <div class="card fade-in d5" id="tipsCard" style="display:none">
+      <div class="card fade-in d6" id="tipsCard" style="display:none">
         <div class="card-hdr"><span class="card-title">improvement suggestions</span></div>
         <div class="tip-list" id="tipsList"></div>
       </div>
@@ -368,16 +374,16 @@ nav {
 
       <!-- VS BEST -->
       <div class="card fade-in d4">
-        <div class="card-hdr"><span class="card-title">vs. top solution</span></div>
+        <div class="card-hdr"><span class="card-title">vs. leaderboard #1</span></div>
         <div class="card-body" style="padding:10px 14px">
           <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;font-size:10px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;padding-bottom:5px;border-bottom:1px solid var(--border);margin-bottom:2px">
             <span></span><span>you</span><span>#1</span>
           </div>
-          <div class="metric-row"><span class="mk">overall</span><span style="color:var(--warn);font-size:12px">0.81</span><span style="color:var(--accent);font-size:12px">0.97</span></div>
-          <div class="metric-row"><span class="mk">llm calls</span><span class="mv wn">6</span><span class="mv ac">1</span></div>
-          <div class="metric-row"><span class="mk">tokens</span><span class="mv wn">2,864</span><span class="mv ac">420</span></div>
-          <div class="metric-row"><span class="mk">cost</span><span class="mv wn">$0.14</span><span class="mv ac">$0.04</span></div>
-          <div class="metric-row"><span class="mk">retries</span><span class="mv dn">2</span><span class="mv ac">0</span></div>
+          <div class="metric-row"><span class="mk">overall</span><span id="cmpYouOverall" class="mv">—</span><span id="cmpTopOverall" class="mv">—</span></div>
+          <div class="metric-row"><span class="mk">accuracy</span><span id="cmpYouAccuracy" class="mv">—</span><span id="cmpTopAccuracy" class="mv">—</span></div>
+          <div class="metric-row"><span class="mk">llm calls</span><span id="cmpYouCalls" class="mv">—</span><span id="cmpTopCalls" class="mv">—</span></div>
+          <div class="metric-row"><span class="mk">cost</span><span id="cmpYouCost" class="mv">—</span><span id="cmpTopCost" class="mv">—</span></div>
+          <div class="metric-row"><span class="mk">reliability</span><span id="cmpYouRel" class="mv">—</span><span id="cmpTopRel" class="mv">—</span></div>
         </div>
       </div>
 
@@ -398,6 +404,7 @@ nav {
 <script src="/static/api.js"></script>
 <script>
   let _reportCache = null;
+  let _currentChallengeId = null;
 
   function fmtNum(n) { return n == null ? '—' : n.toLocaleString(); }
   function fmtScore(n) { return n == null ? '—' : n.toFixed(2); }
@@ -544,32 +551,185 @@ nav {
     ).join('');
   }
 
+  function _cmpClass(you, top, higherBetter = true) {
+    if (you == null || top == null) return '';
+    if (higherBetter) return you >= top ? 'ac' : 'wn';
+    return you <= top ? 'ac' : 'wn';
+  }
+
+  function _setCmpCell(id, value, cls) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = 'mv' + (cls ? ' ' + cls : '');
+    el.textContent = value;
+  }
+
+  async function renderTopComparison(challengeId, report) {
+    try {
+      const entries = await PromptCodeAPI.getLeaderboard(challengeId, 1);
+      const top = Array.isArray(entries) ? entries[0] : null;
+      if (!top) return;
+
+      const youOverall = report.overall;
+      const topOverall = top.score_overall;
+      _setCmpCell('cmpYouOverall', fmtScore(youOverall), _cmpClass(youOverall, topOverall, true));
+      _setCmpCell('cmpTopOverall', fmtScore(topOverall), 'ac');
+
+      const youAccuracy = report.accuracy;
+      const topAccuracy = top.score_accuracy;
+      _setCmpCell('cmpYouAccuracy', fmtScore(youAccuracy), _cmpClass(youAccuracy, topAccuracy, true));
+      _setCmpCell('cmpTopAccuracy', fmtScore(topAccuracy), 'ac');
+
+      const youCalls = Number(report.llm_calls || 0);
+      const topCalls = Number(top.total_llm_calls || 0);
+      _setCmpCell('cmpYouCalls', fmtNum(youCalls), _cmpClass(youCalls, topCalls, false));
+      _setCmpCell('cmpTopCalls', fmtNum(topCalls), 'ac');
+
+      const youCost = Number(report.cost_usd || 0);
+      const topCost = Number(top.total_cost_usd || 0);
+      _setCmpCell('cmpYouCost', fmtCost(youCost), _cmpClass(youCost, topCost, false));
+      _setCmpCell('cmpTopCost', fmtCost(topCost), 'ac');
+
+      const youRel = Number(report.reliability || 0);
+      const topRel = Number(top.score_reliability || 0);
+      _setCmpCell('cmpYouRel', fmtScore(youRel), _cmpClass(youRel, topRel, true));
+      _setCmpCell('cmpTopRel', fmtScore(topRel), 'ac');
+    } catch (_) {
+      // Keep default placeholders if leaderboard is unavailable.
+    }
+  }
+
   function generateTips(report) {
+    const actionItems = Array.isArray(report.coaching_actions) ? report.coaching_actions : [];
+    if (actionItems.length) {
+      return actionItems.map(a => {
+        const p = (a.priority || 'medium').toLowerCase();
+        const why = `${a.why || ''}`.trim();
+        const change = `${a.suggested_change || ''}`.trim();
+        const coachPrompt = `I want to improve my PromptCode submission.\nAction: ${a.title || 'Action item'}\nWhy: ${why}\nSuggested change: ${change}\nPlease give me a minimal code/prompt patch and explain expected score impact.`;
+        return {
+          priority: p === 'high' ? 'high' : (p === 'low' ? 'low' : 'med'),
+          title: a.title || 'Action item',
+          desc: `${why} ${change}`.trim(),
+          impact: Array.isArray(a.expected_impact) && a.expected_impact.length
+            ? `↑ ${a.expected_impact.join(', ')}`
+            : 'improve targeted metrics',
+          coachPrompt,
+        };
+      });
+    }
+
     const tips = [];
     const growth = report.growth || {};
     if (report.efficiency != null && report.efficiency < 0.75) {
-      tips.push({ priority: 'high', title: 'Improve efficiency', desc: `Your efficiency score is ${fmtScore(report.efficiency)}. Consider batching LLM calls or reducing token usage to lower cost and latency.`, impact: '↑ efficiency score' });
+      tips.push({ priority: 'high', title: 'Improve efficiency', desc: `Your efficiency score is ${fmtScore(report.efficiency)}. Consider batching LLM calls or reducing token usage to lower cost and latency.`, impact: '↑ efficiency score', coachPrompt: `My efficiency score is ${fmtScore(report.efficiency)}. Help me reduce tokens/cost/latency with minimal code and prompt changes.` });
     }
     if (report.accuracy != null && report.accuracy < 0.85) {
-      tips.push({ priority: 'high', title: 'Improve accuracy', desc: `Accuracy is ${fmtScore(report.accuracy)}. Review failing passes and add stricter output formatting instructions to your prompt.`, impact: '↑ accuracy score' });
+      tips.push({ priority: 'high', title: 'Improve accuracy', desc: `Accuracy is ${fmtScore(report.accuracy)}. Review failing passes and add stricter output formatting instructions to your prompt.`, impact: '↑ accuracy score', coachPrompt: `My accuracy score is ${fmtScore(report.accuracy)}. Suggest precise prompt/code changes to increase correctness on clean runs.` });
     }
     if (report.reliability != null && report.reliability < 0.85) {
-      tips.push({ priority: 'med', title: 'Improve reliability', desc: `Reliability is ${fmtScore(report.reliability)}. Ensure consistent outputs under perturbed inputs by constraining the output schema.`, impact: '↑ reliability score' });
+      tips.push({ priority: 'med', title: 'Improve reliability', desc: `Reliability is ${fmtScore(report.reliability)}. Ensure consistent outputs under perturbed inputs by constraining the output schema.`, impact: '↑ reliability score', coachPrompt: `My reliability score is ${fmtScore(report.reliability)}. Help me make outputs more stable across perturbed/adversarial runs.` });
     }
     if (report.orchestration != null && report.orchestration < 0.75) {
-      tips.push({ priority: 'med', title: 'Improve orchestration', desc: `Orchestration score is ${fmtScore(report.orchestration)}. Reduce retries and redundant calls. Use structured output formats to avoid parse failures.`, impact: '↑ orchestration score' });
+      tips.push({ priority: 'med', title: 'Improve orchestration', desc: `Orchestration score is ${fmtScore(report.orchestration)}. Reduce retries and redundant calls. Use structured output formats to avoid parse failures.`, impact: '↑ orchestration score', coachPrompt: `My orchestration score is ${fmtScore(report.orchestration)}. Suggest retry/validation/fallback improvements with minimal changes.` });
     }
     const runs = report.runs || [];
     const failedRuns = runs.filter(r => r.status !== 'passed' && r.status !== 'pass');
     if (failedRuns.length > 0) {
-      tips.push({ priority: 'high', title: `${failedRuns.length} pass${failedRuns.length > 1 ? 'es' : ''} did not fully pass`, desc: `Review the evaluation passes table — runs of type "${failedRuns.map(r => r.run_type).join(', ')}" need attention.`, impact: '↑ overall score' });
+      tips.push({ priority: 'high', title: `${failedRuns.length} pass${failedRuns.length > 1 ? 'es' : ''} did not fully pass`, desc: `Review the evaluation passes table — runs of type "${failedRuns.map(r => r.run_type).join(', ')}" need attention.`, impact: '↑ overall score', coachPrompt: `I failed ${failedRuns.length} runs (${failedRuns.map(r => r.run_type).join(', ')}). Help me prioritize fixes and provide a minimal patch plan.` });
     }
     if (growth.delta_overall != null && growth.delta_overall < -0.02) {
-      tips.push({ priority: 'med', title: 'You regressed vs your last attempt', desc: `Overall changed by ${growth.delta_overall.toFixed(2)}. Compare your last prompt version and reintroduce the parts that improved reliability.`, impact: '↑ growth score' });
+      tips.push({ priority: 'med', title: 'You regressed vs your last attempt', desc: `Overall changed by ${growth.delta_overall.toFixed(2)}. Compare your last prompt version and reintroduce the parts that improved reliability.`, impact: '↑ growth score', coachPrompt: `I regressed by ${growth.delta_overall.toFixed(2)} vs last attempt. Help me identify likely changes to revert and what to keep.` });
     } else if (growth.delta_overall != null && growth.delta_overall > 0.02) {
-      tips.push({ priority: 'low', title: 'Solid iteration improvement', desc: `Overall improved by +${growth.delta_overall.toFixed(2)}. Keep the same strategy and push robustness next.`, impact: 'maintain progress' });
+      tips.push({ priority: 'low', title: 'Solid iteration improvement', desc: `Overall improved by +${growth.delta_overall.toFixed(2)}. Keep the same strategy and push robustness next.`, impact: 'maintain progress', coachPrompt: `I improved by +${growth.delta_overall.toFixed(2)}. What is the highest-impact next step to improve robustness without regressing efficiency?` });
     }
     return tips;
+  }
+
+  function buildCoachUrl(promptText) {
+    if (!_currentChallengeId) return '/challenges.html';
+    const params = new URLSearchParams({
+      id: _currentChallengeId,
+      coach: (promptText || '').slice(0, 1400),
+    });
+    return `/challenge.html?${params.toString()}`;
+  }
+
+  function buildCoachPromptWithEvidence(report, tip) {
+    const runs = Array.isArray(report.runs) ? report.runs : [];
+    const failed = runs.filter(r => (r.status !== 'pass' && r.status !== 'passed')).slice(0, 3);
+    const failedSummary = failed.length
+      ? failed.map(r => `${r.run_type || 'run'}#${(Number(r.run_index || 0) + 1)} acc=${fmtScore(r.accuracy)}`).join(', ')
+      : 'none';
+
+    const deltas = (report.iteration_diff && report.iteration_diff.score_deltas) || {};
+    const dOverall = deltas.overall == null ? 'n/a' : (Number(deltas.overall) > 0 ? '+' : '') + Number(deltas.overall).toFixed(2);
+    const dAcc = deltas.accuracy == null ? 'n/a' : (Number(deltas.accuracy) > 0 ? '+' : '') + Number(deltas.accuracy).toFixed(2);
+    const dRob = deltas.robustness == null ? 'n/a' : (Number(deltas.robustness) > 0 ? '+' : '') + Number(deltas.robustness).toFixed(2);
+    const dEff = deltas.efficiency == null ? 'n/a' : (Number(deltas.efficiency) > 0 ? '+' : '') + Number(deltas.efficiency).toFixed(2);
+
+    const base = tip.coachPrompt || `${tip.title}. ${tip.desc}`;
+    return [
+      'I want a minimal patch plan for this PromptCode submission.',
+      '',
+      `Action focus: ${tip.title}`,
+      `Reason: ${tip.desc}`,
+      '',
+      'Current scores:',
+      `- overall: ${fmtScore(report.overall)}`,
+      `- accuracy: ${fmtScore(report.accuracy)}`,
+      `- robustness: ${fmtScore(report.edge_case_handling)}`,
+      `- efficiency: ${fmtScore(report.efficiency)}`,
+      `- reliability: ${fmtScore(report.reliability)}`,
+      `- orchestration: ${fmtScore(report.orchestration)}`,
+      '',
+      `Failed runs: ${failedSummary}`,
+      `Iteration deltas: overall=${dOverall}, accuracy=${dAcc}, robustness=${dRob}, efficiency=${dEff}`,
+      '',
+      `Original ask: ${base}`,
+      '',
+      'Give:',
+      '1) exact prompt edits',
+      '2) exact code edits',
+      '3) why this should improve the targeted metrics',
+      '4) one quick validation checklist before resubmitting',
+    ].join('\n').slice(0, 1800);
+  }
+
+  function renderIterationDiff(report) {
+    const card = document.getElementById('iterationCard');
+    const body = document.getElementById('iterationBody');
+    if (!card || !body) return;
+    const diff = report.iteration_diff || {};
+    if (!diff || !diff.status) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = '';
+
+    const code = diff.code_changes || {};
+    const prompts = diff.prompt_changes || {};
+    const deltas = diff.score_deltas || {};
+    const trend = String(diff.status || 'flat');
+    const trendColor = trend === 'improved' ? 'var(--success)' : (trend === 'regressed' ? 'var(--danger)' : 'var(--warn)');
+    const fmtDelta = (v) => v == null ? '—' : `${Number(v) > 0 ? '+' : ''}${Number(v).toFixed(2)}`;
+
+    body.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="color:${trendColor};text-transform:uppercase;font-size:10px;letter-spacing:.06em">${trend}</span>
+        <span style="font-size:11px;color:var(--muted)">prev: ${diff.previous_submission_id ? String(diff.previous_submission_id).slice(0, 8) : 'none'}</span>
+      </div>
+      <div style="margin-bottom:10px">${diff.summary || ''}</div>
+      <div class="metric-row"><span class="mk">code +lines</span><span class="mv">${fmtNum(code.added_lines || 0)}</span></div>
+      <div class="metric-row"><span class="mk">code -lines</span><span class="mv">${fmtNum(code.removed_lines || 0)}</span></div>
+      <div class="metric-row"><span class="mk">code change ratio</span><span class="mv">${code.changed_ratio != null ? Number(code.changed_ratio).toFixed(2) : '—'}</span></div>
+      <div class="metric-row"><span class="mk">prompt snippets added</span><span class="mv">${fmtNum(prompts.added_count || 0)}</span></div>
+      <div class="metric-row"><span class="mk">prompt snippets removed</span><span class="mv">${fmtNum(prompts.removed_count || 0)}</span></div>
+      <div class="metric-row"><span class="mk">Δ overall</span><span class="mv">${fmtDelta(deltas.overall)}</span></div>
+      <div class="metric-row"><span class="mk">Δ accuracy</span><span class="mv">${fmtDelta(deltas.accuracy)}</span></div>
+      <div class="metric-row"><span class="mk">Δ robustness</span><span class="mv">${fmtDelta(deltas.robustness)}</span></div>
+      <div class="metric-row"><span class="mk">Δ efficiency</span><span class="mv">${fmtDelta(deltas.efficiency)}</span></div>
+    `;
   }
 
   function renderTips(report) {
@@ -581,10 +741,12 @@ nav {
     list.innerHTML = tips.map(t => {
       const pClass = t.priority === 'high' ? 'tip-p-high' : t.priority === 'med' ? 'tip-p-med' : 'tip-p-low';
       const pLabel = t.priority === 'high' ? 'high impact' : t.priority === 'med' ? 'medium impact' : 'low impact';
+      const coachHref = buildCoachUrl(buildCoachPromptWithEvidence(report, t));
       return `<div class="tip-item">
         <div class="tip-header"><span class="tip-priority ${pClass}">${pLabel}</span><span class="tip-title">${t.title}</span></div>
         <div class="tip-desc">${t.desc}</div>
         <div class="tip-impact">${t.impact}</div>
+        <div style="margin-top:8px"><a class="btn btn-ghost btn-sm" href="${coachHref}">open in coach →</a></div>
       </div>`;
     }).join('');
   }
@@ -659,12 +821,14 @@ nav {
 
       // Tips
       renderTips(report);
+      renderIterationDiff(report);
 
       // JSON report
       renderJsonReport(report);
 
       // SDK usage
       renderSDKUsage(report, sub);
+      await renderTopComparison(sub.challenge_id, report);
 
     } catch (e) {
       console.log('Report not yet available:', e.message);
@@ -708,6 +872,7 @@ nav {
 
     try {
       const sub = await PromptCodeAPI.getSubmission(submissionId);
+      _currentChallengeId = sub.challenge_id;
       const challengeUrl = `/challenge.html?id=${sub.challenge_id}`;
       document.getElementById('backToChallenge').href = challengeUrl;
       document.getElementById('breadcrumbChallenge').href = challengeUrl;

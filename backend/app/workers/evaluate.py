@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import difflib
 import logging
+import re
 import uuid as _uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -72,8 +74,22 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
         mastery_state=mastery_state,
         previous=previous,
     )
+    iteration_diff = _build_iteration_diff(
+        previous=previous,
+        current=submission,
+        growth=growth,
+    )
+    coaching_actions = _build_coaching_actions(
+        result=result,
+        growth=growth,
+        runs=result.runs,
+        diagnostics=result.diagnostics,
+        iteration_diff=iteration_diff,
+    )
     report["growth"] = growth
     report["coaching"] = coaching
+    report["iteration_diff"] = iteration_diff
+    report["coaching_actions"] = coaching_actions
     report["mastery_state"] = mastery_state
 
     submission.status = "completed"
@@ -369,3 +385,211 @@ def _build_coaching(
         "mastery_state": mastery_state,
         "previous_submission_id": str(previous.id) if previous else None,
     }
+
+
+def _build_iteration_diff(
+    *,
+    previous: Submission | None,
+    current: Submission,
+    growth: dict[str, Any],
+) -> dict[str, Any]:
+    if not previous:
+        return {
+            "status": "first_attempt",
+            "summary": "No previous attempt. This run establishes your baseline.",
+            "previous_submission_id": None,
+            "code_changes": {
+                "added_lines": 0,
+                "removed_lines": 0,
+                "changed_ratio": 0.0,
+            },
+            "prompt_changes": {
+                "added_count": 0,
+                "removed_count": 0,
+                "added_examples": [],
+                "removed_examples": [],
+            },
+            "score_deltas": {
+                "overall": None,
+                "accuracy": None,
+                "robustness": None,
+                "efficiency": None,
+            },
+        }
+
+    prev_code = previous.code or ""
+    cur_code = current.code or ""
+
+    prev_lines = prev_code.splitlines()
+    cur_lines = cur_code.splitlines()
+    added_lines = removed_lines = 0
+    for line in difflib.ndiff(prev_lines, cur_lines):
+        if line.startswith("+ "):
+            added_lines += 1
+        elif line.startswith("- "):
+            removed_lines += 1
+    base = max(1, len(prev_lines))
+    changed_ratio = round(min(1.0, (added_lines + removed_lines) / base), 4)
+
+    prev_prompts = _extract_prompt_snippets(prev_code)
+    cur_prompts = _extract_prompt_snippets(cur_code)
+    added_prompts = [p for p in cur_prompts if p not in prev_prompts]
+    removed_prompts = [p for p in prev_prompts if p not in cur_prompts]
+
+    d_overall = growth.get("delta_overall")
+    if d_overall is None:
+        summary = "Changes detected, but score delta is unavailable."
+    elif d_overall > 0.01:
+        summary = "This iteration improved. Keep the strongest new changes and continue narrowing weak spots."
+    elif d_overall < -0.01:
+        summary = "This iteration regressed. Revert the highest-risk prompt/code edits and retest."
+    else:
+        summary = "This iteration was mostly flat. Make one more targeted change and compare again."
+
+    return {
+        "status": growth.get("status", "flat"),
+        "summary": summary,
+        "previous_submission_id": str(previous.id),
+        "code_changes": {
+            "added_lines": added_lines,
+            "removed_lines": removed_lines,
+            "changed_ratio": changed_ratio,
+        },
+        "prompt_changes": {
+            "added_count": len(added_prompts),
+            "removed_count": len(removed_prompts),
+            "added_examples": added_prompts[:3],
+            "removed_examples": removed_prompts[:3],
+        },
+        "score_deltas": {
+            "overall": growth.get("delta_overall"),
+            "accuracy": growth.get("delta_accuracy"),
+            "robustness": growth.get("delta_robustness"),
+            "efficiency": growth.get("delta_efficiency"),
+        },
+    }
+
+
+def _build_coaching_actions(
+    *,
+    result: Any,
+    growth: dict[str, Any],
+    runs: list[dict[str, Any]],
+    diagnostics: list[dict[str, Any]],
+    iteration_diff: dict[str, Any],
+) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+
+    failed = [r for r in runs if r.get("status") != "pass"]
+    for run in failed[:3]:
+        run_type = str(run.get("run_type", "run"))
+        if run_type in ("clean", "hidden_clean"):
+            change = "Constrain output to strict JSON schema and add explicit field-level requirements."
+            impact = ["accuracy", "rule_adherence"]
+        elif run_type == "perturbed":
+            change = "Add normalization rules (whitespace/date/currency/name cleanup) before extraction."
+            impact = ["robustness", "reliability"]
+        elif run_type == "adversarial":
+            change = "Add malformed-input fallback behavior and 'unknown' handling for ambiguous records."
+            impact = ["robustness", "orchestration"]
+        else:
+            change = "Tighten validation and retry bounds for unstable outputs."
+            impact = ["reliability", "orchestration"]
+
+        actions.append({
+            "priority": "high",
+            "title": f"Fix {run_type} failure",
+            "why": f"Run #{int(run.get('run_index', 0)) + 1} failed with accuracy {float(run.get('accuracy', 0.0)):.2f}.",
+            "evidence": {
+                "run_type": run_type,
+                "run_index": run.get("run_index", 0),
+                "status": run.get("status"),
+                "accuracy": run.get("accuracy"),
+            },
+            "suggested_change": change,
+            "expected_impact": impact,
+        })
+
+    for d in diagnostics[:2]:
+        sev = str(d.get("severity", "low")).lower()
+        if sev not in ("high", "medium"):
+            continue
+        metric = str(d.get("metric", "metric"))
+        if metric == "efficiency":
+            suggestion = "Batch related tasks into fewer LLM calls and shorten repetitive context."
+            impact = ["efficiency"]
+        elif metric == "orchestration":
+            suggestion = "Validate JSON output before use and cap retries with explicit fallback."
+            impact = ["orchestration", "reliability"]
+        elif metric == "accuracy":
+            suggestion = "Specify exact keys/types and force output format to match challenge schema."
+            impact = ["accuracy", "rule_adherence"]
+        else:
+            suggestion = "Address this diagnostic first, then re-run to verify improvement."
+            impact = [metric]
+
+        actions.append({
+            "priority": "medium" if sev == "medium" else "high",
+            "title": f"Address {metric} diagnostic",
+            "why": str(d.get("message", "")),
+            "evidence": {"metric": metric, "severity": sev},
+            "suggested_change": suggestion,
+            "expected_impact": impact,
+        })
+
+    if growth.get("delta_overall") is not None and float(growth.get("delta_overall") or 0.0) < -0.02:
+        actions.append({
+            "priority": "high",
+            "title": "Recover previous baseline",
+            "why": f"Overall score regressed by {float(growth['delta_overall']):.2f} from your last attempt.",
+            "evidence": {
+                "delta_overall": growth.get("delta_overall"),
+                "previous_submission_id": growth.get("previous_submission_id"),
+            },
+            "suggested_change": "Reintroduce the most stable prompt structure from the previous run, then apply one targeted fix.",
+            "expected_impact": ["overall", "reliability"],
+        })
+
+    prompt_changes = (iteration_diff.get("prompt_changes") or {})
+    if int(prompt_changes.get("added_count") or 0) > 2 and float(result.efficiency) < 0.75:
+        actions.append({
+            "priority": "medium",
+            "title": "Reduce prompt churn",
+            "why": "Many prompt edits were introduced, but efficiency is still below target.",
+            "evidence": {
+                "prompt_added_count": prompt_changes.get("added_count"),
+                "efficiency": float(result.efficiency),
+            },
+            "suggested_change": "Consolidate overlapping instructions into one reusable prompt block.",
+            "expected_impact": ["efficiency", "reliability"],
+        })
+
+    priority_order = {"high": 0, "medium": 1, "low": 2}
+    actions.sort(key=lambda a: priority_order.get(a.get("priority", "low"), 3))
+    return actions[:5]
+
+
+def _extract_prompt_snippets(code: str, *, max_snippets: int = 8) -> list[str]:
+    if not code.strip():
+        return []
+
+    patterns = [
+        r'(?:prompt|system|user_message|instructions)\s*[:=]\s*(?:f?"""(.*?)"""|f?\'\'\'(.*?)\'\'\')',
+        r'(?:prompt|system|user_message|instructions)\s*[:=]\s*(?:f?"(.*?)"|f?\'(.*?)\')',
+        r'(?:llm\.call|chat\.completions\.create)\((.*?)\)',
+    ]
+    snippets: list[str] = []
+    seen: set[str] = set()
+    for pattern in patterns:
+        for m in re.finditer(pattern, code, re.DOTALL):
+            raw = next((g for g in m.groups() if g), "")
+            cleaned = re.sub(r"\s+", " ", raw).strip()
+            if len(cleaned) < 20:
+                continue
+            if cleaned in seen:
+                continue
+            seen.add(cleaned)
+            snippets.append(cleaned[:180])
+            if len(snippets) >= max_snippets:
+                return snippets
+    return snippets

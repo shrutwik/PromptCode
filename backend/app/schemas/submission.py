@@ -95,6 +95,8 @@ class SubmissionReport(BaseModel):
     confidence_intervals: dict[str, Any] = {}
     growth: dict[str, Any] = {}
     coaching: dict[str, Any] = {}
+    coaching_actions: list[dict[str, Any]] = []
+    iteration_diff: dict[str, Any] = {}
     mastery_state: str | None = None
     audit_trail: list[dict[str, Any]] = []
     runs: list[dict[str, Any]] = []

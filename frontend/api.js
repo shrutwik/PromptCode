@@ -160,6 +160,26 @@ const PromptCodeAPI = {
         return resp.json();
     },
 
+    async runPlayground(system, messages, options = {}) {
+        const resp = await this._fetch('/chat/playground-run', {
+            method: 'POST',
+            body: JSON.stringify({
+                system: system || '',
+                messages: messages || [],
+                model: options.model,
+                temperature: options.temperature ?? 0,
+                max_tokens: options.max_tokens ?? 1000,
+            }),
+        });
+        if (!resp.ok) {
+            const err = await resp.json();
+            const detail = err.detail;
+            const msg = typeof detail === 'string' ? detail : 'Playground run failed';
+            throw new Error(msg);
+        }
+        return resp.json();
+    },
+
     async getSubmissionStatus(id) {
         const resp = await this._fetch(`/submissions/${id}/status`);
         if (!resp.ok) throw new Error('Failed to fetch status');
