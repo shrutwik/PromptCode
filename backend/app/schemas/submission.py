@@ -84,4 +84,5 @@ class SubmissionReport(BaseModel):
     diagnostics: list[dict[str, Any]] = []
     feedback: str = ""
     scorecard: dict[str, float] = {}
+    evaluation_config: dict[str, Any] = {}
     runs: list[dict[str, Any]] = []

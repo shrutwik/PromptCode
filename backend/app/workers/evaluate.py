@@ -19,7 +19,7 @@ from app.services.evaluation.engine import evaluate_submission
 logger = logging.getLogger(__name__)
 
 
-async def run_evaluation_pipeline(submission_id: str) -> None:
+async def run_evaluation_pipeline(submission_id: str) -> bool:
     """Entry point called from BackgroundTasks.
 
     Loads the submission, runs evaluation, persists scores and report.
@@ -27,9 +27,11 @@ async def run_evaluation_pipeline(submission_id: str) -> None:
     async with async_session_factory() as db:
         try:
             await _evaluate(db, submission_id)
+            return True
         except Exception:
             logger.exception("Evaluation pipeline failed for submission %s", submission_id)
             await _mark_failed(db, submission_id)
+            return False
 
 
 async def _evaluate(db: AsyncSession, submission_id: str) -> None:
@@ -85,7 +87,7 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
                 "feedback": run_data.get("feedback", ""),
                 "error": run_data.get("error"),
             },
-            telemetry=None,
+            telemetry=run_data.get("meta"),
             tokens_total=run_data.get("tokens_total", 0),
             cost_usd=run_data.get("cost_usd", 0.0),
             latency_ms=run_data.get("latency_ms", 0.0),

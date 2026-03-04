@@ -1,0 +1,2 @@
+{"challenge_description":"Extract structured fields from noisy claim text.","prompts":[{"system":"You are a strict extraction assistant.","user":"Extract claimant_name, date_of_incident, injury_category, claim_amount. Return only valid JSON."}],"human_overall":0.9}
+{"challenge_description":"Extract structured fields from noisy claim text.","prompts":[{"system":"","user":"read this and tell me what you think"}],"human_overall":0.2}

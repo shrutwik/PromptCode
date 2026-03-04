@@ -12,7 +12,7 @@ from app.models.challenge import Challenge
 from app.models.submission import Submission
 from app.models.user import User
 from app.schemas.submission import SubmissionCreate, SubmissionReport, SubmissionResponse
-from app.workers.evaluate import run_evaluation_pipeline
+from app.workers.queue import enqueue_evaluation_job, process_job
 
 router = APIRouter()
 
@@ -60,7 +60,10 @@ async def create_submission(
     await db.commit()
     await db.refresh(submission)
 
-    background_tasks.add_task(run_evaluation_pipeline, str(submission.id))
+    job = await enqueue_evaluation_job(db, submission.id)
+    # Opportunistic in-process execution for low-latency MVP behavior.
+    # Persistent queue workers can process the same job if this process restarts.
+    background_tasks.add_task(process_job, str(job.id))
 
     return submission
 

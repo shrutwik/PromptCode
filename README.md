@@ -58,6 +58,13 @@ docker-compose up -d
 
 This starts PostgreSQL and the FastAPI backend on `http://localhost:8000`.
 
+For resilient async scoring, start the queue worker in a second shell:
+
+```bash
+cd backend
+python -m scripts.run_queue_worker
+```
+
 ### 4. Seed the first challenge
 
 ```bash
@@ -175,6 +182,11 @@ Hard gates:
 - If `accuracy < 0.40`, overall is capped
 - If schema/constraint adherence is weak, overall is capped
 - No-LLM hardcoded solutions are disqualified
+- Anti-gaming checks penalize extremely low-token low-effort outputs
+
+Reproducibility:
+- Every run includes deterministic metadata in report (`evaluation_seed`, perturbation config version, per-run seed + perturbation type)
+- Hidden tests are supported via `config.hidden_tests` and excluded from public challenge payloads
 
 ### Report Format
 
@@ -205,3 +217,16 @@ Users must parse noisy insurance claim reports and extract:
 - `claim_amount` (float)
 
 See `challenges/extract_structured_data/` for the full config and a sample solution.
+
+## Prompt Judge Calibration
+
+To keep prompt-quality judging aligned with human ratings, run periodic calibration:
+
+```bash
+cd backend
+python -m scripts.calibrate_prompt_judge --samples ../docs/prompt_judge_samples.jsonl --mode judge
+```
+
+Recommended cadence:
+- Weekly during active rubric changes
+- Bi-weekly once stable

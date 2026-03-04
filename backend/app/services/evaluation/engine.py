@@ -32,6 +32,7 @@ SCORE_WEIGHTS = {
     "orchestration": 0.10,
     "calibration": 0.05,
 }
+PERTURBATION_CONFIG_VERSION = "v1"
 
 
 class EvaluationResult:
@@ -59,6 +60,7 @@ class EvaluationResult:
         code_analysis_details: dict[str, Any],
         calibration_details: dict[str, Any],
         diagnostics: list[dict[str, str]],
+        evaluation_config: dict[str, Any],
         hardcoded: bool = False,
     ):
         self.accuracy = accuracy
@@ -82,6 +84,7 @@ class EvaluationResult:
         self.code_analysis_details = code_analysis_details
         self.calibration_details = calibration_details
         self.diagnostics = diagnostics
+        self.evaluation_config = evaluation_config
         self.hardcoded = hardcoded
 
     def to_report(self, submission_id: str) -> dict[str, Any]:
@@ -114,6 +117,7 @@ class EvaluationResult:
             "calibration_details": self.calibration_details,
             "diagnostics": self.diagnostics,
             "feedback": self.diagnostics[0]["message"] if self.diagnostics else "",
+            "evaluation_config": self.evaluation_config,
             "scorecard": {
                 "accuracy": self.accuracy,
                 "robustness": self.edge_case_handling,
@@ -146,6 +150,8 @@ def evaluate_submission(
     accuracy_mode = challenge_config.get("accuracy_mode", "json")
     base_inputs = challenge_config.get("inputs", {})
     challenge_description = challenge_config.get("description", "")
+    evaluation_seed = int(challenge_config.get("evaluation_seed", random.randint(1, 2**31 - 1)))
+    seed_rng = random.Random(evaluation_seed)
 
     run_records: list[dict[str, Any]] = []
     clean_accuracies: list[float] = []
@@ -160,42 +166,99 @@ def evaluate_submission(
     total_retries = 0
 
     clean_runs = int(challenge_config.get("clean_runs", 1))
+    run_plan: list[dict[str, Any]] = []
+    hidden_cases = _build_hidden_cases(challenge_config, ground_truth, accuracy_mode)
 
     for i in range(clean_runs):
-        result = run_in_sandbox(code, entrypoint, challenge_config, input_overrides=base_inputs)
-        record = _process_run(result, ground_truth, accuracy_mode, "clean", i)
-        run_records.append(record)
-        clean_accuracies.append(record["accuracy"])
-        all_telemetry.extend(result.telemetry)
-        total_prompt_tokens += record["tokens_prompt"]
-        total_completion_tokens += record["tokens_completion"]
-        total_cost += record["cost_usd"]
-        total_latency += record["latency_ms"]
-        total_calls += record["llm_calls"]
-        total_retries += record["retries"]
+        run_plan.append(
+            {
+                "run_type": "clean",
+                "run_index": i,
+                "inputs": base_inputs,
+                "ground_truth": ground_truth,
+                "accuracy_mode": accuracy_mode,
+                "meta": {
+                    "seed": None,
+                    "perturbation": "none",
+                    "source_set": "visible",
+                    "perturbation_config_version": PERTURBATION_CONFIG_VERSION,
+                },
+            }
+        )
+
+    for i, hidden in enumerate(hidden_cases):
+        run_plan.append(
+            {
+                "run_type": "hidden_clean",
+                "run_index": i,
+                "inputs": hidden["inputs"],
+                "ground_truth": hidden["ground_truth"],
+                "accuracy_mode": hidden["accuracy_mode"],
+                "meta": {
+                    "seed": None,
+                    "perturbation": "none",
+                    "source_set": hidden["name"],
+                    "hidden": True,
+                    "perturbation_config_version": PERTURBATION_CONFIG_VERSION,
+                },
+            }
+        )
 
     for i in range(settings.evaluation_normal_runs):
-        seed = random.randint(0, 2**31)
+        seed = seed_rng.randint(0, 2**31)
         perturbed = perturb_normal(base_inputs, seed)
-        result = run_in_sandbox(code, entrypoint, challenge_config, input_overrides=perturbed)
-        record = _process_run(result, ground_truth, accuracy_mode, "perturbed", i)
-        run_records.append(record)
-        perturbed_accuracies.append(record["accuracy"])
-        all_telemetry.extend(result.telemetry)
-        total_prompt_tokens += record["tokens_prompt"]
-        total_completion_tokens += record["tokens_completion"]
-        total_cost += record["cost_usd"]
-        total_latency += record["latency_ms"]
-        total_calls += record["llm_calls"]
-        total_retries += record["retries"]
+        run_plan.append(
+            {
+                "run_type": "perturbed",
+                "run_index": i,
+                "inputs": perturbed,
+                "ground_truth": ground_truth,
+                "accuracy_mode": accuracy_mode,
+                "meta": {
+                    "seed": seed,
+                    "perturbation": "normal",
+                    "source_set": "visible",
+                    "perturbation_config_version": PERTURBATION_CONFIG_VERSION,
+                },
+            }
+        )
 
     for i in range(settings.evaluation_adversarial_runs):
-        seed = random.randint(0, 2**31)
+        seed = seed_rng.randint(0, 2**31)
         perturbed = perturb_adversarial(base_inputs, seed)
-        result = run_in_sandbox(code, entrypoint, challenge_config, input_overrides=perturbed)
-        record = _process_run(result, ground_truth, accuracy_mode, "adversarial", i)
+        run_plan.append(
+            {
+                "run_type": "adversarial",
+                "run_index": i,
+                "inputs": perturbed,
+                "ground_truth": ground_truth,
+                "accuracy_mode": accuracy_mode,
+                "meta": {
+                    "seed": seed,
+                    "perturbation": "adversarial",
+                    "source_set": "visible",
+                    "perturbation_config_version": PERTURBATION_CONFIG_VERSION,
+                },
+            }
+        )
+
+    for spec in run_plan:
+        result = run_in_sandbox(code, entrypoint, challenge_config, input_overrides=spec["inputs"])
+        record = _process_run(
+            result,
+            spec["ground_truth"],
+            spec["accuracy_mode"],
+            spec["run_type"],
+            spec["run_index"],
+            meta=spec["meta"],
+        )
         run_records.append(record)
-        adversarial_accuracies.append(record["accuracy"])
+        if spec["run_type"] in ("clean", "hidden_clean"):
+            clean_accuracies.append(record["accuracy"])
+        elif spec["run_type"] == "perturbed":
+            perturbed_accuracies.append(record["accuracy"])
+        elif spec["run_type"] == "adversarial":
+            adversarial_accuracies.append(record["accuracy"])
         all_telemetry.extend(result.telemetry)
         total_prompt_tokens += record["tokens_prompt"]
         total_completion_tokens += record["tokens_completion"]
@@ -256,6 +319,17 @@ def evaluate_submission(
         logger.warning("Hardcoded answer detected - zeroing all quality scores")
         acc = pq = rule_adherence = eff = rel = orch = cq = robustness = calibration = 0.0
 
+    metric_gaming = _detect_metric_gaming(
+        runs=run_records,
+        total_tokens=total_prompt_tokens + total_completion_tokens,
+        total_calls=total_calls,
+        accuracy=acc,
+        robustness=robustness,
+    )
+    if metric_gaming["triggered"]:
+        eff = min(eff, 0.25)
+        orch = min(orch, 0.5)
+
     overall = round(
         acc * SCORE_WEIGHTS["accuracy"]
         + robustness * SCORE_WEIGHTS["robustness"]
@@ -271,6 +345,8 @@ def evaluate_submission(
         overall = min(overall, 0.55)
     if rule_adherence < 0.50:
         overall = min(overall, 0.50)
+    if metric_gaming["triggered"]:
+        overall = min(overall, 0.45)
 
     diagnostics = _build_diagnostics(
         accuracy=acc,
@@ -282,7 +358,17 @@ def evaluate_submission(
         calibration=calibration,
         code_quality=cq,
         rule_adherence=rule_adherence,
+        metric_gaming=1.0 if metric_gaming["triggered"] else 0.0,
     )
+    if metric_gaming["triggered"]:
+        diagnostics.insert(
+            0,
+            {
+                "metric": "anti_gaming",
+                "severity": "high",
+                "message": metric_gaming["reason"],
+            },
+        )
 
     return EvaluationResult(
         accuracy=acc,
@@ -306,6 +392,12 @@ def evaluate_submission(
         code_analysis_details=code_quality_result,
         calibration_details=calibration_result,
         diagnostics=diagnostics,
+        evaluation_config={
+            "evaluation_seed": evaluation_seed,
+            "perturbation_config_version": PERTURBATION_CONFIG_VERSION,
+            "run_count": len(run_plan),
+            "hidden_set_count": len(hidden_cases),
+        },
         hardcoded=hardcoded,
     )
 
@@ -379,6 +471,55 @@ def _build_diagnostics(**scores: float) -> list[dict[str, str]]:
     return tips
 
 
+def _build_hidden_cases(
+    challenge_config: dict[str, Any],
+    default_ground_truth: str,
+    default_accuracy_mode: str,
+) -> list[dict[str, Any]]:
+    cases: list[dict[str, Any]] = []
+    hidden_tests = challenge_config.get("hidden_tests")
+    if isinstance(hidden_tests, list):
+        for i, case in enumerate(hidden_tests):
+            if not isinstance(case, dict) or "inputs" not in case:
+                continue
+            gt = case.get("ground_truth", default_ground_truth)
+            if isinstance(gt, (list, dict)):
+                gt = json.dumps(gt)
+            cases.append(
+                {
+                    "name": str(case.get("name", f"hidden_{i+1}")),
+                    "inputs": case["inputs"],
+                    "ground_truth": gt,
+                    "accuracy_mode": str(case.get("accuracy_mode", default_accuracy_mode)),
+                }
+            )
+    return cases
+
+
+def _detect_metric_gaming(
+    *,
+    runs: list[dict[str, Any]],
+    total_tokens: int,
+    total_calls: int,
+    accuracy: float,
+    robustness: float,
+) -> dict[str, Any]:
+    if not runs:
+        return {"triggered": False, "reason": ""}
+
+    avg_output_chars = sum(r.get("output_chars", 0) for r in runs) / max(1, len(runs))
+    minimal_usage = total_tokens <= max(120, len(runs) * 20) and total_calls <= max(1, len(runs) // 2)
+    low_quality = accuracy < 0.65 or robustness < 0.55
+    low_effort_output = avg_output_chars < 24
+
+    if minimal_usage and low_quality and low_effort_output:
+        return {
+            "triggered": True,
+            "reason": "Potential metric gaming detected: extremely low usage plus low-quality/low-effort outputs.",
+        }
+    return {"triggered": False, "reason": ""}
+
+
 def _detect_hardcoding(
     total_calls: int,
     accuracies: list[float],
@@ -437,6 +578,8 @@ def _process_run(
     accuracy_mode: str,
     run_type: str,
     run_index: int,
+    *,
+    meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     telemetry = result.telemetry
     prompt_tokens = sum(r.get("tokens_prompt", 0) for r in telemetry)
@@ -450,8 +593,10 @@ def _process_run(
     acc = 0.0
     schema_valid = False
     confidence = None
+    output_chars = 0
     if result.success:
         raw = result.output.strip()
+        output_chars = len(raw)
         acc = score_accuracy(raw, ground_truth, mode=accuracy_mode)
         schema_valid = _is_schema_valid(raw, accuracy_mode)
         confidence = _extract_confidence_value(raw)
@@ -466,6 +611,7 @@ def _process_run(
         "accuracy": round(acc, 4),
         "schema_valid": schema_valid,
         "confidence": confidence,
+        "output_chars": output_chars,
         "tokens_prompt": prompt_tokens,
         "tokens_completion": completion_tokens,
         "tokens_total": tokens,
@@ -474,6 +620,7 @@ def _process_run(
         "llm_calls": calls,
         "retries": retries,
         "error": result.error,
+        "meta": meta or {},
     }
 
 
