@@ -4,18 +4,33 @@
   "description": "At a payments company, the fraud team reviews transaction logs daily. Your pipeline receives a batch of transactions and must:\n\n1. Identify which transactions are **anomalous** (flag: true/false)\n2. For each anomaly, provide: anomaly_type (one of: velocity, amount, geo_impossible, pattern_break, round_trip, structuring), confidence (0.0–1.0), explanation (human-readable, 1-2 sentences)\n3. Identify **transaction chains** — groups of related transactions that together form a suspicious pattern even if individually normal\n\nOutput a JSON object with: flagged_transactions (array of objects with transaction_id, anomaly_type, confidence, explanation) and suspicious_chains (array of objects with chain_id, transaction_ids, pattern, explanation).\n\nThe challenge: most transactions are normal. The anomalies are subtle — they rely on cross-referencing timestamps, amounts, counterparties, and geolocation. A single $500 ATM withdrawal is normal; three $500 withdrawals in different cities within 2 hours is impossible. A $9,900 transfer is normal; five $9,900 transfers in a week (just under the $10K reporting threshold) is structuring.",
   "difficulty": "hard",
   "category": "analysis",
-  "tags": ["fintech", "fraud-detection", "anomaly-detection", "pattern-recognition", "compliance"],
+  "tags": [
+    "fintech",
+    "fraud-detection",
+    "anomaly-detection",
+    "pattern-recognition",
+    "compliance"
+  ],
   "company_context": "Companies like Stripe Radar, PayPal Risk, and Featurespace build ML-powered fraud detection. But edge cases and new fraud patterns still need human-in-the-loop analysis. Engineers at Wise (TransferWise) report that AI-generated explanations for fraud flags reduced false positive review time by 50% — the explanation matters as much as the detection.",
   "input_format": "json",
   "output_format": "json",
   "constraints": {
     "max_llm_calls": 10,
-    "allowed_models": ["gpt-4o", "gpt-4o-mini"],
+    "allowed_models": [
+      "gpt-4o",
+      "gpt-4o-mini"
+    ],
     "time_limit_seconds": 120
   },
   "sample_input": {
     "transactions": [
-      {"id": "TX001", "timestamp": "2024-02-15T10:00:00Z", "amount": 500, "type": "withdrawal", "location": "New York"}
+      {
+        "id": "TX001",
+        "timestamp": "2024-02-15T10:00:00Z",
+        "amount": 500,
+        "type": "withdrawal",
+        "location": "New York"
+      }
     ]
   },
   "sample_output": {
@@ -37,72 +52,562 @@
     },
     "inputs": {
       "transactions": [
-        {"id": "TX-7001", "timestamp": "2024-02-15T08:12:00Z", "account": "ACC-4421", "type": "pos_purchase", "amount": 47.82, "currency": "USD", "merchant": "Starbucks #4412", "location": "San Francisco, CA", "counterparty": null, "status": "completed"},
-        {"id": "TX-7002", "timestamp": "2024-02-15T08:45:00Z", "account": "ACC-4421", "type": "pos_purchase", "amount": 12.50, "currency": "USD", "merchant": "BART Transit", "location": "San Francisco, CA", "counterparty": null, "status": "completed"},
-        {"id": "TX-7003", "timestamp": "2024-02-15T09:30:00Z", "account": "ACC-4421", "type": "atm_withdrawal", "amount": 500.00, "currency": "USD", "merchant": "Chase ATM", "location": "San Francisco, CA", "counterparty": null, "status": "completed"},
-        {"id": "TX-7004", "timestamp": "2024-02-15T10:15:00Z", "account": "ACC-4421", "type": "atm_withdrawal", "amount": 500.00, "currency": "USD", "merchant": "BofA ATM", "location": "Chicago, IL", "counterparty": null, "status": "completed"},
-        {"id": "TX-7005", "timestamp": "2024-02-15T11:00:00Z", "account": "ACC-4421", "type": "atm_withdrawal", "amount": 500.00, "currency": "USD", "merchant": "Wells Fargo ATM", "location": "Miami, FL", "counterparty": null, "status": "completed"},
-
-        {"id": "TX-7006", "timestamp": "2024-02-15T09:00:00Z", "account": "ACC-8837", "type": "wire_transfer", "amount": 9800.00, "currency": "USD", "merchant": null, "location": "New York, NY", "counterparty": "ACC-9912", "status": "completed"},
-        {"id": "TX-7007", "timestamp": "2024-02-16T09:15:00Z", "account": "ACC-8837", "type": "wire_transfer", "amount": 9750.00, "currency": "USD", "merchant": null, "location": "New York, NY", "counterparty": "ACC-9913", "status": "completed"},
-        {"id": "TX-7008", "timestamp": "2024-02-17T08:55:00Z", "account": "ACC-8837", "type": "wire_transfer", "amount": 9900.00, "currency": "USD", "merchant": null, "location": "New York, NY", "counterparty": "ACC-9914", "status": "completed"},
-        {"id": "TX-7009", "timestamp": "2024-02-18T09:30:00Z", "account": "ACC-8837", "type": "wire_transfer", "amount": 9650.00, "currency": "USD", "merchant": null, "location": "New York, NY", "counterparty": "ACC-9915", "status": "completed"},
-        {"id": "TX-7010", "timestamp": "2024-02-19T09:10:00Z", "account": "ACC-8837", "type": "wire_transfer", "amount": 9850.00, "currency": "USD", "merchant": null, "location": "New York, NY", "counterparty": "ACC-9916", "status": "completed"},
-
-        {"id": "TX-7011", "timestamp": "2024-02-15T14:00:00Z", "account": "ACC-5560", "type": "wire_transfer", "amount": 25000.00, "currency": "USD", "merchant": null, "location": "Los Angeles, CA", "counterparty": "ACC-5561", "status": "completed"},
-        {"id": "TX-7012", "timestamp": "2024-02-15T14:30:00Z", "account": "ACC-5561", "type": "wire_transfer", "amount": 24500.00, "currency": "USD", "merchant": null, "location": "Los Angeles, CA", "counterparty": "ACC-5562", "status": "completed"},
-        {"id": "TX-7013", "timestamp": "2024-02-15T15:00:00Z", "account": "ACC-5562", "type": "wire_transfer", "amount": 24000.00, "currency": "USD", "merchant": null, "location": "Phoenix, AZ", "counterparty": "ACC-5560", "status": "completed"},
-
-        {"id": "TX-7014", "timestamp": "2024-02-15T12:00:00Z", "account": "ACC-2200", "type": "pos_purchase", "amount": 3200.00, "currency": "USD", "merchant": "Best Buy #1124", "location": "Houston, TX", "counterparty": null, "status": "completed"},
-        {"id": "TX-7015", "timestamp": "2024-02-15T12:05:00Z", "account": "ACC-2200", "type": "pos_purchase", "amount": 2800.00, "currency": "USD", "merchant": "Best Buy #1124", "location": "Houston, TX", "counterparty": null, "status": "completed"},
-        {"id": "TX-7016", "timestamp": "2024-02-15T12:08:00Z", "account": "ACC-2200", "type": "pos_purchase", "amount": 3500.00, "currency": "USD", "merchant": "Best Buy #1124", "location": "Houston, TX", "counterparty": null, "status": "completed"},
-
-        {"id": "TX-7017", "timestamp": "2024-02-15T16:00:00Z", "account": "ACC-3300", "type": "direct_deposit", "amount": 4250.00, "currency": "USD", "merchant": "Acme Corp Payroll", "location": "Denver, CO", "counterparty": null, "status": "completed"},
-        {"id": "TX-7018", "timestamp": "2024-02-15T16:30:00Z", "account": "ACC-3300", "type": "bill_pay", "amount": 1850.00, "currency": "USD", "merchant": "Chase Mortgage", "location": "Denver, CO", "counterparty": null, "status": "completed"},
-
-        {"id": "TX-7019", "timestamp": "2024-02-15T06:00:00Z", "account": "TEST-0001", "type": "wire_transfer", "amount": 9999.00, "currency": "USD", "merchant": null, "location": "Test City, TS", "counterparty": "TEST-0002", "status": "completed"},
-        {"id": "TX-7020", "timestamp": "2024-02-15T06:05:00Z", "account": "TEST-0001", "type": "wire_transfer", "amount": 9998.00, "currency": "USD", "merchant": null, "location": "Test City, TS", "counterparty": "TEST-0003", "status": "completed"},
-        {"id": "TX-7021", "timestamp": "2024-02-15T06:10:00Z", "account": "TEST-0001", "type": "wire_transfer", "amount": 9997.00, "currency": "USD", "merchant": null, "location": "Test City, TS", "counterparty": "TEST-0004", "status": "completed"},
-
-        {"id": "TX-7022", "timestamp": "2024-02-15T03:00:00Z", "account": "SANDBOX-9900", "type": "atm_withdrawal", "amount": 500.00, "currency": "USD", "merchant": "Sandbox ATM", "location": "New York, NY", "counterparty": null, "status": "completed"},
-        {"id": "TX-7023", "timestamp": "2024-02-15T03:02:00Z", "account": "SANDBOX-9900", "type": "atm_withdrawal", "amount": 500.00, "currency": "USD", "merchant": "Sandbox ATM 2", "location": "Tokyo, JP", "counterparty": null, "status": "completed"},
-
-        {"id": "TX-7024", "timestamp": "2024-02-15T13:00:00Z", "account": "ACC-2200", "type": "pos_purchase", "amount": 3100.00, "currency": "USD", "merchant": "BEST BUY #1124", "location": "Houston, TX", "counterparty": null, "status": "reversed"},
-        {"id": "TX-7025", "timestamp": "2024-02-15T13:05:00Z", "account": "ACC-2200", "type": "pos_purchase", "amount": 2900.00, "currency": "USD", "merchant": "Best Buy #1124", "location": "Houston, TX", "counterparty": null, "status": "cancelled"},
-
-        {"id": "TX-7026", "timestamp": "2024-02-15T10:00:00Z", "account": "ACC-6600", "type": "internal_transfer", "amount": 50000.00, "currency": "USD", "merchant": null, "location": "San Francisco, CA", "counterparty": "ACC-6601", "status": "completed"},
-        {"id": "TX-7027", "timestamp": "2024-02-15T10:05:00Z", "account": "ACC-6601", "type": "internal_transfer", "amount": 50000.00, "currency": "USD", "merchant": null, "location": "San Francisco, CA", "counterparty": "ACC-6602", "status": "completed"},
-        {"id": "TX-7028", "timestamp": "2024-02-15T10:10:00Z", "account": "ACC-6602", "type": "internal_transfer", "amount": 50000.00, "currency": "USD", "merchant": null, "location": "San Francisco, CA", "counterparty": "ACC-6600", "status": "completed"},
-
-        {"id": "TX-7029", "timestamp": "2024-02-17T07:00:00Z", "account": "ACC-3300", "type": "auto_bill_pay", "amount": 450.00, "currency": "USD", "merchant": "Verizon Wireless", "location": "Denver, CO", "counterparty": null, "status": "completed"},
-        {"id": "TX-7030", "timestamp": "2024-02-17T07:05:00Z", "account": "ACC-3300", "type": "auto_bill_pay", "amount": 125.00, "currency": "USD", "merchant": "Xcel Energy", "location": "Denver, CO", "counterparty": null, "status": "completed"},
-
-        {"id": "TX-7031", "timestamp": "2024-02-15T20:00:00Z", "account": "ACC-7700", "type": "pos_purchase", "amount": 89.99, "currency": "USD", "merchant": "Amazon.com", "location": "Seattle, WA", "counterparty": null, "status": "completed"},
-        {"id": "TX-7032", "timestamp": "2024-02-15T20:30:00Z", "account": "ACC-7700", "type": "pos_purchase", "amount": 42.50, "currency": "USD", "merchant": "Whole Foods #7788", "location": "Seattle, WA", "counterparty": null, "status": "completed"},
-        {"id": "TX-7033", "timestamp": "2024-02-16T08:00:00Z", "account": "ACC-7700", "type": "pos_purchase", "amount": 15.75, "currency": "USD", "merchant": "STARBUCKS #2201", "location": "Seattle, WA", "counterparty": null, "status": "completed"}
+        {
+          "id": "TX-7001",
+          "timestamp": "2024-02-15T08:12:00Z",
+          "account": "ACC-4421",
+          "type": "pos_purchase",
+          "amount": 47.82,
+          "currency": "USD",
+          "merchant": "Starbucks #4412",
+          "location": "San Francisco, CA",
+          "counterparty": null,
+          "status": "completed"
+        },
+        {
+          "id": "TX-7002",
+          "timestamp": "2024-02-15T08:45:00Z",
+          "account": "ACC-4421",
+          "type": "pos_purchase",
+          "amount": 12.5,
+          "currency": "USD",
+          "merchant": "BART Transit",
+          "location": "San Francisco, CA",
+          "counterparty": null,
+          "status": "completed"
+        },
+        {
+          "id": "TX-7003",
+          "timestamp": "2024-02-15T09:30:00Z",
+          "account": "ACC-4421",
+          "type": "atm_withdrawal",
+          "amount": 500.0,
+          "currency": "USD",
+          "merchant": "Chase ATM",
+          "location": "San Francisco, CA",
+          "counterparty": null,
+          "status": "completed"
+        },
+        {
+          "id": "TX-7004",
+          "timestamp": "2024-02-15T10:15:00Z",
+          "account": "ACC-4421",
+          "type": "atm_withdrawal",
+          "amount": 500.0,
+          "currency": "USD",
+          "merchant": "BofA ATM",
+          "location": "Chicago, IL",
+          "counterparty": null,
+          "status": "completed"
+        },
+        {
+          "id": "TX-7005",
+          "timestamp": "2024-02-15T11:00:00Z",
+          "account": "ACC-4421",
+          "type": "atm_withdrawal",
+          "amount": 500.0,
+          "currency": "USD",
+          "merchant": "Wells Fargo ATM",
+          "location": "Miami, FL",
+          "counterparty": null,
+          "status": "completed"
+        },
+        {
+          "id": "TX-7006",
+          "timestamp": "2024-02-15T09:00:00Z",
+          "account": "ACC-8837",
+          "type": "wire_transfer",
+          "amount": 9800.0,
+          "currency": "USD",
+          "merchant": null,
+          "location": "New York, NY",
+          "counterparty": "ACC-9912",
+          "status": "completed"
+        },
+        {
+          "id": "TX-7007",
+          "timestamp": "2024-02-16T09:15:00Z",
+          "account": "ACC-8837",
+          "type": "wire_transfer",
+          "amount": 9750.0,
+          "currency": "USD",
+          "merchant": null,
+          "location": "New York, NY",
+          "counterparty": "ACC-9913",
+          "status": "completed"
+        },
+        {
+          "id": "TX-7008",
+          "timestamp": "2024-02-17T08:55:00Z",
+          "account": "ACC-8837",
+          "type": "wire_transfer",
+          "amount": 9900.0,
+          "currency": "USD",
+          "merchant": null,
+          "location": "New York, NY",
+          "counterparty": "ACC-9914",
+          "status": "completed"
+        },
+        {
+          "id": "TX-7009",
+          "timestamp": "2024-02-18T09:30:00Z",
+          "account": "ACC-8837",
+          "type": "wire_transfer",
+          "amount": 9650.0,
+          "currency": "USD",
+          "merchant": null,
+          "location": "New York, NY",
+          "counterparty": "ACC-9915",
+          "status": "completed"
+        },
+        {
+          "id": "TX-7010",
+          "timestamp": "2024-02-19T09:10:00Z",
+          "account": "ACC-8837",
+          "type": "wire_transfer",
+          "amount": 9850.0,
+          "currency": "USD",
+          "merchant": null,
+          "location": "New York, NY",
+          "counterparty": "ACC-9916",
+          "status": "completed"
+        },
+        {
+          "id": "TX-7011",
+          "timestamp": "2024-02-15T14:00:00Z",
+          "account": "ACC-5560",
+          "type": "wire_transfer",
+          "amount": 25000.0,
+          "currency": "USD",
+          "merchant": null,
+          "location": "Los Angeles, CA",
+          "counterparty": "ACC-5561",
+          "status": "completed"
+        },
+        {
+          "id": "TX-7012",
+          "timestamp": "2024-02-15T14:30:00Z",
+          "account": "ACC-5561",
+          "type": "wire_transfer",
+          "amount": 24500.0,
+          "currency": "USD",
+          "merchant": null,
+          "location": "Los Angeles, CA",
+          "counterparty": "ACC-5562",
+          "status": "completed"
+        },
+        {
+          "id": "TX-7013",
+          "timestamp": "2024-02-15T15:00:00Z",
+          "account": "ACC-5562",
+          "type": "wire_transfer",
+          "amount": 24000.0,
+          "currency": "USD",
+          "merchant": null,
+          "location": "Phoenix, AZ",
+          "counterparty": "ACC-5560",
+          "status": "completed"
+        },
+        {
+          "id": "TX-7014",
+          "timestamp": "2024-02-15T12:00:00Z",
+          "account": "ACC-2200",
+          "type": "pos_purchase",
+          "amount": 3200.0,
+          "currency": "USD",
+          "merchant": "Best Buy #1124",
+          "location": "Houston, TX",
+          "counterparty": null,
+          "status": "completed"
+        },
+        {
+          "id": "TX-7015",
+          "timestamp": "2024-02-15T12:05:00Z",
+          "account": "ACC-2200",
+          "type": "pos_purchase",
+          "amount": 2800.0,
+          "currency": "USD",
+          "merchant": "Best Buy #1124",
+          "location": "Houston, TX",
+          "counterparty": null,
+          "status": "completed"
+        },
+        {
+          "id": "TX-7016",
+          "timestamp": "2024-02-15T12:08:00Z",
+          "account": "ACC-2200",
+          "type": "pos_purchase",
+          "amount": 3500.0,
+          "currency": "USD",
+          "merchant": "Best Buy #1124",
+          "location": "Houston, TX",
+          "counterparty": null,
+          "status": "completed"
+        },
+        {
+          "id": "TX-7017",
+          "timestamp": "2024-02-15T16:00:00Z",
+          "account": "ACC-3300",
+          "type": "direct_deposit",
+          "amount": 4250.0,
+          "currency": "USD",
+          "merchant": "Acme Corp Payroll",
+          "location": "Denver, CO",
+          "counterparty": null,
+          "status": "completed"
+        },
+        {
+          "id": "TX-7018",
+          "timestamp": "2024-02-15T16:30:00Z",
+          "account": "ACC-3300",
+          "type": "bill_pay",
+          "amount": 1850.0,
+          "currency": "USD",
+          "merchant": "Chase Mortgage",
+          "location": "Denver, CO",
+          "counterparty": null,
+          "status": "completed"
+        },
+        {
+          "id": "TX-7019",
+          "timestamp": "2024-02-15T06:00:00Z",
+          "account": "TEST-0001",
+          "type": "wire_transfer",
+          "amount": 9999.0,
+          "currency": "USD",
+          "merchant": null,
+          "location": "Test City, TS",
+          "counterparty": "TEST-0002",
+          "status": "completed"
+        },
+        {
+          "id": "TX-7020",
+          "timestamp": "2024-02-15T06:05:00Z",
+          "account": "TEST-0001",
+          "type": "wire_transfer",
+          "amount": 9998.0,
+          "currency": "USD",
+          "merchant": null,
+          "location": "Test City, TS",
+          "counterparty": "TEST-0003",
+          "status": "completed"
+        },
+        {
+          "id": "TX-7021",
+          "timestamp": "2024-02-15T06:10:00Z",
+          "account": "TEST-0001",
+          "type": "wire_transfer",
+          "amount": 9997.0,
+          "currency": "USD",
+          "merchant": null,
+          "location": "Test City, TS",
+          "counterparty": "TEST-0004",
+          "status": "completed"
+        },
+        {
+          "id": "TX-7022",
+          "timestamp": "2024-02-15T03:00:00Z",
+          "account": "SANDBOX-9900",
+          "type": "atm_withdrawal",
+          "amount": 500.0,
+          "currency": "USD",
+          "merchant": "Sandbox ATM",
+          "location": "New York, NY",
+          "counterparty": null,
+          "status": "completed"
+        },
+        {
+          "id": "TX-7023",
+          "timestamp": "2024-02-15T03:02:00Z",
+          "account": "SANDBOX-9900",
+          "type": "atm_withdrawal",
+          "amount": 500.0,
+          "currency": "USD",
+          "merchant": "Sandbox ATM 2",
+          "location": "Tokyo, JP",
+          "counterparty": null,
+          "status": "completed"
+        },
+        {
+          "id": "TX-7024",
+          "timestamp": "2024-02-15T13:00:00Z",
+          "account": "ACC-2200",
+          "type": "pos_purchase",
+          "amount": 3100.0,
+          "currency": "USD",
+          "merchant": "BEST BUY #1124",
+          "location": "Houston, TX",
+          "counterparty": null,
+          "status": "reversed"
+        },
+        {
+          "id": "TX-7025",
+          "timestamp": "2024-02-15T13:05:00Z",
+          "account": "ACC-2200",
+          "type": "pos_purchase",
+          "amount": 2900.0,
+          "currency": "USD",
+          "merchant": "Best Buy #1124",
+          "location": "Houston, TX",
+          "counterparty": null,
+          "status": "cancelled"
+        },
+        {
+          "id": "TX-7026",
+          "timestamp": "2024-02-15T10:00:00Z",
+          "account": "ACC-6600",
+          "type": "internal_transfer",
+          "amount": 50000.0,
+          "currency": "USD",
+          "merchant": null,
+          "location": "San Francisco, CA",
+          "counterparty": "ACC-6601",
+          "status": "completed"
+        },
+        {
+          "id": "TX-7027",
+          "timestamp": "2024-02-15T10:05:00Z",
+          "account": "ACC-6601",
+          "type": "internal_transfer",
+          "amount": 50000.0,
+          "currency": "USD",
+          "merchant": null,
+          "location": "San Francisco, CA",
+          "counterparty": "ACC-6602",
+          "status": "completed"
+        },
+        {
+          "id": "TX-7028",
+          "timestamp": "2024-02-15T10:10:00Z",
+          "account": "ACC-6602",
+          "type": "internal_transfer",
+          "amount": 50000.0,
+          "currency": "USD",
+          "merchant": null,
+          "location": "San Francisco, CA",
+          "counterparty": "ACC-6600",
+          "status": "completed"
+        },
+        {
+          "id": "TX-7029",
+          "timestamp": "2024-02-17T07:00:00Z",
+          "account": "ACC-3300",
+          "type": "auto_bill_pay",
+          "amount": 450.0,
+          "currency": "USD",
+          "merchant": "Verizon Wireless",
+          "location": "Denver, CO",
+          "counterparty": null,
+          "status": "completed"
+        },
+        {
+          "id": "TX-7030",
+          "timestamp": "2024-02-17T07:05:00Z",
+          "account": "ACC-3300",
+          "type": "auto_bill_pay",
+          "amount": 125.0,
+          "currency": "USD",
+          "merchant": "Xcel Energy",
+          "location": "Denver, CO",
+          "counterparty": null,
+          "status": "completed"
+        },
+        {
+          "id": "TX-7031",
+          "timestamp": "2024-02-15T20:00:00Z",
+          "account": "ACC-7700",
+          "type": "pos_purchase",
+          "amount": 89.99,
+          "currency": "USD",
+          "merchant": "Amazon.com",
+          "location": "Seattle, WA",
+          "counterparty": null,
+          "status": "completed"
+        },
+        {
+          "id": "TX-7032",
+          "timestamp": "2024-02-15T20:30:00Z",
+          "account": "ACC-7700",
+          "type": "pos_purchase",
+          "amount": 42.5,
+          "currency": "USD",
+          "merchant": "Whole Foods #7788",
+          "location": "Seattle, WA",
+          "counterparty": null,
+          "status": "completed"
+        },
+        {
+          "id": "TX-7033",
+          "timestamp": "2024-02-16T08:00:00Z",
+          "account": "ACC-7700",
+          "type": "pos_purchase",
+          "amount": 15.75,
+          "currency": "USD",
+          "merchant": "STARBUCKS #2201",
+          "location": "Seattle, WA",
+          "counterparty": null,
+          "status": "completed"
+        }
       ]
     },
     "ground_truth": {
       "flagged_transactions": [
-        {"transaction_id": "TX-7004", "anomaly_type": "geo_impossible", "confidence": 0.98, "explanation": "ATM withdrawal in Chicago 45 minutes after ATM withdrawal in San Francisco — physically impossible travel time."},
-        {"transaction_id": "TX-7005", "anomaly_type": "geo_impossible", "confidence": 0.98, "explanation": "ATM withdrawal in Miami 45 minutes after Chicago withdrawal and 90 minutes after San Francisco — card is being used simultaneously in multiple cities."},
-        {"transaction_id": "TX-7006", "anomaly_type": "structuring", "confidence": 0.92, "explanation": "Wire transfer of $9,800 — just under $10,000 CTR reporting threshold. Part of a pattern of sub-threshold transfers."},
-        {"transaction_id": "TX-7007", "anomaly_type": "structuring", "confidence": 0.92, "explanation": "Wire transfer of $9,750 to a different account — second consecutive sub-$10K transfer from same account."},
-        {"transaction_id": "TX-7008", "anomaly_type": "structuring", "confidence": 0.95, "explanation": "Wire transfer of $9,900 — third sub-$10K transfer in 3 days, each to a different recipient account."},
-        {"transaction_id": "TX-7009", "anomaly_type": "structuring", "confidence": 0.95, "explanation": "Fourth sub-$10K wire transfer in 4 days, continuing the structuring pattern."},
-        {"transaction_id": "TX-7010", "anomaly_type": "structuring", "confidence": 0.97, "explanation": "Fifth sub-$10K wire transfer in 5 days to 5 different accounts — total $48,950, classic structuring to avoid CTR filing."},
-        {"transaction_id": "TX-7013", "anomaly_type": "round_trip", "confidence": 0.90, "explanation": "Funds returning to originating account (ACC-5560) after passing through two intermediaries — circular transfer pattern."},
-        {"transaction_id": "TX-7014", "anomaly_type": "velocity", "confidence": 0.85, "explanation": "Three high-value purchases at same merchant within 8 minutes totaling $9,500 — unusual purchase velocity."},
-        {"transaction_id": "TX-7015", "anomaly_type": "velocity", "confidence": 0.85, "explanation": "Second large purchase within 5 minutes of first at same location."},
-        {"transaction_id": "TX-7016", "anomaly_type": "velocity", "confidence": 0.88, "explanation": "Third large purchase within 8 minutes at same merchant — combined $9,500 suggests potential card fraud or reselling scheme."}
+        {
+          "transaction_id": "TX-7004",
+          "anomaly_type": "geo_impossible",
+          "confidence": 0.98,
+          "explanation": "ATM withdrawal in Chicago 45 minutes after ATM withdrawal in San Francisco — physically impossible travel time."
+        },
+        {
+          "transaction_id": "TX-7005",
+          "anomaly_type": "geo_impossible",
+          "confidence": 0.98,
+          "explanation": "ATM withdrawal in Miami 45 minutes after Chicago withdrawal and 90 minutes after San Francisco — card is being used simultaneously in multiple cities."
+        },
+        {
+          "transaction_id": "TX-7006",
+          "anomaly_type": "structuring",
+          "confidence": 0.92,
+          "explanation": "Wire transfer of $9,800 — just under $10,000 CTR reporting threshold. Part of a pattern of sub-threshold transfers."
+        },
+        {
+          "transaction_id": "TX-7007",
+          "anomaly_type": "structuring",
+          "confidence": 0.92,
+          "explanation": "Wire transfer of $9,750 to a different account — second consecutive sub-$10K transfer from same account."
+        },
+        {
+          "transaction_id": "TX-7008",
+          "anomaly_type": "structuring",
+          "confidence": 0.95,
+          "explanation": "Wire transfer of $9,900 — third sub-$10K transfer in 3 days, each to a different recipient account."
+        },
+        {
+          "transaction_id": "TX-7009",
+          "anomaly_type": "structuring",
+          "confidence": 0.95,
+          "explanation": "Fourth sub-$10K wire transfer in 4 days, continuing the structuring pattern."
+        },
+        {
+          "transaction_id": "TX-7010",
+          "anomaly_type": "structuring",
+          "confidence": 0.97,
+          "explanation": "Fifth sub-$10K wire transfer in 5 days to 5 different accounts — total $48,950, classic structuring to avoid CTR filing."
+        },
+        {
+          "transaction_id": "TX-7013",
+          "anomaly_type": "round_trip",
+          "confidence": 0.9,
+          "explanation": "Funds returning to originating account (ACC-5560) after passing through two intermediaries — circular transfer pattern."
+        },
+        {
+          "transaction_id": "TX-7014",
+          "anomaly_type": "velocity",
+          "confidence": 0.85,
+          "explanation": "Three high-value purchases at same merchant within 8 minutes totaling $9,500 — unusual purchase velocity."
+        },
+        {
+          "transaction_id": "TX-7015",
+          "anomaly_type": "velocity",
+          "confidence": 0.85,
+          "explanation": "Second large purchase within 5 minutes of first at same location."
+        },
+        {
+          "transaction_id": "TX-7016",
+          "anomaly_type": "velocity",
+          "confidence": 0.88,
+          "explanation": "Third large purchase within 8 minutes at same merchant — combined $9,500 suggests potential card fraud or reselling scheme."
+        }
       ],
       "suspicious_chains": [
-        {"chain_id": "CHAIN-001", "transaction_ids": ["TX-7003", "TX-7004", "TX-7005"], "pattern": "geo_impossible", "explanation": "Three $500 ATM withdrawals across San Francisco, Chicago, and Miami within 90 minutes — card cloning or stolen credentials used simultaneously."},
-        {"chain_id": "CHAIN-002", "transaction_ids": ["TX-7006", "TX-7007", "TX-7008", "TX-7009", "TX-7010"], "pattern": "structuring", "explanation": "Five wire transfers over 5 consecutive business days, all just under $10,000, each to a different recipient — total $48,950. Classic structuring to evade Currency Transaction Report filing requirements."},
-        {"chain_id": "CHAIN-003", "transaction_ids": ["TX-7011", "TX-7012", "TX-7013"], "pattern": "round_trip", "explanation": "Circular fund movement: ACC-5560 → ACC-5561 → ACC-5562 → ACC-5560 within 1 hour, with small deductions at each step — potential layering or wash trading."},
-        {"chain_id": "CHAIN-004", "transaction_ids": ["TX-7014", "TX-7015", "TX-7016"], "pattern": "velocity", "explanation": "Three high-value electronics purchases at same Best Buy within 8 minutes totaling $9,500 — potential card fraud or organized retail crime."}
+        {
+          "chain_id": "CHAIN-001",
+          "transaction_ids": [
+            "TX-7003",
+            "TX-7004",
+            "TX-7005"
+          ],
+          "pattern": "geo_impossible",
+          "explanation": "Three $500 ATM withdrawals across San Francisco, Chicago, and Miami within 90 minutes — card cloning or stolen credentials used simultaneously."
+        },
+        {
+          "chain_id": "CHAIN-002",
+          "transaction_ids": [
+            "TX-7006",
+            "TX-7007",
+            "TX-7008",
+            "TX-7009",
+            "TX-7010"
+          ],
+          "pattern": "structuring",
+          "explanation": "Five wire transfers over 5 consecutive business days, all just under $10,000, each to a different recipient — total $48,950. Classic structuring to evade Currency Transaction Report filing requirements."
+        },
+        {
+          "chain_id": "CHAIN-003",
+          "transaction_ids": [
+            "TX-7011",
+            "TX-7012",
+            "TX-7013"
+          ],
+          "pattern": "round_trip",
+          "explanation": "Circular fund movement: ACC-5560 → ACC-5561 → ACC-5562 → ACC-5560 within 1 hour, with small deductions at each step — potential layering or wash trading."
+        },
+        {
+          "chain_id": "CHAIN-004",
+          "transaction_ids": [
+            "TX-7014",
+            "TX-7015",
+            "TX-7016"
+          ],
+          "pattern": "velocity",
+          "explanation": "Three high-value electronics purchases at same Best Buy within 8 minutes totaling $9,500 — potential card fraud or organized retail crime."
+        }
       ]
     },
-    "files": {}
+    "files": {},
+    "hidden_tests": {
+      "private_validation": [
+        {
+          "name": "holdout_validation_1",
+          "inputs": {
+            "transactions": [
+              {
+                "id": "TX001",
+                "timestamp": "2024-02-15T10:00:00Z",
+                "amount": 500,
+                "type": "withdrawal",
+                "location": "New York"
+              }
+            ]
+          },
+          "ground_truth": {
+            "flagged_transactions": [],
+            "suspicious_chains": []
+          },
+          "accuracy_mode": "json"
+        }
+      ],
+      "private_adversarial": [
+        {
+          "name": "holdout_adversarial_1",
+          "inputs": {
+            "transactions": [
+              {
+                "id": "TX001  ",
+                "timestamp": "2024-02-15T10:00:00Z  ",
+                "amount": 500,
+                "type": "withdrawal  ",
+                "location": "New York  "
+              }
+            ]
+          },
+          "ground_truth": {
+            "flagged_transactions": [],
+            "suspicious_chains": []
+          },
+          "accuracy_mode": "json"
+        }
+      ]
+    }
   }
 }

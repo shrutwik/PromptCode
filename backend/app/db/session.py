@@ -9,7 +9,12 @@ settings = get_settings()
 _connect_args: dict = {}
 if settings.database_url.startswith("postgresql+"):
     if settings.database_ssl_require:
-        _connect_args["ssl"] = ssl._create_unverified_context()
+        if settings.database_ssl_ca_file:
+            _connect_args["ssl"] = ssl.create_default_context(
+                cafile=settings.database_ssl_ca_file
+            )
+        else:
+            _connect_args["ssl"] = ssl.create_default_context()
     # Supabase poolers (PgBouncer) don't support prepared statements in
     # transaction mode; disable asyncpg's statement cache to avoid issues.
     _connect_args["statement_cache_size"] = 0

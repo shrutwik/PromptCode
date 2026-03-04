@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     database_echo: bool = False
     # Set True when using Supabase or any hosted Postgres that requires SSL
     database_ssl_require: bool = False
+    # Optional CA bundle path for verified TLS connections.
+    database_ssl_ca_file: str = ""
 
     openai_api_key: str = ""
     openai_base_url: str = ""

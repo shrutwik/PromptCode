@@ -58,7 +58,8 @@ docker-compose up -d
 
 This starts PostgreSQL and the FastAPI backend on `http://localhost:8000`.
 
-For resilient async scoring, start the queue worker in a second shell:
+The compose stack now includes a `worker` service for resilient async scoring.
+If you run the backend outside compose, start the queue worker in a second shell:
 
 ```bash
 cd backend
@@ -99,6 +100,9 @@ PROMPTCODE_DATABASE_URL=postgresql+asyncpg://postgres.[ref]:[password]@aws-0-[re
 
 # Required for Supabase (SSL)
 PROMPTCODE_DATABASE_SSL_REQUIRE=true
+
+# Optional: custom CA bundle path for TLS verification
+PROMPTCODE_DATABASE_SSL_CA_FILE=/etc/ssl/certs/ca-certificates.crt
 ```
 
 You can use either the **Session pooler** (port 5432) or **Transaction pooler** (port 6543) URI from the Supabase dashboard.
@@ -132,7 +136,6 @@ The app will create tables on first startup if they don’t exist (`Base.metadat
 | `GET` | `/health` | Health check |
 | `GET` | `/api/challenges/` | List all challenges |
 | `GET` | `/api/challenges/{id}` | Get challenge details |
-| `POST` | `/api/challenges/` | Create a challenge |
 | `POST` | `/api/submissions/` | Submit a solution |
 | `GET` | `/api/submissions/{id}` | Get submission status |
 | `GET` | `/api/submissions/{id}/report` | Get prompt efficiency report |
@@ -187,6 +190,7 @@ Hard gates:
 Reproducibility:
 - Every run includes deterministic metadata in report (`evaluation_seed`, perturbation config version, per-run seed + perturbation type)
 - Hidden tests are supported via `config.hidden_tests` and excluded from public challenge payloads
+- Detailed scoring contract: `docs/SCORING_SPEC.md`
 
 ### Report Format
 
@@ -230,3 +234,11 @@ python -m scripts.calibrate_prompt_judge --samples ../docs/prompt_judge_samples.
 Recommended cadence:
 - Weekly during active rubric changes
 - Bi-weekly once stable
+
+## Tests
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest -q
+```

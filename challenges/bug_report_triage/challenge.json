@@ -4,23 +4,48 @@
   "description": "At a large SaaS company, the bug tracker receives 50+ reports daily from QA, customers, and automated monitoring. Many are duplicates reported differently. Your pipeline must:\n\n1. **Deduplicate**: Group bug reports that describe the same underlying issue. Reports may use different words, reference different symptoms of the same root cause, or come from different platforms.\n2. **Triage each unique bug**: Assign severity (critical/high/medium/low), affected_component, root_cause_hypothesis, and suggested_assignee (based on the component).\n3. **Identify regression candidates**: Flag bugs that mention 'worked before', 'after update', 'since last release', or describe behavior changes.\n\nOutput a JSON object with:\n- groups: array of {group_id, canonical_title, bug_ids, severity, affected_component, root_cause_hypothesis, is_regression, suggested_team}\n\nEach group represents one unique bug. Singleton groups are fine (bug with no duplicates).",
   "difficulty": "hard",
   "category": "classification",
-  "tags": ["devtools", "bug-tracking", "deduplication", "triage", "nlp"],
+  "tags": [
+    "devtools",
+    "bug-tracking",
+    "deduplication",
+    "triage",
+    "nlp"
+  ],
   "company_context": "Companies like Jira, Linear, and Sentry deal with duplicate bug reports constantly. GitHub's internal data shows 23% of bug reports are duplicates. Engineers at Spotify built an ML-powered dedup system that reduced duplicate investigation time by 40%. The hard part isn't exact duplicates — it's recognizing that 'app crashes on upload' and 'file attachment causes OOM' are the same bug.",
   "input_format": "json",
   "output_format": "json",
   "constraints": {
     "max_llm_calls": 12,
-    "allowed_models": ["gpt-4o", "gpt-4o-mini"],
+    "allowed_models": [
+      "gpt-4o",
+      "gpt-4o-mini"
+    ],
     "time_limit_seconds": 120
   },
   "sample_input": {
     "bug_reports": [
-      {"id": "BUG-001", "title": "App crashes", "reporter": "QA", "description": "App crashes when clicking submit"}
+      {
+        "id": "BUG-001",
+        "title": "App crashes",
+        "reporter": "QA",
+        "description": "App crashes when clicking submit"
+      }
     ]
   },
   "sample_output": {
     "groups": [
-      {"group_id": "G-1", "canonical_title": "App crash on submit", "bug_ids": ["BUG-001"], "severity": "high", "affected_component": "forms", "root_cause_hypothesis": "Null pointer in form submission handler", "is_regression": false, "suggested_team": "frontend"}
+      {
+        "group_id": "G-1",
+        "canonical_title": "App crash on submit",
+        "bug_ids": [
+          "BUG-001"
+        ],
+        "severity": "high",
+        "affected_component": "forms",
+        "root_cause_hypothesis": "Null pointer in form submission handler",
+        "is_regression": false,
+        "suggested_team": "frontend"
+      }
     ]
   },
   "config": {
@@ -37,35 +62,193 @@
     },
     "inputs": {
       "bug_reports": [
-        {"id": "BUG-3341", "title": "Dashboard won't load", "reporter": "customer_support", "platform": "web", "status": "open", "description": "Enterprise customer (Acme Inc) reports dashboard shows infinite spinner. Started this morning. They're on Chrome 121. Cleared cache, tried incognito, same issue. Other pages work fine. They have 847 widgets configured.", "reported_at": "2024-02-15T08:00:00Z"},
-        {"id": "BUG-3342", "title": "Analytics page blank after update", "reporter": "qa_team", "platform": "web", "status": "open", "description": "After deploying v4.12.0 yesterday, the analytics dashboard renders a blank white page. No errors in console initially, but after ~30 seconds a JavaScript heap out of memory error appears. Reproduced on staging with accounts that have >500 dashboard widgets. Accounts with <100 widgets load fine.", "reported_at": "2024-02-15T08:30:00Z"},
-        {"id": "BUG-3343", "title": "CSV export times out", "reporter": "customer", "platform": "web", "status": "open", "description": "When I try to export my data as CSV, it just spins forever and eventually gives a timeout error. I have about 2 years of data. This used to work fine last month.", "reported_at": "2024-02-15T09:00:00Z"},
-        {"id": "BUG-3344", "title": "mobile app - push notifications stopped", "reporter": "customer", "platform": "ios", "status": "open", "description": "Haven't received any push notifications for the past 3 days. I checked my phone settings and notifications are enabled for the app. My coworker on Android says theirs work fine. iPhone 15 Pro, iOS 17.3.", "reported_at": "2024-02-15T09:15:00Z"},
-        {"id": "BUG-3345", "title": "OOM crash on dashboard render", "reporter": "monitoring", "platform": "web", "status": "open", "description": "Alert: JavaScript heap out of memory errors spiking on dashboard-service pods since v4.12.0 deploy. Affected pods: dashboard-web-7f8d4 through dashboard-web-7f8d9. Memory usage jumps from 512MB to 4GB+ during widget rendering for large accounts. Appears to be an O(n²) rendering loop in the new widget grid layout.", "reported_at": "2024-02-15T09:30:00Z"},
-        {"id": "BUG-3346", "title": "Data export feature broken", "reporter": "customer_support", "platform": "web", "status": "open", "description": "Multiple customers reporting that CSV and PDF exports are failing. Error varies — some get timeout, others get a 502 Bad Gateway. Engineering confirmed the export worker pool was reduced from 8 to 2 workers in last week's infra change (INFRA-2241). Affecting all account sizes.", "reported_at": "2024-02-15T10:00:00Z"},
-        {"id": "BUG-3347", "title": "iOS notifications not working", "reporter": "qa_team", "platform": "ios", "status": "open", "description": "iOS push notifications broken after APNS certificate rotation on Feb 12. The new cert was installed for production but the staging cert wasn't updated, and the notification service is incorrectly reading the staging config in production. Android (FCM) unaffected. All iOS users impacted.", "reported_at": "2024-02-15T10:30:00Z"},
-        {"id": "BUG-3348", "title": "Widget dashboard performance degradation", "reporter": "customer", "platform": "web", "status": "open", "description": "Our dashboard used to load in 2-3 seconds, now it takes over a minute and sometimes crashes the browser tab. We have about 600 widgets. Started happening this week after you guys did an update. Pretty frustrating since we pay for the enterprise plan.", "reported_at": "2024-02-15T11:00:00Z"},
-        {"id": "BUG-3349", "title": "Search results inconsistent", "reporter": "qa_team", "platform": "web", "status": "open", "description": "Global search sometimes returns stale results. Searching for a record immediately after creation shows no results, but searching 5 minutes later works. Elasticsearch replication lag suspected. Intermittent — hard to reproduce consistently. Not related to any recent deploy.", "reported_at": "2024-02-15T11:30:00Z"},
-        {"id": "BUG-3350", "title": "Login fails with SSO", "reporter": "customer_support", "platform": "web", "status": "open", "description": "Customer using Okta SSO reports intermittent login failures — about 1 in 5 attempts. Error: 'SAML assertion expired'. Their Okta admin confirmed clocks are synced. Might be a timing issue on our SAML validation side. Only affecting this customer so far.", "reported_at": "2024-02-15T12:00:00Z"},
-
-        {"id": "BUG-3351", "title": "Dashboard loading slowly on mobile", "reporter": "customer", "platform": "android", "status": "open", "description": "The dashboard takes forever to load on my Android phone. Sometimes the app just freezes completely. Samsung Galaxy S24, Android 14. I have about 200 widgets. This has been an issue for months, not just recent.", "reported_at": "2024-02-15T12:30:00Z"},
-
-        {"id": "BUG-3352", "title": "Export button missing", "reporter": "customer", "platform": "web", "status": "resolved", "description": "The CSV export button disappeared from the toolbar. UPDATE: Never mind, I found it — it moved to the new menu dropdown in the latest update. Closing this.", "reported_at": "2024-02-15T13:00:00Z"},
-        {"id": "BUG-3353", "title": "Can't export PDF", "reporter": "customer", "platform": "web", "status": "closed", "description": "PDF export gives 502 error. Support team already fixed it for my account by restarting the worker.", "reported_at": "2024-02-15T13:15:00Z"},
-
-        {"id": "BUG-3354", "title": "Feature request: dark mode for dashboard", "reporter": "customer", "platform": "web", "status": "open", "description": "This is not a bug, just a feature request. Please add dark mode to the dashboard. I work late hours and the bright white background is hard on the eyes. Would be great to have a toggle in settings."},
-        {"id": "BUG-3355", "title": "Request: API for bulk export", "reporter": "customer", "platform": "web", "status": "open", "description": "Not a bug — feature request. We need a programmatic API endpoint for bulk data export. Currently we have to use the UI which doesn't scale for our automation needs. Would love a REST endpoint that takes date range and format params."},
-
-        {"id": "BUG-3356", "title": "Test: Dashboard load smoke test failure", "reporter": "automated_test_suite", "platform": "web", "status": "open", "description": "AUTOMATED TEST FAILURE: test_dashboard_load_500_widgets — Expected load time < 5000ms, actual: 62341ms. Test environment: staging-02. Build: v4.12.0-rc3. This is a recurring test that runs every 15 minutes.", "reported_at": "2024-02-15T09:45:00Z"},
-        {"id": "BUG-3357", "title": "Test: Push notification delivery test failure", "reporter": "automated_test_suite", "platform": "ios", "status": "open", "description": "AUTOMATED TEST FAILURE: test_ios_push_delivery — Expected notification within 30s, received none. Test environment: staging-01. APNS sandbox endpoint returning 403. Build: v4.12.0-rc3.", "reported_at": "2024-02-15T10:00:00Z"},
-
-        {"id": "BUG-3358", "title": "CORRECTION: Dashboard OOM details", "reporter": "qa_team", "platform": "web", "status": "open", "description": "UPDATE: Correction to BUG-3342. After further investigation, the threshold is not >500 widgets but >400 widgets. Also the root cause is confirmed as the O(n²) loop in the WidgetGridLayout.tsx component at line 247. The v4.11.9 release did NOT have this issue — it was introduced specifically in the v4.12.0 merge of PR #8841.", "reported_at": "2024-02-15T14:00:00Z"},
-
-        {"id": "BUG-3359", "title": "Slow search on mobile app", "reporter": "customer", "platform": "android", "status": "open", "description": "The search feature is super slow on the Android app. Takes 10+ seconds to return results. This has been a problem since I started using the app 6 months ago, so it's not a new thing. Running latest app version 3.8.2.", "reported_at": "2024-02-15T14:30:00Z"},
-
-        {"id": "BUG-3360", "title": "Webhook delivery failures", "reporter": "customer_support", "platform": "web", "status": "open", "description": "Enterprise customer (TechCo) reports their webhook endpoint stopped receiving events 2 days ago. Our logs show delivery attempts are timing out after 5 seconds. Their endpoint URL changed last week during a migration and they updated it in our settings, but the old URL is still being used for some event types. Likely a caching issue in the webhook delivery service.", "reported_at": "2024-02-15T15:00:00Z"},
-
-        {"id": "BUG-3361", "title": "Android push notifications not arriving", "reporter": "customer", "platform": "android", "status": "open", "description": "I'm not getting push notifications on my Android phone. Pixel 8, Android 14. Notifications are enabled. This started about a week ago. My colleague on iPhone says his are broken too.", "reported_at": "2024-02-15T15:30:00Z"}
+        {
+          "id": "BUG-3341",
+          "title": "Dashboard won't load",
+          "reporter": "customer_support",
+          "platform": "web",
+          "status": "open",
+          "description": "Enterprise customer (Acme Inc) reports dashboard shows infinite spinner. Started this morning. They're on Chrome 121. Cleared cache, tried incognito, same issue. Other pages work fine. They have 847 widgets configured.",
+          "reported_at": "2024-02-15T08:00:00Z"
+        },
+        {
+          "id": "BUG-3342",
+          "title": "Analytics page blank after update",
+          "reporter": "qa_team",
+          "platform": "web",
+          "status": "open",
+          "description": "After deploying v4.12.0 yesterday, the analytics dashboard renders a blank white page. No errors in console initially, but after ~30 seconds a JavaScript heap out of memory error appears. Reproduced on staging with accounts that have >500 dashboard widgets. Accounts with <100 widgets load fine.",
+          "reported_at": "2024-02-15T08:30:00Z"
+        },
+        {
+          "id": "BUG-3343",
+          "title": "CSV export times out",
+          "reporter": "customer",
+          "platform": "web",
+          "status": "open",
+          "description": "When I try to export my data as CSV, it just spins forever and eventually gives a timeout error. I have about 2 years of data. This used to work fine last month.",
+          "reported_at": "2024-02-15T09:00:00Z"
+        },
+        {
+          "id": "BUG-3344",
+          "title": "mobile app - push notifications stopped",
+          "reporter": "customer",
+          "platform": "ios",
+          "status": "open",
+          "description": "Haven't received any push notifications for the past 3 days. I checked my phone settings and notifications are enabled for the app. My coworker on Android says theirs work fine. iPhone 15 Pro, iOS 17.3.",
+          "reported_at": "2024-02-15T09:15:00Z"
+        },
+        {
+          "id": "BUG-3345",
+          "title": "OOM crash on dashboard render",
+          "reporter": "monitoring",
+          "platform": "web",
+          "status": "open",
+          "description": "Alert: JavaScript heap out of memory errors spiking on dashboard-service pods since v4.12.0 deploy. Affected pods: dashboard-web-7f8d4 through dashboard-web-7f8d9. Memory usage jumps from 512MB to 4GB+ during widget rendering for large accounts. Appears to be an O(n²) rendering loop in the new widget grid layout.",
+          "reported_at": "2024-02-15T09:30:00Z"
+        },
+        {
+          "id": "BUG-3346",
+          "title": "Data export feature broken",
+          "reporter": "customer_support",
+          "platform": "web",
+          "status": "open",
+          "description": "Multiple customers reporting that CSV and PDF exports are failing. Error varies — some get timeout, others get a 502 Bad Gateway. Engineering confirmed the export worker pool was reduced from 8 to 2 workers in last week's infra change (INFRA-2241). Affecting all account sizes.",
+          "reported_at": "2024-02-15T10:00:00Z"
+        },
+        {
+          "id": "BUG-3347",
+          "title": "iOS notifications not working",
+          "reporter": "qa_team",
+          "platform": "ios",
+          "status": "open",
+          "description": "iOS push notifications broken after APNS certificate rotation on Feb 12. The new cert was installed for production but the staging cert wasn't updated, and the notification service is incorrectly reading the staging config in production. Android (FCM) unaffected. All iOS users impacted.",
+          "reported_at": "2024-02-15T10:30:00Z"
+        },
+        {
+          "id": "BUG-3348",
+          "title": "Widget dashboard performance degradation",
+          "reporter": "customer",
+          "platform": "web",
+          "status": "open",
+          "description": "Our dashboard used to load in 2-3 seconds, now it takes over a minute and sometimes crashes the browser tab. We have about 600 widgets. Started happening this week after you guys did an update. Pretty frustrating since we pay for the enterprise plan.",
+          "reported_at": "2024-02-15T11:00:00Z"
+        },
+        {
+          "id": "BUG-3349",
+          "title": "Search results inconsistent",
+          "reporter": "qa_team",
+          "platform": "web",
+          "status": "open",
+          "description": "Global search sometimes returns stale results. Searching for a record immediately after creation shows no results, but searching 5 minutes later works. Elasticsearch replication lag suspected. Intermittent — hard to reproduce consistently. Not related to any recent deploy.",
+          "reported_at": "2024-02-15T11:30:00Z"
+        },
+        {
+          "id": "BUG-3350",
+          "title": "Login fails with SSO",
+          "reporter": "customer_support",
+          "platform": "web",
+          "status": "open",
+          "description": "Customer using Okta SSO reports intermittent login failures — about 1 in 5 attempts. Error: 'SAML assertion expired'. Their Okta admin confirmed clocks are synced. Might be a timing issue on our SAML validation side. Only affecting this customer so far.",
+          "reported_at": "2024-02-15T12:00:00Z"
+        },
+        {
+          "id": "BUG-3351",
+          "title": "Dashboard loading slowly on mobile",
+          "reporter": "customer",
+          "platform": "android",
+          "status": "open",
+          "description": "The dashboard takes forever to load on my Android phone. Sometimes the app just freezes completely. Samsung Galaxy S24, Android 14. I have about 200 widgets. This has been an issue for months, not just recent.",
+          "reported_at": "2024-02-15T12:30:00Z"
+        },
+        {
+          "id": "BUG-3352",
+          "title": "Export button missing",
+          "reporter": "customer",
+          "platform": "web",
+          "status": "resolved",
+          "description": "The CSV export button disappeared from the toolbar. UPDATE: Never mind, I found it — it moved to the new menu dropdown in the latest update. Closing this.",
+          "reported_at": "2024-02-15T13:00:00Z"
+        },
+        {
+          "id": "BUG-3353",
+          "title": "Can't export PDF",
+          "reporter": "customer",
+          "platform": "web",
+          "status": "closed",
+          "description": "PDF export gives 502 error. Support team already fixed it for my account by restarting the worker.",
+          "reported_at": "2024-02-15T13:15:00Z"
+        },
+        {
+          "id": "BUG-3354",
+          "title": "Feature request: dark mode for dashboard",
+          "reporter": "customer",
+          "platform": "web",
+          "status": "open",
+          "description": "This is not a bug, just a feature request. Please add dark mode to the dashboard. I work late hours and the bright white background is hard on the eyes. Would be great to have a toggle in settings."
+        },
+        {
+          "id": "BUG-3355",
+          "title": "Request: API for bulk export",
+          "reporter": "customer",
+          "platform": "web",
+          "status": "open",
+          "description": "Not a bug — feature request. We need a programmatic API endpoint for bulk data export. Currently we have to use the UI which doesn't scale for our automation needs. Would love a REST endpoint that takes date range and format params."
+        },
+        {
+          "id": "BUG-3356",
+          "title": "Test: Dashboard load smoke test failure",
+          "reporter": "automated_test_suite",
+          "platform": "web",
+          "status": "open",
+          "description": "AUTOMATED TEST FAILURE: test_dashboard_load_500_widgets — Expected load time < 5000ms, actual: 62341ms. Test environment: staging-02. Build: v4.12.0-rc3. This is a recurring test that runs every 15 minutes.",
+          "reported_at": "2024-02-15T09:45:00Z"
+        },
+        {
+          "id": "BUG-3357",
+          "title": "Test: Push notification delivery test failure",
+          "reporter": "automated_test_suite",
+          "platform": "ios",
+          "status": "open",
+          "description": "AUTOMATED TEST FAILURE: test_ios_push_delivery — Expected notification within 30s, received none. Test environment: staging-01. APNS sandbox endpoint returning 403. Build: v4.12.0-rc3.",
+          "reported_at": "2024-02-15T10:00:00Z"
+        },
+        {
+          "id": "BUG-3358",
+          "title": "CORRECTION: Dashboard OOM details",
+          "reporter": "qa_team",
+          "platform": "web",
+          "status": "open",
+          "description": "UPDATE: Correction to BUG-3342. After further investigation, the threshold is not >500 widgets but >400 widgets. Also the root cause is confirmed as the O(n²) loop in the WidgetGridLayout.tsx component at line 247. The v4.11.9 release did NOT have this issue — it was introduced specifically in the v4.12.0 merge of PR #8841.",
+          "reported_at": "2024-02-15T14:00:00Z"
+        },
+        {
+          "id": "BUG-3359",
+          "title": "Slow search on mobile app",
+          "reporter": "customer",
+          "platform": "android",
+          "status": "open",
+          "description": "The search feature is super slow on the Android app. Takes 10+ seconds to return results. This has been a problem since I started using the app 6 months ago, so it's not a new thing. Running latest app version 3.8.2.",
+          "reported_at": "2024-02-15T14:30:00Z"
+        },
+        {
+          "id": "BUG-3360",
+          "title": "Webhook delivery failures",
+          "reporter": "customer_support",
+          "platform": "web",
+          "status": "open",
+          "description": "Enterprise customer (TechCo) reports their webhook endpoint stopped receiving events 2 days ago. Our logs show delivery attempts are timing out after 5 seconds. Their endpoint URL changed last week during a migration and they updated it in our settings, but the old URL is still being used for some event types. Likely a caching issue in the webhook delivery service.",
+          "reported_at": "2024-02-15T15:00:00Z"
+        },
+        {
+          "id": "BUG-3361",
+          "title": "Android push notifications not arriving",
+          "reporter": "customer",
+          "platform": "android",
+          "status": "open",
+          "description": "I'm not getting push notifications on my Android phone. Pixel 8, Android 14. Notifications are enabled. This started about a week ago. My colleague on iPhone says his are broken too.",
+          "reported_at": "2024-02-15T15:30:00Z"
+        }
       ]
     },
     "ground_truth": {
@@ -73,7 +256,12 @@
         {
           "group_id": "G-1",
           "canonical_title": "Dashboard OOM crash for accounts with many widgets (v4.12.0 regression)",
-          "bug_ids": ["BUG-3341", "BUG-3342", "BUG-3345", "BUG-3348"],
+          "bug_ids": [
+            "BUG-3341",
+            "BUG-3342",
+            "BUG-3345",
+            "BUG-3348"
+          ],
           "severity": "critical",
           "affected_component": "dashboard",
           "root_cause_hypothesis": "O(n²) rendering loop in WidgetGridLayout.tsx (line 247) introduced in v4.12.0 (PR #8841) causes JavaScript heap OOM for accounts with >400 widgets",
@@ -83,7 +271,10 @@
         {
           "group_id": "G-2",
           "canonical_title": "Data export (CSV/PDF) failing due to reduced worker pool",
-          "bug_ids": ["BUG-3343", "BUG-3346"],
+          "bug_ids": [
+            "BUG-3343",
+            "BUG-3346"
+          ],
           "severity": "high",
           "affected_component": "export",
           "root_cause_hypothesis": "Export worker pool reduced from 8 to 2 in INFRA-2241, causing timeouts and 502 errors under normal load",
@@ -93,7 +284,10 @@
         {
           "group_id": "G-3",
           "canonical_title": "iOS push notifications broken after APNS certificate rotation",
-          "bug_ids": ["BUG-3344", "BUG-3347"],
+          "bug_ids": [
+            "BUG-3344",
+            "BUG-3347"
+          ],
           "severity": "high",
           "affected_component": "notifications",
           "root_cause_hypothesis": "Notification service reading staging APNS certificate config in production after Feb 12 cert rotation",
@@ -103,7 +297,9 @@
         {
           "group_id": "G-4",
           "canonical_title": "Search returns stale results due to Elasticsearch replication lag",
-          "bug_ids": ["BUG-3349"],
+          "bug_ids": [
+            "BUG-3349"
+          ],
           "severity": "medium",
           "affected_component": "search",
           "root_cause_hypothesis": "Elasticsearch replication lag causing newly created records to be invisible in search for several minutes",
@@ -113,7 +309,9 @@
         {
           "group_id": "G-5",
           "canonical_title": "Intermittent SSO login failure with Okta — SAML assertion timing",
-          "bug_ids": ["BUG-3350"],
+          "bug_ids": [
+            "BUG-3350"
+          ],
           "severity": "medium",
           "affected_component": "auth",
           "root_cause_hypothesis": "Clock skew or tight validation window on SAML assertion expiry causing intermittent login failures for Okta SSO customers",
@@ -123,7 +321,9 @@
         {
           "group_id": "G-6",
           "canonical_title": "Android dashboard performance slow (longstanding, not related to v4.12.0)",
-          "bug_ids": ["BUG-3351"],
+          "bug_ids": [
+            "BUG-3351"
+          ],
           "severity": "medium",
           "affected_component": "mobile",
           "root_cause_hypothesis": "Android app's dashboard rendering not optimized for large widget counts — chronic performance issue predating v4.12.0",
@@ -133,7 +333,9 @@
         {
           "group_id": "G-7",
           "canonical_title": "Android search performance slow (longstanding)",
-          "bug_ids": ["BUG-3359"],
+          "bug_ids": [
+            "BUG-3359"
+          ],
           "severity": "low",
           "affected_component": "mobile",
           "root_cause_hypothesis": "Android app search implementation not optimized — has been slow since initial release per user report",
@@ -143,7 +345,9 @@
         {
           "group_id": "G-8",
           "canonical_title": "Webhook delivery using stale cached endpoint URL",
-          "bug_ids": ["BUG-3360"],
+          "bug_ids": [
+            "BUG-3360"
+          ],
           "severity": "high",
           "affected_component": "webhooks",
           "root_cause_hypothesis": "Webhook delivery service caching old endpoint URL for some event types after customer updated their endpoint configuration",
@@ -153,7 +357,9 @@
         {
           "group_id": "G-9",
           "canonical_title": "Android push notifications not arriving",
-          "bug_ids": ["BUG-3361"],
+          "bug_ids": [
+            "BUG-3361"
+          ],
           "severity": "medium",
           "affected_component": "notifications",
           "root_cause_hypothesis": "Android FCM push notifications failing independently of the iOS APNS issue — needs separate investigation as iOS-specific root cause (APNS cert) would not affect Android",
@@ -162,6 +368,72 @@
         }
       ]
     },
-    "files": {}
+    "files": {},
+    "hidden_tests": {
+      "private_validation": [
+        {
+          "name": "holdout_validation_1",
+          "inputs": {
+            "bug_reports": [
+              {
+                "id": "BUG-001",
+                "title": "App crashes",
+                "reporter": "QA",
+                "description": "App crashes when clicking submit"
+              }
+            ]
+          },
+          "ground_truth": {
+            "groups": [
+              {
+                "group_id": "G-1",
+                "canonical_title": "App crash on submit",
+                "bug_ids": [
+                  "BUG-001"
+                ],
+                "severity": "high",
+                "affected_component": "forms",
+                "root_cause_hypothesis": "Null pointer in form submission handler",
+                "is_regression": false,
+                "suggested_team": "frontend"
+              }
+            ]
+          },
+          "accuracy_mode": "json"
+        }
+      ],
+      "private_adversarial": [
+        {
+          "name": "holdout_adversarial_1",
+          "inputs": {
+            "bug_reports": [
+              {
+                "id": "BUG-001  ",
+                "title": "App crashes  ",
+                "reporter": "QA  ",
+                "description": "App crashes when clicking submit  "
+              }
+            ]
+          },
+          "ground_truth": {
+            "groups": [
+              {
+                "group_id": "G-1",
+                "canonical_title": "App crash on submit",
+                "bug_ids": [
+                  "BUG-001"
+                ],
+                "severity": "high",
+                "affected_component": "forms",
+                "root_cause_hypothesis": "Null pointer in form submission handler",
+                "is_regression": false,
+                "suggested_team": "frontend"
+              }
+            ]
+          },
+          "accuracy_mode": "json"
+        }
+      ]
+    }
   }
 }

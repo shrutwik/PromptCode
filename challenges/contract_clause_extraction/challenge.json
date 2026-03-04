@@ -4,13 +4,22 @@
   "description": "At a legal tech company, lawyers need to review hundreds of vendor contracts. Your pipeline receives raw contract text and must:\n\n1. Identify each distinct clause\n2. Classify it into one of: indemnification, limitation_of_liability, termination, confidentiality, payment_terms, intellectual_property, warranty, force_majeure, governing_law, data_protection, non_compete, other\n3. Extract key terms from each clause (monetary limits, time periods, conditions)\n4. Flag any clauses that are unusually risky (one-sided indemnification, unlimited liability, auto-renewal with >30 day notice, non-compete >2 years)\n\nOutput a JSON array of clause objects to stdout. Each must have: clause_type, text_excerpt (first 100 chars), key_terms (object), risk_flag (boolean), risk_reason (string or null).\n\nThe contracts mix legalese, defined terms, cross-references, and deliberately vague language. Some clauses span multiple paragraphs.",
   "difficulty": "hard",
   "category": "extraction",
-  "tags": ["legal", "contracts", "clause-extraction", "risk-analysis", "nlp"],
+  "tags": [
+    "legal",
+    "contracts",
+    "clause-extraction",
+    "risk-analysis",
+    "nlp"
+  ],
   "company_context": "Legal tech companies like Ironclad, DocuSign, and Kira Systems process millions of contracts. Manual contract review takes 2-4 hours per document and costs $200-500 in lawyer time. AI-powered clause extraction reduces review time by 60% while catching risky terms that humans miss under time pressure.",
   "input_format": "text",
   "output_format": "json",
   "constraints": {
     "max_llm_calls": 15,
-    "allowed_models": ["gpt-4o", "gpt-4o-mini"],
+    "allowed_models": [
+      "gpt-4o",
+      "gpt-4o-mini"
+    ],
     "time_limit_seconds": 180
   },
   "sample_input": {
@@ -22,7 +31,10 @@
     {
       "clause_type": "confidentiality",
       "text_excerpt": "CONFIDENTIALITY. Receiving Party shall hold in confidence all Confidential Information for a period",
-      "key_terms": {"duration": "3 years", "scope": "all Confidential Information"},
+      "key_terms": {
+        "duration": "3 years",
+        "scope": "all Confidential Information"
+      },
       "risk_flag": false,
       "risk_reason": null
     }
@@ -61,13 +73,9 @@
     "inputs": {
       "contracts": [
         "MASTER SERVICES AGREEMENT\nBetween: TechVendor Solutions Inc. (\"Provider\") and ClientCorp LLC (\"Client\")\nEffective Date: January 1, 2024\n\n4. PAYMENT TERMS\n4.1 Client shall pay Provider the fees set forth in each Statement of Work within forty-five (45) days of receipt of invoice. Late payments shall accrue interest at the rate of 1.5% per month or the maximum rate permitted by law, whichever is less.\n4.2 Provider reserves the right to suspend Services if any invoice remains unpaid for more than sixty (60) days. Client shall reimburse Provider for all reasonable costs of collection, including attorneys' fees.\n4.3 Fees shall increase automatically by 8% on each anniversary of the Effective Date unless Client provides written notice of objection at least ninety (90) days prior to such anniversary.\n\n5. INDEMNIFICATION\n5.1 Client shall indemnify, defend, and hold harmless Provider and its officers, directors, employees, agents, and affiliates from and against any and all claims, damages, losses, liabilities, costs, and expenses (including reasonable attorneys' fees) arising out of or relating to: (a) Client's use of the Services; (b) Client's breach of this Agreement; (c) any claim by a third party relating to Client's products or services; or (d) Client's negligence or willful misconduct.\n5.2 Provider's indemnification obligations shall be limited to claims arising directly from Provider's gross negligence or willful misconduct in performing the Services.\n\n6. LIMITATION OF LIABILITY\n6.1 IN NO EVENT SHALL PROVIDER'S TOTAL AGGREGATE LIABILITY UNDER THIS AGREEMENT EXCEED THE FEES PAID BY CLIENT IN THE THREE (3) MONTHS PRECEDING THE CLAIM.\n6.2 IN NO EVENT SHALL PROVIDER BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, REGARDLESS OF THE CAUSE OF ACTION.\n6.3 The limitations set forth in this Section 6 shall not apply to Client's indemnification obligations under Section 5 or Client's payment obligations under Section 4.\n\n7. TERM AND TERMINATION\n7.1 This Agreement shall have an initial term of three (3) years from the Effective Date and shall automatically renew for successive one (1) year periods unless either party provides written notice of non-renewal at least one-hundred-twenty (120) days prior to the end of the then-current term.\n7.2 Provider may terminate this Agreement immediately upon written notice if Client breaches any material term and fails to cure within ten (10) days. Client may terminate only at the end of a term per Section 7.1.\n7.3 Upon termination by Client, Client shall pay all fees due through the end of the then-current term, including fees for any uncommenced Statement of Work.\n\n8. NON-COMPETE\n8.1 During the term of this Agreement and for a period of thirty-six (36) months following termination, Client shall not, directly or indirectly, develop, market, or sell any product or service that competes with the Services provided hereunder.\n\n9. CONFIDENTIALITY\n9.1 Each party shall hold in strict confidence all Confidential Information of the other party. \"Confidential Information\" means any information designated as confidential or that reasonably should be understood to be confidential given the nature of the information and circumstances of disclosure.\n9.2 Confidentiality obligations shall survive for five (5) years following termination of this Agreement.\n\n10. GOVERNING LAW AND DISPUTE RESOLUTION\n10.1 This Agreement shall be governed by and construed in accordance with the laws of the State of Delaware, without regard to conflict of laws principles.\n10.2 Any dispute arising under this Agreement shall be resolved exclusively through binding arbitration in Wilmington, Delaware, under the rules of the American Arbitration Association.",
-
         "*** STATUS: SUPERSEDED ***\n*** This agreement has been replaced by MSA-2024-002 dated March 1, 2024 ***\n\nMASTER SERVICES AGREEMENT (MSA-2023-005)\nBetween: CloudPlatform Inc. (\"Provider\") and RetailMax Corp (\"Client\")\nEffective Date: June 1, 2023\n\n3. PAYMENT TERMS\n3.1 Client shall pay all invoices within thirty (30) days.\n3.2 No late fees shall apply.\n\n4. LIMITATION OF LIABILITY\n4.1 Provider's liability is unlimited.\n\n5. TERMINATION\n5.1 Either party may terminate with 30 days notice.\n\n[Full contract text continues...]",
-
         "AMENDMENT NO. 1 TO MASTER SERVICES AGREEMENT\nBetween: TechVendor Solutions Inc. (\"Provider\") and ClientCorp LLC (\"Client\")\nEffective Date: April 15, 2024\nAmends: Master Services Agreement dated January 1, 2024\n\nThe parties hereby agree to amend the Agreement as follows:\n\n1. Section 4.3 (Fee Increases) is hereby amended to read:\n\"4.3 Fees shall increase automatically by 5% on each anniversary of the Effective Date unless Client provides written notice of objection at least sixty (60) days prior to such anniversary.\"\n\n2. Section 6.1 (Liability Cap) is hereby amended to read:\n\"6.1 IN NO EVENT SHALL PROVIDER'S TOTAL AGGREGATE LIABILITY UNDER THIS AGREEMENT EXCEED THE FEES PAID BY CLIENT IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM.\"\n\n3. Section 8 (Non-Compete) is hereby STRICKEN in its entirety and shall be of no further force or effect.\n\nAll other terms and conditions of the Agreement remain unchanged.",
-
         "[TEMPLATE — FORM AGREEMENT]\nSTANDARD VENDOR AGREEMENT v3.2\n\nThis template is provided for reference only. It has not been executed\nby any parties and does not constitute a binding agreement.\n\n1. PAYMENT: Net 30.\n2. LIABILITY: Capped at 12 months fees.\n3. TERM: 1 year, auto-renew.\n4. CONFIDENTIALITY: 3 years.\n5. GOVERNING LAW: [STATE TBD]\n\n[Template continues with placeholder language...]",
-
         "SOFTWARE LICENSE AND SERVICES AGREEMENT\nBetween: DataFlow Analytics Ltd. (\"Licensor\") and Meridian Health Systems (\"Licensee\")\nEffective Date: February 15, 2024\n\n3. LICENSE GRANT AND INTELLECTUAL PROPERTY\n3.1 Licensor hereby grants Licensee a non-exclusive, non-transferable license to use the Software during the term of this Agreement solely for Licensee's internal business purposes.\n3.2 All intellectual property rights in the Software, including any modifications, enhancements, or derivative works, shall remain the exclusive property of Licensor, regardless of whether such modifications were requested or funded by Licensee.\n3.3 Any custom integrations, reports, or configurations developed jointly by the parties during implementation shall be owned exclusively by Licensor, who grants Licensee a perpetual, royalty-free license to use such works solely in connection with the Software.\n\n4. DATA PROTECTION AND PRIVACY\n4.1 Licensor shall process Licensee's data solely for the purpose of providing the Services and in accordance with applicable data protection laws, including but not limited to HIPAA, as Licensee operates in the healthcare sector.\n4.2 Licensor shall implement and maintain appropriate technical and organizational measures to protect Personal Health Information (PHI) in accordance with the Business Associate Agreement executed concurrently herewith.\n4.3 Upon termination, Licensor shall retain Licensee's data for a period of seven (7) years for regulatory compliance purposes, after which it shall be securely destroyed. Licensee may request an export of its data at any time during this period.\n4.4 Licensor shall notify Licensee within twenty-four (24) hours of discovering any data breach involving Licensee's data.\n\n5. WARRANTY AND REPRESENTATIONS\n5.1 Licensor warrants that the Software shall perform substantially in accordance with the documentation for a period of ninety (90) days following each delivery (the \"Warranty Period\").\n5.2 EXCEPT AS EXPRESSLY SET FORTH IN SECTION 5.1, THE SOFTWARE IS PROVIDED \"AS IS\" AND LICENSOR MAKES NO OTHER WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT.\n5.3 Licensee's exclusive remedy for breach of the warranty in Section 5.1 shall be, at Licensor's option, repair or replacement of the non-conforming Software.\n\n6. FORCE MAJEURE\n6.1 Neither party shall be liable for any failure or delay in performing its obligations under this Agreement to the extent such failure or delay results from circumstances beyond the reasonable control of that party, including but not limited to: acts of God, natural disasters, war, terrorism, epidemics, government actions, labor disputes, power failures, internet or telecommunications failures, cyberattacks, or any other event that could not have been reasonably foreseen or prevented.\n6.2 The affected party shall provide notice within forty-eight (48) hours and use commercially reasonable efforts to mitigate the impact. If a force majeure event continues for more than ninety (90) days, either party may terminate this Agreement without penalty.\n\n7. INDEMNIFICATION\n7.1 Licensor shall indemnify Licensee against claims that the Software infringes any valid United States patent or copyright, provided Licensee promptly notifies Licensor and grants Licensor sole control of the defense.\n7.2 Licensee shall indemnify Licensor against all claims arising from Licensee's use of the Software in violation of applicable law, Licensee's combination of the Software with non-approved third-party systems, or Licensee's failure to implement security measures recommended by Licensor.\n\n8. LIMITATION OF LIABILITY\n8.1 EXCEPT FOR INDEMNIFICATION OBLIGATIONS AND BREACHES OF DATA PROTECTION OBLIGATIONS, NEITHER PARTY'S TOTAL AGGREGATE LIABILITY SHALL EXCEED TWO TIMES (2X) THE FEES PAID OR PAYABLE IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM.\n8.2 NEITHER PARTY SHALL BE LIABLE FOR INDIRECT, INCIDENTAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES.\n\n9. TERM AND TERMINATION\n9.1 Initial term of five (5) years. Auto-renews for successive two (2) year periods unless either party provides written notice of non-renewal at least one-hundred-eighty (180) days prior to expiration.\n9.2 Either party may terminate for material breach with sixty (60) days written notice and opportunity to cure.\n9.3 Licensee may terminate for convenience with twelve (12) months prior written notice, subject to payment of an early termination fee equal to fifty percent (50%) of the remaining fees for the then-current term.\n\n10. GOVERNING LAW\n10.1 This Agreement shall be governed by the laws of the State of California. Disputes shall be resolved by litigation in the state or federal courts located in San Francisco County.\n\nEXHIBIT A — SAMPLE CLAUSE LANGUAGE\n[SAMPLE LANGUAGE — NOT PART OF AGREEMENT]\nThe following are example clauses provided for reference during negotiation and are NOT incorporated into this Agreement:\n- Mutual unlimited indemnification\n- No limitation of liability\n- Perpetual license surviving termination\n[END OF SAMPLE LANGUAGE]"
       ]
     },
@@ -75,102 +83,215 @@
       {
         "clause_type": "payment_terms",
         "text_excerpt": "4. PAYMENT TERMS 4.1 Client shall pay Provider the fees set forth in each Statement of Work within",
-        "key_terms": {"payment_window": "45 days", "late_interest": "1.5% per month", "suspension_threshold": "60 days unpaid", "auto_increase": "5% annually (as amended)", "objection_notice": "60 days (as amended)"},
+        "key_terms": {
+          "payment_window": "45 days",
+          "late_interest": "1.5% per month",
+          "suspension_threshold": "60 days unpaid",
+          "auto_increase": "5% annually (as amended)",
+          "objection_notice": "60 days (as amended)"
+        },
         "risk_flag": false,
         "risk_reason": null
       },
       {
         "clause_type": "indemnification",
         "text_excerpt": "5. INDEMNIFICATION 5.1 Client shall indemnify, defend, and hold harmless Provider and its officers",
-        "key_terms": {"client_scope": "broad — use of services, breach, third-party claims, negligence", "provider_scope": "limited to gross negligence or willful misconduct only"},
+        "key_terms": {
+          "client_scope": "broad — use of services, breach, third-party claims, negligence",
+          "provider_scope": "limited to gross negligence or willful misconduct only"
+        },
         "risk_flag": true,
         "risk_reason": "Heavily one-sided: Client indemnifies for broad categories including third-party claims, while Provider only indemnifies for gross negligence/willful misconduct."
       },
       {
         "clause_type": "limitation_of_liability",
         "text_excerpt": "6. LIMITATION OF LIABILITY 6.1 IN NO EVENT SHALL PROVIDER'S TOTAL AGGREGATE LIABILITY UNDER THIS AG",
-        "key_terms": {"provider_cap": "fees paid in preceding 12 months (as amended)", "exclusions": "no indirect/consequential/punitive damages", "carve_outs": "client indemnification and payment obligations uncapped"},
+        "key_terms": {
+          "provider_cap": "fees paid in preceding 12 months (as amended)",
+          "exclusions": "no indirect/consequential/punitive damages",
+          "carve_outs": "client indemnification and payment obligations uncapped"
+        },
         "risk_flag": true,
         "risk_reason": "Client's indemnification and payment obligations are explicitly uncapped while Provider enjoys a fixed cap."
       },
       {
         "clause_type": "termination",
         "text_excerpt": "7. TERM AND TERMINATION 7.1 This Agreement shall have an initial term of three (3) years from the E",
-        "key_terms": {"initial_term": "3 years", "auto_renewal": "1-year periods", "non_renewal_notice": "120 days", "provider_cure_period": "10 days for Client breach", "client_termination": "end of term only", "termination_fees": "all fees through end of term"},
+        "key_terms": {
+          "initial_term": "3 years",
+          "auto_renewal": "1-year periods",
+          "non_renewal_notice": "120 days",
+          "provider_cure_period": "10 days for Client breach",
+          "client_termination": "end of term only",
+          "termination_fees": "all fees through end of term"
+        },
         "risk_flag": true,
         "risk_reason": "120-day non-renewal notice exceeds 30-day standard; Client cannot terminate for cause mid-term; termination still requires paying remaining fees."
       },
       {
         "clause_type": "confidentiality",
         "text_excerpt": "9. CONFIDENTIALITY 9.1 Each party shall hold in strict confidence all Confidential Information of th",
-        "key_terms": {"scope": "mutual", "duration": "5 years post-termination", "definition": "designated as confidential or reasonably understood to be"},
+        "key_terms": {
+          "scope": "mutual",
+          "duration": "5 years post-termination",
+          "definition": "designated as confidential or reasonably understood to be"
+        },
         "risk_flag": false,
         "risk_reason": null
       },
       {
         "clause_type": "governing_law",
         "text_excerpt": "10. GOVERNING LAW AND DISPUTE RESOLUTION 10.1 This Agreement shall be governed by and construed in a",
-        "key_terms": {"jurisdiction": "Delaware", "dispute_resolution": "binding arbitration", "arbitration_location": "Wilmington, Delaware", "arbitration_body": "American Arbitration Association"},
+        "key_terms": {
+          "jurisdiction": "Delaware",
+          "dispute_resolution": "binding arbitration",
+          "arbitration_location": "Wilmington, Delaware",
+          "arbitration_body": "American Arbitration Association"
+        },
         "risk_flag": false,
         "risk_reason": null
       },
       {
         "clause_type": "intellectual_property",
         "text_excerpt": "3. LICENSE GRANT AND INTELLECTUAL PROPERTY 3.1 Licensor hereby grants Licensee a non-exclusive, non-",
-        "key_terms": {"license_type": "non-exclusive, non-transferable", "ip_ownership": "all IP including joint works owned by Licensor", "licensee_rights": "perpetual royalty-free license for joint works, Software use only"},
+        "key_terms": {
+          "license_type": "non-exclusive, non-transferable",
+          "ip_ownership": "all IP including joint works owned by Licensor",
+          "licensee_rights": "perpetual royalty-free license for joint works, Software use only"
+        },
         "risk_flag": true,
         "risk_reason": "Unilateral IP assignment: jointly developed custom work is owned exclusively by Licensor even when funded by Licensee."
       },
       {
         "clause_type": "data_protection",
         "text_excerpt": "4. DATA PROTECTION AND PRIVACY 4.1 Licensor shall process Licensee's data solely for the purpose of",
-        "key_terms": {"compliance_frameworks": "HIPAA", "breach_notification": "24 hours", "data_retention": "7 years post-termination", "data_export": "available at any time during retention period"},
+        "key_terms": {
+          "compliance_frameworks": "HIPAA",
+          "breach_notification": "24 hours",
+          "data_retention": "7 years post-termination",
+          "data_export": "available at any time during retention period"
+        },
         "risk_flag": true,
         "risk_reason": "7-year post-termination data retention exceeds 5-year standard threshold and may create prolonged compliance obligations."
       },
       {
         "clause_type": "warranty",
         "text_excerpt": "5. WARRANTY AND REPRESENTATIONS 5.1 Licensor warrants that the Software shall perform substantially",
-        "key_terms": {"warranty_period": "90 days per delivery", "remedy": "repair or replacement at Licensor's option", "disclaimer": "no implied warranties of merchantability, fitness, or non-infringement"},
+        "key_terms": {
+          "warranty_period": "90 days per delivery",
+          "remedy": "repair or replacement at Licensor's option",
+          "disclaimer": "no implied warranties of merchantability, fitness, or non-infringement"
+        },
         "risk_flag": false,
         "risk_reason": null
       },
       {
         "clause_type": "force_majeure",
         "text_excerpt": "6. FORCE MAJEURE 6.1 Neither party shall be liable for any failure or delay in performing its oblig",
-        "key_terms": {"notice_period": "48 hours", "termination_trigger": "90 days continuous force majeure", "scope": "acts of God, natural disasters, war, terrorism, epidemics, government actions, labor disputes, power failures, internet failures, cyberattacks"},
+        "key_terms": {
+          "notice_period": "48 hours",
+          "termination_trigger": "90 days continuous force majeure",
+          "scope": "acts of God, natural disasters, war, terrorism, epidemics, government actions, labor disputes, power failures, internet failures, cyberattacks"
+        },
         "risk_flag": false,
         "risk_reason": null
       },
       {
         "clause_type": "indemnification",
         "text_excerpt": "7. INDEMNIFICATION 7.1 Licensor shall indemnify Licensee against claims that the Software infringes",
-        "key_terms": {"licensor_scope": "IP infringement (US patents and copyrights)", "licensee_scope": "legal violations, non-approved integrations, failure to implement recommended security", "control": "Licensor has sole control of IP defense"},
+        "key_terms": {
+          "licensor_scope": "IP infringement (US patents and copyrights)",
+          "licensee_scope": "legal violations, non-approved integrations, failure to implement recommended security",
+          "control": "Licensor has sole control of IP defense"
+        },
         "risk_flag": false,
         "risk_reason": null
       },
       {
         "clause_type": "limitation_of_liability",
         "text_excerpt": "8. LIMITATION OF LIABILITY 8.1 EXCEPT FOR INDEMNIFICATION OBLIGATIONS AND BREACHES OF DATA PROTECTI",
-        "key_terms": {"cap": "2x fees paid in preceding 12 months", "exclusions": "no indirect/consequential/punitive damages", "carve_outs": "indemnification and data protection breaches uncapped"},
+        "key_terms": {
+          "cap": "2x fees paid in preceding 12 months",
+          "exclusions": "no indirect/consequential/punitive damages",
+          "carve_outs": "indemnification and data protection breaches uncapped"
+        },
         "risk_flag": false,
         "risk_reason": null
       },
       {
         "clause_type": "termination",
         "text_excerpt": "9. TERM AND TERMINATION 9.1 Initial term of five (5) years. Auto-renews for successive two (2) year",
-        "key_terms": {"initial_term": "5 years", "auto_renewal": "2-year periods", "non_renewal_notice": "180 days", "cure_period": "60 days", "convenience_termination": "12 months notice", "early_termination_fee": "50% of remaining fees"},
+        "key_terms": {
+          "initial_term": "5 years",
+          "auto_renewal": "2-year periods",
+          "non_renewal_notice": "180 days",
+          "cure_period": "60 days",
+          "convenience_termination": "12 months notice",
+          "early_termination_fee": "50% of remaining fees"
+        },
         "risk_flag": true,
         "risk_reason": "180-day non-renewal notice far exceeds 30-day standard; early termination fee of 50% of remaining term creates significant financial penalty; 5-year initial term is unusually long."
       },
       {
         "clause_type": "governing_law",
         "text_excerpt": "10. GOVERNING LAW 10.1 This Agreement shall be governed by the laws of the State of California. Dis",
-        "key_terms": {"jurisdiction": "California", "dispute_resolution": "litigation", "venue": "state or federal courts, San Francisco County"},
+        "key_terms": {
+          "jurisdiction": "California",
+          "dispute_resolution": "litigation",
+          "venue": "state or federal courts, San Francisco County"
+        },
         "risk_flag": false,
         "risk_reason": null
       }
     ],
-    "files": {}
+    "files": {},
+    "hidden_tests": {
+      "private_validation": [
+        {
+          "name": "holdout_validation_1",
+          "inputs": {
+            "contracts": [
+              "CONFIDENTIALITY. Receiving Party shall hold in confidence all Confidential Information for a period of 3 years following disclosure."
+            ]
+          },
+          "ground_truth": [
+            {
+              "clause_type": "confidentiality",
+              "text_excerpt": "CONFIDENTIALITY. Receiving Party shall hold in confidence all Confidential Information for a period",
+              "key_terms": {
+                "duration": "3 years",
+                "scope": "all Confidential Information"
+              },
+              "risk_flag": false,
+              "risk_reason": null
+            }
+          ],
+          "accuracy_mode": "json"
+        }
+      ],
+      "private_adversarial": [
+        {
+          "name": "holdout_adversarial_1",
+          "inputs": {
+            "contracts": [
+              "CONFIDENTIALITY. Receiving Party shall hold in confidence all Confidential Information for a period of 3 years following disclosure.\n\n[OCR:NOISE::#]"
+            ]
+          },
+          "ground_truth": [
+            {
+              "clause_type": "confidentiality",
+              "text_excerpt": "CONFIDENTIALITY. Receiving Party shall hold in confidence all Confidential Information for a period",
+              "key_terms": {
+                "duration": "3 years",
+                "scope": "all Confidential Information"
+              },
+              "risk_flag": false,
+              "risk_reason": null
+            }
+          ],
+          "accuracy_mode": "json"
+        }
+      ]
+    }
   }
 }

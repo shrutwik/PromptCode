@@ -17,6 +17,8 @@ from app.models.submission import Submission
 from app.services.evaluation.engine import evaluate_submission
 
 logger = logging.getLogger(__name__)
+MIN_LEADERBOARD_TESTS = 6
+MIN_LEADERBOARD_RELIABILITY = 0.55
 
 
 async def run_evaluation_pipeline(submission_id: str) -> bool:
@@ -112,6 +114,13 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
 
 
 async def _upsert_leaderboard(db: AsyncSession, submission: Submission) -> None:
+    if not _eligible_for_leaderboard(submission):
+        logger.info(
+            "Submission %s skipped for leaderboard eligibility gates",
+            submission.id,
+        )
+        return
+
     result = await db.execute(
         select(LeaderboardEntry).where(
             LeaderboardEntry.challenge_id == submission.challenge_id,
@@ -143,6 +152,22 @@ async def _upsert_leaderboard(db: AsyncSession, submission: Submission) -> None:
         entry.score_edge_cases = submission.score_edge_cases or 0.0
         entry.total_cost_usd = submission.total_cost_usd or 0.0
         entry.total_llm_calls = submission.total_llm_calls or 0
+
+
+def _eligible_for_leaderboard(submission: Submission) -> bool:
+    if submission.status != "completed":
+        return False
+    if submission.score_overall is None:
+        return False
+    if (submission.score_reliability or 0.0) < MIN_LEADERBOARD_RELIABILITY:
+        return False
+    report = submission.report or {}
+    if report.get("disqualified"):
+        return False
+    tests_total = int(report.get("tests_total") or 0)
+    if tests_total < MIN_LEADERBOARD_TESTS:
+        return False
+    return True
 
 
 async def _mark_failed(db: AsyncSession, submission_id: str) -> None:

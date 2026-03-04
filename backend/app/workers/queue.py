@@ -36,10 +36,8 @@ async def enqueue_evaluation_job(
 async def process_job(job_id: str) -> None:
     """Process one queued job by id. Safe to call from BackgroundTasks."""
     async with async_session_factory() as db:
-        job = await db.get(EvaluationJob, uuid.UUID(job_id))
+        job = await _claim_job_by_id(db, uuid.UUID(job_id))
         if not job:
-            return
-        if job.status not in ("queued", "retry"):
             return
         await _run_job(db, job)
 
@@ -74,6 +72,7 @@ def _queue_query() -> Select[tuple[EvaluationJob]]:
             EvaluationJob.status.in_(("queued", "retry")),
             EvaluationJob.available_at <= now,
         )
+        .with_for_update(skip_locked=True)
         .order_by(EvaluationJob.created_at.asc())
         .limit(1)
     )
@@ -82,6 +81,26 @@ def _queue_query() -> Select[tuple[EvaluationJob]]:
 async def _claim_next_job(db: AsyncSession) -> EvaluationJob | None:
     result = await db.execute(_queue_query())
     job = result.scalar_one_or_none()
+    return await _claim_loaded_job(db, job)
+
+
+async def _claim_job_by_id(db: AsyncSession, job_id: uuid.UUID) -> EvaluationJob | None:
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(EvaluationJob)
+        .where(
+            EvaluationJob.id == job_id,
+            EvaluationJob.status.in_(("queued", "retry")),
+            EvaluationJob.available_at <= now,
+        )
+        .with_for_update(skip_locked=True)
+        .limit(1)
+    )
+    job = result.scalar_one_or_none()
+    return await _claim_loaded_job(db, job)
+
+
+async def _claim_loaded_job(db: AsyncSession, job: EvaluationJob | None) -> EvaluationJob | None:
     if not job:
         return None
     job.status = "running"

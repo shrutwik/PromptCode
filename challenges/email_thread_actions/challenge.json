@@ -4,13 +4,22 @@
   "description": "At a project management company, teams drown in email threads. Your pipeline receives raw email thread text (multiple participants, replies, forwards, quoted text) and must extract:\n\n1. A **summary** (2-3 sentences capturing the thread's purpose and outcome)\n2. All **action_items** — each with: assignee, task, deadline (if mentioned, else null), priority (high/medium/low), status (new/in_progress/blocked/done)\n3. All **decisions_made** — each with: decision, decided_by, date\n4. **open_questions** — unresolved questions that still need answers\n\nOutput a JSON object to stdout with keys: summary, action_items, decisions_made, open_questions.\n\nThe hard part: emails are messy. People reply inline, change subjects mid-thread, delegate vaguely ('can someone handle this?'), reference previous conversations, and use ambiguous pronouns. Your prompt engineering must handle all of this.",
   "difficulty": "hard",
   "category": "summarization",
-  "tags": ["email", "project-management", "action-items", "multi-party", "nlp"],
+  "tags": [
+    "email",
+    "project-management",
+    "action-items",
+    "multi-party",
+    "nlp"
+  ],
   "company_context": "Companies like Asana, Monday.com, and Notion are building AI features to extract action items from communication channels. Engineers who built Superhuman's AI triage report that accurately identifying ownership is the hardest part — 'someone should do this' is not an assignment.",
   "input_format": "text",
   "output_format": "json",
   "constraints": {
     "max_llm_calls": 10,
-    "allowed_models": ["gpt-4o", "gpt-4o-mini"],
+    "allowed_models": [
+      "gpt-4o",
+      "gpt-4o-mini"
+    ],
     "time_limit_seconds": 120
   },
   "sample_input": {
@@ -18,7 +27,15 @@
   },
   "sample_output": {
     "summary": "Alice requested the Q1 report from Bob, who agreed to deliver by Thursday.",
-    "action_items": [{"assignee": "Bob", "task": "Send Q1 report", "deadline": "Thursday", "priority": "medium", "status": "in_progress"}],
+    "action_items": [
+      {
+        "assignee": "Bob",
+        "task": "Send Q1 report",
+        "deadline": "Thursday",
+        "priority": "medium",
+        "status": "in_progress"
+      }
+    ],
     "decisions_made": [],
     "open_questions": []
   },
@@ -55,24 +72,106 @@
     "ground_truth": {
       "summary": "BlueChip Industries ($2.4M ARR) must migrate from v1 to v2 API by March 15 as a hard blocker for their April 1 contract renewal. The migration tool failed due to deprecated blob storage references (not the same bug as Acme). The team decided to build a storage reference shim handling all 3 deprecated types, and identified 3 custom fields without clean v2 equivalents — the most complex being 'approval_chain'. BlueChip's CTO may extend the renewal deadline to April 15 if a concrete timeline is provided by Thursday.",
       "action_items": [
-        {"assignee": "David Kim", "task": "Build shim to map deprecated blob storage URLs to new CDN paths, handling all 3 deprecated storage reference types, with rollback strategy included", "deadline": null, "priority": "high", "status": "new"},
-        {"assignee": "David Kim", "task": "File tech debt ticket for migration tool silent failures and add 50-field limit issue", "deadline": "2024-02-14", "priority": "medium", "status": "done"},
-        {"assignee": "David Kim", "task": "Do technical handoff with Ravi at 2 PM Tuesday", "deadline": "2024-02-13", "priority": "high", "status": "new"},
-        {"assignee": "Ravi Mehta", "task": "Write custom field mapping spec with recommendation on risk_score field", "deadline": "2024-02-14", "priority": "high", "status": "in_progress"},
-        {"assignee": "Ravi Mehta", "task": "Deliver deprecated storage reference shim spec with checksum-based validation step", "deadline": "2024-02-13", "priority": "high", "status": "in_progress"},
-        {"assignee": "Ravi Mehta", "task": "Lead technical portion of Thursday kickoff call with BlueChip", "deadline": "2024-02-15", "priority": "high", "status": "new"},
-        {"assignee": "Ravi Mehta", "task": "Begin shim implementation based on David's architecture on Friday", "deadline": "2024-02-16", "priority": "high", "status": "new"},
-        {"assignee": "Lisa Park", "task": "Add Angela (CSM) to the Thursday kickoff call", "deadline": "2024-02-15", "priority": "medium", "status": "new"},
-        {"assignee": "Jennifer Walsh", "task": "Run daily standups at 9:30 AM in #proj-bluechip-migration starting Tuesday", "deadline": "2024-02-13", "priority": "medium", "status": "new"}
+        {
+          "assignee": "David Kim",
+          "task": "Build shim to map deprecated blob storage URLs to new CDN paths, handling all 3 deprecated storage reference types, with rollback strategy included",
+          "deadline": null,
+          "priority": "high",
+          "status": "new"
+        },
+        {
+          "assignee": "David Kim",
+          "task": "File tech debt ticket for migration tool silent failures and add 50-field limit issue",
+          "deadline": "2024-02-14",
+          "priority": "medium",
+          "status": "done"
+        },
+        {
+          "assignee": "David Kim",
+          "task": "Do technical handoff with Ravi at 2 PM Tuesday",
+          "deadline": "2024-02-13",
+          "priority": "high",
+          "status": "new"
+        },
+        {
+          "assignee": "Ravi Mehta",
+          "task": "Write custom field mapping spec with recommendation on risk_score field",
+          "deadline": "2024-02-14",
+          "priority": "high",
+          "status": "in_progress"
+        },
+        {
+          "assignee": "Ravi Mehta",
+          "task": "Deliver deprecated storage reference shim spec with checksum-based validation step",
+          "deadline": "2024-02-13",
+          "priority": "high",
+          "status": "in_progress"
+        },
+        {
+          "assignee": "Ravi Mehta",
+          "task": "Lead technical portion of Thursday kickoff call with BlueChip",
+          "deadline": "2024-02-15",
+          "priority": "high",
+          "status": "new"
+        },
+        {
+          "assignee": "Ravi Mehta",
+          "task": "Begin shim implementation based on David's architecture on Friday",
+          "deadline": "2024-02-16",
+          "priority": "high",
+          "status": "new"
+        },
+        {
+          "assignee": "Lisa Park",
+          "task": "Add Angela (CSM) to the Thursday kickoff call",
+          "deadline": "2024-02-15",
+          "priority": "medium",
+          "status": "new"
+        },
+        {
+          "assignee": "Jennifer Walsh",
+          "task": "Run daily standups at 9:30 AM in #proj-bluechip-migration starting Tuesday",
+          "deadline": "2024-02-13",
+          "priority": "medium",
+          "status": "new"
+        }
       ],
       "decisions_made": [
-        {"decision": "Build a storage reference shim (Option 1) rather than having BlueChip re-upload, handling all 3 deprecated storage types", "decided_by": "Jennifer Walsh", "date": "2024-02-12"},
-        {"decision": "Include risk_score recommendation in the Wednesday custom field mapping doc", "decided_by": "Jennifer Walsh", "date": "2024-02-12"},
-        {"decision": "Add Angela (Customer Success Manager) to the Thursday kickoff call", "decided_by": "Jennifer Walsh", "date": "2024-02-12"},
-        {"decision": "Ravi will lead technical discussion at Thursday kickoff since David is on PTO", "decided_by": "Jennifer Walsh", "date": "2024-02-12"},
-        {"decision": "Include rollback strategy in the shim design — non-negotiable", "decided_by": "Jennifer Walsh", "date": "2024-02-12"},
-        {"decision": "Commit to zero data loss with checksum-based post-migration verification", "decided_by": "Jennifer Walsh", "date": "2024-02-12"},
-        {"decision": "Keep March 15 as internal target regardless of potential April 15 extension", "decided_by": "Jennifer Walsh", "date": "2024-02-12"}
+        {
+          "decision": "Build a storage reference shim (Option 1) rather than having BlueChip re-upload, handling all 3 deprecated storage types",
+          "decided_by": "Jennifer Walsh",
+          "date": "2024-02-12"
+        },
+        {
+          "decision": "Include risk_score recommendation in the Wednesday custom field mapping doc",
+          "decided_by": "Jennifer Walsh",
+          "date": "2024-02-12"
+        },
+        {
+          "decision": "Add Angela (Customer Success Manager) to the Thursday kickoff call",
+          "decided_by": "Jennifer Walsh",
+          "date": "2024-02-12"
+        },
+        {
+          "decision": "Ravi will lead technical discussion at Thursday kickoff since David is on PTO",
+          "decided_by": "Jennifer Walsh",
+          "date": "2024-02-12"
+        },
+        {
+          "decision": "Include rollback strategy in the shim design — non-negotiable",
+          "decided_by": "Jennifer Walsh",
+          "date": "2024-02-12"
+        },
+        {
+          "decision": "Commit to zero data loss with checksum-based post-migration verification",
+          "decided_by": "Jennifer Walsh",
+          "date": "2024-02-12"
+        },
+        {
+          "decision": "Keep March 15 as internal target regardless of potential April 15 extension",
+          "decided_by": "Jennifer Walsh",
+          "date": "2024-02-12"
+        }
       ],
       "open_questions": [
         "How should the 'approval_chain' custom field (nested JSON with v1 user IDs) be mapped to v2? Needs discussion with BlueChip's team.",
@@ -82,6 +181,54 @@
         "How will BlueChip's 12 internal tools consuming the v1 API be handled during/after migration?"
       ]
     },
-    "files": {}
+    "files": {},
+    "hidden_tests": {
+      "private_validation": [
+        {
+          "name": "holdout_validation_1",
+          "inputs": {
+            "email_thread": "From: Alice\nTo: Bob\nSubject: Meeting notes\n\nBob, can you send the Q1 report by Friday?\n\n---\nFrom: Bob\nTo: Alice\n\nSure, I'll have it ready by Thursday."
+          },
+          "ground_truth": {
+            "summary": "Alice requested the Q1 report from Bob, who agreed to deliver by Thursday.",
+            "action_items": [
+              {
+                "assignee": "Bob",
+                "task": "Send Q1 report",
+                "deadline": "Thursday",
+                "priority": "medium",
+                "status": "in_progress"
+              }
+            ],
+            "decisions_made": [],
+            "open_questions": []
+          },
+          "accuracy_mode": "json"
+        }
+      ],
+      "private_adversarial": [
+        {
+          "name": "holdout_adversarial_1",
+          "inputs": {
+            "email_thread": "From: Alice\nTo: Bob\nSubject: Meeting notes\n\nBob, can you send the Q1 report by Friday?\n\n---\nFrom: Bob\nTo: Alice\n\nSure, I'll have it ready by Thursday.\n\n[OCR:NOISE::#]"
+          },
+          "ground_truth": {
+            "summary": "Alice requested the Q1 report from Bob, who agreed to deliver by Thursday.",
+            "action_items": [
+              {
+                "assignee": "Bob",
+                "task": "Send Q1 report",
+                "deadline": "Thursday",
+                "priority": "medium",
+                "status": "in_progress"
+              }
+            ],
+            "decisions_made": [],
+            "open_questions": []
+          },
+          "accuracy_mode": "json"
+        }
+      ]
+    }
   }
 }

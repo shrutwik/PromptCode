@@ -4,13 +4,22 @@
   "description": "At a B2B SaaS company, the support team receives hundreds of tickets daily through email, chat, and in-app forms. Each ticket needs to be classified by:\n- **department**: billing, technical, account, security, feature_request, onboarding\n- **priority**: critical, high, medium, low\n- **sentiment**: angry, frustrated, neutral, satisfied\n- **requires_escalation**: boolean — true if the customer threatens legal action, mentions a deadline, is an enterprise account, or describes data loss\n\nYour pipeline receives raw ticket text (often poorly written, with typos, mixed languages, and emotional language) and must output structured classification for each ticket.\n\nOutput a JSON array to stdout. Each object must have: ticket_id, department, priority, sentiment, requires_escalation, reasoning (one-sentence justification for the routing).\n\nThe tricky part: tickets are ambiguous. A billing complaint about a technical issue that caused an overcharge touches both departments — you must pick the PRIMARY department. Priority must account for business impact, not just how angry the customer sounds.",
   "difficulty": "hard",
   "category": "classification",
-  "tags": ["saas", "customer-support", "nlp", "multi-label", "triage"],
+  "tags": [
+    "saas",
+    "customer-support",
+    "nlp",
+    "multi-label",
+    "triage"
+  ],
   "company_context": "SaaS companies like Zendesk, Intercom, and Freshdesk route millions of tickets. Misrouted tickets add 4-8 hours to resolution time. AI-powered routing reduces mean time to resolution by 35% when done correctly, but bad classification is worse than no classification.",
   "input_format": "text",
   "output_format": "json",
   "constraints": {
     "max_llm_calls": 15,
-    "allowed_models": ["gpt-4o", "gpt-4o-mini"],
+    "allowed_models": [
+      "gpt-4o",
+      "gpt-4o-mini"
+    ],
     "time_limit_seconds": 120
   },
   "sample_input": {
@@ -275,6 +284,60 @@
         "reasoning": "Data discrepancy between dashboard and API with board presentation deadline — technical data integrity issue with business impact."
       }
     ],
-    "files": {}
+    "files": {},
+    "hidden_tests": {
+      "private_validation": [
+        {
+          "name": "holdout_validation_1",
+          "inputs": {
+            "tickets": [
+              {
+                "ticket_id": "T-0000",
+                "channel": "email",
+                "account_tier": "startup",
+                "text": "Hi, I can't log into my dashboard. It says my password is wrong but I just reset it."
+              }
+            ]
+          },
+          "ground_truth": [
+            {
+              "ticket_id": "T-0000",
+              "department": "technical",
+              "priority": "medium",
+              "sentiment": "frustrated",
+              "requires_escalation": false,
+              "reasoning": "Login issue after password reset indicates a technical bug, not a billing or account problem."
+            }
+          ],
+          "accuracy_mode": "json"
+        }
+      ],
+      "private_adversarial": [
+        {
+          "name": "holdout_adversarial_1",
+          "inputs": {
+            "tickets": [
+              {
+                "ticket_id": "T-0000  ",
+                "channel": "email  ",
+                "account_tier": "startup  ",
+                "text": "Hi, I can't log into my dashboard. It says my password is wrong but I just reset it.\n\n[OCR:NOISE::#]"
+              }
+            ]
+          },
+          "ground_truth": [
+            {
+              "ticket_id": "T-0000",
+              "department": "technical",
+              "priority": "medium",
+              "sentiment": "frustrated",
+              "requires_escalation": false,
+              "reasoning": "Login issue after password reset indicates a technical bug, not a billing or account problem."
+            }
+          ],
+          "accuracy_mode": "json"
+        }
+      ]
+    }
   }
 }

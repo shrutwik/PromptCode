@@ -4,25 +4,54 @@
   "description": "At a product analytics company, PMs need to understand what customers love, hate, and want from hundreds of reviews. Your pipeline receives raw product reviews and must:\n\n1. Identify **themes** — recurring topics mentioned across multiple reviews (not just keywords — semantic themes like 'onboarding friction' even if no review uses that exact phrase)\n2. For each theme: sentiment (positive/negative/mixed), frequency (how many reviews mention it), representative_quotes (2-3 direct quotes), severity (for negative themes: critical/moderate/minor)\n3. Generate an **executive summary** (3-5 sentences) highlighting the most important findings\n4. Identify **feature requests** — specific product improvements suggested by reviewers\n5. Calculate an overall **health_score** (0-100) based on sentiment distribution\n\nOutput a JSON object with: themes, executive_summary, feature_requests, health_score.\n\nThe challenge: reviews are noisy, subjective, and often mix positive and negative feedback in the same review. Sarcasm, relative comparisons ('better than X but worse than Y'), and feature-specific sentiment (love the product but hate the pricing) make this hard.",
   "difficulty": "hard",
   "category": "summarization",
-  "tags": ["product-analytics", "sentiment-analysis", "nlp", "customer-feedback", "synthesis"],
+  "tags": [
+    "product-analytics",
+    "sentiment-analysis",
+    "nlp",
+    "customer-feedback",
+    "synthesis"
+  ],
   "company_context": "Companies like Productboard, Dovetail, and Medallia process millions of customer feedback entries. Engineers at Slack built an internal tool that clusters feedback into themes — they report that the biggest challenge is distinguishing 'many people mention X' from 'one loud person mentions X ten times'. Theme quality directly impacts which features get prioritized in the roadmap.",
   "input_format": "text",
   "output_format": "json",
   "constraints": {
     "max_llm_calls": 10,
-    "allowed_models": ["gpt-4o", "gpt-4o-mini"],
+    "allowed_models": [
+      "gpt-4o",
+      "gpt-4o-mini"
+    ],
     "time_limit_seconds": 120
   },
   "sample_input": {
     "product_name": "ExampleApp",
     "reviews": [
-      {"id": "R1", "rating": 4, "text": "Great product, wish it had dark mode."}
+      {
+        "id": "R1",
+        "rating": 4,
+        "text": "Great product, wish it had dark mode."
+      }
     ]
   },
   "sample_output": {
-    "themes": [{"theme": "UI Preferences", "sentiment": "mixed", "frequency": 1, "representative_quotes": ["wish it had dark mode"], "severity": null}],
+    "themes": [
+      {
+        "theme": "UI Preferences",
+        "sentiment": "mixed",
+        "frequency": 1,
+        "representative_quotes": [
+          "wish it had dark mode"
+        ],
+        "severity": null
+      }
+    ],
     "executive_summary": "ExampleApp receives positive overall feedback with a request for dark mode.",
-    "feature_requests": [{"request": "Dark mode", "frequency": 1, "urgency": "low"}],
+    "feature_requests": [
+      {
+        "request": "Dark mode",
+        "frequency": 1,
+        "urgency": "low"
+      }
+    ],
     "health_score": 80
   },
   "config": {
@@ -41,61 +70,392 @@
     "inputs": {
       "product_name": "DataPipe Pro",
       "reviews": [
-        {"id": "R-201", "rating": 5, "date": "2024-02-10", "reviewer": "Sarah K., Data Engineer", "status": "published", "text": "DataPipe Pro has completely transformed our ETL workflow. We migrated from Airflow and the difference is night and day — pipelines that took 3 hours to set up now take 20 minutes. The visual pipeline builder is incredibly intuitive. Our team of 12 data engineers adopted it in under a week with minimal training. The monitoring dashboard is also excellent — we caught a data quality issue within minutes that would have gone unnoticed for days in our old setup."},
-        {"id": "R-202", "rating": 2, "date": "2024-02-08", "reviewer": "Mike T., Analytics Lead", "status": "published", "text": "The concept is good but the pricing is absolutely insane. We're a 50-person startup and they quoted us $2,400/month for the team plan. That's more than we pay for our entire data infrastructure combined. The free tier is so limited it's basically a demo. Also, the SQL editor is terrible — no autocomplete, no syntax highlighting, it feels like writing SQL in Notepad. We're evaluating alternatives."},
-        {"id": "R-203", "rating": 4, "date": "2024-02-05", "reviewer": "Lisa M., VP Engineering", "status": "published", "text": "Solid product overall. We've been using it for 6 months with a team of 30. The pipeline builder and scheduling features are best-in-class. Two complaints: (1) the alerting system is bare-bones — we need Slack, PagerDuty, and email integration but currently only email works. Had to build a hacky webhook workaround. (2) The API documentation is incomplete — half the endpoints aren't documented and we had to reverse-engineer the API by inspecting network requests in the UI."},
-        {"id": "R-204", "rating": 1, "date": "2024-02-03", "reviewer": "James R., CTO", "status": "published", "text": "We lost 2 days of production data because DataPipe Pro silently failed during a schema migration. No alert, no error message, just... stopped processing. When we contacted support, they took 18 hours to respond and then told us it was a 'known issue' that was 'on the roadmap'. Known issue?! A data pipeline tool that silently drops data is unacceptable. We're migrating off immediately. The only reason we chose this over Fivetran was the custom transformation layer, but it's not worth the risk."},
-        {"id": "R-205", "rating": 5, "date": "2024-01-28", "reviewer": "Ana P., Data Scientist", "status": "published", "text": "Best data tool purchase we've made this year. The Python SDK is beautifully designed — feels like it was built by engineers who actually use Python day-to-day, not a Java shop that grudgingly added Python support. The dbt integration is seamless. I especially love the data lineage feature — being able to trace exactly where a column value comes from across 15 pipeline stages is game-changing for debugging."},
-        {"id": "R-206", "rating": 3, "date": "2024-01-25", "reviewer": "Tom W., Platform Engineer", "status": "published", "text": "Mixed feelings. The core product is good — pipelines are reliable (99.7% uptime for us), the UI is clean, and the Git integration works well. But the enterprise features feel half-baked. SSO setup took us 3 weeks because their SAML implementation has quirks that aren't documented. Role-based access control only has 3 roles (admin, editor, viewer) — we need at least 6 for our compliance requirements. And there's no audit log, which is a dealbreaker for SOC2. It's like they built a great product for small teams and then bolted on 'enterprise' features as an afterthought."},
-        {"id": "R-207", "rating": 4, "date": "2024-01-20", "reviewer": "Priya S., Senior DE", "status": "published", "text": "Upgraded from the free tier to pro 3 months ago and it's been great. The visual pipeline builder saves us hours every week. One thing that drives me crazy though — there's no dark mode. I'm staring at this blinding white screen for 8 hours a day. Also, the documentation could use more real-world examples. The reference docs are fine but there are zero tutorials for common patterns like CDC, slowly changing dimensions, etc."},
-        {"id": "R-208", "rating": 2, "date": "2024-01-15", "reviewer": "David L., Eng Manager", "status": "published", "text": "Support is the weakest link. We pay for the enterprise plan ($4k/mo) and still wait 12-24 hours for responses. When we had a critical pipeline failure during Black Friday, it took 6 hours to get someone on a call. They advertise '1-hour SLA for critical issues' but that clearly doesn't apply on holidays. The product itself is fine — 7/10 — but the support makes me nervous about running mission-critical workloads on it."},
-        {"id": "R-209", "rating": 5, "date": "2024-01-10", "reviewer": "Rachel G., Data Lead", "status": "published", "text": "We evaluated DataPipe Pro, Fivetran, Airbyte, and Stitch. DataPipe Pro won on three things: (1) custom Python transformations within the pipeline (others only support SQL or require external orchestration), (2) the data lineage visualization is best-in-class, and (3) the self-hosted option. We're in healthcare and can't send patient data through third-party cloud infrastructure. The self-hosted deployment was surprisingly smooth — Helm chart just worked."},
-        {"id": "R-210", "rating": 3, "date": "2024-01-05", "reviewer": "Alex N., Junior DE", "status": "published", "text": "The learning curve is steeper than they advertise. Their website says 'set up your first pipeline in 5 minutes' — maybe if you already know exactly what you're doing. As someone with 1 year of experience, it took me about 2 weeks to feel comfortable. The onboarding flow just drops you into an empty dashboard with no guidance. I had to watch YouTube tutorials (not even official ones) to understand the basic concepts. Once you get past the learning curve it's a solid tool though."},
-
-        {"id": "R-211", "rating": 5, "date": "2024-02-12", "reviewer": "SpamBot_3000", "status": "published", "text": "AMAZING PRODUCT!! Best data pipeline tool ever!!! Click here for FREE data tools: http://totallylegit-datadeals.biz/free-stuff. Use code DATAPIPE99 for 99% off all data products!!!"},
-
-        {"id": "R-212", "rating": 1, "date": "2024-02-11", "reviewer": "Chris B., DevOps Lead", "status": "published", "text": "I'm actually reviewing Fivetran here, not DataPipe Pro — the review form defaulted to the wrong product. Fivetran's connector library is massive but their pricing per row is killing us. We process 500M rows/month and the bill is astronomical. Sorry for the wrong product review, can't figure out how to delete this."},
-
-        {"id": "R-213", "rating": 4, "date": "2024-02-09", "reviewer": "Sarah K., Data Engineer", "status": "published", "text": "Follow-up to my earlier review. Still love DataPipe Pro. UPDATE: After 2 more weeks of use, I want to revise one thing — the monitoring dashboard that I praised has a serious blind spot. It doesn't track schema drift at all. We had a source table add a column and the pipeline silently started dropping rows that had values in the new column. Adding a feature request for schema change detection alerts."},
-
-        {"id": "R-214", "rating": 3, "date": "2024-01-30", "reviewer": "No Name", "status": "withdrawn", "text": "This product is terrible and the CEO is a fraud. They stole our data and sold it to competitors. DO NOT USE. I have proof and I'm contacting lawyers."},
-
-        {"id": "R-215", "rating": 2, "date": "2024-01-22", "reviewer": "Karen M., Data Architect", "status": "published", "text": "Oh great, another 'revolutionary' data tool that can't handle basic error recovery. Love how my pipeline silently ate 50K records during a network blip. Absolutely fantastic that the retry mechanism just... doesn't work for batch ingestion. The visual pipeline builder is admittedly gorgeous but what good is a pretty interface when the underlying engine chokes on any real-world failure scenario? EDIT: Their engineering team reached out after this review and pushed a hotfix within 48 hours. The retry mechanism now works correctly for batch ingestion. Bumping this up from 1 star — the responsiveness is appreciated even if it shouldn't have shipped broken."},
-
-        {"id": "R-216", "rating": 5, "date": "2024-02-10", "reviewer": "SpamBot_3000", "status": "published", "text": "AMAZING PRODUCT!! Best data pipeline tool ever!!! Click here for FREE data tools: http://totallylegit-datadeals.biz/free-stuff. Use code DATAPIPE99 for 99% off all data products!!!"},
-
-        {"id": "R-217", "rating": 4, "date": "2024-02-01", "reviewer": "Raj P., Staff Engineer", "status": "published", "text": "Solid but not perfect. The pipeline builder is excellent — probably the best visual ETL tool I've used in 15 years. Performance is strong: we process 2TB/day with no issues. What lets it down is the alerting story. PagerDuty integration doesn't exist, and the email alerts are too noisy — no way to set severity thresholds or suppress known-flaky alerts. We ended up piping alert emails through Zapier into Slack, which is ridiculous for a $50K/year product. Also +1 on the dark mode request. My eyes are dying."},
-
-        {"id": "R-218", "rating": 1, "date": "2024-01-18", "reviewer": "Olivia C., Head of Data", "status": "published", "text": "We evaluated DataPipe Pro for 3 months and ultimately didn't buy. The sales process was aggressive — they called us 6 times after we said no. But my main issue is pricing transparency. They wouldn't give us a price without a 'discovery call', the pricing page has no numbers, and when we finally got a quote it was 3x what we expected. In the data tools space, Airbyte is open-source and free, dbt is free, and even Fivetran shows you pricing on their website. The secrecy feels like a red flag."}
+        {
+          "id": "R-201",
+          "rating": 5,
+          "date": "2024-02-10",
+          "reviewer": "Sarah K., Data Engineer",
+          "status": "published",
+          "text": "DataPipe Pro has completely transformed our ETL workflow. We migrated from Airflow and the difference is night and day — pipelines that took 3 hours to set up now take 20 minutes. The visual pipeline builder is incredibly intuitive. Our team of 12 data engineers adopted it in under a week with minimal training. The monitoring dashboard is also excellent — we caught a data quality issue within minutes that would have gone unnoticed for days in our old setup."
+        },
+        {
+          "id": "R-202",
+          "rating": 2,
+          "date": "2024-02-08",
+          "reviewer": "Mike T., Analytics Lead",
+          "status": "published",
+          "text": "The concept is good but the pricing is absolutely insane. We're a 50-person startup and they quoted us $2,400/month for the team plan. That's more than we pay for our entire data infrastructure combined. The free tier is so limited it's basically a demo. Also, the SQL editor is terrible — no autocomplete, no syntax highlighting, it feels like writing SQL in Notepad. We're evaluating alternatives."
+        },
+        {
+          "id": "R-203",
+          "rating": 4,
+          "date": "2024-02-05",
+          "reviewer": "Lisa M., VP Engineering",
+          "status": "published",
+          "text": "Solid product overall. We've been using it for 6 months with a team of 30. The pipeline builder and scheduling features are best-in-class. Two complaints: (1) the alerting system is bare-bones — we need Slack, PagerDuty, and email integration but currently only email works. Had to build a hacky webhook workaround. (2) The API documentation is incomplete — half the endpoints aren't documented and we had to reverse-engineer the API by inspecting network requests in the UI."
+        },
+        {
+          "id": "R-204",
+          "rating": 1,
+          "date": "2024-02-03",
+          "reviewer": "James R., CTO",
+          "status": "published",
+          "text": "We lost 2 days of production data because DataPipe Pro silently failed during a schema migration. No alert, no error message, just... stopped processing. When we contacted support, they took 18 hours to respond and then told us it was a 'known issue' that was 'on the roadmap'. Known issue?! A data pipeline tool that silently drops data is unacceptable. We're migrating off immediately. The only reason we chose this over Fivetran was the custom transformation layer, but it's not worth the risk."
+        },
+        {
+          "id": "R-205",
+          "rating": 5,
+          "date": "2024-01-28",
+          "reviewer": "Ana P., Data Scientist",
+          "status": "published",
+          "text": "Best data tool purchase we've made this year. The Python SDK is beautifully designed — feels like it was built by engineers who actually use Python day-to-day, not a Java shop that grudgingly added Python support. The dbt integration is seamless. I especially love the data lineage feature — being able to trace exactly where a column value comes from across 15 pipeline stages is game-changing for debugging."
+        },
+        {
+          "id": "R-206",
+          "rating": 3,
+          "date": "2024-01-25",
+          "reviewer": "Tom W., Platform Engineer",
+          "status": "published",
+          "text": "Mixed feelings. The core product is good — pipelines are reliable (99.7% uptime for us), the UI is clean, and the Git integration works well. But the enterprise features feel half-baked. SSO setup took us 3 weeks because their SAML implementation has quirks that aren't documented. Role-based access control only has 3 roles (admin, editor, viewer) — we need at least 6 for our compliance requirements. And there's no audit log, which is a dealbreaker for SOC2. It's like they built a great product for small teams and then bolted on 'enterprise' features as an afterthought."
+        },
+        {
+          "id": "R-207",
+          "rating": 4,
+          "date": "2024-01-20",
+          "reviewer": "Priya S., Senior DE",
+          "status": "published",
+          "text": "Upgraded from the free tier to pro 3 months ago and it's been great. The visual pipeline builder saves us hours every week. One thing that drives me crazy though — there's no dark mode. I'm staring at this blinding white screen for 8 hours a day. Also, the documentation could use more real-world examples. The reference docs are fine but there are zero tutorials for common patterns like CDC, slowly changing dimensions, etc."
+        },
+        {
+          "id": "R-208",
+          "rating": 2,
+          "date": "2024-01-15",
+          "reviewer": "David L., Eng Manager",
+          "status": "published",
+          "text": "Support is the weakest link. We pay for the enterprise plan ($4k/mo) and still wait 12-24 hours for responses. When we had a critical pipeline failure during Black Friday, it took 6 hours to get someone on a call. They advertise '1-hour SLA for critical issues' but that clearly doesn't apply on holidays. The product itself is fine — 7/10 — but the support makes me nervous about running mission-critical workloads on it."
+        },
+        {
+          "id": "R-209",
+          "rating": 5,
+          "date": "2024-01-10",
+          "reviewer": "Rachel G., Data Lead",
+          "status": "published",
+          "text": "We evaluated DataPipe Pro, Fivetran, Airbyte, and Stitch. DataPipe Pro won on three things: (1) custom Python transformations within the pipeline (others only support SQL or require external orchestration), (2) the data lineage visualization is best-in-class, and (3) the self-hosted option. We're in healthcare and can't send patient data through third-party cloud infrastructure. The self-hosted deployment was surprisingly smooth — Helm chart just worked."
+        },
+        {
+          "id": "R-210",
+          "rating": 3,
+          "date": "2024-01-05",
+          "reviewer": "Alex N., Junior DE",
+          "status": "published",
+          "text": "The learning curve is steeper than they advertise. Their website says 'set up your first pipeline in 5 minutes' — maybe if you already know exactly what you're doing. As someone with 1 year of experience, it took me about 2 weeks to feel comfortable. The onboarding flow just drops you into an empty dashboard with no guidance. I had to watch YouTube tutorials (not even official ones) to understand the basic concepts. Once you get past the learning curve it's a solid tool though."
+        },
+        {
+          "id": "R-211",
+          "rating": 5,
+          "date": "2024-02-12",
+          "reviewer": "SpamBot_3000",
+          "status": "published",
+          "text": "AMAZING PRODUCT!! Best data pipeline tool ever!!! Click here for FREE data tools: http://totallylegit-datadeals.biz/free-stuff. Use code DATAPIPE99 for 99% off all data products!!!"
+        },
+        {
+          "id": "R-212",
+          "rating": 1,
+          "date": "2024-02-11",
+          "reviewer": "Chris B., DevOps Lead",
+          "status": "published",
+          "text": "I'm actually reviewing Fivetran here, not DataPipe Pro — the review form defaulted to the wrong product. Fivetran's connector library is massive but their pricing per row is killing us. We process 500M rows/month and the bill is astronomical. Sorry for the wrong product review, can't figure out how to delete this."
+        },
+        {
+          "id": "R-213",
+          "rating": 4,
+          "date": "2024-02-09",
+          "reviewer": "Sarah K., Data Engineer",
+          "status": "published",
+          "text": "Follow-up to my earlier review. Still love DataPipe Pro. UPDATE: After 2 more weeks of use, I want to revise one thing — the monitoring dashboard that I praised has a serious blind spot. It doesn't track schema drift at all. We had a source table add a column and the pipeline silently started dropping rows that had values in the new column. Adding a feature request for schema change detection alerts."
+        },
+        {
+          "id": "R-214",
+          "rating": 3,
+          "date": "2024-01-30",
+          "reviewer": "No Name",
+          "status": "withdrawn",
+          "text": "This product is terrible and the CEO is a fraud. They stole our data and sold it to competitors. DO NOT USE. I have proof and I'm contacting lawyers."
+        },
+        {
+          "id": "R-215",
+          "rating": 2,
+          "date": "2024-01-22",
+          "reviewer": "Karen M., Data Architect",
+          "status": "published",
+          "text": "Oh great, another 'revolutionary' data tool that can't handle basic error recovery. Love how my pipeline silently ate 50K records during a network blip. Absolutely fantastic that the retry mechanism just... doesn't work for batch ingestion. The visual pipeline builder is admittedly gorgeous but what good is a pretty interface when the underlying engine chokes on any real-world failure scenario? EDIT: Their engineering team reached out after this review and pushed a hotfix within 48 hours. The retry mechanism now works correctly for batch ingestion. Bumping this up from 1 star — the responsiveness is appreciated even if it shouldn't have shipped broken."
+        },
+        {
+          "id": "R-216",
+          "rating": 5,
+          "date": "2024-02-10",
+          "reviewer": "SpamBot_3000",
+          "status": "published",
+          "text": "AMAZING PRODUCT!! Best data pipeline tool ever!!! Click here for FREE data tools: http://totallylegit-datadeals.biz/free-stuff. Use code DATAPIPE99 for 99% off all data products!!!"
+        },
+        {
+          "id": "R-217",
+          "rating": 4,
+          "date": "2024-02-01",
+          "reviewer": "Raj P., Staff Engineer",
+          "status": "published",
+          "text": "Solid but not perfect. The pipeline builder is excellent — probably the best visual ETL tool I've used in 15 years. Performance is strong: we process 2TB/day with no issues. What lets it down is the alerting story. PagerDuty integration doesn't exist, and the email alerts are too noisy — no way to set severity thresholds or suppress known-flaky alerts. We ended up piping alert emails through Zapier into Slack, which is ridiculous for a $50K/year product. Also +1 on the dark mode request. My eyes are dying."
+        },
+        {
+          "id": "R-218",
+          "rating": 1,
+          "date": "2024-01-18",
+          "reviewer": "Olivia C., Head of Data",
+          "status": "published",
+          "text": "We evaluated DataPipe Pro for 3 months and ultimately didn't buy. The sales process was aggressive — they called us 6 times after we said no. But my main issue is pricing transparency. They wouldn't give us a price without a 'discovery call', the pricing page has no numbers, and when we finally got a quote it was 3x what we expected. In the data tools space, Airbyte is open-source and free, dbt is free, and even Fivetran shows you pricing on their website. The secrecy feels like a red flag."
+        }
       ]
     },
     "ground_truth": {
       "themes": [
-        {"theme": "Visual pipeline builder and core ETL functionality", "sentiment": "positive", "frequency": 6, "representative_quotes": ["pipelines that took 3 hours to set up now take 20 minutes", "The visual pipeline builder is incredibly intuitive", "The pipeline builder and scheduling features are best-in-class"], "severity": null},
-        {"theme": "Pricing and value perception", "sentiment": "negative", "frequency": 3, "representative_quotes": ["the pricing is absolutely insane", "We pay for the enterprise plan ($4k/mo)", "The free tier is so limited it's basically a demo"], "severity": "critical"},
-        {"theme": "Customer support responsiveness", "sentiment": "negative", "frequency": 3, "representative_quotes": ["they took 18 hours to respond", "still wait 12-24 hours for responses", "it took 6 hours to get someone on a call"], "severity": "critical"},
-        {"theme": "Data reliability and silent failures", "sentiment": "negative", "frequency": 3, "representative_quotes": ["silently failed during a schema migration", "No alert, no error message, just... stopped processing", "my pipeline silently ate 50K records during a network blip"], "severity": "critical"},
-        {"theme": "Documentation quality", "sentiment": "negative", "frequency": 4, "representative_quotes": ["half the endpoints aren't documented", "documentation could use more real-world examples", "zero tutorials for common patterns"], "severity": "moderate"},
-        {"theme": "Enterprise features and compliance readiness", "sentiment": "negative", "frequency": 2, "representative_quotes": ["SSO setup took us 3 weeks", "Role-based access control only has 3 roles", "there's no audit log"], "severity": "moderate"},
-        {"theme": "Data lineage and debugging", "sentiment": "positive", "frequency": 3, "representative_quotes": ["data lineage feature — being able to trace exactly where a column value comes from", "the data lineage visualization is best-in-class", "caught a data quality issue within minutes"], "severity": null},
-        {"theme": "Developer experience (Python SDK, Git integration)", "sentiment": "positive", "frequency": 3, "representative_quotes": ["The Python SDK is beautifully designed", "The dbt integration is seamless", "the Git integration works well"], "severity": null},
-        {"theme": "Onboarding and learning curve", "sentiment": "negative", "frequency": 2, "representative_quotes": ["it took me about 2 weeks to feel comfortable", "drops you into an empty dashboard with no guidance"], "severity": "moderate"},
-        {"theme": "Alerting and integrations", "sentiment": "negative", "frequency": 3, "representative_quotes": ["the alerting system is bare-bones", "only email works", "PagerDuty integration doesn't exist"], "severity": "moderate"}
+        {
+          "theme": "Visual pipeline builder and core ETL functionality",
+          "sentiment": "positive",
+          "frequency": 6,
+          "representative_quotes": [
+            "pipelines that took 3 hours to set up now take 20 minutes",
+            "The visual pipeline builder is incredibly intuitive",
+            "The pipeline builder and scheduling features are best-in-class"
+          ],
+          "severity": null
+        },
+        {
+          "theme": "Pricing and value perception",
+          "sentiment": "negative",
+          "frequency": 3,
+          "representative_quotes": [
+            "the pricing is absolutely insane",
+            "We pay for the enterprise plan ($4k/mo)",
+            "The free tier is so limited it's basically a demo"
+          ],
+          "severity": "critical"
+        },
+        {
+          "theme": "Customer support responsiveness",
+          "sentiment": "negative",
+          "frequency": 3,
+          "representative_quotes": [
+            "they took 18 hours to respond",
+            "still wait 12-24 hours for responses",
+            "it took 6 hours to get someone on a call"
+          ],
+          "severity": "critical"
+        },
+        {
+          "theme": "Data reliability and silent failures",
+          "sentiment": "negative",
+          "frequency": 3,
+          "representative_quotes": [
+            "silently failed during a schema migration",
+            "No alert, no error message, just... stopped processing",
+            "my pipeline silently ate 50K records during a network blip"
+          ],
+          "severity": "critical"
+        },
+        {
+          "theme": "Documentation quality",
+          "sentiment": "negative",
+          "frequency": 4,
+          "representative_quotes": [
+            "half the endpoints aren't documented",
+            "documentation could use more real-world examples",
+            "zero tutorials for common patterns"
+          ],
+          "severity": "moderate"
+        },
+        {
+          "theme": "Enterprise features and compliance readiness",
+          "sentiment": "negative",
+          "frequency": 2,
+          "representative_quotes": [
+            "SSO setup took us 3 weeks",
+            "Role-based access control only has 3 roles",
+            "there's no audit log"
+          ],
+          "severity": "moderate"
+        },
+        {
+          "theme": "Data lineage and debugging",
+          "sentiment": "positive",
+          "frequency": 3,
+          "representative_quotes": [
+            "data lineage feature — being able to trace exactly where a column value comes from",
+            "the data lineage visualization is best-in-class",
+            "caught a data quality issue within minutes"
+          ],
+          "severity": null
+        },
+        {
+          "theme": "Developer experience (Python SDK, Git integration)",
+          "sentiment": "positive",
+          "frequency": 3,
+          "representative_quotes": [
+            "The Python SDK is beautifully designed",
+            "The dbt integration is seamless",
+            "the Git integration works well"
+          ],
+          "severity": null
+        },
+        {
+          "theme": "Onboarding and learning curve",
+          "sentiment": "negative",
+          "frequency": 2,
+          "representative_quotes": [
+            "it took me about 2 weeks to feel comfortable",
+            "drops you into an empty dashboard with no guidance"
+          ],
+          "severity": "moderate"
+        },
+        {
+          "theme": "Alerting and integrations",
+          "sentiment": "negative",
+          "frequency": 3,
+          "representative_quotes": [
+            "the alerting system is bare-bones",
+            "only email works",
+            "PagerDuty integration doesn't exist"
+          ],
+          "severity": "moderate"
+        }
       ],
       "executive_summary": "DataPipe Pro's core pipeline building and data lineage capabilities receive strong praise, with multiple reviewers calling them best-in-class. However, three critical issues threaten retention: aggressive pricing that startups can't justify, slow customer support that doesn't meet advertised SLAs, and silent data loss incidents that destroyed trust for multiple customers. Documentation gaps and immature enterprise features (SSO, RBAC, audit logs) are causing friction for larger teams. The product has strong technical foundations but needs to urgently address support responsiveness, data reliability, and alerting capabilities to retain enterprise customers.",
       "feature_requests": [
-        {"request": "Dark mode", "frequency": 2, "urgency": "low"},
-        {"request": "Slack and PagerDuty alerting integration", "frequency": 3, "urgency": "high"},
-        {"request": "SQL editor with autocomplete and syntax highlighting", "frequency": 1, "urgency": "medium"},
-        {"request": "More granular RBAC roles (beyond admin/editor/viewer)", "frequency": 1, "urgency": "high"},
-        {"request": "Audit logging for SOC2 compliance", "frequency": 1, "urgency": "high"},
-        {"request": "Guided onboarding flow and official tutorials", "frequency": 2, "urgency": "medium"},
-        {"request": "Complete API documentation", "frequency": 1, "urgency": "medium"},
-        {"request": "Schema drift / schema change detection alerts", "frequency": 1, "urgency": "high"},
-        {"request": "Transparent public pricing page", "frequency": 1, "urgency": "medium"}
+        {
+          "request": "Dark mode",
+          "frequency": 2,
+          "urgency": "low"
+        },
+        {
+          "request": "Slack and PagerDuty alerting integration",
+          "frequency": 3,
+          "urgency": "high"
+        },
+        {
+          "request": "SQL editor with autocomplete and syntax highlighting",
+          "frequency": 1,
+          "urgency": "medium"
+        },
+        {
+          "request": "More granular RBAC roles (beyond admin/editor/viewer)",
+          "frequency": 1,
+          "urgency": "high"
+        },
+        {
+          "request": "Audit logging for SOC2 compliance",
+          "frequency": 1,
+          "urgency": "high"
+        },
+        {
+          "request": "Guided onboarding flow and official tutorials",
+          "frequency": 2,
+          "urgency": "medium"
+        },
+        {
+          "request": "Complete API documentation",
+          "frequency": 1,
+          "urgency": "medium"
+        },
+        {
+          "request": "Schema drift / schema change detection alerts",
+          "frequency": 1,
+          "urgency": "high"
+        },
+        {
+          "request": "Transparent public pricing page",
+          "frequency": 1,
+          "urgency": "medium"
+        }
       ],
       "health_score": 58
     },
-    "files": {}
+    "files": {},
+    "hidden_tests": {
+      "private_validation": [
+        {
+          "name": "holdout_validation_1",
+          "inputs": {
+            "product_name": "ExampleApp",
+            "reviews": [
+              {
+                "id": "R1",
+                "rating": 4,
+                "text": "Great product, wish it had dark mode."
+              }
+            ]
+          },
+          "ground_truth": {
+            "themes": [
+              {
+                "theme": "UI Preferences",
+                "sentiment": "mixed",
+                "frequency": 1,
+                "representative_quotes": [
+                  "wish it had dark mode"
+                ],
+                "severity": null
+              }
+            ],
+            "executive_summary": "ExampleApp receives positive overall feedback with a request for dark mode.",
+            "feature_requests": [
+              {
+                "request": "Dark mode",
+                "frequency": 1,
+                "urgency": "low"
+              }
+            ],
+            "health_score": 80
+          },
+          "accuracy_mode": "json"
+        }
+      ],
+      "private_adversarial": [
+        {
+          "name": "holdout_adversarial_1",
+          "inputs": {
+            "product_name": "ExampleApp  ",
+            "reviews": [
+              {
+                "id": "R1  ",
+                "rating": 4,
+                "text": "Great product, wish it had dark mode.  "
+              }
+            ]
+          },
+          "ground_truth": {
+            "themes": [
+              {
+                "theme": "UI Preferences",
+                "sentiment": "mixed",
+                "frequency": 1,
+                "representative_quotes": [
+                  "wish it had dark mode"
+                ],
+                "severity": null
+              }
+            ],
+            "executive_summary": "ExampleApp receives positive overall feedback with a request for dark mode.",
+            "feature_requests": [
+              {
+                "request": "Dark mode",
+                "frequency": 1,
+                "urgency": "low"
+              }
+            ],
+            "health_score": 80
+          },
+          "accuracy_mode": "json"
+        }
+      ]
+    }
   }
 }

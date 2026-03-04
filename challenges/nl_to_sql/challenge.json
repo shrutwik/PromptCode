@@ -4,21 +4,40 @@
   "description": "At a data analytics company, business analysts ask questions in plain English and engineers write SQL for them. Your pipeline automates this.\n\nYou receive:\n1. A database schema (DDL)\n2. A set of natural language questions\n\nFor each question, generate:\n- The SQL query that answers it (PostgreSQL dialect)\n- A brief explanation of your approach\n- Confidence level (high/medium/low)\n\nOutput a JSON array to stdout. Each object: question_id, sql, explanation, confidence.\n\nThe questions range from simple lookups to complex multi-join aggregations with window functions. The schema has deliberate complexity: nullable columns, denormalized tables, ambiguous column names across tables, and join keys that aren't obvious. Some questions are intentionally ambiguous — your prompt engineering must handle this gracefully.\n\nThe SQL must be executable — no pseudocode, no placeholders. Use PostgreSQL syntax.",
   "difficulty": "hard",
   "category": "code_generation",
-  "tags": ["sql", "text-to-sql", "analytics", "databases", "code-generation"],
+  "tags": [
+    "sql",
+    "text-to-sql",
+    "analytics",
+    "databases",
+    "code-generation"
+  ],
   "company_context": "Companies like Mode Analytics, Metabase, and Looker are all building natural language to SQL features. Snowflake's Cortex and Databricks' AI assistant both tackle this. Engineers report that the hard cases aren't the simple queries — they're the questions that require understanding business logic, handling ambiguous column names, and knowing when NOT to generate SQL because the question can't be answered from the available data.",
   "input_format": "text",
   "output_format": "json",
   "constraints": {
     "max_llm_calls": 15,
-    "allowed_models": ["gpt-4o", "gpt-4o-mini"],
+    "allowed_models": [
+      "gpt-4o",
+      "gpt-4o-mini"
+    ],
     "time_limit_seconds": 120
   },
   "sample_input": {
     "schema": "CREATE TABLE users (id INT PRIMARY KEY, name TEXT);",
-    "questions": [{"id": "Q0", "text": "How many users are there?"}]
+    "questions": [
+      {
+        "id": "Q0",
+        "text": "How many users are there?"
+      }
+    ]
   },
   "sample_output": [
-    {"question_id": "Q0", "sql": "SELECT COUNT(*) AS user_count FROM users;", "explanation": "Simple count of all rows in users table.", "confidence": "high"}
+    {
+      "question_id": "Q0",
+      "sql": "SELECT COUNT(*) AS user_count FROM users;",
+      "explanation": "Simple count of all rows in users table.",
+      "confidence": "high"
+    }
   ],
   "config": {
     "accuracy_mode": "json",
@@ -36,27 +55,66 @@
     "inputs": {
       "schema": "-- E-commerce database schema (PostgreSQL)\n\nCREATE TABLE customers (\n    customer_id SERIAL PRIMARY KEY,\n    email VARCHAR(255) UNIQUE NOT NULL,\n    full_name VARCHAR(255),\n    signup_date DATE NOT NULL,\n    plan_type VARCHAR(50) DEFAULT 'free', -- free, starter, pro, enterprise\n    company_name VARCHAR(255),\n    mrr DECIMAL(10,2) DEFAULT 0.00, -- monthly recurring revenue (current snapshot only)\n    churn_date DATE, -- NULL if still active\n    referral_source VARCHAR(100),\n    country VARCHAR(2) -- billing/home country ISO code\n);\n\nCREATE TABLE orders (\n    order_id SERIAL PRIMARY KEY,\n    customer_id INT REFERENCES customers(customer_id),\n    order_date TIMESTAMP NOT NULL,\n    total_amount DECIMAL(10,2) NOT NULL,\n    discount_amount DECIMAL(10,2) DEFAULT 0.00,\n    status VARCHAR(50) NOT NULL, -- pending, completed, refunded, cancelled\n    payment_method VARCHAR(50),\n    shipping_country VARCHAR(2), -- delivery destination ISO code\n    coupon_code VARCHAR(50)\n);\n\nCREATE TABLE order_items (\n    item_id SERIAL PRIMARY KEY,\n    order_id INT REFERENCES orders(order_id),\n    product_id INT REFERENCES products(product_id),\n    quantity INT NOT NULL,\n    unit_price DECIMAL(10,2) NOT NULL,\n    line_total DECIMAL(10,2) NOT NULL\n);\n\nCREATE TABLE products (\n    product_id SERIAL PRIMARY KEY,\n    name VARCHAR(255) NOT NULL,\n    category VARCHAR(100),\n    subcategory VARCHAR(100),\n    base_price DECIMAL(10,2) NOT NULL,\n    cost_price DECIMAL(10,2),\n    is_active BOOLEAN DEFAULT true,\n    created_at TIMESTAMP DEFAULT NOW()\n);\n\nCREATE TABLE support_tickets (\n    ticket_id SERIAL PRIMARY KEY,\n    customer_id INT REFERENCES customers(customer_id),\n    created_at TIMESTAMP NOT NULL,\n    resolved_at TIMESTAMP,\n    category VARCHAR(100), -- billing, technical, account, feature_request\n    priority VARCHAR(20), -- low, medium, high, critical\n    satisfaction_score INT -- 1-5, NULL if not rated\n);\n\nCREATE TABLE events (\n    event_id BIGSERIAL PRIMARY KEY,\n    customer_id INT REFERENCES customers(customer_id),\n    event_type VARCHAR(100) NOT NULL, -- page_view, feature_used, login, api_call\n    event_timestamp TIMESTAMP NOT NULL,\n    metadata JSONB\n);\n\n-- DEPRECATED: Do not use. Retained for audit trail only.\nCREATE TABLE legacy_orders (\n    id SERIAL PRIMARY KEY,\n    cust_id INT,\n    order_dt DATE,\n    amt DECIMAL(10,2),\n    stat VARCHAR(20)\n);",
       "questions": [
-        {"id": "Q1", "text": "What's our monthly revenue for the last 6 months, broken down by customer plan type? Only count completed orders."},
-        {"id": "Q2", "text": "Which customers have the highest support ticket volume relative to their MRR? I want to find the 'squeaky wheels' — customers who cost us the most in support relative to what they pay."},
-        {"id": "Q3", "text": "Show me the month-over-month retention rate. A customer is 'retained' if they placed at least one order in both the current month and the previous month."},
-        {"id": "Q4", "text": "What are our top 10 products by profit margin, but only include products that have sold more than 100 units? Profit margin = (unit_price - cost_price) / unit_price."},
-        {"id": "Q5", "text": "Find customers who are likely to churn — they were active (placed orders) in the 3 months before last month but had zero orders last month. Exclude already-churned customers."},
-        {"id": "Q6", "text": "What's the average time between a customer's first order and their first support ticket? Break it down by plan type."},
-        {"id": "Q7", "text": "Which coupon codes have the best ROI? I want to see each coupon's total discount given vs the total revenue from orders that used it, and the number of unique customers."},
-
-        {"id": "Q8", "text": "[INTERNAL] What's the average NPS score by account manager? We need this for the quarterly review with the sales team."},
-        {"id": "Q9", "text": "[INTERNAL] Show me the pipeline conversion rates from our Salesforce CRM data — how many leads became paying customers last quarter?"},
-
-        {"id": "Q10", "text": "[DRAFT] revenue by"},
-        {"id": "Q11", "text": "[DRAFT] top customers who"},
-
-        {"id": "Q12", "text": "Show me total revenue from our old orders system for 2022. I think the historical data might be in a different table."},
-
-        {"id": "Q13", "text": "What's the breakdown of orders by shipping destination country vs customer home country? I want to see how often people ship to a different country than where they're based."},
-
-        {"id": "Q14", "text": "List all products including discontinued ones, with their total lifetime sales. I want to see everything, even products we no longer sell."},
-
-        {"id": "Q15", "text": "What's our average ticket resolution time by priority level? Only include tickets that have actually been resolved."}
+        {
+          "id": "Q1",
+          "text": "What's our monthly revenue for the last 6 months, broken down by customer plan type? Only count completed orders."
+        },
+        {
+          "id": "Q2",
+          "text": "Which customers have the highest support ticket volume relative to their MRR? I want to find the 'squeaky wheels' — customers who cost us the most in support relative to what they pay."
+        },
+        {
+          "id": "Q3",
+          "text": "Show me the month-over-month retention rate. A customer is 'retained' if they placed at least one order in both the current month and the previous month."
+        },
+        {
+          "id": "Q4",
+          "text": "What are our top 10 products by profit margin, but only include products that have sold more than 100 units? Profit margin = (unit_price - cost_price) / unit_price."
+        },
+        {
+          "id": "Q5",
+          "text": "Find customers who are likely to churn — they were active (placed orders) in the 3 months before last month but had zero orders last month. Exclude already-churned customers."
+        },
+        {
+          "id": "Q6",
+          "text": "What's the average time between a customer's first order and their first support ticket? Break it down by plan type."
+        },
+        {
+          "id": "Q7",
+          "text": "Which coupon codes have the best ROI? I want to see each coupon's total discount given vs the total revenue from orders that used it, and the number of unique customers."
+        },
+        {
+          "id": "Q8",
+          "text": "[INTERNAL] What's the average NPS score by account manager? We need this for the quarterly review with the sales team."
+        },
+        {
+          "id": "Q9",
+          "text": "[INTERNAL] Show me the pipeline conversion rates from our Salesforce CRM data — how many leads became paying customers last quarter?"
+        },
+        {
+          "id": "Q10",
+          "text": "[DRAFT] revenue by"
+        },
+        {
+          "id": "Q11",
+          "text": "[DRAFT] top customers who"
+        },
+        {
+          "id": "Q12",
+          "text": "Show me total revenue from our old orders system for 2022. I think the historical data might be in a different table."
+        },
+        {
+          "id": "Q13",
+          "text": "What's the breakdown of orders by shipping destination country vs customer home country? I want to see how often people ship to a different country than where they're based."
+        },
+        {
+          "id": "Q14",
+          "text": "List all products including discontinued ones, with their total lifetime sales. I want to see everything, even products we no longer sell."
+        },
+        {
+          "id": "Q15",
+          "text": "What's our average ticket resolution time by priority level? Only include tickets that have actually been resolved."
+        }
       ]
     },
     "ground_truth": [
@@ -139,6 +197,54 @@
         "confidence": "high"
       }
     ],
-    "files": {}
+    "files": {},
+    "hidden_tests": {
+      "private_validation": [
+        {
+          "name": "holdout_validation_1",
+          "inputs": {
+            "schema": "CREATE TABLE users (id INT PRIMARY KEY, name TEXT);",
+            "questions": [
+              {
+                "id": "Q0",
+                "text": "How many users are there?"
+              }
+            ]
+          },
+          "ground_truth": [
+            {
+              "question_id": "Q0",
+              "sql": "SELECT COUNT(*) AS user_count FROM users;",
+              "explanation": "Simple count of all rows in users table.",
+              "confidence": "high"
+            }
+          ],
+          "accuracy_mode": "json"
+        }
+      ],
+      "private_adversarial": [
+        {
+          "name": "holdout_adversarial_1",
+          "inputs": {
+            "schema": "CREATE TABLE users (id INT PRIMARY KEY, name TEXT);\n\n[OCR:NOISE::#]",
+            "questions": [
+              {
+                "id": "Q0  ",
+                "text": "How many users are there?  "
+              }
+            ]
+          },
+          "ground_truth": [
+            {
+              "question_id": "Q0",
+              "sql": "SELECT COUNT(*) AS user_count FROM users;",
+              "explanation": "Simple count of all rows in users table.",
+              "confidence": "high"
+            }
+          ],
+          "accuracy_mode": "json"
+        }
+      ]
+    }
   }
 }

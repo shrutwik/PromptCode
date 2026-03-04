@@ -85,4 +85,6 @@ class SubmissionReport(BaseModel):
     feedback: str = ""
     scorecard: dict[str, float] = {}
     evaluation_config: dict[str, Any] = {}
+    confidence_intervals: dict[str, Any] = {}
+    audit_trail: list[dict[str, Any]] = []
     runs: list[dict[str, Any]] = []

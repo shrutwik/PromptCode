@@ -4,13 +4,22 @@
   "description": "At a recruiting platform, resumes arrive in wildly inconsistent formats — copy-pasted from PDFs, exported from LinkedIn, hand-typed in emails. Your pipeline must extract structured candidate profiles from raw resume text.\n\nFor each resume, extract:\n- **name**: full name\n- **email**: email address\n- **years_of_experience**: integer, calculated from work history\n- **skills**: array of technical skills (normalized — e.g., 'JS' and 'JavaScript' should both become 'JavaScript')\n- **education**: array of objects with {degree, institution, year}\n- **current_role**: object with {title, company}\n- **languages**: array of programming/human languages mentioned\n\nOutput a JSON array to stdout.\n\nChallenges: inconsistent section headers, creative formatting, abbreviations, skills buried in job descriptions rather than listed explicitly, overlapping date ranges, career gaps that affect YoE calculation.",
   "difficulty": "hard",
   "category": "extraction",
-  "tags": ["recruiting", "resume", "nlp", "normalization", "structured-output"],
+  "tags": [
+    "recruiting",
+    "resume",
+    "nlp",
+    "normalization",
+    "structured-output"
+  ],
   "company_context": "Recruiting platforms like Greenhouse, Lever, and LinkedIn process millions of resumes. Manual parsing costs $3-5 per resume and takes 5-10 minutes. AI parsing at 90%+ accuracy enables instant candidate matching, but errors in skills extraction or YoE calculation cause bad matches that waste hiring managers' time.",
   "input_format": "text",
   "output_format": "json",
   "constraints": {
     "max_llm_calls": 12,
-    "allowed_models": ["gpt-4o", "gpt-4o-mini"],
+    "allowed_models": [
+      "gpt-4o",
+      "gpt-4o-mini"
+    ],
     "time_limit_seconds": 120
   },
   "sample_input": {
@@ -23,10 +32,26 @@
       "name": "John Smith",
       "email": "john@email.com",
       "years_of_experience": 3,
-      "skills": ["Python", "Java", "AWS"],
-      "education": [{"degree": "BS Computer Science", "institution": "MIT", "year": 2021}],
-      "current_role": {"title": "Software Engineer", "company": "Google"},
-      "languages": ["Python", "Java"]
+      "skills": [
+        "Python",
+        "Java",
+        "AWS"
+      ],
+      "education": [
+        {
+          "degree": "BS Computer Science",
+          "institution": "MIT",
+          "year": 2021
+        }
+      ],
+      "current_role": {
+        "title": "Software Engineer",
+        "company": "Google"
+      },
+      "languages": [
+        "Python",
+        "Java"
+      ]
     }
   ],
   "config": {
@@ -44,16 +69,53 @@
       ],
       "normalization_rules": {
         "skills": {
-          "JavaScript": ["JS", "Javascript", "javascript", "ECMAScript", "ES6", "ES2015+"],
-          "TypeScript": ["TS", "Typescript", "typescript"],
-          "React": ["React.js", "ReactJS", "react"],
-          "Node.js": ["Node", "NodeJS", "node.js"],
-          "Ruby on Rails": ["Rails", "RoR", "Ruby on Rails"],
-          "PostgreSQL": ["Postgres", "PostgreSQL", "psql"],
-          "Kubernetes": ["K8s", "k8s", "kubernetes"],
-          "Apache Spark": ["Spark"],
-          "Apache Kafka": ["Kafka"],
-          "Apache Flink": ["Flink"],
+          "JavaScript": [
+            "JS",
+            "Javascript",
+            "javascript",
+            "ECMAScript",
+            "ES6",
+            "ES2015+"
+          ],
+          "TypeScript": [
+            "TS",
+            "Typescript",
+            "typescript"
+          ],
+          "React": [
+            "React.js",
+            "ReactJS",
+            "react"
+          ],
+          "Node.js": [
+            "Node",
+            "NodeJS",
+            "node.js"
+          ],
+          "Ruby on Rails": [
+            "Rails",
+            "RoR",
+            "Ruby on Rails"
+          ],
+          "PostgreSQL": [
+            "Postgres",
+            "PostgreSQL",
+            "psql"
+          ],
+          "Kubernetes": [
+            "K8s",
+            "k8s",
+            "kubernetes"
+          ],
+          "Apache Spark": [
+            "Spark"
+          ],
+          "Apache Kafka": [
+            "Kafka"
+          ],
+          "Apache Flink": [
+            "Flink"
+          ],
           "note": "Normalize tool/framework names to their canonical forms. Short forms should expand. Do NOT list sub-services separately (e.g., 'AWS' not 'AWS EMR, AWS S3' unless both the parent cloud AND specific service are listed)."
         },
         "years_of_experience": "Calculate from EARLIEST work start date to 'present' (assume Jan 2025 as current date). Internships do NOT count. Overlapping roles count once. Round to nearest integer.",
@@ -64,25 +126,15 @@
     "inputs": {
       "resumes": [
         "PRIYA SHARMA\npriya.sharma92@gmail.com | +1 (415) 555-0183 | linkedin.com/in/priyasharma\n\nSENIOR DATA ENGINEER\n\n--- EXPERIENCE ---\n\nStripe (San Francisco, CA)\nSenior Data Engineer                                     Mar 2022 — Present\n• Architected real-time fraud detection pipeline processing 50M+ events/day using Apache Kafka, Flink, and Spark\n• Reduced pipeline latency by 73% by migrating from batch ETL to streaming architecture\n• Led team of 4 engineers to build ML feature store serving 200+ models\n• Tech: Python, Scala, Spark, Kafka, Flink, AWS (EMR, S3, Redshift), Terraform, dbt\n\nUber (San Francisco, CA)\nData Engineer II                                          Jun 2019 — Feb 2022\n• Built and maintained data pipelines for surge pricing team, processing 2TB+ daily\n• Developed internal Airflow-based orchestration framework adopted by 12 teams\n• Migrated legacy Hive pipelines to Spark, reducing compute costs by $1.2M/year\n• Tech: Python, Java, Spark, Hive, Presto, Airflow, GCP (BigQuery, Dataflow)\n\nInfosys (Bangalore, India)\nSoftware Engineer                                         Jul 2014 — May 2019\n• Full-stack development for banking clients using Java/Spring Boot\n• Built data warehouse reporting layer with Talend and Oracle DB\n• On-site client engagement at Wells Fargo (2017-2019)\n\n--- EDUCATION ---\nM.S. Computer Science — San Jose State University, 2019\nB.Tech Information Technology — VIT University, 2014\n\n--- SKILLS ---\nLanguages: Python, Scala, Java, SQL\nBig Data: Spark, Kafka, Flink, Hive, Presto, dbt, Airflow\nCloud: AWS (EMR, S3, Redshift, Lambda), GCP (BigQuery, Dataflow, GCS)\nOther: Terraform, Docker, Kubernetes, Git, CI/CD",
-
         "Marcus Johnson\nmarcus.j@outlook.com\n\nAbout Me:\nFull-stack dev with 6 years exp. Currently at a Series B startup building\nthe future of logistics. I love Rust and systems programming but pay the\nbills with TypeScript. Open source contributor (>500 stars on my CLI tools).\nBased in Austin, TX.\n\nWhere I've Worked:\n* TruckFlow (Senior Full-Stack Engineer, 2023-now)\n  - Building real-time fleet tracking dashboard\n  - React/Next.js frontend, Rust microservices, PostgreSQL\n  - Set up the entire CI/CD pipeline from scratch\n\n* Shopify (Full-Stack Developer, 2020-2023)\n  - Worked on checkout optimization team\n  - Ruby on Rails backend, React frontend\n  - Reduced cart abandonment by 12% through A/B tested UX changes\n\n* Freelance Web Dev (2018-2020)\n  - Built websites and web apps for local businesses\n  - WordPress, PHP, later moved to React\n  - ~15 clients, mostly e-commerce\n\nSchool:\n- BS in CS from UT Austin (graduated 2018)\n\nWhat I Know:\nJS/TS, React, Next.js, Node, Rust, Ruby, Rails, PostgreSQL, Redis,\nDocker, k8s, AWS, GraphQL, REST, Git, Linux, Tailwind CSS",
-
         "DR. AISHA CHEN, PhD\naisha.chen@stanford.edu\n\nSTANFORD UNIVERSITY — Research Scientist (2023-present)\nLeading NLP research group focused on LLM alignment and safety.\nPublished 12 papers in top-tier venues (NeurIPS, ICML, ACL). h-index: 24.\n\nGOOGLE DEEPMIND — Senior Research Engineer (2020-2023)\nCore contributor to Gemini pre-training infrastructure.\nDesigned RLHF pipeline used across multiple model families.\nFiled 3 patents on efficient attention mechanisms.\n\nGOOGLE BRAIN — Research Engineer (2018-2020)\nWorked on Transformer architecture improvements.\nCo-authored 2 papers on sparse attention.\n\nEDUCATION\nPhD Computer Science, Stanford University (2018)\n  Thesis: \"Efficient Attention Mechanisms for Long-Context Understanding\"\nBS Mathematics + CS (double major), Caltech (2013)\n\nSKILLS: Python, PyTorch, JAX, TensorFlow, CUDA, C++, distributed training,\n        Kubernetes, GCP, Weights & Biases, LaTeX\n\nLANGUAGES: English (native), Mandarin (fluent), French (conversational)",
-
         "RÉSUMÉ\n========\nRaj    Patel\nraj.p@yahoo.in\n\nCurrent: DevOps Lead @ Razorpay   (jan 2023 - present)\n  managing CI/CD infra for payments platform\n  team of 8 devops engineers\n  tech: kubernetes, terraform, ansible, jenkins,  argocd\n  migrated 200+ services from EC2 to EKS\n\nPrevious:\n  Flipkart - SRE  (2020 to 2022)\n    on-call for India's biggest sale events (Big Billion Days)\n    built monitoring/alerting stack: prometheus + grafana + pagerduty\n    handled 100k+ rps during peak\n\n  Wipro - Systems Admin  (2017-2020)\n    managed linux servers, vmware,  basic automation with bash/python\n    got AWS SA cert in 2019\n\nEducation\n  BCA (Bachelor of Computer Applications) -- Pune University 2017\n\nCerts: AWS Solutions Architect, CKA (Certified Kubernetes Admin),\n       HashiCorp Terraform Associate\n\nSkills: Linux, AWS, GCP, Docker, K8s, Terraform, Ansible, Jenkins,\n        ArgoCD, Prometheus, Grafana, Python, Bash, Go (learning)",
-
         "[SAMPLE RESUME — FOR TEMPLATE PURPOSES ONLY]\n==================================================\nJane Q. Candidate\njane.candidate@example.com\n\nSenior Software Engineer at ExampleCorp (2020-present)\nJunior Developer at TestCompany (2017-2020)\n\nBS Computer Science, Example University 2017\n\nSkills: Python, Java, React, AWS, Docker\n\nThis is a placeholder resume used to demonstrate the\nparser format. Do NOT include in production output.\n==================================================",
-
         "NOT SEEKING — DO NOT CONTACT\n=============================\nBrandon K. Torres\nbrandon.torres@gmail.com\n\nStatus: WITHDRAWN from candidate pool as of 2024-11-15.\nAccepted offer at another company.\n\nSenior Backend Engineer at DataDog (2021-present)\nSoftware Engineer at Twilio (2018-2021)\n\nBS CS, Georgia Tech 2018\nSkills: Go, Python, Kubernetes, AWS, Kafka\n=============================",
-
         "Marcus Johnson\nmarcus.j@outlook.com\n\n[UPDATED RESUME — Dec 2024]\n\nAbout Me:\nFull-stack & systems engineer with 7 years exp. Currently leading\nthe platform team at TruckFlow. Promoted to Staff Engineer in Oct 2024.\nBased in Austin, TX.\n\nWhere I've Worked:\n* TruckFlow (Staff Engineer — Platform, Oct 2024-now)\n  - Leading 4-person platform team building internal developer tools\n  - Architected event-driven microservice mesh (Rust, NATS, PostgreSQL)\n  - Drove adoption of OpenTelemetry across 30+ services\n\n* TruckFlow (Senior Full-Stack Engineer, 2023-Sep 2024)\n  - Built real-time fleet tracking dashboard\n  - React/Next.js frontend, Rust microservices, PostgreSQL\n  - Set up the entire CI/CD pipeline from scratch\n\n* Shopify (Full-Stack Developer, 2020-2023)\n  - Worked on checkout optimization team\n  - Ruby on Rails backend, React frontend\n  - Reduced cart abandonment by 12% through A/B tested UX changes\n\n* Freelance Web Dev (2018-2020)\n  - Built websites and web apps for local businesses\n  - WordPress, PHP, later moved to React\n  - ~15 clients, mostly e-commerce\n\nSchool:\n- BS in CS from UT Austin (graduated 2018)\n\nWhat I Know:\nJS/TS, React, Next.js, Node, Rust, Ruby, Rails, PostgreSQL, Redis,\nDocker, k8s, AWS, GraphQL, REST, Git, Linux, Tailwind CSS, NATS,\nOpenTelemetry",
-
         "[TEST CANDIDATE #001 — QA VALIDATION]\nName: Automated Test User\nEmail: qa-test@internal.system\nExperience: 100 years at FakeCompany Inc.\nSkills: Everything, AllLanguages, AllFrameworks\nEducation: PhD Everything, Fake University 2099\n\nThis record is used for automated QA testing of\nthe resume parser. Expected to be filtered out.",
-
         "CURRICULUM VITAE\n=================\nDr.  Oluwaseun   Adeyemi\nseun.adeyemi@proton.me\n\nPROFESSIONAL EXPERIENCE\n\nMicrosoft — Principal Software Engineer  (Apr 2021 – Present)\n  Azure AI Services team\n  Leading development of speech-to-text APIs supporting 40+ languages\n  Managing team of 12 engineers across Redmond and Hyderabad\n  Tech: C#, .NET, Python, Azure (Cognitive Services, AKS, CosmosDB)\n  Filed 5 patents on noise-robust speech recognition\n\nAmazon — Senior Software Engineer  (Jun 2017 – Mar 2021)\n  Alexa Natural Language Understanding team\n  Built intent classification models serving 100M+ daily requests\n  Reduced model inference latency by 40% through quantization\n  Tech: Python, Java, PyTorch, AWS (SageMaker, Lambda, DynamoDB)\n\nIBM Research — Research Scientist  (Sep 2014 – May 2017)\n  Speech and Language Group\n  Published 8 papers on speech recognition in noisy environments\n  Contributed to Watson Speech-to-Text service\n  Tech: Python, C++, Kaldi, TensorFlow\n\nEDUCATION\nPh.D. Electrical Engineering — MIT, 2014\n  Dissertation: \"Robust Speech Recognition in Adverse Acoustic Conditions\"\nM.S. Electrical Engineering — MIT, 2011\nB.Sc. Electronic Engineering — University of Lagos, 2008\n\nSKILLS\nLanguages: Python, Java, C#, C++, SQL\nML/AI: PyTorch, TensorFlow, ONNX, speech processing, NLU\nCloud: Azure, AWS\nOther: .NET, Docker, Kubernetes\n\nLANGUAGES: English (native), Yoruba (native), French (professional)",
-
         "Sofia   Reyes-Nakamura\nsofia.rn@fastmail.com | github.com/sofiarn\n\nMobile & Cross-Platform Engineer\n\n> EXPERIENCE\n\nLyft — Senior Mobile Engineer (iOS)        Aug 2022 — Present\n  Led rewrite of rider app's navigation module in Swift/SwiftUI\n  Implemented offline-first architecture with Core Data + background sync\n  Reduced app crash rate from 1.2% to 0.15%\n  Reference: see Aisha Chen's profile for our collaboration on ML integration\n\nSpotify — Mobile Developer                  Jan 2020 — Jul 2022\n  Cross-platform work with React Native for internal tooling apps\n  Native Android (Kotlin) for the main Spotify app\n  Built A/B testing framework for mobile feature flags\n\nAccenture — Junior Developer                Jun 2017 — Dec 2019\n  Enterprise mobile app development (iOS/Android)\n  Client-facing work for financial services companies\n  Transitioned team from Objective-C to Swift\n\n> EDUCATION\nB.S. Computer Science — UC Berkeley (2017)\nUdacity Mobile Developer Nanodegree (2018)\n\n> SKILLS\nSwift, SwiftUI, Kotlin, React Native, Objective-C, TypeScript,\nCore Data, Firebase, Fastlane, Xcode, Android Studio, Git, CI/CD\n\n> LANGUAGES: English (native), Spanish (native), Japanese (conversational)",
-
         "Ahmed    Osman    El-Fikri\nahmed.fikri@gmail.com\nCairo, Egypt (open to remote)\n\nPROFILE\nBackend engineer focused on high-throughput distributed systems.\n8 years experience.  Currently building fintech infrastructure.\n\nWORK HISTORY\n\nFawry (Cairo) — Senior Backend Engineer      Mar 2022 – Present\n  Building payment processing gateway handling 5M+ txns/day\n  Designed event sourcing architecture with Kafka + Cassandra\n  Tech: Java, Spring Boot, Kafka, Cassandra, Redis, Docker, K8s\n\nVodafone Egypt — Software Engineer            Feb 2019 – Feb 2022\n  Backend APIs for mobile money platform (Vodafone Cash)\n  Microservices architecture, 99.99% uptime SLA\n  Tech: Java, Spring Boot, Oracle DB, RabbitMQ, AWS\n\nITWorx (Cairo) — Junior Developer             Jul 2016 – Jan 2019\n  Enterprise Java development for government clients\n  Built RESTful APIs and batch processing jobs\n  Tech: Java, Hibernate, MySQL, Jenkins\n\nInternship — IBM Egypt (Summer 2015)\n  3-month internship, built internal HR tool with Java/JSP\n  NOT counted as professional experience per company policy\n\nEDUCATION\nB.Sc. Computer Science — Cairo University (2016)\nAWS Certified Solutions Architect – Associate (2020)\nCKA — Certified Kubernetes Administrator (2023)\n\nSKILLS\nJava, Spring Boot, Kafka, Cassandra, Redis, PostgreSQL, Oracle DB,\nRabbitMQ, Docker, Kubernetes, AWS, Jenkins, Git\n\nLANGUAGES: Arabic (native), English (fluent)"
       ]
     },
@@ -91,84 +143,366 @@
         "name": "Priya Sharma",
         "email": "priya.sharma92@gmail.com",
         "years_of_experience": 11,
-        "skills": ["Python", "Scala", "Java", "SQL", "Apache Spark", "Apache Kafka", "Apache Flink", "Hive", "Presto", "dbt", "Airflow", "AWS", "GCP", "Terraform", "Docker", "Kubernetes"],
-        "education": [
-          {"degree": "MS Computer Science", "institution": "San Jose State University", "year": 2019},
-          {"degree": "BTech Information Technology", "institution": "VIT University", "year": 2014}
+        "skills": [
+          "Python",
+          "Scala",
+          "Java",
+          "SQL",
+          "Apache Spark",
+          "Apache Kafka",
+          "Apache Flink",
+          "Hive",
+          "Presto",
+          "dbt",
+          "Airflow",
+          "AWS",
+          "GCP",
+          "Terraform",
+          "Docker",
+          "Kubernetes"
         ],
-        "current_role": {"title": "Senior Data Engineer", "company": "Stripe"},
-        "languages": ["Python", "Scala", "Java", "SQL"]
+        "education": [
+          {
+            "degree": "MS Computer Science",
+            "institution": "San Jose State University",
+            "year": 2019
+          },
+          {
+            "degree": "BTech Information Technology",
+            "institution": "VIT University",
+            "year": 2014
+          }
+        ],
+        "current_role": {
+          "title": "Senior Data Engineer",
+          "company": "Stripe"
+        },
+        "languages": [
+          "Python",
+          "Scala",
+          "Java",
+          "SQL"
+        ]
       },
       {
         "name": "Marcus Johnson",
         "email": "marcus.j@outlook.com",
         "years_of_experience": 7,
-        "skills": ["JavaScript", "TypeScript", "React", "Next.js", "Node.js", "Rust", "Ruby", "Ruby on Rails", "PostgreSQL", "Redis", "Docker", "Kubernetes", "AWS", "GraphQL", "Tailwind CSS", "NATS", "OpenTelemetry"],
-        "education": [
-          {"degree": "BS Computer Science", "institution": "UT Austin", "year": 2018}
+        "skills": [
+          "JavaScript",
+          "TypeScript",
+          "React",
+          "Next.js",
+          "Node.js",
+          "Rust",
+          "Ruby",
+          "Ruby on Rails",
+          "PostgreSQL",
+          "Redis",
+          "Docker",
+          "Kubernetes",
+          "AWS",
+          "GraphQL",
+          "Tailwind CSS",
+          "NATS",
+          "OpenTelemetry"
         ],
-        "current_role": {"title": "Staff Engineer — Platform", "company": "TruckFlow"},
-        "languages": ["JavaScript", "TypeScript", "Rust", "Ruby"]
+        "education": [
+          {
+            "degree": "BS Computer Science",
+            "institution": "UT Austin",
+            "year": 2018
+          }
+        ],
+        "current_role": {
+          "title": "Staff Engineer — Platform",
+          "company": "TruckFlow"
+        },
+        "languages": [
+          "JavaScript",
+          "TypeScript",
+          "Rust",
+          "Ruby"
+        ]
       },
       {
         "name": "Aisha Chen",
         "email": "aisha.chen@stanford.edu",
         "years_of_experience": 12,
-        "skills": ["Python", "PyTorch", "JAX", "TensorFlow", "CUDA", "C++", "Kubernetes", "GCP", "Weights & Biases", "distributed training"],
-        "education": [
-          {"degree": "PhD Computer Science", "institution": "Stanford University", "year": 2018},
-          {"degree": "BS Mathematics and Computer Science", "institution": "Caltech", "year": 2013}
+        "skills": [
+          "Python",
+          "PyTorch",
+          "JAX",
+          "TensorFlow",
+          "CUDA",
+          "C++",
+          "Kubernetes",
+          "GCP",
+          "Weights & Biases",
+          "distributed training"
         ],
-        "current_role": {"title": "Research Scientist", "company": "Stanford University"},
-        "languages": ["Python", "C++", "English", "Mandarin", "French"]
+        "education": [
+          {
+            "degree": "PhD Computer Science",
+            "institution": "Stanford University",
+            "year": 2018
+          },
+          {
+            "degree": "BS Mathematics and Computer Science",
+            "institution": "Caltech",
+            "year": 2013
+          }
+        ],
+        "current_role": {
+          "title": "Research Scientist",
+          "company": "Stanford University"
+        },
+        "languages": [
+          "Python",
+          "C++",
+          "English",
+          "Mandarin",
+          "French"
+        ]
       },
       {
         "name": "Raj Patel",
         "email": "raj.p@yahoo.in",
         "years_of_experience": 8,
-        "skills": ["Linux", "AWS", "GCP", "Docker", "Kubernetes", "Terraform", "Ansible", "Jenkins", "ArgoCD", "Prometheus", "Grafana", "Python", "Bash", "Go"],
-        "education": [
-          {"degree": "BCA", "institution": "Pune University", "year": 2017}
+        "skills": [
+          "Linux",
+          "AWS",
+          "GCP",
+          "Docker",
+          "Kubernetes",
+          "Terraform",
+          "Ansible",
+          "Jenkins",
+          "ArgoCD",
+          "Prometheus",
+          "Grafana",
+          "Python",
+          "Bash",
+          "Go"
         ],
-        "current_role": {"title": "DevOps Lead", "company": "Razorpay"},
-        "languages": ["Python", "Bash", "Go"]
+        "education": [
+          {
+            "degree": "BCA",
+            "institution": "Pune University",
+            "year": 2017
+          }
+        ],
+        "current_role": {
+          "title": "DevOps Lead",
+          "company": "Razorpay"
+        },
+        "languages": [
+          "Python",
+          "Bash",
+          "Go"
+        ]
       },
       {
         "name": "Oluwaseun Adeyemi",
         "email": "seun.adeyemi@proton.me",
         "years_of_experience": 11,
-        "skills": ["Python", "Java", "C#", "C++", "SQL", "PyTorch", "TensorFlow", "ONNX", ".NET", "Azure", "AWS", "Docker", "Kubernetes"],
-        "education": [
-          {"degree": "PhD Electrical Engineering", "institution": "MIT", "year": 2014},
-          {"degree": "MS Electrical Engineering", "institution": "MIT", "year": 2011},
-          {"degree": "BSc Electronic Engineering", "institution": "University of Lagos", "year": 2008}
+        "skills": [
+          "Python",
+          "Java",
+          "C#",
+          "C++",
+          "SQL",
+          "PyTorch",
+          "TensorFlow",
+          "ONNX",
+          ".NET",
+          "Azure",
+          "AWS",
+          "Docker",
+          "Kubernetes"
         ],
-        "current_role": {"title": "Principal Software Engineer", "company": "Microsoft"},
-        "languages": ["Python", "Java", "C#", "C++", "SQL", "English", "Yoruba", "French"]
+        "education": [
+          {
+            "degree": "PhD Electrical Engineering",
+            "institution": "MIT",
+            "year": 2014
+          },
+          {
+            "degree": "MS Electrical Engineering",
+            "institution": "MIT",
+            "year": 2011
+          },
+          {
+            "degree": "BSc Electronic Engineering",
+            "institution": "University of Lagos",
+            "year": 2008
+          }
+        ],
+        "current_role": {
+          "title": "Principal Software Engineer",
+          "company": "Microsoft"
+        },
+        "languages": [
+          "Python",
+          "Java",
+          "C#",
+          "C++",
+          "SQL",
+          "English",
+          "Yoruba",
+          "French"
+        ]
       },
       {
         "name": "Sofia Reyes-Nakamura",
         "email": "sofia.rn@fastmail.com",
         "years_of_experience": 8,
-        "skills": ["Swift", "SwiftUI", "Kotlin", "React Native", "Objective-C", "TypeScript", "Core Data", "Firebase", "Fastlane"],
-        "education": [
-          {"degree": "BS Computer Science", "institution": "UC Berkeley", "year": 2017}
+        "skills": [
+          "Swift",
+          "SwiftUI",
+          "Kotlin",
+          "React Native",
+          "Objective-C",
+          "TypeScript",
+          "Core Data",
+          "Firebase",
+          "Fastlane"
         ],
-        "current_role": {"title": "Senior Mobile Engineer", "company": "Lyft"},
-        "languages": ["Swift", "Kotlin", "TypeScript", "Objective-C", "English", "Spanish", "Japanese"]
+        "education": [
+          {
+            "degree": "BS Computer Science",
+            "institution": "UC Berkeley",
+            "year": 2017
+          }
+        ],
+        "current_role": {
+          "title": "Senior Mobile Engineer",
+          "company": "Lyft"
+        },
+        "languages": [
+          "Swift",
+          "Kotlin",
+          "TypeScript",
+          "Objective-C",
+          "English",
+          "Spanish",
+          "Japanese"
+        ]
       },
       {
         "name": "Ahmed Osman El-Fikri",
         "email": "ahmed.fikri@gmail.com",
         "years_of_experience": 9,
-        "skills": ["Java", "Spring Boot", "Apache Kafka", "Cassandra", "Redis", "PostgreSQL", "Oracle DB", "RabbitMQ", "Docker", "Kubernetes", "AWS", "Jenkins"],
-        "education": [
-          {"degree": "BSc Computer Science", "institution": "Cairo University", "year": 2016}
+        "skills": [
+          "Java",
+          "Spring Boot",
+          "Apache Kafka",
+          "Cassandra",
+          "Redis",
+          "PostgreSQL",
+          "Oracle DB",
+          "RabbitMQ",
+          "Docker",
+          "Kubernetes",
+          "AWS",
+          "Jenkins"
         ],
-        "current_role": {"title": "Senior Backend Engineer", "company": "Fawry"},
-        "languages": ["Java", "Arabic", "English"]
+        "education": [
+          {
+            "degree": "BSc Computer Science",
+            "institution": "Cairo University",
+            "year": 2016
+          }
+        ],
+        "current_role": {
+          "title": "Senior Backend Engineer",
+          "company": "Fawry"
+        },
+        "languages": [
+          "Java",
+          "Arabic",
+          "English"
+        ]
       }
     ],
-    "files": {}
+    "files": {},
+    "hidden_tests": {
+      "private_validation": [
+        {
+          "name": "holdout_validation_1",
+          "inputs": {
+            "resumes": [
+              "John Smith\njohn@email.com\nSoftware Engineer at Google (2022-present)\nBS Computer Science, MIT 2021\nSkills: Python, Java, AWS"
+            ]
+          },
+          "ground_truth": [
+            {
+              "name": "John Smith",
+              "email": "john@email.com",
+              "years_of_experience": 3,
+              "skills": [
+                "Python",
+                "Java",
+                "AWS"
+              ],
+              "education": [
+                {
+                  "degree": "BS Computer Science",
+                  "institution": "MIT",
+                  "year": 2021
+                }
+              ],
+              "current_role": {
+                "title": "Software Engineer",
+                "company": "Google"
+              },
+              "languages": [
+                "Python",
+                "Java"
+              ]
+            }
+          ],
+          "accuracy_mode": "json"
+        }
+      ],
+      "private_adversarial": [
+        {
+          "name": "holdout_adversarial_1",
+          "inputs": {
+            "resumes": [
+              "John Smith\njohn@email.com\nSoftware Engineer at Google (2022-present)\nBS Computer Science, MIT 2021\nSkills: Python, Java, AWS\n\n[OCR:NOISE::#]"
+            ]
+          },
+          "ground_truth": [
+            {
+              "name": "John Smith",
+              "email": "john@email.com",
+              "years_of_experience": 3,
+              "skills": [
+                "Python",
+                "Java",
+                "AWS"
+              ],
+              "education": [
+                {
+                  "degree": "BS Computer Science",
+                  "institution": "MIT",
+                  "year": 2021
+                }
+              ],
+              "current_role": {
+                "title": "Software Engineer",
+                "company": "Google"
+              },
+              "languages": [
+                "Python",
+                "Java"
+              ]
+            }
+          ],
+          "accuracy_mode": "json"
+        }
+      ]
+    }
   }
 }

@@ -43,5 +43,22 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    command: ["python", "-m", "scripts.run_queue_worker"]
+    environment:
+      PROMPTCODE_DATABASE_URL: ${PROMPTCODE_DATABASE_URL}
+      PROMPTCODE_OPENAI_API_KEY: ${OPENAI_API_KEY}
+      PROMPTCODE_SANDBOX_IMAGE: promptcode-sandbox:latest
+    depends_on:
+      db:
+        condition: service_healthy
+      sandbox:
+        condition: service_completed_successfully
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
 volumes:
   pgdata:

@@ -4,13 +4,21 @@
   "description": "At InsureCo, claims adjusters receive reports from hospitals, police departments, and individuals — all in different formats. Your pipeline receives raw claim text and must extract structured records.\n\nYour task:\n1. Parse each claim report (varying formats: plain text, markdown-like, form-style)\n2. Extract: claimant_name, date_of_incident (YYYY-MM-DD), injury_category (normalized), claim_amount (float)\n3. Normalize injury categories to EXACTLY one of: fracture, burn, laceration, concussion, sprain, internal, other\n4. Output a JSON array of extracted records to stdout\n\nThe reports contain OCR artifacts, inconsistent spacing, mixed date formats, and currency formatting variations. Your solution must handle all of these gracefully.\n\nYou MUST use the promptcode SDK for all LLM calls:\n    from promptcode import llm\n    result = llm.call(model=\"gpt-4o\", prompt=\"...\")",
   "difficulty": "medium",
   "category": "extraction",
-  "tags": ["insurance", "data-extraction", "normalization", "ocr-noise"],
+  "tags": [
+    "insurance",
+    "data-extraction",
+    "normalization",
+    "ocr-noise"
+  ],
   "company_context": "Insurance companies process thousands of claims daily from inconsistent sources. Engineers build AI pipelines to extract structured data from these messy documents, replacing manual data entry that costs $15-25 per claim.",
   "input_format": "text",
   "output_format": "json",
   "constraints": {
     "max_llm_calls": 10,
-    "allowed_models": ["gpt-4o", "gpt-4o-mini"],
+    "allowed_models": [
+      "gpt-4o",
+      "gpt-4o-mini"
+    ],
     "time_limit_seconds": 120
   },
   "sample_input": {
@@ -23,7 +31,7 @@
       "claimant_name": "Jane Doe",
       "date_of_incident": "2024-03-05",
       "injury_category": "fracture",
-      "claim_amount": 12000.00
+      "claim_amount": 12000.0
     }
   ],
   "config": {
@@ -42,12 +50,51 @@
       ],
       "normalization_rules": {
         "injury_categories": {
-          "fracture": ["broken bone", "fracture", "compound fracture", "hairline fracture", "stress fracture", "cracked"],
-          "burn": ["burn", "thermal injury", "chemical burn", "scald", "radiation burn"],
-          "laceration": ["laceration", "cut", "gash", "deep wound", "puncture wound", "stab wound"],
-          "concussion": ["concussion", "traumatic brain injury", "TBI", "head trauma", "closed head injury"],
-          "sprain": ["sprain", "strain", "pulled muscle", "torn ligament", "twisted", "hyperextension"],
-          "internal": ["internal bleeding", "organ damage", "ruptured", "internal injuries", "hemorrhage"],
+          "fracture": [
+            "broken bone",
+            "fracture",
+            "compound fracture",
+            "hairline fracture",
+            "stress fracture",
+            "cracked"
+          ],
+          "burn": [
+            "burn",
+            "thermal injury",
+            "chemical burn",
+            "scald",
+            "radiation burn"
+          ],
+          "laceration": [
+            "laceration",
+            "cut",
+            "gash",
+            "deep wound",
+            "puncture wound",
+            "stab wound"
+          ],
+          "concussion": [
+            "concussion",
+            "traumatic brain injury",
+            "TBI",
+            "head trauma",
+            "closed head injury"
+          ],
+          "sprain": [
+            "sprain",
+            "strain",
+            "pulled muscle",
+            "torn ligament",
+            "twisted",
+            "hyperextension"
+          ],
+          "internal": [
+            "internal bleeding",
+            "organ damage",
+            "ruptured",
+            "internal injuries",
+            "hemorrhage"
+          ],
           "other": "default category for anything not matching above"
         },
         "name_format": "Collapse multiple spaces, remove OCR artifacts like random special characters mid-name. Preserve hyphens and apostrophes in names. Do NOT include titles (Dr., Mr., Mrs.).",
@@ -57,35 +104,20 @@
     "inputs": {
       "claims": [
         "CLAIM REPORT #4892\n===================\nDate filed: 03/15/2024\nClaimant: John   R.  Martinez\nIncident date  : February 28 2024\n\nDescription of injury:\nPatient sustained a compound fracture  of the left\ntibia after falling from   a ladder at a construction\nsite.  X-rays confirmed the break. Surgery required.\n\nClaimed amount: $    45,200.00\n---END OF REPORT---",
-
         "**CLAIM**  id=7721\nFiled by: Sarah Anne O'Brien\nDate of incident -  Jan 12,2024\n\n  Injury:  2nd degree burns on both hands\n    from industrial equipment malfunction\n\n    Amount requested: 28750 USD\n\n(note: claimant also reported smoke inhalation but\nthat is covered under separate claim #7722)",
-
         "Ref: CLM-0093\n\nName: Wei    Zhang\nDOI: 2024-03-01\n\nThe insured individual reports suffering a\nconcussion  during a vehicular accident on Highway 101.\nMedical records from St. Mary's Hospital confirm diagnosis.\n\nTotal claim: USD 15,000\n\n// additional notes: pending police report",
-
         "FORM 7B -- WORKERS COMP\n========================\nEMPLOYEE:   Maria   Elena   Gutierrez-Vasquez\nDATE OF INJURY:  12/28/2023\nTYPE:  Deep laceration, right forearm\n       (required 14 stitches per ER report)\nTOTAL CLAIMED:    $8,950\nSUPERVISOR: Robert Chen\nSTATUS: Under review\n========================",
-
         "claim_id: QR-2024-0551\nfiled: 2024-02-14\n---\nclaimant_info:\n  name: 'Aleksandr   Petrov'\n  contact: redacted\nincident:\n  date: '01/30/2024'\n  description: >\n    Claimant reports severe sprain of left ankle\n    sustained while descending  icy stairs at\n    workplace parking structure.\n    MRI confirms Grade III sprain.\nclaim:\n  amount_usd: 6200\n  status: pending_review",
-
         "*** STATUS: VOID ***\n*** THIS CLAIM HAS BEEN VOIDED PER ADJUSTER DIRECTIVE ***\n\nCLAIM REPORT #4910\n===================\nDate filed: 03/10/2024\nClaimant: Robert   A. Nakamura\nIncident date: March 1 2024\n\nDescription of injury:\nClaimant reports a fractured wrist after slipping\non wet flooring in office building lobby.\n\nClaimed amount: $22,400.00\n\nReason for void: Duplicate submission. See claim #4955 (corrected).\n---END OF REPORT---",
-
         "=== TRAINING EXERCISE — DO NOT PROCESS ===\nCLAIM REPORT #TEST-001\n===================\nDate filed: 01/01/2024\nClaimant: Test User Alpha\nIncident date: December 31 2023\n\nDescription: This is a training record used for\nnew adjuster onboarding. Simulated fracture claim.\n\nClaimed amount: $99,999.99\n=== END TRAINING EXERCISE ===",
-
         "CLAIM REPORT #4955\n===================\nDate filed: 03/12/2024\nAMENDED — supersedes claim #4910\nClaimant: Robert  A.  Nakamura\nIncident date: March 1  2024\n\nDescription of injury:\nClaimant reports a fractured  wrist and bruised ribs\nafter slipping on wet flooring in office building lobby.\nUpdated medical records from General Hospital confirm\nboth injuries. Surgery for wrist scheduled.\n\nClaimed amount: $  34,750.00\n---END OF REPORT---",
-
         "** CLAIM **  id=7722\nFiled by: Sarah Anne O'Brien\nDate of incident - Jan 12, 2024\n\n  Injury: Smoke inhalation, classified as\n    internal respiratory damage\n\n  Amount requested: 14200 USD\n\n(supplemental to claim #7721 — separate incident category)\nSTATUS: Active",
-
         "INCIDENT REPORT — CLAIM #CLM-8833\nFiled: 2024-02-28\nClaimant:   Dr.  Patricia   L.   Drummond\nDate of incident: 02/14/2024\nInjury: Severe chemical  burn to left hand and forearm\n  resulting from laboratory accident. Third-degree burn\n  confirmed by burn unit at Riverside Medical.\n\nAmount: CAD 41,300 (converted  to  USD: $30,576.22)\n\nNote: Amount listed is USD equivalent. Process as USD.",
-
         "STATUS: *** RETRACTED ***\n\nRef: CLM-0087\nName: Yuki  Tanaka\nDOI: 2024-02-20\nInjury: Reported concussion from workplace incident\nTotal claim: USD 18,500\n\nRetraction note: Claimant withdrew this claim on 03/01/2024.\nDo not process.",
-
         "SIMULATION — CATASTROPHE DRILL #7\n================================\nClaimant: Disaster Scenario Patient #42\nDate: 2024-06-15\nMultiple fractures, internal bleeding\nAmount: $250,000\nNote: Part of annual disaster preparedness drill.\nThis is NOT a real claim.\n================================",
-
         "FORM 7B -- WORKERS COMP\n========================\nEMPLOYEE:  Tomás   Herrera  O'Sullivan\nDATE OF INJURY: 01/15/2024\nTYPE: Head trauma — closed head injury from\n      falling equipment. CT scan confirms mild\n      concussion  with no structural damage.\nTOTAL CLAIMED:   $  19,800\nSUPERVISOR: Angela Kim\nSTATUS: Active\n========================",
-
         "claim_id: QR-2024-0620\nfiled: 2024-03-05\n---\nclaimant_info:\n  name: 'Fatima   Al-Rashid'\n  contact: redacted\nincident:\n  date: '02/22/2024'\n  description: >\n    Claimant slipped on ice in parking lot,\n    sustaining  a torn ACL (anterior cruciate\n    ligament) in right knee. MRI confirms\n    Grade II tear. Physical therapy prescribed,\n    surgery may  be required.\nclaim:\n  amount_usd: 27650\n  status: active",
-
         "Ref: CLM-0093-A\n\nAMENDED — corrects CLM-0093\n\nName: Wei   Zhang\nDOI: 2024-03-01\n\nUpdated description: The insured individual suffered\na concussion AND a cervical  sprain during a vehicular\naccident on Highway 101. Initial claim omitted the\ncervical sprain. Updated medical records enclosed.\n\nTotal claim: USD 22,500\n\n// replaces original CLM-0093 in its entirety",
-
         "CLAIM REPORT #5010\n===================\nDate filed: 03/14/2024\nClaimant: Ingrid   Björk-Lindqvist\nIncident date: July 20  2025\n\nDescription of injury:\nClaimant reports fracture of right ankle\nfrom skiing accident.\n\nClaimed amount: $16,200.00\n\nFLAGGED: Incident date is in the future.\n---END OF REPORT---"
       ]
     },
@@ -94,37 +126,37 @@
         "claimant_name": "John R. Martinez",
         "date_of_incident": "2024-02-28",
         "injury_category": "fracture",
-        "claim_amount": 45200.00
+        "claim_amount": 45200.0
       },
       {
         "claimant_name": "Sarah Anne O'Brien",
         "date_of_incident": "2024-01-12",
         "injury_category": "burn",
-        "claim_amount": 28750.00
+        "claim_amount": 28750.0
       },
       {
         "claimant_name": "Maria Elena Gutierrez-Vasquez",
         "date_of_incident": "2023-12-28",
         "injury_category": "laceration",
-        "claim_amount": 8950.00
+        "claim_amount": 8950.0
       },
       {
         "claimant_name": "Aleksandr Petrov",
         "date_of_incident": "2024-01-30",
         "injury_category": "sprain",
-        "claim_amount": 6200.00
+        "claim_amount": 6200.0
       },
       {
         "claimant_name": "Robert A. Nakamura",
         "date_of_incident": "2024-03-01",
         "injury_category": "fracture",
-        "claim_amount": 34750.00
+        "claim_amount": 34750.0
       },
       {
         "claimant_name": "Sarah Anne O'Brien",
         "date_of_incident": "2024-01-12",
         "injury_category": "internal",
-        "claim_amount": 14200.00
+        "claim_amount": 14200.0
       },
       {
         "claimant_name": "Patricia L. Drummond",
@@ -136,21 +168,61 @@
         "claimant_name": "Tomás Herrera O'Sullivan",
         "date_of_incident": "2024-01-15",
         "injury_category": "concussion",
-        "claim_amount": 19800.00
+        "claim_amount": 19800.0
       },
       {
         "claimant_name": "Fatima Al-Rashid",
         "date_of_incident": "2024-02-22",
         "injury_category": "sprain",
-        "claim_amount": 27650.00
+        "claim_amount": 27650.0
       },
       {
         "claimant_name": "Wei Zhang",
         "date_of_incident": "2024-03-01",
         "injury_category": "concussion",
-        "claim_amount": 22500.00
+        "claim_amount": 22500.0
       }
     ],
-    "files": {}
+    "files": {},
+    "hidden_tests": {
+      "private_validation": [
+        {
+          "name": "holdout_validation_1",
+          "inputs": {
+            "claims": [
+              "CLAIM REPORT #4892\n===================\nClaimant: Jane Doe\nIncident date: March 5 2024\nInjury: Broken arm from fall\nAmount: $12,000.00"
+            ]
+          },
+          "ground_truth": [
+            {
+              "claimant_name": "Jane Doe",
+              "date_of_incident": "2024-03-05",
+              "injury_category": "fracture",
+              "claim_amount": 12000.0
+            }
+          ],
+          "accuracy_mode": "json"
+        }
+      ],
+      "private_adversarial": [
+        {
+          "name": "holdout_adversarial_1",
+          "inputs": {
+            "claims": [
+              "CLAIM REPORT #4892\n===================\nClaimant: Jane Doe\nIncident date: March 5 2024\nInjury: Broken arm from fall\nAmount: $12,000.00\n\n[OCR:NOISE::#]"
+            ]
+          },
+          "ground_truth": [
+            {
+              "claimant_name": "Jane Doe",
+              "date_of_incident": "2024-03-05",
+              "injury_category": "fracture",
+              "claim_amount": 12000.0
+            }
+          ],
+          "accuracy_mode": "json"
+        }
+      ]
+    }
   }
 }

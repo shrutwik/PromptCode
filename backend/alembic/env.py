@@ -23,7 +23,12 @@ config.set_main_option("sqlalchemy.url", _db_url)
 _db_connect_args = {}
 if settings.database_url.startswith("postgresql+"):
     if getattr(settings, "database_ssl_require", False):
-        _db_connect_args["ssl"] = ssl._create_unverified_context()
+        if getattr(settings, "database_ssl_ca_file", ""):
+            _db_connect_args["ssl"] = ssl.create_default_context(
+                cafile=settings.database_ssl_ca_file
+            )
+        else:
+            _db_connect_args["ssl"] = ssl.create_default_context()
     # See app.db.session: disable asyncpg statement cache when going through
     # Supabase poolers to avoid prepared statement / connection issues.
     _db_connect_args["statement_cache_size"] = 0

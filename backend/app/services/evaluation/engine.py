@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import random
+from datetime import datetime, timezone
 from typing import Any
 
 from app.core.config import get_settings
@@ -61,6 +62,8 @@ class EvaluationResult:
         calibration_details: dict[str, Any],
         diagnostics: list[dict[str, str]],
         evaluation_config: dict[str, Any],
+        confidence_intervals: dict[str, Any] | None = None,
+        audit_trail: list[dict[str, Any]] | None = None,
         hardcoded: bool = False,
     ):
         self.accuracy = accuracy
@@ -85,6 +88,8 @@ class EvaluationResult:
         self.calibration_details = calibration_details
         self.diagnostics = diagnostics
         self.evaluation_config = evaluation_config
+        self.confidence_intervals = confidence_intervals or {}
+        self.audit_trail = audit_trail or []
         self.hardcoded = hardcoded
 
     def to_report(self, submission_id: str) -> dict[str, Any]:
@@ -118,6 +123,8 @@ class EvaluationResult:
             "diagnostics": self.diagnostics,
             "feedback": self.diagnostics[0]["message"] if self.diagnostics else "",
             "evaluation_config": self.evaluation_config,
+            "confidence_intervals": self.confidence_intervals,
+            "audit_trail": self.audit_trail,
             "scorecard": {
                 "accuracy": self.accuracy,
                 "robustness": self.edge_case_handling,
@@ -164,6 +171,16 @@ def evaluate_submission(
     total_latency = 0.0
     total_calls = 0
     total_retries = 0
+    audit_trail: list[dict[str, Any]] = [
+        {
+            "event": "evaluation_started",
+            "at": _now_iso(),
+            "details": {
+                "accuracy_mode": accuracy_mode,
+                "evaluation_seed": evaluation_seed,
+            },
+        }
+    ]
 
     clean_runs = int(challenge_config.get("clean_runs", 1))
     run_plan: list[dict[str, Any]] = []
@@ -266,6 +283,20 @@ def evaluate_submission(
         total_latency += record["latency_ms"]
         total_calls += record["llm_calls"]
         total_retries += record["retries"]
+        audit_trail.append(
+            {
+                "event": "run_completed",
+                "at": _now_iso(),
+                "details": {
+                    "run_type": record["run_type"],
+                    "run_index": record["run_index"],
+                    "status": record["status"],
+                    "accuracy": record["accuracy"],
+                    "schema_valid": record["schema_valid"],
+                    "seed": (record.get("meta") or {}).get("seed"),
+                },
+            }
+        )
 
     all_accuracies = clean_accuracies + perturbed_accuracies + adversarial_accuracies
 
@@ -318,6 +349,13 @@ def evaluate_submission(
     if hardcoded:
         logger.warning("Hardcoded answer detected - zeroing all quality scores")
         acc = pq = rule_adherence = eff = rel = orch = cq = robustness = calibration = 0.0
+        audit_trail.append(
+            {
+                "event": "hardcode_disqualification",
+                "at": _now_iso(),
+                "details": {"reason": "hardcoded_or_no_llm_usage"},
+            }
+        )
 
     metric_gaming = _detect_metric_gaming(
         runs=run_records,
@@ -329,6 +367,13 @@ def evaluate_submission(
     if metric_gaming["triggered"]:
         eff = min(eff, 0.25)
         orch = min(orch, 0.5)
+        audit_trail.append(
+            {
+                "event": "anti_gaming_penalty",
+                "at": _now_iso(),
+                "details": {"reason": metric_gaming["reason"]},
+            }
+        )
 
     overall = round(
         acc * SCORE_WEIGHTS["accuracy"]
@@ -343,10 +388,31 @@ def evaluate_submission(
 
     if acc < 0.40:
         overall = min(overall, 0.55)
+        audit_trail.append(
+            {
+                "event": "score_cap_applied",
+                "at": _now_iso(),
+                "details": {"cap": 0.55, "reason": "accuracy_below_0.40"},
+            }
+        )
     if rule_adherence < 0.50:
         overall = min(overall, 0.50)
+        audit_trail.append(
+            {
+                "event": "score_cap_applied",
+                "at": _now_iso(),
+                "details": {"cap": 0.50, "reason": "rule_adherence_below_0.50"},
+            }
+        )
     if metric_gaming["triggered"]:
         overall = min(overall, 0.45)
+        audit_trail.append(
+            {
+                "event": "score_cap_applied",
+                "at": _now_iso(),
+                "details": {"cap": 0.45, "reason": "anti_gaming_triggered"},
+            }
+        )
 
     diagnostics = _build_diagnostics(
         accuracy=acc,
@@ -369,6 +435,29 @@ def evaluate_submission(
                 "message": metric_gaming["reason"],
             },
         )
+
+    confidence_intervals = {
+        "accuracy": _mean_confidence_interval(clean_accuracies),
+        "robustness_proxy": _mean_confidence_interval(
+            perturbed_accuracies + adversarial_accuracies
+        ),
+        "run_accuracy": _mean_confidence_interval(all_accuracies),
+        "pass_rate": _proportion_confidence_interval(
+            sum(1 for r in run_records if r.get("status") == "pass"),
+            len(run_records),
+        ),
+    }
+    audit_trail.append(
+        {
+            "event": "evaluation_completed",
+            "at": _now_iso(),
+            "details": {
+                "overall": overall,
+                "tests_total": len(run_records),
+                "tests_passed": sum(1 for r in run_records if r.get("status") == "pass"),
+            },
+        }
+    )
 
     return EvaluationResult(
         accuracy=acc,
@@ -397,7 +486,10 @@ def evaluate_submission(
             "perturbation_config_version": PERTURBATION_CONFIG_VERSION,
             "run_count": len(run_plan),
             "hidden_set_count": len(hidden_cases),
+            "scoring_weights": SCORE_WEIGHTS,
         },
+        confidence_intervals=confidence_intervals,
+        audit_trail=audit_trail,
         hardcoded=hardcoded,
     )
 
@@ -479,21 +571,44 @@ def _build_hidden_cases(
     cases: list[dict[str, Any]] = []
     hidden_tests = challenge_config.get("hidden_tests")
     if isinstance(hidden_tests, list):
-        for i, case in enumerate(hidden_tests):
-            if not isinstance(case, dict) or "inputs" not in case:
+        _append_hidden_cases(
+            cases, hidden_tests, "hidden", default_ground_truth, default_accuracy_mode
+        )
+    elif isinstance(hidden_tests, dict):
+        for tier_name, tier_cases in hidden_tests.items():
+            if not isinstance(tier_cases, list):
                 continue
-            gt = case.get("ground_truth", default_ground_truth)
-            if isinstance(gt, (list, dict)):
-                gt = json.dumps(gt)
-            cases.append(
-                {
-                    "name": str(case.get("name", f"hidden_{i+1}")),
-                    "inputs": case["inputs"],
-                    "ground_truth": gt,
-                    "accuracy_mode": str(case.get("accuracy_mode", default_accuracy_mode)),
-                }
+            _append_hidden_cases(
+                cases,
+                tier_cases,
+                str(tier_name),
+                default_ground_truth,
+                default_accuracy_mode,
             )
     return cases
+
+
+def _append_hidden_cases(
+    dest: list[dict[str, Any]],
+    hidden_cases: list[dict[str, Any]],
+    tier_name: str,
+    default_ground_truth: str,
+    default_accuracy_mode: str,
+) -> None:
+    for i, case in enumerate(hidden_cases):
+        if not isinstance(case, dict) or "inputs" not in case:
+            continue
+        gt = case.get("ground_truth", default_ground_truth)
+        if isinstance(gt, (list, dict)):
+            gt = json.dumps(gt)
+        dest.append(
+            {
+                "name": str(case.get("name", f"{tier_name}_{i+1}")),
+                "inputs": case["inputs"],
+                "ground_truth": gt,
+                "accuracy_mode": str(case.get("accuracy_mode", default_accuracy_mode)),
+            }
+        )
 
 
 def _detect_metric_gaming(
@@ -598,7 +713,7 @@ def _process_run(
         raw = result.output.strip()
         output_chars = len(raw)
         acc = score_accuracy(raw, ground_truth, mode=accuracy_mode)
-        schema_valid = _is_schema_valid(raw, accuracy_mode)
+        schema_valid = _is_schema_valid(raw, accuracy_mode, ground_truth)
         confidence = _extract_confidence_value(raw)
 
     status = "pass" if (result.success and acc >= 0.8 and schema_valid) else "fail"
@@ -624,12 +739,13 @@ def _process_run(
     }
 
 
-def _is_schema_valid(output: str, accuracy_mode: str) -> bool:
+def _is_schema_valid(output: str, accuracy_mode: str, ground_truth: str) -> bool:
     if accuracy_mode != "json":
         return bool(output.strip())
     try:
-        json.loads(output)
-        return True
+        got = json.loads(output)
+        expected = json.loads(ground_truth) if isinstance(ground_truth, str) else ground_truth
+        return _validate_shape(got, expected)
     except Exception:
         return False
 
@@ -645,3 +761,100 @@ def _extract_confidence_value(output: str) -> float | None:
             if isinstance(v, (int, float)) and any(t in k.lower() for t in ("confidence", "probability", "prob")):
                 return float(v)
     return None
+
+
+def _validate_shape(got: Any, expected: Any) -> bool:
+    if expected is None:
+        return got is None
+    if isinstance(expected, bool):
+        return isinstance(got, bool)
+    if isinstance(expected, (int, float)) and not isinstance(expected, bool):
+        return isinstance(got, (int, float)) and not isinstance(got, bool)
+    if isinstance(expected, str):
+        return isinstance(got, str)
+    if isinstance(expected, list):
+        if not isinstance(got, list):
+            return False
+        if not expected:
+            return True
+        sample = expected[0]
+        return all(_validate_shape(item, sample) for item in got)
+    if isinstance(expected, dict):
+        if not isinstance(got, dict):
+            return False
+        for key, exp_val in expected.items():
+            if key not in got:
+                return False
+            if not _validate_shape(got[key], exp_val):
+                return False
+        return True
+    return True
+
+
+def _mean_confidence_interval(values: list[float]) -> dict[str, Any]:
+    if not values:
+        return {
+            "n": 0,
+            "mean": 0.0,
+            "lower_95": 0.0,
+            "upper_95": 0.0,
+            "half_width": 0.0,
+            "method": "normal_approx",
+        }
+    n = len(values)
+    mean = sum(values) / n
+    if n == 1:
+        lower = upper = mean
+    else:
+        variance = sum((v - mean) ** 2 for v in values) / n
+        std = variance ** 0.5
+        half = 1.96 * (std / (n ** 0.5))
+        lower = max(0.0, mean - half)
+        upper = min(1.0, mean + half)
+    return {
+        "n": n,
+        "mean": round(mean, 4),
+        "lower_95": round(lower, 4),
+        "upper_95": round(upper, 4),
+        "half_width": round((upper - lower) / 2, 4),
+        "method": "normal_approx",
+    }
+
+
+def _proportion_confidence_interval(successes: int, total: int) -> dict[str, Any]:
+    if total <= 0:
+        return {
+            "n": 0,
+            "rate": 0.0,
+            "lower_95": 0.0,
+            "upper_95": 0.0,
+            "half_width": 0.0,
+            "method": "wilson",
+        }
+
+    z = 1.96
+    p = successes / total
+    denom = 1.0 + (z**2 / total)
+    center = (p + (z**2 / (2 * total))) / denom
+    margin = (
+        z
+        * (
+            ((p * (1 - p)) / total)
+            + ((z**2) / (4 * (total**2)))
+        )
+        ** 0.5
+    ) / denom
+    lower = max(0.0, center - margin)
+    upper = min(1.0, center + margin)
+    return {
+        "n": total,
+        "rate": round(p, 4),
+        "lower_95": round(lower, 4),
+        "upper_95": round(upper, 4),
+        "half_width": round((upper - lower) / 2, 4),
+        "method": "wilson",
+    }
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
