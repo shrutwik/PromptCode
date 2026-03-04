@@ -4,10 +4,10 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, func
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.db.types import GUID
 
 
 class LeaderboardEntry(Base):
@@ -19,16 +19,16 @@ class LeaderboardEntry(Base):
     __tablename__ = "leaderboard"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        GUID(), primary_key=True, default=uuid.uuid4
     )
     challenge_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("challenges.id"), index=True
+        GUID(), ForeignKey("challenges.id"), index=True
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), index=True
+        GUID(), ForeignKey("users.id"), index=True
     )
     submission_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("submissions.id"), unique=True
+        GUID(), ForeignKey("submissions.id"), unique=True
     )
 
     score_overall: Mapped[float] = mapped_column(Float, default=0.0)

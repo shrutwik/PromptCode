@@ -347,3 +347,102 @@ def score_orchestration(
         score -= _PENALTIES["no_validation"] * 0.5
 
     return round(max(0.0, score), 4)
+
+
+# ---------------------------------------------------------------------------
+# Efficiency tradeoff (quality-aware)
+# ---------------------------------------------------------------------------
+
+def score_efficiency_tradeoff(
+    *,
+    total_tokens: int,
+    total_cost_usd: float,
+    total_latency_ms: float,
+    total_calls: int,
+    quality_anchor: float,
+    budgets: dict[str, float],
+) -> float:
+    """Score efficiency using a budget frontier + quality gate.
+
+    A submission should not score highly on efficiency if quality is poor,
+    even when it uses very few tokens/calls.
+    """
+    token_budget = max(1.0, float(budgets.get("token_budget", 12_000)))
+    cost_budget = max(0.0001, float(budgets.get("cost_budget_usd", 0.20)))
+    latency_budget = max(1.0, float(budgets.get("latency_budget_ms", 30_000)))
+    call_budget = max(1.0, float(budgets.get("call_budget", 20)))
+
+    token_ratio = total_tokens / token_budget
+    cost_ratio = total_cost_usd / cost_budget
+    latency_ratio = total_latency_ms / latency_budget
+    call_ratio = total_calls / call_budget
+
+    weighted_usage = (
+        token_ratio * 0.35
+        + cost_ratio * 0.35
+        + latency_ratio * 0.20
+        + call_ratio * 0.10
+    )
+
+    if weighted_usage <= 1.0:
+        frontier = 1.0 - (weighted_usage * 0.15)
+    else:
+        frontier = 1.0 - ((weighted_usage - 1.0) * 0.6)
+    frontier = max(0.0, min(1.0, frontier))
+
+    q = max(0.0, min(1.0, quality_anchor))
+    quality_gate = max(0.0, min(1.0, (q - 0.2) / 0.6))
+
+    score = frontier * (0.4 + 0.6 * quality_gate)
+    return round(max(0.0, min(1.0, score)), 4)
+
+
+# ---------------------------------------------------------------------------
+# Calibration
+# ---------------------------------------------------------------------------
+
+def score_calibration(confidence_points: list[tuple[float, float]]) -> dict[str, Any]:
+    """Compute confidence calibration quality from (confidence, outcome) pairs.
+
+    confidence: model confidence in [0, 1]
+    outcome: observed correctness in {0, 1}
+    """
+    if not confidence_points:
+        return {
+            "score": 0.5,
+            "ece": None,
+            "brier": None,
+            "samples": 0,
+            "method": "no_confidence_signals",
+        }
+
+    clipped = []
+    for conf, outcome in confidence_points:
+        c = max(0.0, min(1.0, float(conf)))
+        o = 1.0 if float(outcome) >= 0.5 else 0.0
+        clipped.append((c, o))
+
+    n = len(clipped)
+    brier = sum((c - o) ** 2 for c, o in clipped) / n
+
+    bins = [[] for _ in range(10)]
+    for c, o in clipped:
+        idx = min(9, int(c * 10))
+        bins[idx].append((c, o))
+
+    ece = 0.0
+    for bucket in bins:
+        if not bucket:
+            continue
+        avg_conf = sum(c for c, _ in bucket) / len(bucket)
+        avg_acc = sum(o for _, o in bucket) / len(bucket)
+        ece += (len(bucket) / n) * abs(avg_conf - avg_acc)
+
+    score = 1.0 - min(1.0, (0.65 * brier + 0.35 * ece) * 2.0)
+    return {
+        "score": round(max(0.0, min(1.0, score)), 4),
+        "ece": round(ece, 4),
+        "brier": round(brier, 4),
+        "samples": n,
+        "method": "ece_brier",
+    }

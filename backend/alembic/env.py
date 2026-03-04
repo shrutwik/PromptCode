@@ -1,9 +1,9 @@
 import asyncio
+import ssl
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import pool
-from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import get_settings
 from app.db.base import Base
@@ -17,7 +17,16 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# Alembic's ConfigParser treats '%' as interpolation markers; escape them.
+_db_url = settings.database_url.replace("%", "%%")
+config.set_main_option("sqlalchemy.url", _db_url)
+_db_connect_args = {}
+if settings.database_url.startswith("postgresql+"):
+    if getattr(settings, "database_ssl_require", False):
+        _db_connect_args["ssl"] = ssl._create_unverified_context()
+    # See app.db.session: disable asyncpg statement cache when going through
+    # Supabase poolers to avoid prepared statement / connection issues.
+    _db_connect_args["statement_cache_size"] = 0
 
 
 def run_migrations_offline() -> None:
@@ -39,10 +48,11 @@ def do_run_migrations(connection):
 
 
 async def run_async_migrations() -> None:
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    from sqlalchemy.ext.asyncio import create_async_engine
+    connectable = create_async_engine(
+        settings.database_url,
         poolclass=pool.NullPool,
+        connect_args=_db_connect_args,
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

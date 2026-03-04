@@ -44,6 +44,11 @@ async def create_submission(
     challenge = await db.get(Challenge, payload.challenge_id)
     if not challenge:
         raise HTTPException(status_code=404, detail="Challenge not found")
+    if not payload.entrypoint.endswith(".py"):
+        raise HTTPException(
+            status_code=400,
+            detail="This MVP evaluator currently supports Python submissions only (entrypoint must end with .py).",
+        )
 
     submission = Submission(
         challenge_id=payload.challenge_id,

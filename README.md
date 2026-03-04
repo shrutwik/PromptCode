@@ -73,6 +73,51 @@ curl http://localhost:8000/health
 curl http://localhost:8000/api/challenges/
 ```
 
+## Using Supabase as the database
+
+You can run the backend against a [Supabase](https://supabase.com) Postgres instance instead of local Docker.
+
+### 1. Create a Supabase project
+
+1. Go to [supabase.com](https://supabase.com) and create a project.
+2. In **Project Settings → Database**, copy the **Connection string** (URI format).
+3. Replace the scheme: change `postgresql://` to `postgresql+asyncpg://` (required for the async driver).
+4. If the URI has a placeholder like `[YOUR-PASSWORD]`, replace it with your database password (same as in the Supabase dashboard).
+
+### 2. Configure `.env`
+
+```bash
+# Use your Supabase connection string (with +asyncpg)
+PROMPTCODE_DATABASE_URL=postgresql+asyncpg://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres
+
+# Required for Supabase (SSL)
+PROMPTCODE_DATABASE_SSL_REQUIRE=true
+```
+
+You can use either the **Session pooler** (port 5432) or **Transaction pooler** (port 6543) URI from the Supabase dashboard.
+
+### 3. Run migrations and seed
+
+From the project root (so `.env` is loaded):
+
+```bash
+cd backend
+pip install -r requirements.txt
+alembic upgrade head
+python -m scripts.seed_challenge
+```
+
+### 4. Start the backend
+
+No need to run PostgreSQL in Docker; start only the FastAPI app:
+
+```bash
+cd backend
+uvicorn app.main:app --reload --port 8000
+```
+
+The app will create tables on first startup if they don’t exist (`Base.metadata.create_all`). For a clean schema, prefer `alembic upgrade head` after pointing to a new Supabase database.
+
 ## API Endpoints
 
 | Method | Path | Description |
@@ -118,27 +163,36 @@ Each submission is executed **7 times**:
 
 | Score | Weight | Measures |
 |-------|--------|----------|
-| **Prompt Quality** | 25% | Clarity, specificity, structure, robustness of prompts (LLM-as-judge) |
-| **Accuracy** | 25% | Output correctness vs ground truth (fuzzy matching for dates, names, numbers) |
-| **Efficiency** | 15% | Token usage and cost (lower = better) |
-| **Reliability** | 15% | Consistency across runs |
-| **Orchestration** | 10% | Penalizes retries, redundant calls, missing validation |
-| **Code Quality** | 10% | Error handling, structure, validation patterns (AST analysis) |
+| **Accuracy** | 35% | Clean-run correctness vs ground truth |
+| **Robustness** | 15% | Pass rate under perturbed and adversarial inputs |
+| **Reliability** | 10% | Stability/consistency across repeated runs |
+| **Efficiency** | 15% | Cost-latency-token tradeoff, quality-gated |
+| **Prompt Design** | 10% | Prompt clarity, specificity, structure, grounding |
+| **Orchestration** | 10% | Retry discipline, validation, error handling |
+| **Calibration** | 5% | Confidence alignment with observed correctness |
+
+Hard gates:
+- If `accuracy < 0.40`, overall is capped
+- If schema/constraint adherence is weak, overall is capped
+- No-LLM hardcoded solutions are disqualified
 
 ### Report Format
 
 ```json
 {
   "accuracy": 0.92,
+  "edge_case_handling": 0.84,
   "prompt_quality": 0.85,
   "efficiency": 0.71,
   "reliability": 0.88,
   "orchestration": 0.95,
-  "code_quality": 0.78,
+  "calibration": 0.76,
   "overall": 0.86,
   "cost_usd": 0.14,
   "latency_ms": 4230,
-  "llm_calls": 6
+  "llm_calls": 6,
+  "tests_passed": 6,
+  "tests_total": 8
 }
 ```
 

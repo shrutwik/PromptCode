@@ -67,10 +67,21 @@ class SubmissionReport(BaseModel):
     orchestration: float
     code_quality: float
     edge_case_handling: float = 0.0
+    calibration: float = 0.5
     overall: float
     cost_usd: float
     latency_ms: float
     llm_calls: int
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
+    retries: int | None = None
+    tests_passed: int | None = None
+    tests_total: int | None = None
     prompt_quality_details: PromptQualityBreakdown | dict[str, Any] = {}
     code_analysis_details: CodeQualityBreakdown | dict[str, Any] = {}
+    calibration_details: dict[str, Any] = {}
+    diagnostics: list[dict[str, Any]] = []
+    feedback: str = ""
+    scorecard: dict[str, float] = {}
     runs: list[dict[str, Any]] = []

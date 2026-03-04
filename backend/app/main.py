@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+import logging
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,12 +14,18 @@ from app.db.base import Base
 from app.db.session import engine
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Try to ensure tables exist, but don't block startup if the DB
+    # (e.g., Supabase) is temporarily unavailable.
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as exc:  # pragma: no cover - best-effort guard
+        logger.error("Database initialization failed during startup", exc_info=exc)
     yield
     await engine.dispose()
 

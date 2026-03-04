@@ -14,6 +14,8 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://promptcode:promptcode@localhost:5432/promptcode"
     database_echo: bool = False
+    # Set True when using Supabase or any hosted Postgres that requires SSL
+    database_ssl_require: bool = False
 
     openai_api_key: str = ""
     openai_base_url: str = ""

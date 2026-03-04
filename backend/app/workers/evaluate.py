@@ -14,7 +14,7 @@ from app.models.challenge import Challenge
 from app.models.leaderboard import LeaderboardEntry
 from app.models.run import Run
 from app.models.submission import Submission
-from app.services.evaluation.ai_judge import ai_judge_evaluate
+from app.services.evaluation.engine import evaluate_submission
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
     eval_config = {**challenge.config}
     eval_config.setdefault("description", challenge.description)
 
-    result = ai_judge_evaluate(
+    result = evaluate_submission(
         code=submission.code,
         entrypoint=submission.entrypoint,
         challenge_config=eval_config,
@@ -80,8 +80,11 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
             submission_id=submission.id,
             run_type=run_data.get("run_type", "ai_judge"),
             run_index=run_data.get("run_index", 0),
-            status="success" if run_data.get("success") else "error",
-            output={"feedback": run_data.get("feedback", ""), "accuracy_reasoning": run_data.get("accuracy_reasoning", "")},
+            status=run_data.get("status", "fail"),
+            output={
+                "feedback": run_data.get("feedback", ""),
+                "error": run_data.get("error"),
+            },
             telemetry=None,
             tokens_total=run_data.get("tokens_total", 0),
             cost_usd=run_data.get("cost_usd", 0.0),
@@ -123,7 +126,7 @@ async def _upsert_leaderboard(db: AsyncSession, submission: Submission) -> None:
         )
         db.add(entry)
 
-    if submission.score_overall and (
+    if submission.score_overall is not None and (
         entry.score_overall is None or submission.score_overall > entry.score_overall
     ):
         entry.submission_id = submission.id

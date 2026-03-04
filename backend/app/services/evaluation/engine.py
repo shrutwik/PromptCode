@@ -1,15 +1,4 @@
-"""Evaluation engine — orchestrates multiple sandbox runs and scoring.
-
-Weight system (8 dimensions):
-  - accuracy:           0.20  (did they get the right answer?)
-  - prompt_quality:     0.20  (how well did they talk to the AI?)
-  - rule_adherence:     0.15  (did they follow challenge-specific rules?)
-  - efficiency:         0.10  (how cheaply / token-efficiently?)
-  - reliability:        0.10  (how consistently across runs?)
-  - orchestration:      0.10  (how cleanly did they call the LLM?)
-  - code_quality:       0.10  (how well-structured is their code?)
-  - edge_case_handling: 0.05  (how well do they handle noisy/adversarial input?)
-"""
+"""Evaluation engine: multi-run sandbox scoring with quality, robustness, and efficiency tradeoffs."""
 
 from __future__ import annotations
 
@@ -24,7 +13,8 @@ from app.services.evaluation.perturbation import perturb_adversarial, perturb_no
 from app.services.evaluation.prompt_quality import score_prompt_quality
 from app.services.evaluation.scorer import (
     score_accuracy,
-    score_efficiency,
+    score_calibration,
+    score_efficiency_tradeoff,
     score_orchestration,
     score_reliability,
 )
@@ -34,14 +24,13 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 SCORE_WEIGHTS = {
-    "accuracy": 0.20,
-    "prompt_quality": 0.20,
-    "rule_adherence": 0.15,
-    "efficiency": 0.10,
+    "accuracy": 0.35,
+    "robustness": 0.15,
     "reliability": 0.10,
+    "efficiency": 0.15,
+    "prompt_quality": 0.10,
     "orchestration": 0.10,
-    "code_quality": 0.10,
-    "edge_case_handling": 0.05,
+    "calibration": 0.05,
 }
 
 
@@ -57,13 +46,19 @@ class EvaluationResult:
         orchestration: float,
         code_quality: float,
         edge_case_handling: float,
+        calibration: float,
         overall: float,
         cost_usd: float,
         latency_ms: float,
         llm_calls: int,
+        prompt_tokens: int,
+        completion_tokens: int,
+        retries: int,
         runs: list[dict[str, Any]],
         prompt_quality_details: dict[str, Any],
         code_analysis_details: dict[str, Any],
+        calibration_details: dict[str, Any],
+        diagnostics: list[dict[str, str]],
         hardcoded: bool = False,
     ):
         self.accuracy = accuracy
@@ -74,16 +69,24 @@ class EvaluationResult:
         self.orchestration = orchestration
         self.code_quality = code_quality
         self.edge_case_handling = edge_case_handling
+        self.calibration = calibration
         self.overall = overall
         self.cost_usd = cost_usd
         self.latency_ms = latency_ms
         self.llm_calls = llm_calls
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+        self.retries = retries
         self.runs = runs
         self.prompt_quality_details = prompt_quality_details
         self.code_analysis_details = code_analysis_details
+        self.calibration_details = calibration_details
+        self.diagnostics = diagnostics
         self.hardcoded = hardcoded
 
     def to_report(self, submission_id: str) -> dict[str, Any]:
+        tests_passed = sum(1 for r in self.runs if r.get("status") == "pass")
+        tests_total = len(self.runs)
         report: dict[str, Any] = {
             "submission_id": submission_id,
             "accuracy": self.accuracy,
@@ -94,13 +97,32 @@ class EvaluationResult:
             "orchestration": self.orchestration,
             "code_quality": self.code_quality,
             "edge_case_handling": self.edge_case_handling,
+            "calibration": self.calibration,
             "overall": self.overall,
             "cost_usd": round(self.cost_usd, 6),
             "latency_ms": round(self.latency_ms, 2),
             "llm_calls": self.llm_calls,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_tokens": self.prompt_tokens + self.completion_tokens,
+            "retries": self.retries,
+            "tests_passed": tests_passed,
+            "tests_total": tests_total,
+            "runs": self.runs,
             "prompt_quality_details": self.prompt_quality_details,
             "code_analysis_details": self.code_analysis_details,
-            "runs": self.runs,
+            "calibration_details": self.calibration_details,
+            "diagnostics": self.diagnostics,
+            "feedback": self.diagnostics[0]["message"] if self.diagnostics else "",
+            "scorecard": {
+                "accuracy": self.accuracy,
+                "robustness": self.edge_case_handling,
+                "reliability": self.reliability,
+                "efficiency": self.efficiency,
+                "prompt_design": self.prompt_quality,
+                "orchestration": self.orchestration,
+                "calibration": self.calibration,
+            },
         }
         if self.hardcoded:
             report["disqualified"] = True
@@ -116,7 +138,7 @@ def evaluate_submission(
     entrypoint: str,
     challenge_config: dict[str, Any],
 ) -> EvaluationResult:
-    """Run a full evaluation: sandbox runs, then all six scoring dimensions."""
+    """Run full evaluation across clean, perturbed, and adversarial runs."""
 
     ground_truth = challenge_config.get("ground_truth", "")
     if isinstance(ground_truth, (list, dict)):
@@ -126,108 +148,235 @@ def evaluate_submission(
     challenge_description = challenge_config.get("description", "")
 
     run_records: list[dict[str, Any]] = []
-    accuracies: list[float] = []
+    clean_accuracies: list[float] = []
+    perturbed_accuracies: list[float] = []
+    adversarial_accuracies: list[float] = []
     all_telemetry: list[dict[str, Any]] = []
-    total_tokens = 0
+    total_prompt_tokens = 0
+    total_completion_tokens = 0
     total_cost = 0.0
     total_latency = 0.0
     total_calls = 0
     total_retries = 0
 
-    # --- Normal runs with perturbations ---
+    clean_runs = int(challenge_config.get("clean_runs", 1))
+
+    for i in range(clean_runs):
+        result = run_in_sandbox(code, entrypoint, challenge_config, input_overrides=base_inputs)
+        record = _process_run(result, ground_truth, accuracy_mode, "clean", i)
+        run_records.append(record)
+        clean_accuracies.append(record["accuracy"])
+        all_telemetry.extend(result.telemetry)
+        total_prompt_tokens += record["tokens_prompt"]
+        total_completion_tokens += record["tokens_completion"]
+        total_cost += record["cost_usd"]
+        total_latency += record["latency_ms"]
+        total_calls += record["llm_calls"]
+        total_retries += record["retries"]
+
     for i in range(settings.evaluation_normal_runs):
         seed = random.randint(0, 2**31)
         perturbed = perturb_normal(base_inputs, seed)
-        result = run_in_sandbox(
-            code, entrypoint, challenge_config, input_overrides=perturbed
-        )
-        record = _process_run(result, ground_truth, accuracy_mode, "normal", i)
+        result = run_in_sandbox(code, entrypoint, challenge_config, input_overrides=perturbed)
+        record = _process_run(result, ground_truth, accuracy_mode, "perturbed", i)
         run_records.append(record)
-        accuracies.append(record["accuracy"])
+        perturbed_accuracies.append(record["accuracy"])
         all_telemetry.extend(result.telemetry)
-        total_tokens += record["tokens_total"]
+        total_prompt_tokens += record["tokens_prompt"]
+        total_completion_tokens += record["tokens_completion"]
         total_cost += record["cost_usd"]
         total_latency += record["latency_ms"]
         total_calls += record["llm_calls"]
         total_retries += record["retries"]
 
-    # --- Adversarial runs ---
     for i in range(settings.evaluation_adversarial_runs):
         seed = random.randint(0, 2**31)
         perturbed = perturb_adversarial(base_inputs, seed)
-        result = run_in_sandbox(
-            code, entrypoint, challenge_config, input_overrides=perturbed
-        )
+        result = run_in_sandbox(code, entrypoint, challenge_config, input_overrides=perturbed)
         record = _process_run(result, ground_truth, accuracy_mode, "adversarial", i)
         run_records.append(record)
-        accuracies.append(record["accuracy"])
+        adversarial_accuracies.append(record["accuracy"])
         all_telemetry.extend(result.telemetry)
-        total_tokens += record["tokens_total"]
+        total_prompt_tokens += record["tokens_prompt"]
+        total_completion_tokens += record["tokens_completion"]
         total_cost += record["cost_usd"]
         total_latency += record["latency_ms"]
         total_calls += record["llm_calls"]
         total_retries += record["retries"]
 
-    # --- Hardcode detection ---
-    # If the code produces high accuracy but makes zero LLM calls, the user
-    # likely hardcoded the answer or leaked the ground truth.
+    all_accuracies = clean_accuracies + perturbed_accuracies + adversarial_accuracies
+
     hardcoded = _detect_hardcoding(
         total_calls=total_calls,
-        accuracies=accuracies,
+        accuracies=all_accuracies,
         code=code,
         ground_truth=ground_truth,
     )
 
-    # --- Static code analysis ---
-    code_analysis_result = analyze_code(code)
+    code_analysis_result = analyze_code(code, entrypoint)
     code_quality_result = score_code_quality(code_analysis_result)
-
-    # --- Prompt quality (LLM-as-judge) ---
     pq_result = score_prompt_quality(all_telemetry, challenge_description)
 
-    # --- Scoring ---
-    acc = round(sum(accuracies) / len(accuracies), 4) if accuracies else 0.0
+    acc = round(sum(clean_accuracies) / len(clean_accuracies), 4) if clean_accuracies else 0.0
+    robustness = _score_robustness(perturbed_accuracies, adversarial_accuracies)
+    rel = score_reliability(all_accuracies)
     pq = round(pq_result.get("overall", 0.0), 4)
-    eff = score_efficiency(total_tokens, total_cost)
-    rel = score_reliability(accuracies)
+    cq = round(code_quality_result.get("score", 0.5), 4)
+
     orch = score_orchestration(
         total_calls,
         total_retries,
         expected_calls=challenge_config.get("expected_calls", 3),
         code_analysis=code_quality_result,
     )
-    cq = round(code_quality_result.get("score", 0.5), 4)
+
+    rule_adherence = _score_constraint_adherence(run_records)
+
+    quality_anchor = (acc * 0.5) + (robustness * 0.3) + (rel * 0.2)
+    run_count = max(1, len(run_records))
+    eff = score_efficiency_tradeoff(
+        total_tokens=total_prompt_tokens + total_completion_tokens,
+        total_cost_usd=total_cost,
+        total_latency_ms=total_latency,
+        total_calls=total_calls,
+        quality_anchor=quality_anchor,
+        budgets={
+            "token_budget": challenge_config.get("token_budget", 12_000),
+            "cost_budget_usd": challenge_config.get("cost_budget_usd", 0.20),
+            "latency_budget_ms": challenge_config.get("latency_budget_ms", 30_000),
+            "call_budget": challenge_config.get("call_budget", challenge_config.get("expected_calls", 3) * run_count),
+        },
+    )
+
+    calibration_points = _extract_confidence_points(run_records)
+    calibration_result = score_calibration(calibration_points)
+    calibration = float(calibration_result.get("score", 0.5))
 
     if hardcoded:
-        logger.warning("Hardcoded answer detected — zeroing all scores")
-        acc = pq = eff = rel = orch = cq = 0.0
+        logger.warning("Hardcoded answer detected - zeroing all quality scores")
+        acc = pq = rule_adherence = eff = rel = orch = cq = robustness = calibration = 0.0
 
     overall = round(
         acc * SCORE_WEIGHTS["accuracy"]
-        + pq * SCORE_WEIGHTS["prompt_quality"]
-        + eff * SCORE_WEIGHTS["efficiency"]
+        + robustness * SCORE_WEIGHTS["robustness"]
         + rel * SCORE_WEIGHTS["reliability"]
+        + eff * SCORE_WEIGHTS["efficiency"]
+        + pq * SCORE_WEIGHTS["prompt_quality"]
         + orch * SCORE_WEIGHTS["orchestration"]
-        + cq * SCORE_WEIGHTS["code_quality"],
+        + calibration * SCORE_WEIGHTS["calibration"],
         4,
+    )
+
+    if acc < 0.40:
+        overall = min(overall, 0.55)
+    if rule_adherence < 0.50:
+        overall = min(overall, 0.50)
+
+    diagnostics = _build_diagnostics(
+        accuracy=acc,
+        robustness=robustness,
+        reliability=rel,
+        efficiency=eff,
+        prompt_quality=pq,
+        orchestration=orch,
+        calibration=calibration,
+        code_quality=cq,
+        rule_adherence=rule_adherence,
     )
 
     return EvaluationResult(
         accuracy=acc,
         prompt_quality=pq,
+        rule_adherence=rule_adherence,
         efficiency=eff,
         reliability=rel,
         orchestration=orch,
         code_quality=cq,
+        edge_case_handling=robustness,
+        calibration=calibration,
         overall=overall,
         cost_usd=total_cost,
         latency_ms=total_latency,
         llm_calls=total_calls,
+        prompt_tokens=total_prompt_tokens,
+        completion_tokens=total_completion_tokens,
+        retries=total_retries,
         runs=run_records,
         prompt_quality_details=pq_result,
         code_analysis_details=code_quality_result,
+        calibration_details=calibration_result,
+        diagnostics=diagnostics,
         hardcoded=hardcoded,
     )
+
+
+def _score_robustness(perturbed: list[float], adversarial: list[float]) -> float:
+    perturbed_pass = sum(1 for s in perturbed if s >= 0.8) / len(perturbed) if perturbed else 0.0
+    adversarial_pass = sum(1 for s in adversarial if s >= 0.7) / len(adversarial) if adversarial else 0.0
+    return round((perturbed_pass * 0.5) + (adversarial_pass * 0.5), 4)
+
+
+def _score_constraint_adherence(runs: list[dict[str, Any]]) -> float:
+    if not runs:
+        return 0.0
+
+    schema_valid = sum(1 for r in runs if r.get("schema_valid")) / len(runs)
+    pass_rate = sum(1 for r in runs if r.get("status") == "pass") / len(runs)
+    return round((schema_valid * 0.55) + (pass_rate * 0.45), 4)
+
+
+def _extract_confidence_points(runs: list[dict[str, Any]]) -> list[tuple[float, float]]:
+    points: list[tuple[float, float]] = []
+    for run in runs:
+        conf = run.get("confidence")
+        if conf is None:
+            continue
+        outcome = 1.0 if run.get("status") == "pass" else 0.0
+        points.append((float(conf), outcome))
+    return points
+
+
+def _build_diagnostics(**scores: float) -> list[dict[str, str]]:
+    tips: list[dict[str, str]] = []
+
+    if scores["accuracy"] < 0.85:
+        tips.append({
+            "metric": "accuracy",
+            "severity": "high",
+            "message": "Low clean-run correctness. Tighten extraction instructions and enforce exact output schema.",
+        })
+    if scores["robustness"] < 0.75:
+        tips.append({
+            "metric": "robustness",
+            "severity": "high",
+            "message": "Results degrade on perturbed/adversarial inputs. Add explicit normalization and missing-field handling rules.",
+        })
+    if scores["efficiency"] < 0.70:
+        tips.append({
+            "metric": "efficiency",
+            "severity": "medium",
+            "message": "Usage is above cost/latency budget frontier for achieved quality. Reduce redundant calls and compress prompt context.",
+        })
+    if scores["orchestration"] < 0.75:
+        tips.append({
+            "metric": "orchestration",
+            "severity": "medium",
+            "message": "Orchestration quality is weak. Add retry bounds, JSON validation, and explicit fallback behavior.",
+        })
+    if scores["calibration"] < 0.60:
+        tips.append({
+            "metric": "calibration",
+            "severity": "low",
+            "message": "Confidence signals are missing or miscalibrated. Emit confidence per output and calibrate thresholds.",
+        })
+    if not tips:
+        tips.append({
+            "metric": "summary",
+            "severity": "low",
+            "message": "Balanced submission: no critical weaknesses detected in this run set.",
+        })
+
+    return tips
 
 
 def _detect_hardcoding(
@@ -236,14 +385,6 @@ def _detect_hardcoding(
     code: str,
     ground_truth: str,
 ) -> bool:
-    """Detect if the user hardcoded the answer instead of using AI.
-
-    Signals:
-    1. Zero LLM calls but high accuracy → definitely hardcoded
-    2. Ground truth strings embedded literally in the source code
-    3. Very few LLM calls with suspiciously perfect accuracy across
-       ALL runs including adversarial (real AI solutions degrade on noisy input)
-    """
     mean_acc = sum(accuracies) / len(accuracies) if accuracies else 0.0
 
     if total_calls == 0 and mean_acc > 0.3:
@@ -272,7 +413,6 @@ def _detect_hardcoding(
 
 
 def _count_gt_fragments_in_code(gt: Any, code_lower: str) -> int:
-    """Count how many ground truth values appear literally in the source."""
     count = 0
 
     if isinstance(gt, dict):
@@ -299,6 +439,8 @@ def _process_run(
     run_index: int,
 ) -> dict[str, Any]:
     telemetry = result.telemetry
+    prompt_tokens = sum(r.get("tokens_prompt", 0) for r in telemetry)
+    completion_tokens = sum(r.get("tokens_completion", 0) for r in telemetry)
     tokens = sum(r.get("tokens_total", 0) for r in telemetry)
     cost = sum(r.get("cost_usd", 0.0) for r in telemetry)
     latency = sum(r.get("latency_ms", 0.0) for r in telemetry)
@@ -306,14 +448,26 @@ def _process_run(
     retries = sum(1 for r in telemetry if r.get("retry_index", 0) > 0)
 
     acc = 0.0
+    schema_valid = False
+    confidence = None
     if result.success:
-        acc = score_accuracy(result.output.strip(), ground_truth, mode=accuracy_mode)
+        raw = result.output.strip()
+        acc = score_accuracy(raw, ground_truth, mode=accuracy_mode)
+        schema_valid = _is_schema_valid(raw, accuracy_mode)
+        confidence = _extract_confidence_value(raw)
+
+    status = "pass" if (result.success and acc >= 0.8 and schema_valid) else "fail"
 
     return {
         "run_type": run_type,
         "run_index": run_index,
         "success": result.success,
+        "status": status,
         "accuracy": round(acc, 4),
+        "schema_valid": schema_valid,
+        "confidence": confidence,
+        "tokens_prompt": prompt_tokens,
+        "tokens_completion": completion_tokens,
         "tokens_total": tokens,
         "cost_usd": round(cost, 6),
         "latency_ms": round(latency, 2),
@@ -321,3 +475,26 @@ def _process_run(
         "retries": retries,
         "error": result.error,
     }
+
+
+def _is_schema_valid(output: str, accuracy_mode: str) -> bool:
+    if accuracy_mode != "json":
+        return bool(output.strip())
+    try:
+        json.loads(output)
+        return True
+    except Exception:
+        return False
+
+
+def _extract_confidence_value(output: str) -> float | None:
+    try:
+        data = json.loads(output)
+    except Exception:
+        return None
+
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if isinstance(v, (int, float)) and any(t in k.lower() for t in ("confidence", "probability", "prob")):
+                return float(v)
+    return None
