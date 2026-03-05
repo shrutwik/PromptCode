@@ -10,11 +10,11 @@ def test_prompt_judge_calibration_gate_passes_heuristic_baseline() -> None:
     result = run_gate(
         samples_path=samples,
         mode="heuristic",
-        min_samples=2,
+        min_samples=20,
         min_pearson=0.75,
-        max_mae=0.30,
+        max_mae=0.25,
+        require_judge_mode=False,
     )
     assert result["pass"] is True
-    assert result["sample_count"] >= 2
+    assert result["sample_count"] >= 20
     assert result["pearson_r"] >= 0.75
-

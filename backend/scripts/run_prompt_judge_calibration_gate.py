@@ -35,7 +35,15 @@ def run_gate(
     min_samples: int,
     min_pearson: float,
     max_mae: float,
+    require_judge_mode: bool,
 ) -> dict:
+    if require_judge_mode and mode != "judge":
+        return {
+            "pass": False,
+            "reason": "judge_mode_required",
+            "mode": mode,
+        }
+
     samples = load_samples(samples_path)
     if len(samples) < min_samples:
         return {
@@ -86,9 +94,14 @@ def main() -> None:
         help="Path to JSONL calibration samples",
     )
     parser.add_argument("--mode", choices=["judge", "heuristic"], default="heuristic")
-    parser.add_argument("--min-samples", type=int, default=2)
+    parser.add_argument("--min-samples", type=int, default=20)
     parser.add_argument("--min-pearson", type=float, default=0.75)
-    parser.add_argument("--max-mae", type=float, default=0.30)
+    parser.add_argument("--max-mae", type=float, default=0.25)
+    parser.add_argument(
+        "--require-judge-mode",
+        action="store_true",
+        help="Fail unless mode=judge (use for release-grade checks).",
+    )
     args = parser.parse_args()
 
     result = run_gate(
@@ -97,6 +110,7 @@ def main() -> None:
         min_samples=args.min_samples,
         min_pearson=args.min_pearson,
         max_mae=args.max_mae,
+        require_judge_mode=args.require_judge_mode,
     )
     print(json.dumps(result, indent=2))
     if not result.get("pass", False):
@@ -105,4 +119,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
