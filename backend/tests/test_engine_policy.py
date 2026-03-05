@@ -3,6 +3,8 @@ from __future__ import annotations
 from app.services.evaluation.engine import (
     _apply_overall_caps,
     _build_evaluation_manifest,
+    _default_evaluation_seed,
+    _detect_metric_gaming,
 )
 
 
@@ -78,3 +80,34 @@ def test_evaluation_manifest_is_deterministic():
     assert m1["replay_hash"] == m2["replay_hash"]
     assert m1["challenge_fingerprint"] == m2["challenge_fingerprint"]
 
+
+def test_default_evaluation_seed_is_stable_for_same_config():
+    cfg = {
+        "accuracy_mode": "json",
+        "inputs": {"x": [1, 2, 3]},
+        "ground_truth": {"ok": True},
+        "processing_rules": {"a": 1},
+        "hidden_tests": {"tier": [{"inputs": {"x": [4]}}]},
+    }
+    s1 = _default_evaluation_seed(cfg)
+    s2 = _default_evaluation_seed(cfg)
+    assert s1 == s2
+    assert s1 > 0
+
+
+def test_detect_metric_gaming_flags_repetitive_low_schema_runs():
+    runs = [
+        {"output_hash": "x", "schema_valid": False, "output_chars": 40},
+        {"output_hash": "x", "schema_valid": False, "output_chars": 38},
+        {"output_hash": "x", "schema_valid": False, "output_chars": 42},
+        {"output_hash": "x", "schema_valid": False, "output_chars": 41},
+        {"output_hash": "x", "schema_valid": True, "output_chars": 39},
+    ]
+    result = _detect_metric_gaming(
+        runs=runs,
+        total_tokens=5000,
+        total_calls=8,
+        accuracy=0.6,
+        robustness=0.45,
+    )
+    assert result["triggered"] is True

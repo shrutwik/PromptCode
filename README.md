@@ -261,3 +261,10 @@ pytest -q
 cd backend
 python -m scripts.run_reproducibility_gate --repeats 10 --stddev-threshold 0.03
 ```
+
+## Prompt-Judge Calibration Gate
+
+```bash
+cd backend
+python -m scripts.run_prompt_judge_calibration_gate --mode heuristic --min-samples 2 --min-pearson 0.75 --max-mae 0.30
+```

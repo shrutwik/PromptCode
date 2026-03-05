@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import random
-import hashlib
 from datetime import datetime, timezone
 from typing import Any
 
@@ -161,7 +161,10 @@ def evaluate_submission(
     accuracy_mode = challenge_config.get("accuracy_mode", "json")
     base_inputs = challenge_config.get("inputs", {})
     challenge_description = challenge_config.get("description", "")
-    evaluation_seed = int(challenge_config.get("evaluation_seed", random.randint(1, 2**31 - 1)))
+    evaluation_seed = int(
+        challenge_config.get("evaluation_seed")
+        or _default_evaluation_seed(challenge_config)
+    )
     seed_rng = random.Random(evaluation_seed)
 
     run_records: list[dict[str, Any]] = []
@@ -350,6 +353,11 @@ def evaluate_submission(
     calibration_result = score_calibration(calibration_points)
     calibration = float(calibration_result.get("score", 0.5))
 
+    prompt_judge_fallback = pq_result.get("method") == "heuristic"
+    if prompt_judge_fallback:
+        # Heuristic prompt judging is less trustworthy than LLM-judge scoring.
+        pq = min(pq, 0.65)
+
     if hardcoded:
         logger.warning("Hardcoded answer detected - zeroing all quality scores")
         acc = pq = rule_adherence = eff = rel = orch = cq = robustness = calibration = 0.0
@@ -416,6 +424,15 @@ def evaluate_submission(
         rule_adherence=rule_adherence,
         metric_gaming=1.0 if metric_gaming["triggered"] else 0.0,
     )
+    if prompt_judge_fallback:
+        diagnostics.insert(
+            0,
+            {
+                "metric": "prompt_quality",
+                "severity": "medium",
+                "message": "Prompt judge fell back to heuristics; prompt-quality score confidence is reduced.",
+            },
+        )
     if metric_gaming["triggered"]:
         diagnostics.insert(
             0,
@@ -636,11 +653,20 @@ def _detect_metric_gaming(
     minimal_usage = total_tokens <= max(120, len(runs) * 20) and total_calls <= max(1, len(runs) // 2)
     low_quality = accuracy < 0.65 or robustness < 0.55
     low_effort_output = avg_output_chars < 24
+    output_hashes = [r.get("output_hash") for r in runs if r.get("output_hash")]
+    unique_ratio = (len(set(output_hashes)) / len(output_hashes)) if output_hashes else 1.0
+    suspicious_repeat_pattern = len(output_hashes) >= 4 and unique_ratio < 0.35 and robustness < 0.6
+    low_schema_validity = (sum(1 for r in runs if r.get("schema_valid")) / len(runs)) < 0.5
 
     if minimal_usage and low_quality and low_effort_output:
         return {
             "triggered": True,
             "reason": "Potential metric gaming detected: extremely low usage plus low-quality/low-effort outputs.",
+        }
+    if suspicious_repeat_pattern and low_schema_validity:
+        return {
+            "triggered": True,
+            "reason": "Potential metric gaming detected: repetitive outputs with weak schema adherence under perturbations.",
         }
     return {"triggered": False, "reason": ""}
 
@@ -722,9 +748,12 @@ def _process_run(
     if result.success:
         raw = result.output.strip()
         output_chars = len(raw)
+        output_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest() if raw else None
         acc = score_accuracy(raw, ground_truth, mode=accuracy_mode)
         schema_valid = _is_schema_valid(raw, accuracy_mode, ground_truth)
         confidence = _extract_confidence_value(raw)
+    else:
+        output_hash = None
 
     status = "pass" if (result.success and acc >= 0.8 and schema_valid) else "fail"
 
@@ -737,6 +766,7 @@ def _process_run(
         "schema_valid": schema_valid,
         "confidence": confidence,
         "output_chars": output_chars,
+        "output_hash": output_hash,
         "tokens_prompt": prompt_tokens,
         "tokens_completion": completion_tokens,
         "tokens_total": tokens,
@@ -868,6 +898,21 @@ def _proportion_confidence_interval(successes: int, total: int) -> dict[str, Any
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _default_evaluation_seed(challenge_config: dict[str, Any]) -> int:
+    payload = {
+        "accuracy_mode": challenge_config.get("accuracy_mode", "json"),
+        "inputs": challenge_config.get("inputs", {}),
+        "ground_truth": challenge_config.get("ground_truth", ""),
+        "processing_rules": challenge_config.get("processing_rules", {}),
+        "hidden_tests": challenge_config.get("hidden_tests", {}),
+    }
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    # Keep within signed 31-bit positive range for compatibility.
+    return (int(digest[:12], 16) % (2**31 - 1)) + 1
 
 
 def _apply_overall_caps(

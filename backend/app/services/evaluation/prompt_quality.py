@@ -114,10 +114,13 @@ def _judge_with_llm(
 
     prompt_listing = ""
     for i, p in enumerate(prompts, 1):
-        prompt_listing += f"\n--- Prompt #{i} (model: {p['model']}) ---\n"
-        if p["system"]:
-            prompt_listing += f"[System]: {p['system']}\n"
-        prompt_listing += f"[User]: {p['user']}\n"
+        model_name = p.get("model", "unknown")
+        system_text = p.get("system", "")
+        user_text = p.get("user", "")
+        prompt_listing += f"\n--- Prompt #{i} (model: {model_name}) ---\n"
+        if system_text:
+            prompt_listing += f"[System]: {system_text}\n"
+        prompt_listing += f"[User]: {user_text}\n"
 
     user_message = (
         f"## Challenge Description\n{challenge_description}\n\n"

@@ -6,9 +6,7 @@ tracks scoring drift without requiring sandbox execution or external API calls.
 
 from __future__ import annotations
 
-import hashlib
 import json
-import random
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import mean
@@ -146,18 +144,14 @@ def compute_case_scores(case: BenchmarkCase) -> dict[str, float]:
 
 
 def simulate_repeated_overall(case: BenchmarkCase, repeats: int) -> list[float]:
-    """Simulate repeated evaluation outputs with tiny deterministic jitter.
+    """Replay the scoring computation repeatedly with identical inputs.
 
-    This approximates run-to-run noise while keeping CI deterministic.
+    This verifies deterministic stability of the scoring path itself
+    (no synthetic noise/jitter injection).
     """
-    base = compute_case_scores(case)["overall"]
     values: list[float] = []
-    for i in range(repeats):
-        seed = _seed_from_case(case.case_id, i)
-        rng = random.Random(seed)
-        # Stable, tiny jitter envelope to emulate stochastic model variance.
-        jitter = rng.uniform(-0.01, 0.01)
-        values.append(round(max(0.0, min(1.0, base + jitter)), 4))
+    for _ in range(repeats):
+        values.append(compute_case_scores(case)["overall"])
     return values
 
 
@@ -209,9 +203,4 @@ def evaluate_reproducibility(
             ),
         },
     }
-
-
-def _seed_from_case(case_id: str, i: int) -> int:
-    h = hashlib.sha256(f"{case_id}:{i}".encode("utf-8")).hexdigest()
-    return int(h[:16], 16)
 
