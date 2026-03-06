@@ -7,6 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.challenge import Challenge
@@ -77,9 +78,10 @@ async def create_submission(
     await db.commit()
     await db.refresh(submission)
     await db.refresh(job)
-    # Opportunistic in-process execution for low-latency MVP behavior.
-    # Persistent queue workers can process the same job if this process restarts.
-    background_tasks.add_task(process_job, str(job.id))
+    if get_settings().submission_inline_queue_processing:
+        # Opportunistic in-process execution for low-latency local/dev behavior.
+        # Production deployments should rely on the persistent queue worker.
+        background_tasks.add_task(process_job, str(job.id))
 
     return submission
 

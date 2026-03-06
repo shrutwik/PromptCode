@@ -60,6 +60,7 @@ The compose stack also mounts a shared sandbox workspace path so nested Docker s
 It sets `PROMPTCODE_SANDBOX_NETWORK_MODE=container` so each nested sandbox shares the caller container network namespace and can reach the local relay on `127.0.0.1`.
 
 The compose stack now includes a `worker` service for resilient async scoring.
+It disables in-process submission evaluation in the web container, so queued jobs are handled only by the worker service.
 If you run the backend outside compose, start the queue worker in a second shell:
 
 ```bash
