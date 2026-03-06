@@ -1,6 +1,10 @@
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
 .env
 *.egg-info/
 dist/
@@ -9,6 +13,7 @@ build/
 venv/
 node_modules/
 .next/
+.claude/
 .DS_Store
 *.db
 /pgdata/
