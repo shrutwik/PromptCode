@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import asyncio
+import time
+from collections import defaultdict, deque
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,9 +23,50 @@ from app.schemas.user import (
 
 router = APIRouter()
 
+_AUTH_RATE_WINDOW = 60  # seconds
+_AUTH_RATE_LIMIT = 10  # max attempts per IP per window
+_AUTH_RATE_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
+_AUTH_RATE_LOCK = asyncio.Lock()
+
+
+def _auth_client_key(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for", "").strip()
+    if forwarded_for:
+        client_ip = forwarded_for.split(",")[0].strip()
+        if client_ip:
+            return client_ip
+    real_ip = request.headers.get("x-real-ip", "").strip()
+    if real_ip:
+        return real_ip
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+async def _check_auth_rate_limit(request: Request) -> None:
+    now = time.monotonic()
+    cutoff = now - _AUTH_RATE_WINDOW
+    client_ip = _auth_client_key(request)
+    async with _AUTH_RATE_LOCK:
+        bucket = _AUTH_RATE_BUCKETS[client_ip]
+        while bucket and bucket[0] < cutoff:
+            bucket.popleft()
+        if len(bucket) >= _AUTH_RATE_LIMIT:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many attempts. Please try again later.",
+                headers={"Retry-After": str(_AUTH_RATE_WINDOW)},
+            )
+        bucket.append(now)
+
 
 @router.post("/signup", response_model=TokenResponse, status_code=201)
-async def signup(payload: UserCreate, db: AsyncSession = Depends(get_db)):
+async def signup(
+    payload: UserCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    await _check_auth_rate_limit(request)
     existing = await db.execute(
         select(User).where(
             (User.email == payload.email) | (User.username == payload.username)
@@ -50,7 +95,12 @@ async def signup(payload: UserCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)):
+async def login(
+    payload: UserLogin,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    await _check_auth_rate_limit(request)
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
     if not user or not verify_password(payload.password, user.password_hash):

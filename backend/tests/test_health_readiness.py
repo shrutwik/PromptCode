@@ -64,6 +64,34 @@ def test_health_and_ready_are_ok_with_live_database(monkeypatch):
     asyncio.run(async_engine.dispose())
 
 
+def test_health_sets_security_headers(monkeypatch):
+    async_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    monkeypatch.setattr(main_module, "engine", async_engine)
+    get_settings.cache_clear()
+
+    app = main_module.create_app()
+
+    with TestClient(app) as client:
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.headers["Content-Security-Policy"].startswith("default-src 'self'")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+    assert response.headers["Permissions-Policy"] == "camera=(), microphone=(), geolocation=()"
+    assert response.headers["Cross-Origin-Opener-Policy"] == "same-origin"
+    if not get_settings().debug:
+        assert response.headers["Strict-Transport-Security"] == (
+            "max-age=31536000; includeSubDomains"
+        )
+    else:
+        assert "Strict-Transport-Security" not in response.headers
+
+    get_settings.cache_clear()
+    asyncio.run(async_engine.dispose())
+
+
 def test_ready_returns_503_when_database_is_unavailable(monkeypatch):
     monkeypatch.setattr(main_module, "engine", _FailingEngine())
     get_settings.cache_clear()
