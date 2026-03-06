@@ -16,8 +16,8 @@
 
 ### Implementation Steps
 
-**Step 1: Backup current code**
-- Copy `engine.py` to `engine.py.backup`
+**Step 1: Snapshot current code**
+- Record the current `engine.py` state in git before editing
 
 **Step 2: Create async evaluation function**
 - Refactor `evaluate_submission()` → `async def evaluate_submission_parallel()`
@@ -90,8 +90,8 @@ async def test_full_submission_flow():
 
 ## CHECKPOINTS
 
-**After Step 1 (Backup):**
-- ✅ Original code safe
+**After Step 1 (Snapshot):**
+- ✅ Original code recoverable from git history
 - ✅ Ready to modify
 
 **After Step 2 (Create async function):**
@@ -135,7 +135,6 @@ pytest -xvs backend/tests/test_engine_policy.py  # Existing tests still pass
 ## ROLLBACK PLAN
 
 If anything breaks:
-1. `cp backend/app/services/evaluation/engine.py.backup backend/app/services/evaluation/engine.py`
+1. `git checkout <known-good-commit> -- backend/app/services/evaluation/engine.py`
 2. Revert to sequential version
 3. Debug and try again
-

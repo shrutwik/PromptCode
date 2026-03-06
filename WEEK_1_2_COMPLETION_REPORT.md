@@ -27,7 +27,7 @@
   - Multiple evaluations can run concurrently
 
 **4. Backup & Rollback**
-- ✅ Created `engine.py.backup` (safe rollback if needed)
+- ✅ Kept rollback available through git history
 
 ---
 
@@ -77,7 +77,7 @@ Total: 120s per submission (8x speedup!)
 - [x] All callers updated to use `await`
 - [x] No breaking changes to function signatures (input/output same)
 - [x] Determinism preserved (results processed in spec order)
-- [x] Backup created for rollback
+- [x] Rollback path documented via git history
 
 ---
 
@@ -132,4 +132,3 @@ async def evaluate_submission(...) -> EvaluationResult:
 ## ✨ SUMMARY
 
 Week 1-2 refactoring complete. Evaluation engine now parallelizes all runs across asyncio thread pool, delivering **8x speedup** with zero behavioral changes. All existing tests pass. Ready for Week 3 async test suite and E2E validation.
-
