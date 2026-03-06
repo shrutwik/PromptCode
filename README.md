@@ -61,12 +61,12 @@ Backend and worker submit sandbox runs to that internal executor over HTTP, so t
 It sets `PROMPTCODE_SANDBOX_NETWORK_MODE=container` so each nested sandbox shares the executor container network namespace and can reach the local relay on `127.0.0.1`.
 The executor now exposes `/health`, `/ready`, and `/status` so you can separate process liveness from actual Docker/image readiness.
 
-The compose stack now includes a `worker` service for resilient async scoring.
-It disables in-process submission evaluation in the web container, so queued jobs are handled only by the worker service.
+The compose stack now includes two worker services for conservative multi-user throughput.
+It disables in-process submission evaluation in the web container, so queued jobs are handled only by the worker services.
 Both the backend and worker containers now run `alembic upgrade head` before starting their main process.
 The backend readiness check requires a fresh worker heartbeat when inline queue processing is disabled, and it also fails closed if the configured sandbox executor is unreachable.
 The worker publishes a matching heartbeat healthcheck.
-The default compose scaling guards are conservative: one submission can fan out at most `PROMPTCODE_EVALUATION_MAX_PARALLEL_SPECS` sandbox runs, the executor accepts at most `PROMPTCODE_SANDBOX_EXECUTOR_MAX_CONCURRENT_RUNS` active runs, and each user can hold at most `PROMPTCODE_SUBMISSION_MAX_OUTSTANDING_JOBS_PER_USER` queued/running evaluations.
+The default compose scaling guards are conservative: one submission can fan out at most `PROMPTCODE_EVALUATION_MAX_PARALLEL_SPECS` sandbox runs, the executor accepts at most `PROMPTCODE_SANDBOX_EXECUTOR_MAX_CONCURRENT_RUNS` active runs, and each user can hold at most `PROMPTCODE_SUBMISSION_MAX_OUTSTANDING_JOBS_PER_USER` queued/running evaluations. That user cap does not limit lifetime retries on a challenge; it only limits active jobs at once.
 If you run the backend outside compose, start the queue worker in a second shell:
 
 ```bash
@@ -103,10 +103,10 @@ cd backend
 python -m scripts.run_sandbox_executor_smoke --url http://127.0.0.1:8090 --token "$PROMPTCODE_SANDBOX_EXECUTOR_TOKEN"
 ```
 
-To test modest multi-user throughput locally, keep the executor caps in place and scale workers explicitly:
+To push beyond the default two-worker topology locally, keep the executor caps in place and scale workers explicitly:
 
 ```bash
-docker compose up --build -d --scale worker=2
+docker compose up --build -d --scale worker=3 --scale worker-b=1
 ```
 
 ## Using Supabase as the database

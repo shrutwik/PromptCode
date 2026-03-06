@@ -126,6 +126,27 @@ nav { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--nav-h); 
 .sub-name { color: var(--text); }
 .sub-score { color: var(--accent); }
 .sub-time { color: var(--muted); font-size: 10px; }
+
+@media (max-width: 960px) {
+  nav { padding: 0 16px; }
+  .nav-links { display: none; }
+  .page-wrap { padding: calc(var(--nav-h) + 24px) 16px 40px; }
+  .lb-hero,
+  .page-grid { grid-template-columns: 1fr; }
+  .your-stats {
+    position: static;
+    top: auto;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+  .lb-table {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .lb-header,
+  .lb-row { min-width: 720px; }
+}
 </style>
 </head>
 <body>

@@ -138,6 +138,16 @@ nav {
 /* Error state */
 .form-error { display: none; font-size: 11px; color: var(--danger); margin-top: 5px; }
 
+@media (max-width: 860px) {
+  nav { padding: 0 16px; }
+  .page { grid-template-columns: 1fr; }
+  .left-panel {
+    padding: 36px 24px 48px;
+    border-right: none;
+  }
+  .right-panel { display: none; }
+}
+
 </style>
 </head>
 <body>

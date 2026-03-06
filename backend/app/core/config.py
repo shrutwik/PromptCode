@@ -48,7 +48,7 @@ class Settings(BaseSettings):
 
     evaluation_normal_runs: int = 5
     evaluation_adversarial_runs: int = 2
-    evaluation_max_parallel_specs: int = 3
+    evaluation_max_parallel_specs: int = 2
     evaluation_job_timeout_seconds: int = 1800
     submission_inline_queue_processing: bool = True
     submission_max_outstanding_jobs_per_user: int = 3

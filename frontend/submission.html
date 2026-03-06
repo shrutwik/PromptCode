@@ -205,6 +205,26 @@ nav {
 .diff-easy { background: rgba(96,212,168,0.15); color: var(--success); }
 .diff-med { background: rgba(240,160,96,0.15); color: var(--warn); }
 .diff-hard { background: rgba(240,96,96,0.15); color: var(--danger); }
+
+@media (max-width: 960px) {
+  nav { padding: 0 16px; }
+  .nav-links { display: none; }
+  .page { padding: calc(var(--nav-h) + 24px) 16px 40px; }
+  .result-hero,
+  .content-grid { grid-template-columns: 1fr; }
+  .result-actions { align-items: flex-start; }
+  .right-col {
+    position: static;
+    top: auto;
+  }
+  .card-body { overflow-x: auto; }
+  .passes-table { min-width: 640px; }
+}
+
+@media (max-width: 640px) {
+  .score-grid,
+  .diff-row { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>

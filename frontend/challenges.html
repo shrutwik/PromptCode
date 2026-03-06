@@ -146,6 +146,42 @@ nav { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--nav-h); 
 .wb-right { display:flex; align-items:center; gap:12px; }
 .wb-timer { font-size:11px; color:var(--muted); }
 .wb-timer b { color:var(--warn); }
+
+@media (max-width: 960px) {
+  nav { padding: 0 16px; }
+  .nav-links { display: none; }
+  .layout { grid-template-columns: 1fr; }
+  .sidebar {
+    position: static;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .main { padding: 24px 16px 40px; }
+  .page-header,
+  .weekly-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .header-actions,
+  .wb-right { width: 100%; }
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+  .search-input {
+    width: 100%;
+    margin-left: 0;
+  }
+  .challenges-table {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .table-header,
+  .challenge-row { min-width: 720px; }
+}
+
+@media (max-width: 640px) {
+  .stats-row { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
@@ -158,7 +194,7 @@ nav { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--nav-h); 
     <a href="/playground.html">playground</a>
   </div>
   <div class="nav-right">
-    <span style="font-size:11px;color:var(--muted)">sdk v0.4.1</span>
+    <span style="font-size:11px;color:var(--muted)">promptcode sdk</span>
     <a data-noauth-show class="btn btn-ghost" href="/login.html">sign in</a>
     <a data-noauth-show class="btn btn-primary" href="/signup.html">get started →</a>
     <a data-auth-show href="/profile.html" style="width:28px;height:28px;border-radius:5px;background:var(--accent-dim);border:1px solid rgba(200,240,96,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:none" data-user-initials>jl</a>

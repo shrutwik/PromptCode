@@ -229,6 +229,63 @@ footer {
 .footer-links { display: flex; gap: 20px; }
 .footer-links a { color: var(--muted); text-decoration: none; transition: color 0.2s; }
 .footer-links a:hover { color: var(--text); }
+
+@media (max-width: 960px) {
+  nav { padding: 0 16px; }
+  .nav-links { display: none; }
+  .stats-inner,
+  .steps-grid,
+  .scoring-grid,
+  .sdk-inner {
+    grid-template-columns: 1fr;
+  }
+  .stat-item {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 20px 24px;
+  }
+  .stat-item:last-child { border-bottom: none; }
+  .sdk-inner { gap: 32px; }
+}
+
+@media (max-width: 720px) {
+  nav { padding: 0 12px; }
+  .hero,
+  .section,
+  .sdk-section,
+  .cta-section,
+  footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .hero {
+    min-height: auto;
+    padding-top: calc(var(--nav-h) + 40px);
+    padding-bottom: 64px;
+  }
+  .hero-actions,
+  .cta-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .btn-lg { justify-content: center; }
+  .hero-terminal { margin-top: 48px; }
+  .cp-row {
+    grid-template-columns: 32px 1fr;
+    gap: 10px;
+  }
+  .cp-cat,
+  .cp-solved { display: none; }
+  footer {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 560px) {
+  .stats-inner { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
@@ -251,7 +308,7 @@ footer {
 
 <!-- HERO -->
 <section class="hero">
-  <div class="hero-eyebrow fade-in"><div class="live-dot"></div>now in beta — 847 engineers enrolled</div>
+  <div class="hero-eyebrow fade-in"><div class="live-dot"></div>now in beta — live challenges, real scoring</div>
   <h1 class="hero-title fade-in d1">
     Engineer AI.<br>
     <em>Not just use it.</em>

@@ -648,6 +648,71 @@ nav {
 .d1 { animation-delay: 0.05s; }
 .d2 { animation-delay: 0.10s; }
 .d3 { animation-delay: 0.15s; }
+
+@media (max-width: 1180px) {
+  .problem-pane { width: 300px; }
+  .right-pane { width: 300px; }
+}
+
+@media (max-width: 920px) {
+  nav { padding: 0 12px; }
+  .challenge-crumb,
+  .nav-links { display: none; }
+  .drawer { width: min(320px, 92vw); }
+}
+
+@media (max-width: 820px) {
+  html, body {
+    height: auto;
+    overflow: auto;
+  }
+  body { min-height: 100vh; }
+  .workspace {
+    position: static;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    flex-direction: column;
+    overflow: visible;
+    min-height: calc(100vh - var(--nav-h));
+    padding-top: var(--nav-h);
+  }
+  .splitter { display: none; }
+  .problem-pane,
+  .center-pane,
+  .right-pane {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+  .problem-pane,
+  .right-pane { border-bottom: 1px solid var(--border); }
+  .editor-body { min-height: 380px; }
+  .right-tab-panel.active { min-height: 420px; }
+  .editor-toolbar,
+  .run-bar,
+  .status-bar {
+    height: auto;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .toolbar-left,
+  .toolbar-right,
+  .run-stats,
+  .run-actions { flex-wrap: wrap; }
+  #statusEncoding {
+    margin-left: 0 !important;
+    width: 100%;
+  }
+  .notif {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+  }
+}
 </style>
 </head>
 <body>
@@ -831,7 +896,7 @@ nav {
     <div class="status-bar">
       <div class="status-item" id="statusLastRun"><div class="status-dot idle" id="statusRunDot"></div>last run: <b id="statusLastRunTime">—</b></div>
       <div class="status-item">passes: <b id="statusPasses">—</b></div>
-      <div class="status-item">sdk: <b>v0.4.1</b></div>
+      <div class="status-item">sdk: <b>configured</b></div>
       <div style="margin-left:auto;color:var(--muted)" id="statusEncoding">utf-8</div>
     </div>
   </div>

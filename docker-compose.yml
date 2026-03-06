@@ -26,7 +26,7 @@ x-backend-env: &backend-env
     PROMPTCODE_SANDBOX_EXECUTOR_ACQUIRE_TIMEOUT_SECONDS: ${PROMPTCODE_SANDBOX_EXECUTOR_ACQUIRE_TIMEOUT_SECONDS:-10}
     PROMPTCODE_EVALUATION_NORMAL_RUNS: ${PROMPTCODE_EVALUATION_NORMAL_RUNS:-5}
     PROMPTCODE_EVALUATION_ADVERSARIAL_RUNS: ${PROMPTCODE_EVALUATION_ADVERSARIAL_RUNS:-2}
-    PROMPTCODE_EVALUATION_MAX_PARALLEL_SPECS: ${PROMPTCODE_EVALUATION_MAX_PARALLEL_SPECS:-3}
+    PROMPTCODE_EVALUATION_MAX_PARALLEL_SPECS: ${PROMPTCODE_EVALUATION_MAX_PARALLEL_SPECS:-2}
     PROMPTCODE_EVALUATION_JOB_TIMEOUT_SECONDS: ${PROMPTCODE_EVALUATION_JOB_TIMEOUT_SECONDS:-1800}
     PROMPTCODE_SUBMISSION_INLINE_QUEUE_PROCESSING: ${PROMPTCODE_SUBMISSION_INLINE_QUEUE_PROCESSING:-false}
     PROMPTCODE_SUBMISSION_MAX_OUTSTANDING_JOBS_PER_USER: ${PROMPTCODE_SUBMISSION_MAX_OUTSTANDING_JOBS_PER_USER:-3}
@@ -111,6 +111,25 @@ services:
       start_period: 15s
 
   worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    command: ["python", "-m", "scripts.run_with_migrations", "python", "-m", "scripts.run_queue_worker"]
+    <<: *backend-env
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      sandbox-executor:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "scripts.check_worker_health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker-b:
     build:
       context: .
       dockerfile: docker/Dockerfile.backend

@@ -270,6 +270,36 @@ nav {
 .tab-item { padding: 10px 14px; font-size: 11px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
 .tab-item:hover { color: var(--text); }
 .tab-item.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+@media (max-width: 1180px) {
+  .workspace { grid-template-columns: 220px 1fr 1fr; }
+  .saved-panel { display: none; }
+}
+
+@media (max-width: 900px) {
+  html, body {
+    height: auto;
+    overflow: auto;
+  }
+  nav { padding: 0 12px; }
+  .nav-links { display: none; }
+  .workspace {
+    position: static;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    grid-template-columns: 1fr;
+    overflow: visible;
+    min-height: calc(100vh - var(--nav-h));
+    padding-top: var(--nav-h);
+  }
+  .panel {
+    min-height: 320px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}
 </style>
 </head>
 <body>

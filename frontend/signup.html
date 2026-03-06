@@ -88,6 +88,20 @@ nav { height:52px; display:flex; align-items:center; justify-content:space-betwe
 .sp-avatar { width:24px; height:24px; border-radius:4px; background:var(--accent-dim); border:1px solid var(--accent); display:flex; align-items:center; justify-content:center; font-size:10px; color:var(--accent); }
 
 :root { --accent-dim: rgba(200,240,96,0.1); }
+
+@media (max-width: 860px) {
+  nav { padding: 0 16px; }
+  .page { grid-template-columns: 1fr; }
+  .left-panel {
+    padding: 36px 24px 48px;
+    border-right: none;
+  }
+  .right-panel { display: none; }
+}
+
+@media (max-width: 560px) {
+  .form-row-2 { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
@@ -179,7 +193,7 @@ nav { height:52px; display:flex; align-items:center; justify-content:space-betwe
           <div class="perk-icon">◈</div>
           <div>
             <div class="perk-name">Competitive leaderboard</div>
-            <div class="perk-desc">Rank against 800+ engineers on every challenge. Efficiency is the game.</div>
+            <div class="perk-desc">Rank against other engineers on every challenge. Efficiency is the game.</div>
           </div>
         </div>
         <div class="perk-item" style="animation-delay:0.46s">
@@ -195,7 +209,7 @@ nav { height:52px; display:flex; align-items:center; justify-content:space-betwe
         <div class="sp-text">"First platform that actually tests prompt engineering skills objectively. My score went from 0.64 to 0.97 in two weeks."</div>
         <div class="sp-user">
           <div class="sp-avatar">rk</div>
-          riya_k · ranked #1 on Claims Parser
+          riya_k · top performer on Claims Parser
         </div>
       </div>
     </div>
