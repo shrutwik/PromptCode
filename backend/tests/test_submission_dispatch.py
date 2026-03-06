@@ -182,3 +182,83 @@ def test_submission_dispatch_skips_inline_when_disabled(monkeypatch):
     app.dependency_overrides.clear()
     get_settings.cache_clear()
     asyncio.run(test_engine.dispose())
+
+
+def test_submission_dispatch_rejects_when_user_exceeds_outstanding_job_limit(monkeypatch):
+    db_url = "sqlite+aiosqlite:///:memory:"
+    test_engine = create_async_engine(db_url)
+    session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
+
+    async def create_schema() -> None:
+        async with test_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+    asyncio.run(create_schema())
+
+    async def override_get_db():
+        async with session_factory() as session:
+            yield session
+
+    from app import main as main_module
+    from app.db import session as session_module
+
+    monkeypatch.setattr(session_module, "engine", test_engine)
+    monkeypatch.setattr(session_module, "async_session_factory", session_factory)
+    monkeypatch.setattr(main_module, "engine", test_engine)
+    monkeypatch.setenv("PROMPTCODE_SUBMISSION_INLINE_QUEUE_PROCESSING", "false")
+    monkeypatch.setenv("PROMPTCODE_SUBMISSION_MAX_OUTSTANDING_JOBS_PER_USER", "1")
+    get_settings.cache_clear()
+
+    challenge_id = asyncio.run(_seed_challenge(session_factory))
+
+    app = create_app()
+    app.dependency_overrides[get_db] = override_get_db
+
+    with TestClient(app) as client:
+        signup = client.post(
+            "/api/auth/signup",
+            json={
+                "email": "limit@example.com",
+                "username": "limit_user",
+                "first_name": "Limit",
+                "last_name": "User",
+                "password": "Password123!",
+            },
+        )
+        assert signup.status_code == 201
+        token = signup.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        first_submission = client.post(
+            "/api/submissions/",
+            json={
+                "challenge_id": str(challenge_id),
+                "code": "print('ok')",
+                "entrypoint": "main.py",
+            },
+            headers=headers,
+        )
+        assert first_submission.status_code == 201
+
+        second_submission = client.post(
+            "/api/submissions/",
+            json={
+                "challenge_id": str(challenge_id),
+                "code": "print('still ok')",
+                "entrypoint": "main.py",
+            },
+            headers=headers,
+        )
+        assert second_submission.status_code == 429
+        assert "Too many outstanding evaluation jobs" in second_submission.json()["detail"]
+
+        async def _job_count() -> int:
+            async with session_factory() as session:
+                result = await session.execute(select(EvaluationJob))
+                return len(list(result.scalars()))
+
+        assert asyncio.run(_job_count()) == 1
+
+    app.dependency_overrides.clear()
+    get_settings.cache_clear()
+    asyncio.run(test_engine.dispose())

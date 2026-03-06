@@ -67,10 +67,35 @@ class _ExecutorState:
 settings = get_settings()
 app = FastAPI(title="PromptCode Sandbox Executor")
 executor_state = _ExecutorState()
+_run_limiter: asyncio.Semaphore | None = None
+_run_limiter_capacity: int | None = None
+_run_limiter_lock = Lock()
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _sandbox_executor_max_concurrent_runs() -> int:
+    configured = int(settings.sandbox_executor_max_concurrent_runs or 0)
+    return max(1, configured)
+
+
+def _sandbox_executor_acquire_timeout_seconds() -> float:
+    configured = float(settings.sandbox_executor_acquire_timeout_seconds or 0)
+    return max(1.0, configured)
+
+
+def _executor_run_limiter() -> asyncio.Semaphore:
+    global _run_limiter
+    global _run_limiter_capacity
+
+    capacity = _sandbox_executor_max_concurrent_runs()
+    with _run_limiter_lock:
+        if _run_limiter is None or _run_limiter_capacity != capacity:
+            _run_limiter = asyncio.Semaphore(capacity)
+            _run_limiter_capacity = capacity
+        return _run_limiter
 
 
 def _executor_runtime_report() -> dict[str, Any]:
@@ -132,6 +157,10 @@ def _executor_runtime_report() -> dict[str, Any]:
     return {
         "status": "ok" if overall_ok else "error",
         "checks": checks,
+        "limits": {
+            "max_concurrent_runs": _sandbox_executor_max_concurrent_runs(),
+            "acquire_timeout_seconds": _sandbox_executor_acquire_timeout_seconds(),
+        },
         "stats": executor_state.snapshot(),
     }
 
@@ -164,7 +193,23 @@ async def run_sandbox(
         if authorization != f"Bearer {expected_token}":
             raise HTTPException(status_code=401, detail="Invalid sandbox executor token.")
 
+    limiter = _executor_run_limiter()
+    try:
+        await asyncio.wait_for(
+            limiter.acquire(),
+            timeout=_sandbox_executor_acquire_timeout_seconds(),
+        )
+    except TimeoutError:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Sandbox executor saturated. "
+                f"Max concurrent runs: {_sandbox_executor_max_concurrent_runs()}."
+            ),
+        ) from None
+
     executor_state.mark_run_started()
+    result = None
     try:
         result = await asyncio.to_thread(
             _run_in_sandbox_local,
@@ -176,9 +221,13 @@ async def run_sandbox(
         )
     except Exception as exc:  # pragma: no cover - defensive safety net
         executor_state.mark_run_finished(success=False, error=str(exc))
+        limiter.release()
         raise
-    executor_state.mark_run_finished(
-        success=bool(result.success),
-        error=result.error,
-    )
-    return result.to_dict()
+    try:
+        executor_state.mark_run_finished(
+            success=bool(result.success),
+            error=result.error,
+        )
+        return result.to_dict()
+    finally:
+        limiter.release()

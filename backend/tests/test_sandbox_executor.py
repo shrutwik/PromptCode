@@ -63,6 +63,7 @@ def test_sandbox_executor_requires_token(monkeypatch):
 
 def test_sandbox_executor_forwards_run_request(monkeypatch):
     monkeypatch.setattr(sandbox_executor.settings, "sandbox_executor_token", "secret-token")
+    monkeypatch.setattr(sandbox_executor, "executor_state", sandbox_executor._ExecutorState())
 
     class FakeResult:
         success = True
@@ -114,13 +115,54 @@ def test_sandbox_executor_forwards_run_request(monkeypatch):
     }
 
 
+def test_sandbox_executor_rejects_when_concurrency_limit_is_saturated(monkeypatch):
+    monkeypatch.setattr(sandbox_executor.settings, "sandbox_executor_token", "secret-token")
+
+    class FakeLimiter:
+        async def acquire(self):
+            return True
+
+        def release(self):
+            return None
+
+    async def fake_wait_for(awaitable, timeout):
+        close = getattr(awaitable, "close", None)
+        if callable(close):
+            close()
+        raise TimeoutError()
+
+    monkeypatch.setattr(sandbox_executor, "_executor_run_limiter", lambda: FakeLimiter())
+    monkeypatch.setattr(sandbox_executor, "_sandbox_executor_max_concurrent_runs", lambda: 2)
+    monkeypatch.setattr(sandbox_executor, "_sandbox_executor_acquire_timeout_seconds", lambda: 3.0)
+    monkeypatch.setattr(sandbox_executor.asyncio, "wait_for", fake_wait_for)
+
+    with TestClient(sandbox_executor.app) as client:
+        response = client.post(
+            "/v1/sandbox/run",
+            headers={"Authorization": "Bearer secret-token"},
+            json={
+                "code": "print('ok')",
+                "entrypoint": "main.py",
+                "challenge_config": {"inputs": {}},
+            },
+        )
+
+    assert response.status_code == 503
+    assert "Sandbox executor saturated" in response.json()["detail"]
+
+
 def test_sandbox_executor_status_reports_run_counters(monkeypatch):
     monkeypatch.setattr(sandbox_executor.settings, "sandbox_executor_token", "secret-token")
     monkeypatch.setattr(sandbox_executor, "executor_state", sandbox_executor._ExecutorState())
     monkeypatch.setattr(
         sandbox_executor,
         "_executor_runtime_report",
-        lambda: {"status": "ok", "checks": {}, "stats": sandbox_executor.executor_state.snapshot()},
+        lambda: {
+            "status": "ok",
+            "checks": {},
+            "limits": {"max_concurrent_runs": 6, "acquire_timeout_seconds": 10.0},
+            "stats": sandbox_executor.executor_state.snapshot(),
+        },
     )
 
     class FakeResult:
@@ -157,11 +199,14 @@ def test_sandbox_executor_status_reports_run_counters(monkeypatch):
     assert status_response.json()["stats"]["total_runs"] == 1
     assert status_response.json()["stats"]["successful_runs"] == 1
     assert status_response.json()["stats"]["failed_runs"] == 0
+    assert status_response.json()["limits"]["max_concurrent_runs"] == 6
 
 
 def test_executor_runtime_report_checks_docker_image_and_workdir(monkeypatch, tmp_path):
     monkeypatch.setattr(sandbox_executor, "executor_state", sandbox_executor._ExecutorState())
     monkeypatch.setattr(sandbox_executor, "_sandbox_temp_root", lambda: Path(tmp_path))
+    monkeypatch.setattr(sandbox_executor, "_sandbox_executor_max_concurrent_runs", lambda: 4)
+    monkeypatch.setattr(sandbox_executor, "_sandbox_executor_acquire_timeout_seconds", lambda: 9.0)
 
     class FakeImages:
         def get(self, image_name: str):
@@ -186,6 +231,8 @@ def test_executor_runtime_report_checks_docker_image_and_workdir(monkeypatch, tm
     assert report["checks"]["docker"]["ok"] is True
     assert report["checks"]["sandbox_image"]["ok"] is True
     assert report["checks"]["shared_workdir"]["ok"] is True
+    assert report["limits"]["max_concurrent_runs"] == 4
+    assert report["limits"]["acquire_timeout_seconds"] == 9.0
 
 
 def test_executor_runtime_report_fails_when_docker_is_unavailable(monkeypatch):

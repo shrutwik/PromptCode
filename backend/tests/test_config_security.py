@@ -62,3 +62,23 @@ def test_settings_require_sandbox_executor_token_when_url_is_configured():
         )
 
     assert "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN" in str(exc_info.value)
+
+
+def test_settings_require_positive_scaling_limits():
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            debug=True,
+            jwt_secret="local-dev-secret-change-in-production",
+            evaluation_max_parallel_specs=0,
+        )
+
+    assert "PROMPTCODE_EVALUATION_MAX_PARALLEL_SPECS" in str(exc_info.value)
+
+    with pytest.raises(ValidationError) as sandbox_exc:
+        Settings(
+            debug=True,
+            jwt_secret="local-dev-secret-change-in-production",
+            sandbox_executor_max_concurrent_runs=0,
+        )
+
+    assert "PROMPTCODE_SANDBOX_EXECUTOR_MAX_CONCURRENT_RUNS" in str(sandbox_exc.value)

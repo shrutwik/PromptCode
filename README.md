@@ -66,6 +66,7 @@ It disables in-process submission evaluation in the web container, so queued job
 Both the backend and worker containers now run `alembic upgrade head` before starting their main process.
 The backend readiness check requires a fresh worker heartbeat when inline queue processing is disabled, and it also fails closed if the configured sandbox executor is unreachable.
 The worker publishes a matching heartbeat healthcheck.
+The default compose scaling guards are conservative: one submission can fan out at most `PROMPTCODE_EVALUATION_MAX_PARALLEL_SPECS` sandbox runs, the executor accepts at most `PROMPTCODE_SANDBOX_EXECUTOR_MAX_CONCURRENT_RUNS` active runs, and each user can hold at most `PROMPTCODE_SUBMISSION_MAX_OUTSTANDING_JOBS_PER_USER` queued/running evaluations.
 If you run the backend outside compose, start the queue worker in a second shell:
 
 ```bash
@@ -100,6 +101,12 @@ For a direct sandbox-executor smoke, run:
 ```bash
 cd backend
 python -m scripts.run_sandbox_executor_smoke --url http://127.0.0.1:8090 --token "$PROMPTCODE_SANDBOX_EXECUTOR_TOKEN"
+```
+
+To test modest multi-user throughput locally, keep the executor caps in place and scale workers explicitly:
+
+```bash
+docker compose up --build -d --scale worker=2
 ```
 
 ## Using Supabase as the database

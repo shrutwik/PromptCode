@@ -43,11 +43,15 @@ class Settings(BaseSettings):
     sandbox_cpu_limit: float = 1.0
     sandbox_executor_url: str = ""
     sandbox_executor_token: str = ""
+    sandbox_executor_max_concurrent_runs: int = 6
+    sandbox_executor_acquire_timeout_seconds: int = 10
 
     evaluation_normal_runs: int = 5
     evaluation_adversarial_runs: int = 2
+    evaluation_max_parallel_specs: int = 3
     evaluation_job_timeout_seconds: int = 1800
     submission_inline_queue_processing: bool = True
+    submission_max_outstanding_jobs_per_user: int = 3
     worker_id: str = ""
     worker_heartbeat_interval_seconds: int = 5
     worker_heartbeat_timeout_seconds: int = 30
@@ -78,6 +82,14 @@ class Settings(BaseSettings):
             raise ValueError(
                 "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN must be set when PROMPTCODE_SANDBOX_EXECUTOR_URL is configured."
             )
+        if self.sandbox_executor_max_concurrent_runs < 1:
+            raise ValueError("PROMPTCODE_SANDBOX_EXECUTOR_MAX_CONCURRENT_RUNS must be at least 1.")
+        if self.sandbox_executor_acquire_timeout_seconds < 1:
+            raise ValueError("PROMPTCODE_SANDBOX_EXECUTOR_ACQUIRE_TIMEOUT_SECONDS must be at least 1.")
+        if self.evaluation_max_parallel_specs < 1:
+            raise ValueError("PROMPTCODE_EVALUATION_MAX_PARALLEL_SPECS must be at least 1.")
+        if self.submission_max_outstanding_jobs_per_user < 1:
+            raise ValueError("PROMPTCODE_SUBMISSION_MAX_OUTSTANDING_JOBS_PER_USER must be at least 1.")
         self.worker_id = str(self.worker_id or "").strip()
         if self.worker_heartbeat_interval_seconds < 1:
             raise ValueError("PROMPTCODE_WORKER_HEARTBEAT_INTERVAL_SECONDS must be at least 1.")

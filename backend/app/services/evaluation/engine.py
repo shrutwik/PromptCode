@@ -59,6 +59,11 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
+def _evaluation_max_parallel_specs() -> int:
+    configured = int(settings.evaluation_max_parallel_specs or 0)
+    return max(1, configured)
+
+
 async def _run_all_specs_in_parallel(
     run_plan: list[dict[str, Any]],
     code: str,
@@ -67,16 +72,18 @@ async def _run_all_specs_in_parallel(
 ) -> list[tuple[dict[str, Any], SandboxResult]]:
     """Execute all specs in parallel using the thread pool."""
     loop = asyncio.get_running_loop()
+    semaphore = asyncio.Semaphore(max(1, min(len(run_plan) or 1, _evaluation_max_parallel_specs())))
 
     async def run_spec(spec: dict[str, Any]) -> tuple[dict[str, Any], SandboxResult]:
-        runner = partial(
-            run_in_sandbox,
-            code,
-            entrypoint,
-            challenge_config,
-            input_overrides=spec["inputs"],
-        )
-        result = await loop.run_in_executor(None, runner)
+        async with semaphore:
+            runner = partial(
+                run_in_sandbox,
+                code,
+                entrypoint,
+                challenge_config,
+                input_overrides=spec["inputs"],
+            )
+            result = await loop.run_in_executor(None, runner)
         return spec, result
 
     return await asyncio.gather(*(run_spec(spec) for spec in run_plan))

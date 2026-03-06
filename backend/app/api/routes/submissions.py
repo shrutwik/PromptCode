@@ -4,13 +4,14 @@ import uuid
 from pathlib import PurePosixPath
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.challenge import Challenge
+from app.models.evaluation_job import EvaluationJob
 from app.models.submission import Submission
 from app.models.user import User
 from app.schemas.submission import SubmissionCreate, SubmissionReport, SubmissionResponse
@@ -31,6 +32,44 @@ def _is_safe_python_entrypoint(entrypoint: str) -> bool:
         return False
     # Keep submissions to a single script entrypoint for predictable sandbox exec.
     return len(parts) == 1
+
+
+async def _count_outstanding_jobs_for_user(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+) -> int:
+    result = await db.execute(
+        select(func.count(EvaluationJob.id))
+        .join(Submission, Submission.id == EvaluationJob.submission_id)
+        .where(
+            Submission.user_id == user_id,
+            EvaluationJob.status.in_(("queued", "retry", "running")),
+        )
+    )
+    return int(result.scalar_one() or 0)
+
+
+async def _guard_submission_capacity(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+) -> None:
+    limit = int(get_settings().submission_max_outstanding_jobs_per_user)
+    await db.execute(
+        select(User.id)
+        .where(User.id == user_id)
+        .with_for_update()
+    )
+    outstanding_jobs = await _count_outstanding_jobs_for_user(db, user_id=user_id)
+    if outstanding_jobs >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Too many outstanding evaluation jobs. "
+                f"Limit is {limit} per user; wait for an active submission to finish."
+            ),
+        )
 
 
 @router.get("/", response_model=list[SubmissionResponse])
@@ -65,6 +104,7 @@ async def create_submission(
             status_code=400,
             detail="Entrypoint must be a safe Python filename like 'main.py'.",
         )
+    await _guard_submission_capacity(db, user_id=user.id)
 
     submission = Submission(
         challenge_id=payload.challenge_id,

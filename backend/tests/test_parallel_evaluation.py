@@ -2,6 +2,8 @@
 
 import asyncio
 import inspect
+from threading import Lock
+import time
 
 from app.services.evaluation import engine
 from app.services.evaluation.engine import evaluate_submission
@@ -100,6 +102,51 @@ def test_parallel_helper_exists():
         _run_all_specs_in_parallel
     ), "_run_all_specs_in_parallel should be async"
     print("✅ Parallel helper function exists and is async")
+
+
+def test_parallel_helper_respects_max_parallel_specs(monkeypatch):
+    run_plan = [
+        {"inputs": {"index": 0}},
+        {"inputs": {"index": 1}},
+        {"inputs": {"index": 2}},
+        {"inputs": {"index": 3}},
+    ]
+    state = {
+        "active": 0,
+        "max_active": 0,
+    }
+    state_lock = Lock()
+
+    class FakeResult:
+        success = True
+        output = "ok"
+        exit_code = 0
+        telemetry = []
+        error = None
+
+    def fake_run_in_sandbox(*args, **kwargs):
+        with state_lock:
+            state["active"] += 1
+            state["max_active"] = max(state["max_active"], state["active"])
+        time.sleep(0.05)
+        with state_lock:
+            state["active"] -= 1
+        return FakeResult()
+
+    monkeypatch.setattr(engine.settings, "evaluation_max_parallel_specs", 2)
+    monkeypatch.setattr(engine, "run_in_sandbox", fake_run_in_sandbox)
+
+    results = asyncio.run(
+        engine._run_all_specs_in_parallel(
+            run_plan=run_plan,
+            code="print('ok')",
+            entrypoint="main.py",
+            challenge_config={"inputs": {}},
+        )
+    )
+
+    assert len(results) == 4
+    assert state["max_active"] <= 2
 
 
 def test_prompt_quality_helper_uses_to_thread(monkeypatch):
