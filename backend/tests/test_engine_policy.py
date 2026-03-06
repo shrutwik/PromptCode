@@ -5,6 +5,7 @@ from app.services.evaluation.engine import (
     _build_counterfactual_baseline_code,
     _build_evaluation_manifest,
     _build_usage_breakdown,
+    _counterfactual_template_for_challenge,
     _compute_credibility,
     _default_evaluation_seed,
     _detect_metric_gaming,
@@ -185,3 +186,10 @@ def test_compute_credibility_high_when_signals_are_strong():
     )
     assert result["band"] == "high"
     assert result["score"] >= 0.75
+
+
+def test_counterfactual_template_is_challenge_specific():
+    template = _counterfactual_template_for_challenge(
+        {"challenge_slug": "resume-parsing-pipeline", "challenge_category": "extraction"}
+    )
+    assert "resume" in template["system_prompt"].lower()

@@ -1246,6 +1246,7 @@ def _build_counterfactual_baseline_code(
     challenge_config: dict[str, Any],
     challenge_description: str,
 ) -> str:
+    template = _counterfactual_template_for_challenge(challenge_config)
     model_name = str(challenge_config.get("counterfactual_model", "gpt-4o-mini"))
     max_tokens = int(challenge_config.get("counterfactual_max_tokens", 1400))
     rules_preview = json.dumps(
@@ -1274,6 +1275,8 @@ MAX_TOKENS = {max_tokens}
 DESCRIPTION = {json.dumps(description_preview)}
 RULES = {json.dumps(rules_preview)}
 SCHEMA = {json.dumps(schema_preview)}
+TASK_FOCUS = {json.dumps(template["task_focus"])}
+SYSTEM_PROMPT = {json.dumps(template["system_prompt"])}
 
 
 def _load_input() -> str:
@@ -1286,6 +1289,7 @@ def _load_input() -> str:
 raw_input = _load_input()
 prompt = (
     "Solve the task using the input payload and return only valid JSON.\\n\\n"
+    + "Task focus:\\n" + TASK_FOCUS + "\\n\\n"
     + "Task:\\n" + DESCRIPTION + "\\n\\n"
     + "Normalization rules:\\n" + RULES + "\\n\\n"
     + "Expected output schema example:\\n" + SCHEMA + "\\n\\n"
@@ -1296,13 +1300,80 @@ prompt = (
 response = llm.call(
     model=MODEL,
     prompt=prompt,
-    system="You are a strict structured-data extraction assistant. Output JSON only.",
+    system=SYSTEM_PROMPT,
     temperature=0,
     max_tokens=MAX_TOKENS,
     retries=1,
 )
 print(response.strip())
 """
+
+
+def _counterfactual_template_for_challenge(challenge_config: dict[str, Any]) -> dict[str, str]:
+    slug = str(challenge_config.get("challenge_slug") or "").strip().lower()
+    category = str(challenge_config.get("challenge_category") or "").strip().lower()
+
+    by_slug: dict[str, dict[str, str]] = {
+        "extract-structured-claims": {
+            "task_focus": "Extract normalized insurance claim fields exactly and skip invalid/test records.",
+            "system_prompt": "You are a strict insurance-claims extraction assistant. Output valid JSON only.",
+        },
+        "review-sentiment-synthesis": {
+            "task_focus": "Synthesize review themes, sentiment, and prioritized product actions in structured JSON.",
+            "system_prompt": "You are a customer-feedback analysis assistant. Output valid JSON only.",
+        },
+        "natural-language-to-sql": {
+            "task_focus": "Map natural-language questions to correct SQL outputs using provided schema constraints.",
+            "system_prompt": "You are a careful analytics assistant. Produce schema-constrained JSON only.",
+        },
+        "bug-report-dedup-triage": {
+            "task_focus": "Cluster duplicate bugs and produce triage priority, owner routing, and root-cause hypotheses.",
+            "system_prompt": "You are a software bug-triage assistant. Output valid JSON only.",
+        },
+        "email-thread-action-items": {
+            "task_focus": "Extract actionable tasks, owners, deadlines, and risks from email threads.",
+            "system_prompt": "You are an operations action-item extraction assistant. Output valid JSON only.",
+        },
+        "support-ticket-routing": {
+            "task_focus": "Route support tickets to the right team with priority and concise reason.",
+            "system_prompt": "You are a support triage assistant. Output valid JSON only.",
+        },
+        "resume-parsing-pipeline": {
+            "task_focus": "Parse resumes into normalized structured candidate profiles with robust field handling.",
+            "system_prompt": "You are a resume parsing assistant. Output valid JSON only.",
+        },
+        "contract-clause-extraction": {
+            "task_focus": "Extract clause spans, classify clause types, and assign risk levels from legal contracts.",
+            "system_prompt": "You are a legal clause extraction assistant. Output valid JSON only.",
+        },
+        "legacy-api-xml-to-json": {
+            "task_focus": "Transform legacy XML responses into target JSON schema with strict normalization.",
+            "system_prompt": "You are an enterprise data migration assistant. Output valid JSON only.",
+        },
+        "financial-anomaly-detection": {
+            "task_focus": "Identify suspicious transactions and return categorized anomaly signals with evidence.",
+            "system_prompt": "You are a financial anomaly detection assistant. Output valid JSON only.",
+        },
+    }
+    if slug in by_slug:
+        return by_slug[slug]
+
+    by_category: dict[str, dict[str, str]] = {
+        "extraction": {
+            "task_focus": "Extract and normalize structured fields from noisy inputs.",
+            "system_prompt": "You are a structured data extraction assistant. Output valid JSON only.",
+        },
+        "analysis": {
+            "task_focus": "Analyze inputs and return concise structured findings.",
+            "system_prompt": "You are an analysis assistant. Output valid JSON only.",
+        },
+    }
+    if category in by_category:
+        return by_category[category]
+    return {
+        "task_focus": "Follow task description exactly and return strict JSON output.",
+        "system_prompt": "You are a strict structured output assistant. Output valid JSON only.",
+    }
 
 
 def _default_evaluation_seed(challenge_config: dict[str, Any]) -> int:

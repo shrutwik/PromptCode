@@ -84,6 +84,17 @@ Weights:
 - Anti-gaming trigger caps overall to `0.45`
 - Hardcoded/no-LLM patterns zero quality metrics
 
+## Leaderboard Eligibility Gates
+
+A completed submission is leaderboard-eligible only if:
+
+- reliability is above minimum policy threshold
+- total evaluation tests meet minimum threshold
+- prompt judge method is `llm_judge` (heuristic fallback is excluded)
+- counterfactual baseline status is `ok`
+- `leverage_gain >= 0.0`
+- credibility score meets minimum threshold
+
 ## Confidence and Uncertainty
 
 Report includes confidence intervals:

@@ -23,6 +23,10 @@ from app.services.evaluation.scorer import score_ai_mastery
 logger = logging.getLogger(__name__)
 MIN_LEADERBOARD_TESTS = 6
 MIN_LEADERBOARD_RELIABILITY = 0.55
+MIN_LEADERBOARD_CREDIBILITY = 0.65
+REQUIRE_LLM_PROMPT_JUDGE = True
+REQUIRE_COUNTERFACTUAL_BASELINE = True
+MIN_LEADERBOARD_LEVERAGE_GAIN = 0.0
 
 
 async def run_evaluation_pipeline(submission_id: str) -> bool:
@@ -57,6 +61,9 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
 
     eval_config = {**challenge.config}
     eval_config.setdefault("description", challenge.description)
+    eval_config.setdefault("challenge_slug", challenge.slug)
+    eval_config.setdefault("challenge_title", challenge.title)
+    eval_config.setdefault("challenge_category", challenge.category)
 
     result = evaluate_submission(
         code=submission.code,
@@ -217,6 +224,21 @@ def _eligible_for_leaderboard(submission: Submission) -> bool:
         return False
     tests_total = int(report.get("tests_total") or 0)
     if tests_total < MIN_LEADERBOARD_TESTS:
+        return False
+    credibility = report.get("credibility") or {}
+    if float(credibility.get("score") or 0.0) < MIN_LEADERBOARD_CREDIBILITY:
+        return False
+    prompt_details = report.get("prompt_quality_details") or {}
+    if REQUIRE_LLM_PROMPT_JUDGE and str(prompt_details.get("method") or "") != "llm_judge":
+        return False
+    ai_leverage = report.get("ai_leverage") or {}
+    baseline_status = str(((ai_leverage.get("signals") or {}).get("counterfactual") or {}).get("status") or "")
+    if REQUIRE_COUNTERFACTUAL_BASELINE and baseline_status != "ok":
+        return False
+    leverage_gain = ai_leverage.get("leverage_gain")
+    if leverage_gain is None:
+        return False
+    if float(leverage_gain) < MIN_LEADERBOARD_LEVERAGE_GAIN:
         return False
     return True
 

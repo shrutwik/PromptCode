@@ -10,7 +10,16 @@ def _submission(**overrides):
         "status": "completed",
         "score_overall": 0.8,
         "score_reliability": 0.7,
-        "report": {"tests_total": 8, "disqualified": False},
+        "report": {
+            "tests_total": 8,
+            "disqualified": False,
+            "credibility": {"score": 0.8},
+            "prompt_quality_details": {"method": "llm_judge"},
+            "ai_leverage": {
+                "leverage_gain": 0.03,
+                "signals": {"counterfactual": {"status": "ok"}},
+            },
+        },
     }
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -32,4 +41,3 @@ def test_eligible_for_leaderboard_rejects_disqualified():
     assert _eligible_for_leaderboard(
         _submission(report={"tests_total": 8, "disqualified": True})
     ) is False
-

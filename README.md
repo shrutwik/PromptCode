@@ -207,6 +207,13 @@ Hard gates:
 - No-LLM hardcoded solutions are disqualified
 - Anti-gaming checks penalize extremely low-token low-effort outputs
 
+Leaderboard eligibility gates (publish mode):
+- Minimum reliability and test-count thresholds
+- Prompt judge must run in `llm_judge` mode
+- Counterfactual baseline must complete successfully
+- `leverage_gain` must be non-negative
+- Minimum score credibility threshold
+
 Reproducibility:
 - Every run includes deterministic metadata in report (`evaluation_seed`, perturbation config version, per-run seed + perturbation type)
 - Report includes `evaluation_manifest` fingerprints (`challenge_fingerprint`, run-plan hash, replay hash)
@@ -302,4 +309,11 @@ python -m scripts.run_reproducibility_gate --repeats 10 --stddev-threshold 0.03
 ```bash
 cd backend
 python -m scripts.run_prompt_judge_calibration_gate --mode heuristic --min-samples 20 --min-pearson 0.75 --max-mae 0.25
+```
+
+## Challenge Publish Gate
+
+```bash
+cd backend
+python -m scripts.run_challenge_publish_gate --expected-challenges 10 --min-hidden-cases 2 --min-input-examples 1
 ```
