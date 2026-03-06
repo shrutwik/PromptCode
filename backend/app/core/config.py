@@ -44,6 +44,7 @@ class Settings(BaseSettings):
 
     evaluation_normal_runs: int = 5
     evaluation_adversarial_runs: int = 2
+    evaluation_job_timeout_seconds: int = 1800
 
     jwt_secret: str = ""
 

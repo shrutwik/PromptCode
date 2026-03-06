@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import difflib
 import logging
 import re
@@ -41,6 +42,13 @@ async def run_evaluation_pipeline(submission_id: str) -> bool:
         try:
             await _evaluate(db, submission_id)
             return True
+        except asyncio.CancelledError:
+            logger.warning(
+                "Evaluation pipeline cancelled for submission %s",
+                submission_id,
+            )
+            await _mark_failed(db, submission_id)
+            raise
         except Exception:
             logger.exception("Evaluation pipeline failed for submission %s", submission_id)
             await _mark_failed(db, submission_id)
