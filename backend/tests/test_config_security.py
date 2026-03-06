@@ -64,6 +64,30 @@ def test_settings_require_sandbox_executor_token_when_url_is_configured():
     assert "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN" in str(exc_info.value)
 
 
+def test_settings_reject_insecure_production_database_url():
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            debug=False,
+            jwt_secret="prod-secret-with-real-entropy",
+            database_url="postgresql+asyncpg://promptcode:promptcode@localhost:5432/promptcode",
+        )
+
+    assert "PROMPTCODE_DATABASE_URL must be changed" in str(exc_info.value)
+
+
+def test_settings_reject_insecure_production_sandbox_token():
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            debug=False,
+            jwt_secret="prod-secret-with-real-entropy",
+            database_url="postgresql+asyncpg://user:pass@db.example.com:5432/promptcode",
+            sandbox_executor_url="http://sandbox-executor:8090",
+            sandbox_executor_token="local-sandbox-executor-token",
+        )
+
+    assert "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN must be changed" in str(exc_info.value)
+
+
 def test_settings_require_positive_scaling_limits():
     with pytest.raises(ValidationError) as exc_info:
         Settings(

@@ -92,6 +92,28 @@ def test_health_sets_security_headers(monkeypatch):
     asyncio.run(async_engine.dispose())
 
 
+def test_unhandled_exception_returns_json_500(monkeypatch):
+    async_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    monkeypatch.setattr(main_module, "engine", async_engine)
+    get_settings.cache_clear()
+
+    app = main_module.create_app()
+
+    @app.get("/boom")
+    async def boom():
+        raise RuntimeError("boom")
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.get("/boom")
+
+    assert response.status_code == 500
+    expected_detail = "boom" if get_settings().debug else "Internal server error"
+    assert response.json() == {"detail": expected_detail}
+
+    get_settings.cache_clear()
+    asyncio.run(async_engine.dispose())
+
+
 def test_ready_returns_503_when_database_is_unavailable(monkeypatch):
     monkeypatch.setattr(main_module, "engine", _FailingEngine())
     get_settings.cache_clear()

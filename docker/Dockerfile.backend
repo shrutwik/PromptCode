@@ -14,6 +14,9 @@ COPY sdk/ /sdk/
 COPY frontend/ /frontend/
 COPY challenges/ /challenges/
 RUN pip install --no-cache-dir /sdk/
+RUN useradd -m promptcode && chown -R promptcode:promptcode /app /sdk /frontend /challenges
+
+USER promptcode
 
 EXPOSE 8000
 

@@ -7,10 +7,15 @@ from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 _ENV_FILE = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+_DEFAULT_DATABASE_URL = "postgresql+asyncpg://promptcode:promptcode@localhost:5432/promptcode"
 _INSECURE_JWT_SECRETS = {
     "",
     "change-me-in-production-use-a-real-secret-key",
     "local-dev-secret-change-in-production",
+}
+_INSECURE_SANDBOX_EXECUTOR_TOKENS = {
+    "",
+    "local-sandbox-executor-token",
 }
 
 
@@ -18,7 +23,7 @@ class Settings(BaseSettings):
     app_name: str = "PromptCode"
     debug: bool = False
 
-    database_url: str = "postgresql+asyncpg://promptcode:promptcode@localhost:5432/promptcode"
+    database_url: str = _DEFAULT_DATABASE_URL
     database_echo: bool = False
     # Set True when using Supabase or any hosted Postgres that requires SSL
     database_ssl_require: bool = False
@@ -76,11 +81,26 @@ class Settings(BaseSettings):
             raise ValueError(
                 "PROMPTCODE_JWT_SECRET must be changed from the development default when PROMPTCODE_DEBUG is false."
             )
+        self.database_url = str(self.database_url or "").strip()
+        if not self.database_url:
+            raise ValueError("PROMPTCODE_DATABASE_URL must be set.")
+        if not self.debug and self.database_url == _DEFAULT_DATABASE_URL:
+            raise ValueError(
+                "PROMPTCODE_DATABASE_URL must be changed from the local development default when PROMPTCODE_DEBUG is false."
+            )
         self.sandbox_executor_url = str(self.sandbox_executor_url or "").strip()
         self.sandbox_executor_token = str(self.sandbox_executor_token or "").strip()
         if self.sandbox_executor_url and not self.sandbox_executor_token:
             raise ValueError(
                 "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN must be set when PROMPTCODE_SANDBOX_EXECUTOR_URL is configured."
+            )
+        if (
+            not self.debug
+            and self.sandbox_executor_url
+            and self.sandbox_executor_token in _INSECURE_SANDBOX_EXECUTOR_TOKENS
+        ):
+            raise ValueError(
+                "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN must be changed from the development default when PROMPTCODE_DEBUG is false."
             )
         if self.sandbox_executor_max_concurrent_runs < 1:
             raise ValueError("PROMPTCODE_SANDBOX_EXECUTOR_MAX_CONCURRENT_RUNS must be at least 1.")
