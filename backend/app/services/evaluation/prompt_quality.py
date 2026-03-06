@@ -20,9 +20,10 @@ import logging
 from typing import Any
 
 import openai
+from app.core.model_policy import OPENAI_CHAT_MODELS, resolve_allowed_model
 
 logger = logging.getLogger(__name__)
-_ALLOWED_JUDGE_MODELS = {"gpt-4o", "gpt-4o-mini"}
+_ALLOWED_JUDGE_MODELS = set(OPENAI_CHAT_MODELS)
 
 JUDGE_SYSTEM_PROMPT = """You are an expert prompt engineering evaluator for a competitive platform called PromptCode.
 
@@ -179,11 +180,12 @@ def _resolve_judge_models(settings: Any) -> list[str]:
 
     models: list[str] = []
     for candidate in primary.split(","):
-        model = candidate.strip()
-        if not model:
+        raw_model = candidate.strip()
+        if not raw_model:
             continue
-        if model not in _ALLOWED_JUDGE_MODELS:
-            logger.warning("Ignoring unsupported prompt judge model '%s'", model)
+        model = resolve_allowed_model(raw_model, _ALLOWED_JUDGE_MODELS)
+        if not model:
+            logger.warning("Ignoring unsupported prompt judge model '%s'", raw_model)
             continue
         if model not in models:
             models.append(model)
@@ -191,11 +193,12 @@ def _resolve_judge_models(settings: Any) -> list[str]:
     if not models:
         models = ["gpt-4o"]
 
-    if fallback and fallback not in _ALLOWED_JUDGE_MODELS:
-        logger.warning("Ignoring unsupported prompt judge fallback model '%s'", fallback)
-        fallback = ""
-    if fallback and fallback not in models:
-        models.append(fallback)
+    if fallback:
+        fallback_model = resolve_allowed_model(fallback, _ALLOWED_JUDGE_MODELS)
+        if not fallback_model:
+            logger.warning("Ignoring unsupported prompt judge fallback model '%s'", fallback)
+        elif fallback_model not in models:
+            models.append(fallback_model)
     return models
 
 

@@ -30,3 +30,12 @@ def test_resolve_judge_models_filters_unsupported_and_keeps_supported():
     )
     models = _resolve_judge_models(settings)
     assert models == ["gpt-4o-mini"]
+
+
+def test_resolve_judge_models_normalizes_provider_prefixed_models():
+    settings = SimpleNamespace(
+        prompt_judge_model="protected.gpt-4o-mini,openai:gpt-4o",
+        prompt_judge_fallback_model="openai/gpt-4o",
+    )
+    models = _resolve_judge_models(settings)
+    assert models == ["gpt-4o-mini", "gpt-4o"]
