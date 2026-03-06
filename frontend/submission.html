@@ -720,6 +720,22 @@ nav {
     }
   }
 
+  async function updateHeroRank(challengeId, submissionId) {
+    const heroRank = document.getElementById('heroRank');
+    if (!heroRank || !challengeId || !submissionId) return;
+    heroRank.textContent = '—';
+    try {
+      const entries = await PromptCodeAPI.getLeaderboard(challengeId, 100);
+      const list = Array.isArray(entries) ? entries : (entries.entries || entries.leaderboard || []);
+      const match = list.find(entry => String(entry.submission_id) === String(submissionId));
+      if (match && match.rank != null) {
+        heroRank.textContent = `#${match.rank}`;
+      }
+    } catch (e) {
+      console.log('Rank load failed:', e.message);
+    }
+  }
+
   async function loadReport(submissionId, sub) {
     try {
       const report = await PromptCodeAPI.getSubmissionReport(submissionId);
@@ -783,11 +799,12 @@ nav {
       renderSDKUsage(report, sub);
       renderCoreIntegrity(report);
       await renderTopComparison(sub.challenge_id, report);
+      await updateHeroRank(sub.challenge_id, submissionId);
 
     } catch (e) {
       console.log('Report not yet available:', e.message);
       document.getElementById('heroScore').textContent = '—';
-      document.getElementById('heroScoreSub').textContent = 'no report';
+      document.getElementById('heroScoreSub').textContent = 'finalizing';
     }
   }
 

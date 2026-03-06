@@ -110,13 +110,13 @@ def validate_weight_profile_freeze(
 
     try:
         raw_profile = json.loads(profile.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         logger.exception("Failed to parse profile file %s", profile)
         return {"pass": False, "reason": "profile_parse_error", "profile_path": str(profile)}
 
     try:
         raw_lock = json.loads(lock.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         logger.exception("Failed to parse lock file %s", lock)
         return {"pass": False, "reason": "lock_parse_error", "lock_path": str(lock)}
 
@@ -170,7 +170,7 @@ def get_weight_profile() -> dict[str, Any]:
 
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         logger.exception("Failed to load weight profile from %s; using defaults", path)
         return dict(DEFAULT_PROFILE)
 

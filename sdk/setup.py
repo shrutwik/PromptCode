@@ -5,7 +5,7 @@ setup(
     version="0.1.0",
     packages=find_packages(),
     install_requires=[
-        "openai>=1.0.0",
+        "openai==2.24.0",
     ],
     python_requires=">=3.11",
     description="PromptCode SDK — tracked LLM calls for challenge submissions",

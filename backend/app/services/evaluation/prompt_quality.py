@@ -24,6 +24,15 @@ from app.core.model_policy import OPENAI_CHAT_MODELS, resolve_allowed_model
 
 logger = logging.getLogger(__name__)
 _ALLOWED_JUDGE_MODELS = set(OPENAI_CHAT_MODELS)
+_PROMPT_JUDGE_ERRORS = (
+    openai.OpenAIError,
+    json.JSONDecodeError,
+    KeyError,
+    IndexError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
 
 JUDGE_SYSTEM_PROMPT = """You are an expert prompt engineering evaluator for a competitive platform called PromptCode.
 
@@ -77,7 +86,7 @@ def score_prompt_quality(
 
     try:
         return _judge_with_llm(prompts, challenge_description)
-    except Exception:
+    except _PROMPT_JUDGE_ERRORS:
         logger.exception("LLM judge failed, falling back to heuristic scoring")
         return _heuristic_score(prompts)
 
@@ -148,7 +157,7 @@ def _judge_with_llm(
             )
             selected_model = model
             break
-        except Exception as exc:
+        except _PROMPT_JUDGE_ERRORS as exc:
             last_exc = exc
             logger.warning("Prompt judge model '%s' failed; trying next fallback", model)
             continue

@@ -414,7 +414,7 @@ async def chat(
             )
     except HTTPException:
         raise
-    except Exception as e:
+    except (httpx.HTTPError, TypeError, ValueError) as e:
         raise HTTPException(status_code=502, detail=f"AI error: {e}") from e
 
     prompt_tokens = int(usage_raw.get("prompt_tokens") or 0)
@@ -501,7 +501,7 @@ async def playground_run(
             )
     except HTTPException:
         raise
-    except Exception as e:
+    except (httpx.HTTPError, TypeError, ValueError) as e:
         raise HTTPException(status_code=502, detail=f"AI error: {e}") from e
 
     prompt_tokens = int(usage_raw.get("prompt_tokens") or 0)

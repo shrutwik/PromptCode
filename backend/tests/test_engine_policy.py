@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+from app.services.evaluation import counterfactual
 from app.services.evaluation.engine import (
     _apply_confidence_caps,
     _apply_overall_caps,
@@ -231,3 +234,46 @@ def test_run_type_coverage_rewards_diverse_eval_runs():
         ]
     )
     assert coverage == 1.0
+
+
+def test_run_counterfactual_candidate_applies_confidence_caps(monkeypatch):
+    monkeypatch.setattr(
+        counterfactual,
+        "run_in_sandbox",
+        lambda *args, **kwargs: SimpleNamespace(
+            success=True,
+            output='{"value":"ok","confidence":0.9}',
+            error="",
+            telemetry=[
+                {
+                    "tokens_prompt": 12,
+                    "tokens_completion": 8,
+                    "tokens_total": 20,
+                    "cost_usd": 0.001,
+                    "latency_ms": 25,
+                    "retry_index": 0,
+                    "model": "gpt-4o-mini",
+                }
+            ],
+        ),
+    )
+    monkeypatch.setattr(counterfactual, "score_prompt_quality", lambda *args, **kwargs: {"overall": 0.9, "method": "heuristic"})
+
+    result = counterfactual._run_counterfactual_candidate(
+        baseline_code="print('ok')",
+        run_plan=[
+            {
+                "inputs": {"x": 1},
+                "ground_truth": '{"value":"ok"}',
+                "accuracy_mode": "json",
+                "run_type": "clean",
+                "run_index": 0,
+                "meta": {},
+            }
+        ],
+        challenge_config={"expected_calls": 1},
+        challenge_description="Test",
+    )
+
+    assert result["status"] == "ok"
+    assert any(event["reason"] == "prompt_judge_not_llm" for event in result["cap_events"])

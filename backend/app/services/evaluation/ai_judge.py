@@ -18,12 +18,23 @@ import logging
 import re
 from typing import Any
 
+import httpx
+
 from app.core.config import get_settings
 from app.services.evaluation.code_analysis import analyze_code, score_code_quality
 from app.services.evaluation.engine import EvaluationResult, SCORE_WEIGHTS, _apply_overall_caps
 from app.services.evaluation.prompt_quality import _heuristic_score
 
 logger = logging.getLogger(__name__)
+_AI_JUDGE_FAILURES = (
+    httpx.HTTPError,
+    json.JSONDecodeError,
+    KeyError,
+    IndexError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
 
 def _get_judge_model() -> str:
     return get_settings().openai_model or "gpt-4o"
@@ -324,7 +335,7 @@ def ai_judge_evaluate(
             k: v for k, v in judge_scores.items()
             if k not in ("feedback", "accuracy_reasoning", "rule_adherence_details")
         })
-    except Exception:
+    except _AI_JUDGE_FAILURES:
         logger.exception("AI judge call failed, using heuristic fallback")
         judge_scores = {
             "accuracy": 0.5,
@@ -366,7 +377,7 @@ def ai_judge_evaluate(
         else:
             pq_result = _heuristic_score([{"user": code[:500], "system": ""}])
             pq_result["feedback"] = "No distinct prompts found in code. Scored based on code content."
-    except Exception:
+    except _AI_JUDGE_FAILURES:
         logger.exception("Prompt quality judge failed, falling back to heuristic")
         pq_result = _heuristic_score(
             extracted_prompts if extracted_prompts else [{"user": code[:500], "system": ""}]

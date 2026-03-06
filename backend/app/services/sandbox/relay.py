@@ -137,7 +137,7 @@ class SandboxLLMRelay:
                 except RelayError as exc:
                     self._write_error(exc.status_code, exc.detail)
                     return
-                except Exception:
+                except (httpx.HTTPError, TypeError, ValueError):
                     logger.exception("Sandbox relay failed")
                     self._write_error(HTTPStatus.BAD_GATEWAY, "Sandbox relay upstream failure.")
                     return

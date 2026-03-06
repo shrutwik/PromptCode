@@ -41,22 +41,20 @@ PromptCode/
 
 ```bash
 cp .env.example .env
-# Edit .env and set your OPENAI_API_KEY
+# Edit .env and set your PROMPTCODE_OPENAI_API_KEY and PROMPTCODE_JWT_SECRET
 ```
 
-### 2. Build the sandbox image
+`docker compose` only forwards the `PROMPTCODE_*` settings into the app containers. The unprefixed `OPENAI_API_KEY` remains optional for direct SDK usage outside the platform runtime.
+
+### 2. Start the stack
 
 ```bash
-docker build -t promptcode-sandbox:latest -f docker/Dockerfile.sandbox .
+docker compose up --build -d
 ```
 
-### 3. Start the stack
-
-```bash
-docker-compose up -d
-```
-
-This starts PostgreSQL and the FastAPI backend on `http://localhost:8000`.
+This starts PostgreSQL, builds the sandbox image, and launches the FastAPI backend on `http://localhost:8000`.
+The compose stack always uses the internal Postgres service URL, even if your local `.env` uses SQLite for non-container development.
+The local Postgres container is published on host port `5433` by default to avoid colliding with an existing local database on `5432`.
 
 The compose stack now includes a `worker` service for resilient async scoring.
 If you run the backend outside compose, start the queue worker in a second shell:
@@ -66,7 +64,7 @@ cd backend
 python -m scripts.run_queue_worker
 ```
 
-### 4. Seed the first challenge
+### 3. Seed the first challenge
 
 ```bash
 cd backend
@@ -74,7 +72,7 @@ pip install -r requirements.txt
 python -m scripts.seed_challenge
 ```
 
-### 5. Verify
+### 4. Verify
 
 ```bash
 curl http://localhost:8000/health
@@ -167,6 +165,11 @@ Reports now include `usage_breakdown` with:
 - totals (`calls`, `retries`, tokens, cost, latency, averages)
 - per-model breakdown (calls/tokens/cost/latency)
 - per-run-type breakdown (clean/perturbed/adversarial usage and pass-rate)
+
+Dependency hygiene:
+- `backend/requirements.txt` is now pinned to the verified backend dependency set.
+- `backend/requirements.lock` mirrors the exact container/runtime versions used for Docker builds.
+- `.dockerignore` excludes secrets, tests, and other non-runtime files from the image build context.
 
 ## Evaluation
 
