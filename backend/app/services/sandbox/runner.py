@@ -28,6 +28,7 @@ from app.services.sandbox.relay import SandboxLLMBudget, SandboxLLMRelay
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+_SANDBOX_PIDS_LIMIT = 128
 
 
 def _is_safe_entrypoint(entrypoint: str) -> bool:
@@ -41,6 +42,17 @@ def _is_safe_entrypoint(entrypoint: str) -> bool:
     if any(p in ("", ".", "..") for p in parts):
         return False
     return len(parts) == 1
+
+
+def _is_safe_support_file_path(path_value: str) -> bool:
+    normalized = str(path_value or "").strip().replace("\\", "/")
+    if not normalized or normalized.startswith("/"):
+        return False
+    path = PurePosixPath(normalized)
+    parts = path.parts
+    if any(part in ("", ".", "..") for part in parts):
+        return False
+    return True
 
 
 class SandboxResult:
@@ -97,8 +109,16 @@ def run_in_sandbox(
         input_data = {**challenge_config.get("inputs", {}), **(input_overrides or {})}
         (code_dir / "input.json").write_text(json.dumps(input_data))
 
-        for fname, content in challenge_config.get("files", {}).items():
-            (code_dir / fname).write_text(content)
+        try:
+            _write_support_files(code_dir, challenge_config.get("files", {}) or {})
+        except ValueError as exc:
+            return SandboxResult(
+                success=False,
+                output="",
+                exit_code=-1,
+                telemetry=[],
+                error=str(exc),
+            )
 
         client = docker.from_env()
         container = None
@@ -113,28 +133,15 @@ def run_in_sandbox(
                 budget=llm_budget,
                 default_model=settings.openai_model,
             ) as relay:
-                run_kwargs: dict[str, Any] = {
-                    "image": settings.sandbox_image,
-                    "command": ["python", f"/workspace/{entrypoint}"],
-                    "volumes": {
-                        str(code_dir): {"bind": "/workspace", "mode": "ro"},
-                        str(telemetry_dir): {"bind": "/tmp/promptcode_telemetry", "mode": "rw"},
-                    },
-                    "environment": _build_container_environment(relay=relay, budget=llm_budget),
-                    "mem_limit": settings.sandbox_memory_limit,
-                    "nano_cpus": int(settings.sandbox_cpu_limit * 1e9),
-                    "network_disabled": False,
-                    "detach": True,
-                    "stdout": True,
-                    "stderr": True,
-                    "remove": False,
-                }
-                extra_hosts = _build_extra_hosts(network_mode)
-                if extra_hosts:
-                    run_kwargs["extra_hosts"] = extra_hosts
-                if network_mode:
-                    run_kwargs["network_mode"] = network_mode
-
+                run_kwargs = _build_container_run_kwargs(
+                    code_dir=code_dir,
+                    telemetry_dir=telemetry_dir,
+                    entrypoint=entrypoint,
+                    relay=relay,
+                    budget=llm_budget,
+                    network_mode=network_mode,
+                    run_id=run_id,
+                )
                 container = client.containers.run(**run_kwargs)
                 wait_result = container.wait(timeout=settings.sandbox_timeout_seconds)
                 exit_code = int(wait_result.get("StatusCode", 1))
@@ -216,6 +223,16 @@ def _read_telemetry(telemetry_dir: Path) -> list[dict[str, Any]]:
     return records
 
 
+def _write_support_files(code_dir: Path, files: dict[str, Any]) -> None:
+    for fname, content in files.items():
+        if not _is_safe_support_file_path(fname):
+            raise ValueError(f"Unsafe challenge file path: {fname}")
+        relative_path = PurePosixPath(str(fname).strip().replace("\\", "/"))
+        dest = code_dir.joinpath(*relative_path.parts)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(str(content))
+
+
 def _build_sandbox_llm_budget(challenge_config: dict[str, Any]) -> SandboxLLMBudget:
     constraints = challenge_config.get("constraints", {}) or {}
     raw_allowed_models = constraints.get("allowed_models")
@@ -248,6 +265,49 @@ def _build_container_environment(*, relay: SandboxLLMRelay, budget: SandboxLLMBu
         "PROMPTCODE_LLM_PROXY_TOKEN": relay.token,
         "PROMPTCODE_ALLOWED_MODELS": ",".join(budget.allowed_models),
     }
+
+
+def _build_container_run_kwargs(
+    *,
+    code_dir: Path,
+    telemetry_dir: Path,
+    entrypoint: str,
+    relay: SandboxLLMRelay,
+    budget: SandboxLLMBudget,
+    network_mode: str | None,
+    run_id: str,
+) -> dict[str, Any]:
+    run_kwargs: dict[str, Any] = {
+        "image": settings.sandbox_image,
+        "command": ["python", f"/workspace/{entrypoint}"],
+        "working_dir": "/workspace",
+        "user": "runner",
+        "volumes": {
+            str(code_dir): {"bind": "/workspace", "mode": "ro"},
+            str(telemetry_dir): {"bind": "/tmp/promptcode_telemetry", "mode": "rw"},
+        },
+        "environment": _build_container_environment(relay=relay, budget=budget),
+        "mem_limit": settings.sandbox_memory_limit,
+        "nano_cpus": int(settings.sandbox_cpu_limit * 1e9),
+        "network_disabled": network_mode == "none",
+        "detach": True,
+        "stdout": True,
+        "stderr": True,
+        "remove": False,
+        "cap_drop": ["ALL"],
+        "security_opt": ["no-new-privileges"],
+        "pids_limit": _SANDBOX_PIDS_LIMIT,
+        "labels": {
+            "promptcode.role": "sandbox",
+            "promptcode.run_id": run_id,
+        },
+    }
+    extra_hosts = _build_extra_hosts(network_mode)
+    if extra_hosts:
+        run_kwargs["extra_hosts"] = extra_hosts
+    if network_mode:
+        run_kwargs["network_mode"] = network_mode
+    return run_kwargs
 
 
 def _sandbox_temp_root() -> Path | None:
@@ -284,8 +344,14 @@ def _sandbox_network_mode() -> str | None:
             return f"container:{container_id}"
         logger.warning("PROMPTCODE_SANDBOX_NETWORK_MODE=container but HOSTNAME is not a container id")
         return None
-    if raw in {"host", "bridge", "none"} or raw.startswith("container:"):
+    if raw in {"bridge", "none"}:
         return raw
+    if raw == "host":
+        logger.warning("Ignoring insecure PROMPTCODE_SANDBOX_NETWORK_MODE=host")
+        return None
+    if raw.startswith("container:"):
+        logger.warning("Ignoring direct container network attachment override: %s", raw)
+        return None
     logger.warning("Ignoring unsupported PROMPTCODE_SANDBOX_NETWORK_MODE=%s", raw)
     return None
 

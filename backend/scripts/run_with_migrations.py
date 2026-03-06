@@ -9,19 +9,38 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
 
 
+_MIGRATION_RETRY_ATTEMPTS = 5
+_MIGRATION_RETRY_DELAY_SECONDS = 2.0
+
+
 def _alembic_ini_path() -> Path:
     return Path(__file__).resolve().parents[1] / "alembic.ini"
 
 
+def _is_retryable_migration_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    if "alembic_version" not in message:
+        return False
+    return ("already exists" in message) or ("duplicate key value" in message)
+
+
 def run_pending_migrations() -> None:
     config = Config(str(_alembic_ini_path()))
-    command.upgrade(config, "head")
+    for attempt in range(1, _MIGRATION_RETRY_ATTEMPTS + 1):
+        try:
+            command.upgrade(config, "head")
+            return
+        except Exception as exc:
+            if attempt >= _MIGRATION_RETRY_ATTEMPTS or not _is_retryable_migration_error(exc):
+                raise
+            time.sleep(_MIGRATION_RETRY_DELAY_SECONDS)
 
 
 def exec_target(argv: list[str]) -> "NoReturn":

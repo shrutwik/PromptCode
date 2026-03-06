@@ -10,11 +10,13 @@ import pytest
 
 from app.services.sandbox.relay import RelayError, SandboxLLMBudget, SandboxLLMRelay
 from app.services.sandbox.runner import (
+    _build_container_run_kwargs,
     _build_container_environment,
     _build_sandbox_llm_budget,
     _sandbox_host_alias,
     _sandbox_network_mode,
     _sandbox_temp_root,
+    _write_support_files,
 )
 
 
@@ -252,3 +254,56 @@ def test_sandbox_network_mode_ignores_invalid_container_hostname(monkeypatch):
 
     assert _sandbox_network_mode() is None
     assert _sandbox_host_alias(None) == "host.docker.internal"
+
+
+def test_sandbox_network_mode_rejects_insecure_host_mode(monkeypatch):
+    monkeypatch.setenv("PROMPTCODE_SANDBOX_NETWORK_MODE", "host")
+
+    assert _sandbox_network_mode() is None
+
+
+def test_sandbox_network_mode_rejects_direct_container_override(monkeypatch):
+    monkeypatch.setenv("PROMPTCODE_SANDBOX_NETWORK_MODE", "container:abcdef123456")
+
+    assert _sandbox_network_mode() is None
+
+
+def test_write_support_files_rejects_path_traversal(tmp_path):
+    with pytest.raises(ValueError) as exc_info:
+        _write_support_files(tmp_path, {"../escape.txt": "nope"})
+
+    assert "Unsafe challenge file path" in str(exc_info.value)
+
+
+def test_build_container_run_kwargs_hardens_sandbox_runtime(tmp_path):
+    budget = SandboxLLMBudget(
+        allowed_models=("gpt-4o-mini",),
+        max_calls=2,
+        max_prompt_chars=10_000,
+        max_completion_tokens=1024,
+        max_total_tokens=5000,
+        max_total_cost_usd=0.10,
+    )
+    relay = SimpleNamespace(
+        proxy_url="http://127.0.0.1:41237/v1/llm/call",
+        token="relay-token",
+    )
+
+    kwargs = _build_container_run_kwargs(
+        code_dir=tmp_path / "code",
+        telemetry_dir=tmp_path / "telemetry",
+        entrypoint="main.py",
+        relay=relay,
+        budget=budget,
+        network_mode="container:abcdef123456",
+        run_id="run-123",
+    )
+
+    assert kwargs["user"] == "runner"
+    assert kwargs["working_dir"] == "/workspace"
+    assert kwargs["cap_drop"] == ["ALL"]
+    assert kwargs["security_opt"] == ["no-new-privileges"]
+    assert kwargs["pids_limit"] == 128
+    assert kwargs["labels"]["promptcode.role"] == "sandbox"
+    assert kwargs["labels"]["promptcode.run_id"] == "run-123"
+    assert kwargs["network_mode"] == "container:abcdef123456"

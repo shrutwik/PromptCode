@@ -20,6 +20,7 @@ depends_on = None
 def upgrade() -> None:
     bind = op.get_bind()
     dialect_name = bind.dialect.name
+    inspector = sa.inspect(bind)
 
     # Keep the highest-score row per (challenge_id, user_id) before adding uniqueness.
     op.execute(
@@ -39,8 +40,24 @@ def upgrade() -> None:
                 WHERE ranked.row_num > 1
             )
             """
-        )
+            )
     )
+
+    unique_constraints = {
+        uc["name"]: tuple(uc.get("column_names") or ())
+        for uc in inspector.get_unique_constraints("leaderboard")
+    }
+    existing_indexes = {
+        ix["name"]: tuple(ix.get("column_names") or ())
+        for ix in inspector.get_indexes("leaderboard")
+    }
+    target_columns = ("challenge_id", "user_id")
+    has_target_uniqueness = any(
+        cols == target_columns for cols in unique_constraints.values()
+    ) or any(cols == target_columns for cols in existing_indexes.values())
+
+    if has_target_uniqueness:
+        return
 
     if dialect_name == "sqlite":
         op.create_index(
