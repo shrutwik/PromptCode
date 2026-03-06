@@ -20,6 +20,8 @@ x-backend-env: &backend-env
     PROMPTCODE_SANDBOX_TIMEOUT_SECONDS: ${PROMPTCODE_SANDBOX_TIMEOUT_SECONDS:-120}
     PROMPTCODE_SANDBOX_MEMORY_LIMIT: ${PROMPTCODE_SANDBOX_MEMORY_LIMIT:-512m}
     PROMPTCODE_SANDBOX_CPU_LIMIT: ${PROMPTCODE_SANDBOX_CPU_LIMIT:-1.0}
+    PROMPTCODE_SANDBOX_EXECUTOR_URL: ${PROMPTCODE_SANDBOX_EXECUTOR_URL:-http://sandbox-executor:8090}
+    PROMPTCODE_SANDBOX_EXECUTOR_TOKEN: ${PROMPTCODE_SANDBOX_EXECUTOR_TOKEN:-local-sandbox-executor-token}
     PROMPTCODE_EVALUATION_NORMAL_RUNS: ${PROMPTCODE_EVALUATION_NORMAL_RUNS:-5}
     PROMPTCODE_EVALUATION_ADVERSARIAL_RUNS: ${PROMPTCODE_EVALUATION_ADVERSARIAL_RUNS:-2}
     PROMPTCODE_EVALUATION_JOB_TIMEOUT_SECONDS: ${PROMPTCODE_EVALUATION_JOB_TIMEOUT_SECONDS:-1800}
@@ -52,6 +54,32 @@ services:
     entrypoint: ["echo", "sandbox image built"]
     restart: "no"
 
+  sandbox-executor:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    command: ["uvicorn", "app.sandbox_executor:app", "--host", "0.0.0.0", "--port", "8090"]
+    <<: *backend-env
+    restart: unless-stopped
+    depends_on:
+      sandbox:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/ready', timeout=3).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PROMPTCODE_SANDBOX_HOST_WORKDIR:-/tmp/promptcode_sandbox_work}:${PROMPTCODE_SANDBOX_HOST_WORKDIR:-/tmp/promptcode_sandbox_work}
+
   backend:
     build:
       context: .
@@ -63,8 +91,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      sandbox:
-        condition: service_completed_successfully
+      sandbox-executor:
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -77,9 +105,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${PROMPTCODE_SANDBOX_HOST_WORKDIR:-/tmp/promptcode_sandbox_work}:${PROMPTCODE_SANDBOX_HOST_WORKDIR:-/tmp/promptcode_sandbox_work}
 
   worker:
     build:
@@ -91,17 +116,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      sandbox:
-        condition: service_completed_successfully
+      sandbox-executor:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-m", "scripts.check_worker_health"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${PROMPTCODE_SANDBOX_HOST_WORKDIR:-/tmp/promptcode_sandbox_work}:${PROMPTCODE_SANDBOX_HOST_WORKDIR:-/tmp/promptcode_sandbox_work}
 
 volumes:
   pgdata:

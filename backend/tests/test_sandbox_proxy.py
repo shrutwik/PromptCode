@@ -13,6 +13,8 @@ from app.services.sandbox.runner import (
     _build_container_run_kwargs,
     _build_container_environment,
     _build_sandbox_llm_budget,
+    _run_in_sandbox_remote,
+    _sandbox_executor_enabled,
     _sandbox_host_alias,
     _sandbox_network_mode,
     _sandbox_temp_root,
@@ -307,3 +309,72 @@ def test_build_container_run_kwargs_hardens_sandbox_runtime(tmp_path):
     assert kwargs["labels"]["promptcode.role"] == "sandbox"
     assert kwargs["labels"]["promptcode.run_id"] == "run-123"
     assert kwargs["network_mode"] == "container:abcdef123456"
+
+
+def test_sandbox_executor_enabled_follows_config(monkeypatch):
+    monkeypatch.setattr("app.services.sandbox.runner.settings.sandbox_executor_url", "http://sandbox-executor:8090")
+
+    assert _sandbox_executor_enabled() is True
+
+    monkeypatch.setattr("app.services.sandbox.runner.settings.sandbox_executor_url", "")
+
+    assert _sandbox_executor_enabled() is False
+
+
+def test_run_in_sandbox_remote_posts_to_executor(monkeypatch):
+    monkeypatch.setattr("app.services.sandbox.runner.settings.sandbox_executor_url", "http://sandbox-executor:8090")
+    monkeypatch.setattr("app.services.sandbox.runner.settings.sandbox_executor_token", "executor-token")
+    monkeypatch.setattr("app.services.sandbox.runner.settings.sandbox_timeout_seconds", 120)
+
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {
+                "success": True,
+                "output": "ok",
+                "exit_code": 0,
+                "telemetry": [{"model": "gpt-4o-mini"}],
+                "error": None,
+            }
+
+    class FakeClient:
+        def __init__(self, timeout):
+            captured["timeout"] = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def post(self, url, json, headers):
+            captured["url"] = url
+            captured["json"] = json
+            captured["headers"] = headers
+            return FakeResponse()
+
+    monkeypatch.setattr("app.services.sandbox.runner.httpx.Client", FakeClient)
+
+    result = _run_in_sandbox_remote(
+        "print('ok')",
+        "main.py",
+        {"inputs": {"text": "hello"}},
+        run_id="run-123",
+        input_overrides={"text": "override"},
+    )
+
+    assert result.success is True
+    assert result.output == "ok"
+    assert captured["url"] == "http://sandbox-executor:8090/v1/sandbox/run"
+    assert captured["headers"] == {"Authorization": "Bearer executor-token"}
+    assert captured["json"] == {
+        "code": "print('ok')",
+        "entrypoint": "main.py",
+        "challenge_config": {"inputs": {"text": "hello"}},
+        "run_id": "run-123",
+        "input_overrides": {"text": "override"},
+    }

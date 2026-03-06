@@ -51,3 +51,14 @@ def test_settings_reject_worker_timeout_shorter_than_interval():
         )
 
     assert "WORKER_HEARTBEAT_TIMEOUT_SECONDS" in str(exc_info.value)
+
+
+def test_settings_require_sandbox_executor_token_when_url_is_configured():
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            debug=True,
+            jwt_secret="local-dev-secret-change-in-production",
+            sandbox_executor_url="http://sandbox-executor:8090",
+        )
+
+    assert "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN" in str(exc_info.value)

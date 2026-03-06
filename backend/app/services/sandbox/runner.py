@@ -22,6 +22,7 @@ from typing import Any
 
 import docker
 from docker.errors import APIError, ContainerError, ImageNotFound
+import httpx
 
 from app.core.config import get_settings
 from app.services.sandbox.relay import SandboxLLMBudget, SandboxLLMRelay
@@ -71,6 +72,25 @@ class SandboxResult:
         self.telemetry = telemetry
         self.error = error
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "success": self.success,
+            "output": self.output,
+            "exit_code": self.exit_code,
+            "telemetry": self.telemetry,
+            "error": self.error,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "SandboxResult":
+        return cls(
+            success=bool(payload.get("success")),
+            output=str(payload.get("output") or ""),
+            exit_code=int(payload.get("exit_code", -1)),
+            telemetry=list(payload.get("telemetry") or []),
+            error=str(payload.get("error")) if payload.get("error") is not None else None,
+        )
+
 
 def run_in_sandbox(
     code: str,
@@ -81,6 +101,32 @@ def run_in_sandbox(
     input_overrides: dict[str, Any] | None = None,
 ) -> SandboxResult:
     """Execute user code in a Docker container and collect telemetry."""
+    if _sandbox_executor_enabled():
+        return _run_in_sandbox_remote(
+            code,
+            entrypoint,
+            challenge_config,
+            run_id=run_id,
+            input_overrides=input_overrides,
+        )
+    return _run_in_sandbox_local(
+        code,
+        entrypoint,
+        challenge_config,
+        run_id=run_id,
+        input_overrides=input_overrides,
+    )
+
+
+def _run_in_sandbox_local(
+    code: str,
+    entrypoint: str,
+    challenge_config: dict[str, Any],
+    *,
+    run_id: str | None = None,
+    input_overrides: dict[str, Any] | None = None,
+) -> SandboxResult:
+    """Execute user code locally via the Docker daemon and collect telemetry."""
 
     run_id = run_id or uuid.uuid4().hex[:12]
     if not _is_safe_entrypoint(entrypoint):
@@ -209,6 +255,76 @@ def run_in_sandbox(
         )
 
 
+def _run_in_sandbox_remote(
+    code: str,
+    entrypoint: str,
+    challenge_config: dict[str, Any],
+    *,
+    run_id: str | None = None,
+    input_overrides: dict[str, Any] | None = None,
+) -> SandboxResult:
+    run_id = run_id or uuid.uuid4().hex[:12]
+    if not _is_safe_entrypoint(entrypoint):
+        return SandboxResult(
+            success=False,
+            output="",
+            exit_code=-1,
+            telemetry=[],
+            error="Unsafe entrypoint path",
+        )
+
+    payload = {
+        "code": code,
+        "entrypoint": entrypoint,
+        "challenge_config": challenge_config,
+        "run_id": run_id,
+        "input_overrides": input_overrides or {},
+    }
+    headers = {"Authorization": f"Bearer {settings.sandbox_executor_token}"}
+    timeout_seconds = max(30.0, float(settings.sandbox_timeout_seconds) + 15.0)
+    endpoint = f"{str(settings.sandbox_executor_url).rstrip('/')}/v1/sandbox/run"
+
+    try:
+        with httpx.Client(timeout=timeout_seconds) as client:
+            response = client.post(endpoint, json=payload, headers=headers)
+    except httpx.HTTPError as exc:
+        logger.warning("Sandbox executor request failed: %s", exc)
+        return SandboxResult(
+            success=False,
+            output="",
+            exit_code=-1,
+            telemetry=[],
+            error=f"Sandbox executor unavailable: {exc}",
+        )
+
+    if response.status_code != 200:
+        detail = response.text[:500]
+        logger.warning(
+            "Sandbox executor returned %s: %s",
+            response.status_code,
+            detail,
+        )
+        return SandboxResult(
+            success=False,
+            output="",
+            exit_code=-1,
+            telemetry=[],
+            error=f"Sandbox executor request failed ({response.status_code}): {detail}",
+        )
+
+    try:
+        return SandboxResult.from_dict(response.json())
+    except ValueError as exc:
+        logger.warning("Sandbox executor returned invalid payload: %s", exc)
+        return SandboxResult(
+            success=False,
+            output="",
+            exit_code=-1,
+            telemetry=[],
+            error="Sandbox executor returned invalid JSON payload.",
+        )
+
+
 def _read_telemetry(telemetry_dir: Path) -> list[dict[str, Any]]:
     calls_file = telemetry_dir / "calls.jsonl"
     if not calls_file.exists():
@@ -265,6 +381,10 @@ def _build_container_environment(*, relay: SandboxLLMRelay, budget: SandboxLLMBu
         "PROMPTCODE_LLM_PROXY_TOKEN": relay.token,
         "PROMPTCODE_ALLOWED_MODELS": ",".join(budget.allowed_models),
     }
+
+
+def _sandbox_executor_enabled() -> bool:
+    return bool(str(settings.sandbox_executor_url or "").strip())
 
 
 def _build_container_run_kwargs(

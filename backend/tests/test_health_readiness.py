@@ -81,6 +81,30 @@ def test_ready_returns_503_when_database_is_unavailable(monkeypatch):
     get_settings.cache_clear()
 
 
+def test_ready_returns_503_when_sandbox_executor_is_unavailable(monkeypatch):
+    async_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+
+    async def fake_sandbox_executor_ready(_settings) -> bool:
+        return False
+
+    monkeypatch.setenv("PROMPTCODE_SANDBOX_EXECUTOR_URL", "http://sandbox-executor:8090")
+    monkeypatch.setenv("PROMPTCODE_SANDBOX_EXECUTOR_TOKEN", "secret-token")
+    monkeypatch.setattr(main_module, "engine", async_engine)
+    monkeypatch.setattr(main_module, "_sandbox_executor_ready", fake_sandbox_executor_ready)
+    get_settings.cache_clear()
+
+    app = main_module.create_app()
+
+    with TestClient(app) as client:
+        ready = client.get("/ready")
+
+    assert ready.status_code == 503
+    assert ready.json() == {"status": "error", "detail": "sandbox executor unavailable"}
+
+    get_settings.cache_clear()
+    asyncio.run(async_engine.dispose())
+
+
 def test_ready_requires_worker_heartbeat_when_inline_processing_disabled(monkeypatch):
     async_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
 

@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     sandbox_timeout_seconds: int = 120
     sandbox_memory_limit: str = "512m"
     sandbox_cpu_limit: float = 1.0
+    sandbox_executor_url: str = ""
+    sandbox_executor_token: str = ""
 
     evaluation_normal_runs: int = 5
     evaluation_adversarial_runs: int = 2
@@ -69,6 +71,12 @@ class Settings(BaseSettings):
         if not self.debug and secret in _INSECURE_JWT_SECRETS:
             raise ValueError(
                 "PROMPTCODE_JWT_SECRET must be changed from the development default when PROMPTCODE_DEBUG is false."
+            )
+        self.sandbox_executor_url = str(self.sandbox_executor_url or "").strip()
+        self.sandbox_executor_token = str(self.sandbox_executor_token or "").strip()
+        if self.sandbox_executor_url and not self.sandbox_executor_token:
+            raise ValueError(
+                "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN must be set when PROMPTCODE_SANDBOX_EXECUTOR_URL is configured."
             )
         self.worker_id = str(self.worker_id or "").strip()
         if self.worker_heartbeat_interval_seconds < 1:

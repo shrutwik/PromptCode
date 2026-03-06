@@ -52,17 +52,20 @@ cp .env.example .env
 docker compose up --build -d
 ```
 
-This starts PostgreSQL, builds the sandbox image, and launches the FastAPI backend on `http://localhost:8000`.
+This starts PostgreSQL, builds the sandbox image, and launches the sandbox executor, worker, and FastAPI backend on `http://localhost:8000`.
 The compose stack always uses the internal Postgres service URL, even if your local `.env` uses SQLite for non-container development.
 The local Postgres container is published on host port `5433` by default to avoid colliding with an existing local database on `5432`.
 The backend image now includes the static frontend and challenge definitions, so `/` serves the website and challenge seeding works inside the container.
-The compose stack also mounts a shared sandbox workspace path so nested Docker sandbox runs can bind the submitted code correctly.
-It sets `PROMPTCODE_SANDBOX_NETWORK_MODE=container` so each nested sandbox shares the caller container network namespace and can reach the local relay on `127.0.0.1`.
+The compose stack includes a dedicated `sandbox-executor` service that owns the Docker socket and shared sandbox workspace path.
+Backend and worker submit sandbox runs to that internal executor over HTTP, so they no longer need direct Docker daemon access.
+It sets `PROMPTCODE_SANDBOX_NETWORK_MODE=container` so each nested sandbox shares the executor container network namespace and can reach the local relay on `127.0.0.1`.
+The executor now exposes `/health`, `/ready`, and `/status` so you can separate process liveness from actual Docker/image readiness.
 
 The compose stack now includes a `worker` service for resilient async scoring.
 It disables in-process submission evaluation in the web container, so queued jobs are handled only by the worker service.
 Both the backend and worker containers now run `alembic upgrade head` before starting their main process.
-The backend readiness check requires a fresh worker heartbeat when inline queue processing is disabled, and the worker publishes a matching healthcheck.
+The backend readiness check requires a fresh worker heartbeat when inline queue processing is disabled, and it also fails closed if the configured sandbox executor is unreachable.
+The worker publishes a matching heartbeat healthcheck.
 If you run the backend outside compose, start the queue worker in a second shell:
 
 ```bash
@@ -84,12 +87,19 @@ curl http://localhost:8000/ready
 curl http://localhost:8000/api/challenges/
 ```
 
-`/health` is a liveness check. `/ready` verifies database connectivity and, when inline queue processing is disabled, also requires a fresh worker heartbeat.
+`/health` is a liveness check. `/ready` verifies database connectivity, requires a fresh worker heartbeat when inline queue processing is disabled, and checks the sandbox executor when one is configured.
 For a live end-to-end deployment smoke, run:
 
 ```bash
 cd backend
 python -m scripts.run_deploy_smoke --base-url http://127.0.0.1:8000
+```
+
+For a direct sandbox-executor smoke, run:
+
+```bash
+cd backend
+python -m scripts.run_sandbox_executor_smoke --url http://127.0.0.1:8090 --token "$PROMPTCODE_SANDBOX_EXECUTOR_TOKEN"
 ```
 
 ## Using Supabase as the database

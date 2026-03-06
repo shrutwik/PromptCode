@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+import httpx
 from sqlalchemy import text
 
 from app.api.routes import challenges, chat, leaderboard, submissions
@@ -17,6 +18,21 @@ from app.db.session import engine
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 logger = logging.getLogger(__name__)
+
+
+async def _sandbox_executor_ready(settings) -> bool:
+    executor_url = str(settings.sandbox_executor_url or "").strip()
+    if not executor_url:
+        return True
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{executor_url.rstrip('/')}/ready")
+    except httpx.HTTPError as exc:
+        logger.warning("Sandbox executor readiness check failed: %s", exc)
+        return False
+
+    return response.status_code == 200
 
 
 @asynccontextmanager
@@ -88,6 +104,11 @@ def create_app() -> FastAPI:
             return JSONResponse(
                 status_code=503,
                 content={"status": "error", "detail": "database unavailable"},
+            )
+        if not await _sandbox_executor_ready(settings):
+            return JSONResponse(
+                status_code=503,
+                content={"status": "error", "detail": "sandbox executor unavailable"},
             )
         return {"status": "ok"}
 
