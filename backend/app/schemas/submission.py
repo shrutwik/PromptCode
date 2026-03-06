@@ -4,13 +4,13 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SubmissionCreate(BaseModel):
     challenge_id: uuid.UUID
-    code: str
-    entrypoint: str = "main.py"
+    code: str = Field(min_length=1, max_length=120_000)
+    entrypoint: str = Field(default="main.py", min_length=1, max_length=120)
 
 
 class SubmissionResponse(BaseModel):

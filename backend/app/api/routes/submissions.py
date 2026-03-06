@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from pathlib import PurePosixPath
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -15,6 +16,20 @@ from app.schemas.submission import SubmissionCreate, SubmissionReport, Submissio
 from app.workers.queue import enqueue_evaluation_job, process_job
 
 router = APIRouter()
+
+
+def _is_safe_python_entrypoint(entrypoint: str) -> bool:
+    normalized = str(entrypoint or "").strip().replace("\\", "/")
+    if not normalized or normalized.startswith("/"):
+        return False
+    path = PurePosixPath(normalized)
+    if path.suffix != ".py":
+        return False
+    parts = path.parts
+    if any(p in ("", ".", "..") for p in parts):
+        return False
+    # Keep submissions to a single script entrypoint for predictable sandbox exec.
+    return len(parts) == 1
 
 
 @router.get("/", response_model=list[SubmissionResponse])
@@ -44,10 +59,10 @@ async def create_submission(
     challenge = await db.get(Challenge, payload.challenge_id)
     if not challenge:
         raise HTTPException(status_code=404, detail="Challenge not found")
-    if not payload.entrypoint.endswith(".py"):
+    if not _is_safe_python_entrypoint(payload.entrypoint):
         raise HTTPException(
             status_code=400,
-            detail="This MVP evaluator currently supports Python submissions only (entrypoint must end with .py).",
+            detail="Entrypoint must be a safe Python filename like 'main.py'.",
         )
 
     submission = Submission(

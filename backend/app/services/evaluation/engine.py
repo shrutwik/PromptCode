@@ -23,6 +23,7 @@ from app.services.evaluation.scorer import (
     score_reliance_calibration,
     score_reliability,
 )
+from app.services.evaluation.weight_profile import get_weight_profile
 from app.services.sandbox.runner import SandboxResult, run_in_sandbox
 
 logger = logging.getLogger(__name__)
@@ -459,11 +460,14 @@ def evaluate_submission(
     baseline_overall = baseline_result.get("overall")
     leverage_gain = None if baseline_overall is None else round(overall - float(baseline_overall), 4)
     leverage_gain_score = None if leverage_gain is None else round(_normalize_leverage_gain(leverage_gain), 4)
+    weight_profile = get_weight_profile()
     ai_mastery_result = score_ai_mastery(
         frontier_navigation_score=float(ai_leverage["frontier_navigation_score"]),
         reliance_calibration_score=float(ai_leverage["reliance_calibration_score"]),
         prompt_quality_score=pq,
         leverage_gain_score=leverage_gain_score,
+        weights_without_baseline=weight_profile.get("ai_mastery_without_baseline"),
+        weights_with_baseline=weight_profile.get("ai_mastery_with_baseline"),
     )
     if hardcoded:
         ai_mastery_result["score"] = 0.0
@@ -476,6 +480,7 @@ def evaluate_submission(
         "leverage_gain": leverage_gain,
         "leverage_gain_score": leverage_gain_score,
         "ai_mastery_score": round(float(ai_mastery_result.get("score", 0.0)), 4),
+        "weight_profile_version": str(weight_profile.get("version") or "static_v1"),
     })
     ai_leverage["signals"]["counterfactual"] = baseline_result
     ai_leverage["signals"]["composite"] = ai_mastery_result

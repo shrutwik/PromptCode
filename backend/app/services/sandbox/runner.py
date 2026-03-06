@@ -14,6 +14,7 @@ import logging
 import tempfile
 import uuid
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 
 import docker
@@ -23,6 +24,19 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+
+def _is_safe_entrypoint(entrypoint: str) -> bool:
+    normalized = str(entrypoint or "").strip().replace("\\", "/")
+    if not normalized or normalized.startswith("/"):
+        return False
+    path = PurePosixPath(normalized)
+    if path.suffix != ".py":
+        return False
+    parts = path.parts
+    if any(p in ("", ".", "..") for p in parts):
+        return False
+    return len(parts) == 1
 
 
 class SandboxResult:
@@ -53,6 +67,14 @@ def run_in_sandbox(
     """Execute user code in a Docker container and collect telemetry."""
 
     run_id = run_id or uuid.uuid4().hex[:12]
+    if not _is_safe_entrypoint(entrypoint):
+        return SandboxResult(
+            success=False,
+            output="",
+            exit_code=-1,
+            telemetry=[],
+            error="Unsafe entrypoint path",
+        )
 
     with tempfile.TemporaryDirectory(prefix=f"pc_{run_id}_") as tmpdir:
         workspace = Path(tmpdir)
@@ -75,7 +97,7 @@ def run_in_sandbox(
         try:
             container = client.containers.run(
                 image=settings.sandbox_image,
-                command=f"python /workspace/{entrypoint}",
+                command=["python", f"/workspace/{entrypoint}"],
                 volumes={
                     str(code_dir): {"bind": "/workspace", "mode": "ro"},
                     str(telemetry_dir): {"bind": "/tmp/promptcode_telemetry", "mode": "rw"},

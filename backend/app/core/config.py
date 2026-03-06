@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_base_url: str = ""
     openai_model: str = "gpt-4o"
+    evaluation_weight_profile_path: str = ""
 
     sandbox_image: str = "promptcode-sandbox:latest"
     sandbox_timeout_seconds: int = 120

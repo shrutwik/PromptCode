@@ -572,8 +572,38 @@ def score_ai_mastery(
     prompt_quality_score: float,
     learning_velocity_score: float | None = None,
     leverage_gain_score: float | None = None,
+    weights_without_baseline: dict[str, float] | None = None,
+    weights_with_baseline: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Composite score for AI leverage quality with transparent components."""
+    default_without = {
+        "frontier_navigation": 0.35,
+        "reliance_calibration": 0.30,
+        "prompt_quality": 0.20,
+        "learning_velocity": 0.15,
+    }
+    default_with = {
+        "frontier_navigation": 0.30,
+        "reliance_calibration": 0.25,
+        "prompt_quality": 0.15,
+        "learning_velocity": 0.15,
+        "leverage_gain": 0.15,
+    }
+
+    def _normalized_weights(defaults: dict[str, float], overrides: dict[str, float] | None) -> dict[str, float]:
+        source = dict(defaults)
+        if overrides:
+            for key in defaults.keys():
+                if key in overrides:
+                    source[key] = max(0.0, float(overrides[key]))
+        total = sum(source.values())
+        if total <= 0.0:
+            return dict(defaults)
+        return {k: source[k] / total for k in source.keys()}
+
+    without_weights = _normalized_weights(default_without, weights_without_baseline)
+    with_weights = _normalized_weights(default_with, weights_with_baseline)
+
     learning_velocity = 0.5 if learning_velocity_score is None else _clamp01(learning_velocity_score)
     components = {
         "frontier_navigation": round(_clamp01(frontier_navigation_score), 4),
@@ -583,26 +613,30 @@ def score_ai_mastery(
     }
     if leverage_gain_score is None:
         score = (
-            _clamp01(frontier_navigation_score) * 0.35
-            + _clamp01(reliance_calibration_score) * 0.30
-            + _clamp01(prompt_quality_score) * 0.20
-            + learning_velocity * 0.15
+            _clamp01(frontier_navigation_score) * without_weights["frontier_navigation"]
+            + _clamp01(reliance_calibration_score) * without_weights["reliance_calibration"]
+            + _clamp01(prompt_quality_score) * without_weights["prompt_quality"]
+            + learning_velocity * without_weights["learning_velocity"]
         )
         method = "ai_mastery_v1"
     else:
         leverage = _clamp01(leverage_gain_score)
         components["leverage_gain"] = round(leverage, 4)
         score = (
-            _clamp01(frontier_navigation_score) * 0.30
-            + _clamp01(reliance_calibration_score) * 0.25
-            + _clamp01(prompt_quality_score) * 0.15
-            + learning_velocity * 0.15
-            + leverage * 0.15
+            _clamp01(frontier_navigation_score) * with_weights["frontier_navigation"]
+            + _clamp01(reliance_calibration_score) * with_weights["reliance_calibration"]
+            + _clamp01(prompt_quality_score) * with_weights["prompt_quality"]
+            + learning_velocity * with_weights["learning_velocity"]
+            + leverage * with_weights["leverage_gain"]
         )
         method = "ai_mastery_v2_counterfactual"
     return {
         "score": round(_clamp01(score), 4),
         "components": components,
+        "weights": {
+            "without_baseline": {k: round(v, 4) for k, v in without_weights.items()},
+            "with_baseline": {k: round(v, 4) for k, v in with_weights.items()},
+        },
         "method": method,
     }
 

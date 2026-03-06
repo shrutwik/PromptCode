@@ -19,6 +19,7 @@ from app.models.run import Run
 from app.models.submission import Submission
 from app.services.evaluation.engine import evaluate_submission
 from app.services.evaluation.scorer import score_ai_mastery
+from app.services.evaluation.weight_profile import get_weight_profile
 
 logger = logging.getLogger(__name__)
 MIN_LEADERBOARD_TESTS = 6
@@ -740,11 +741,30 @@ def _build_future_feedback(
         "evaluation_rigor": round(evaluation_rigor, 4),
     }
 
+    profile = get_weight_profile()
+    readiness_weights_raw = profile.get("future_readiness") if isinstance(profile, dict) else None
+    readiness_weights = {
+        "verification_discipline": 0.35,
+        "efficient_leverage": 0.30,
+        "adaptation_speed": 0.20,
+        "evaluation_rigor": 0.15,
+    }
+    if isinstance(readiness_weights_raw, dict):
+        for key in readiness_weights.keys():
+            if key in readiness_weights_raw:
+                try:
+                    readiness_weights[key] = max(0.0, float(readiness_weights_raw[key]))
+                except (TypeError, ValueError):
+                    pass
+        total = sum(readiness_weights.values())
+        if total > 0:
+            readiness_weights = {k: (v / total) for k, v in readiness_weights.items()}
+
     readiness_score = _clamp01(
-        (verification_discipline * 0.35)
-        + (efficient_leverage * 0.30)
-        + (adaptation_speed * 0.20)
-        + (evaluation_rigor * 0.15)
+        (verification_discipline * readiness_weights["verification_discipline"])
+        + (efficient_leverage * readiness_weights["efficient_leverage"])
+        + (adaptation_speed * readiness_weights["adaptation_speed"])
+        + (evaluation_rigor * readiness_weights["evaluation_rigor"])
     )
     readiness_score = round(readiness_score, 4)
     readiness_band = (
@@ -821,6 +841,8 @@ def _build_future_feedback(
         "next_7_days": next_7_days,
         "next_eval_protocol": protocol,
         "signals": {
+            "weight_profile_version": str(profile.get("version") or "static_v1") if isinstance(profile, dict) else "static_v1",
+            "readiness_weights": {k: round(v, 4) for k, v in readiness_weights.items()},
             "calls_per_run": round(calls_per_run, 4),
             "run_type_coverage": round(run_type_coverage, 4),
             "credibility_score": round(credibility_score, 4),

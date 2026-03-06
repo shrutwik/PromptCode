@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
+from collections import defaultdict, deque
 from typing import Any
 
 import httpx
@@ -10,8 +12,10 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.challenge import Challenge
+from app.models.user import User
 
 router = APIRouter()
 
@@ -64,11 +68,56 @@ _MODEL_PRICING: dict[str, tuple[float, float]] = {
     "gpt-3.5-turbo": (0.50 / 1_000_000, 1.50 / 1_000_000),
 }
 _DEFAULT_PRICING = (5.00 / 1_000_000, 15.00 / 1_000_000)
+_MAX_CHAT_MESSAGES = 30
+_MAX_MESSAGE_CHARS = 6_000
+_MAX_CODE_CHARS = 120_000
+_MAX_SYSTEM_CHARS = 6_000
+_RATE_WINDOW_SECONDS = 60
+_COACH_RATE_LIMIT = 20
+_PLAYGROUND_RATE_LIMIT = 30
+_RATE_LIMIT_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
+_RATE_LIMIT_LOCK = asyncio.Lock()
 
 
 def _estimate_cost_usd(model: str, prompt_tokens: int, completion_tokens: int) -> float:
     prompt_rate, completion_rate = _MODEL_PRICING.get(model, _DEFAULT_PRICING)
     return round((prompt_tokens * prompt_rate) + (completion_tokens * completion_rate), 6)
+
+
+async def _enforce_rate_limit(*, key: str, max_requests: int, window_seconds: int = _RATE_WINDOW_SECONDS) -> None:
+    now = time.time()
+    async with _RATE_LIMIT_LOCK:
+        bucket = _RATE_LIMIT_BUCKETS[key]
+        while bucket and (now - bucket[0]) > window_seconds:
+            bucket.popleft()
+        if len(bucket) >= max_requests:
+            retry_after = max(1, int(window_seconds - (now - bucket[0])))
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded. Retry in {retry_after}s.",
+            )
+        bucket.append(now)
+
+
+def _validate_messages(messages: list[ChatMessage] | list[PlaygroundMessage]) -> None:
+    if not messages:
+        raise HTTPException(status_code=400, detail="At least one message is required.")
+    if len(messages) > _MAX_CHAT_MESSAGES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Too many messages. Maximum {_MAX_CHAT_MESSAGES}.",
+        )
+    for m in messages:
+        if m.role not in ("system", "user", "assistant"):
+            raise HTTPException(status_code=400, detail=f"Invalid role: {m.role}")
+        content = str(m.content or "").strip()
+        if not content:
+            raise HTTPException(status_code=400, detail="Message content cannot be empty.")
+        if len(content) > _MAX_MESSAGE_CHARS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Message too long (>{_MAX_MESSAGE_CHARS} chars).",
+            )
 
 
 def _build_system_prompt(challenge: Challenge) -> str:
@@ -106,8 +155,17 @@ def _get_api_url(settings) -> str:
 @router.post("/", response_model=ChatResponse)
 async def chat(
     payload: ChatRequest,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await _enforce_rate_limit(key=f"coach:{user.id}", max_requests=_COACH_RATE_LIMIT)
+    _validate_messages(payload.messages)
+    if len(payload.code) > _MAX_CODE_CHARS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Code payload too large (>{_MAX_CODE_CHARS} chars).",
+        )
+
     settings = get_settings()
     if not settings.openai_api_key:
         raise HTTPException(
@@ -184,7 +242,18 @@ async def chat(
 
 
 @router.post("/playground-run", response_model=PlaygroundRunResponse)
-async def playground_run(payload: PlaygroundRunRequest):
+async def playground_run(
+    payload: PlaygroundRunRequest,
+    user: User = Depends(get_current_user),
+):
+    await _enforce_rate_limit(key=f"playground:{user.id}", max_requests=_PLAYGROUND_RATE_LIMIT)
+    _validate_messages(payload.messages)
+    if len(payload.system) > _MAX_SYSTEM_CHARS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"System prompt too long (>{_MAX_SYSTEM_CHARS} chars).",
+        )
+
     settings = get_settings()
     if not settings.openai_api_key:
         raise HTTPException(
