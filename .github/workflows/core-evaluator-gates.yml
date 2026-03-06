@@ -1,0 +1,61 @@
+name: Core Evaluator Gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  core-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Backend Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements-dev.txt
+
+      - name: Run Backend Tests
+        run: cd backend && pytest -q
+
+      - name: Run Non-Strict Core Gates
+        run: cd backend && python -m scripts.run_release_quality_gates
+
+  release-strict:
+    if: github.event_name != 'pull_request'
+    needs: core-regression
+    runs-on: ubuntu-latest
+    env:
+      PROMPTCODE_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Backend Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements-dev.txt
+
+      - name: Validate OpenAI Key Is Configured
+        run: |
+          if [ -z "${PROMPTCODE_OPENAI_API_KEY}" ]; then
+            echo "Missing OPENAI_API_KEY secret for strict release gates."
+            exit 1
+          fi
+
+      - name: Run Strict Release Gates
+        run: cd backend && python -m scripts.run_release_quality_gates --strict

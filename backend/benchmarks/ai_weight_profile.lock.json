@@ -1,0 +1,16 @@
+{
+  "approved": true,
+  "approved_at": "2026-03-06T07:01:37.134364+00:00",
+  "approved_by": "core-logic-review",
+  "approved_version": "2026-03-06",
+  "profile_sha256": "456fd2f55fdd7e325270014aac0afd2250a51aeb588af56499e3dba16ebb553c",
+  "profile_path": "benchmarks/ai_weight_profile.json",
+  "calibration_gate": {
+    "mode": "",
+    "pass": null,
+    "sample_count": null,
+    "pearson_r": null,
+    "mae": null
+  },
+  "force": true
+}

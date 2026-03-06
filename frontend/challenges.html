@@ -230,7 +230,7 @@ nav { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--nav-h); 
       </div>
       <div class="header-actions">
         
-        <a class="btn btn-primary" href="/challenge.html">start a challenge →</a>
+        <a class="btn btn-primary" id="startChallengeBtn" href="/challenge.html">start a challenge →</a>
       </div>
     </div>
 
@@ -263,7 +263,7 @@ nav { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--nav-h); 
       </div>
       <div class="wb-right">
         <div class="wb-timer">ends in <b>2d 14h</b></div>
-        <a class="btn btn-primary" href="/challenge.html">attempt now →</a>
+        <a class="btn btn-primary" id="weeklyAttemptBtn" href="/challenge.html">attempt now →</a>
       </div>
     </div>
 
@@ -451,17 +451,27 @@ nav { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--nav-h); 
         if (!challengeStats[cid]) {
           challengeStats[cid] = { bestScore: null, status: 'attempted' };
         }
-        const score = sub.overall_score ?? sub.score ?? null;
+        const score = sub.score_overall ?? sub.overall_score ?? sub.score ?? null;
         if (score != null && (challengeStats[cid].bestScore == null || score > challengeStats[cid].bestScore)) {
           challengeStats[cid].bestScore = score;
         }
         if (sub.status === 'completed' || sub.status === 'graded') {
           challengeStats[cid].status = 'solved';
+        } else if (sub.status === 'failed' && challengeStats[cid].status !== 'solved') {
+          challengeStats[cid].status = 'attempted';
         }
       }
     }
 
     const totalChallenges = challenges ? challenges.length : 0;
+    const firstChallengeId = totalChallenges ? challenges[0].id : null;
+    if (firstChallengeId) {
+      const target = `/challenge.html?id=${firstChallengeId}`;
+      const startBtn = document.getElementById('startChallengeBtn');
+      const weeklyBtn = document.getElementById('weeklyAttemptBtn');
+      if (startBtn) startBtn.href = target;
+      if (weeklyBtn) weeklyBtn.href = target;
+    }
     const stats = profile && profile.stats ? profile.stats : null;
     const solved = stats ? (stats.challenges_solved || 0) : 0;
     const avgScore = stats ? (stats.avg_score || 0) : 0;

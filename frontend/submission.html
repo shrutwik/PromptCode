@@ -372,8 +372,16 @@ nav {
         </div>
       </div>
 
+      <!-- CORE INTEGRITY -->
+      <div class="card fade-in d4" id="integrityCard" style="display:none">
+        <div class="card-hdr"><span class="card-title">core evaluation integrity</span></div>
+        <div class="card-body" style="padding:10px 14px" id="integrityBody">
+          <div style="color:var(--muted);font-size:11px;padding:8px 0">Loading...</div>
+        </div>
+      </div>
+
       <!-- VS BEST -->
-      <div class="card fade-in d4">
+      <div class="card fade-in d5">
         <div class="card-hdr"><span class="card-title">vs. leaderboard #1</span></div>
         <div class="card-body" style="padding:10px 14px">
           <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;font-size:10px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;padding-bottom:5px;border-bottom:1px solid var(--border);margin-bottom:2px">
@@ -388,7 +396,7 @@ nav {
       </div>
 
       <!-- NEXT STEPS -->
-      <div class="next-card fade-in d5">
+      <div class="next-card fade-in d6">
         <div class="next-title">next steps</div>
         <div class="next-actions">
           <a class="btn btn-primary" id="improveBtn2" href="/challenges.html" style="justify-content:center">→ improve this solution</a>
@@ -410,6 +418,8 @@ nav {
   function fmtScore(n) { return n == null ? '—' : n.toFixed(2); }
   function fmtCost(n) { return n == null ? '—' : '$' + n.toFixed(4); }
   function fmtMs(n) { return n == null ? '—' : fmtNum(Math.round(n)) + 'ms'; }
+  function asNumber(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
+  function labelize(v) { return String(v == null ? 'unknown' : v).replace(/_/g, ' '); }
 
   function scoreClass(v) {
     if (v == null) return '';
@@ -607,6 +617,116 @@ nav {
     ).join('');
   }
 
+  function extractScoreCapEvents(report) {
+    const trail = Array.isArray(report.audit_trail) ? report.audit_trail : [];
+    return trail
+      .filter(e => e && e.event === 'score_cap_applied' && e.details && typeof e.details === 'object')
+      .map(e => e.details);
+  }
+
+  function getCoreIntegritySignals(report) {
+    const pqDetails = report.prompt_quality_details || {};
+    const evalCfg = report.evaluation_config || {};
+    const credibility = report.credibility || {};
+    const credSignals = credibility.signals || {};
+    const ci = report.confidence_intervals || {};
+    const runAccuracyCI = ci.run_accuracy || {};
+    const calibration = report.calibration_details || {};
+    const leverageSignals = (report.ai_leverage || {}).signals || {};
+    const counterfactual = leverageSignals.counterfactual || {};
+    const aggregate = counterfactual.aggregate || {};
+    const capEvents = extractScoreCapEvents(report);
+    const capReasons = [];
+    capEvents.forEach((event) => {
+      const reason = String(event.reason || '').trim();
+      if (reason && !capReasons.includes(reason)) capReasons.push(reason);
+    });
+
+    return {
+      evaluationMode: String(evalCfg.mode || 'sandbox'),
+      promptJudgeMethod: String(credSignals.prompt_judge_method || pqDetails.method || 'unknown'),
+      judgeModel: String(pqDetails.judge_model || evalCfg.judge_model || 'n/a'),
+      calibrationSamples: asNumber(credSignals.calibration_samples ?? calibration.samples),
+      runAccuracyCiHalfWidth: asNumber(runAccuracyCI.half_width ?? credSignals.run_accuracy_ci_half_width),
+      runTypeCoverage: asNumber(credSignals.run_type_coverage),
+      runCount: asNumber(credSignals.run_count ?? evalCfg.run_count),
+      hiddenSetCount: asNumber(credSignals.hidden_set_count ?? evalCfg.hidden_set_count),
+      counterfactualStatus: String(credSignals.counterfactual_status || counterfactual.status || 'unknown'),
+      aggregateMethod: aggregate.method ? String(aggregate.method) : '',
+      selectedStrategyId: aggregate.selected_strategy_id ? String(aggregate.selected_strategy_id) : '',
+      variantsOk: asNumber(aggregate.variants_ok),
+      variantsTotal: asNumber(aggregate.variants_total),
+      capReasons,
+    };
+  }
+
+  function renderCoreIntegrity(report) {
+    const card = document.getElementById('integrityCard');
+    const body = document.getElementById('integrityBody');
+    if (!card || !body) return;
+
+    const integrity = getCoreIntegritySignals(report);
+    const rows = [
+      ['evaluation mode', labelize(integrity.evaluationMode), integrity.evaluationMode === 'sandbox' ? 'ac' : 'wn'],
+      ['judge mode', labelize(integrity.promptJudgeMethod), integrity.promptJudgeMethod === 'llm_judge' ? 'ac' : 'wn'],
+      ['judge model', integrity.judgeModel || 'n/a', ''],
+    ];
+
+    if (integrity.calibrationSamples != null) {
+      rows.push([
+        'calibration samples',
+        fmtNum(integrity.calibrationSamples),
+        integrity.calibrationSamples >= 6 ? 'ac' : 'wn',
+      ]);
+    }
+    if (integrity.runAccuracyCiHalfWidth != null) {
+      rows.push([
+        'run accuracy ci',
+        `±${integrity.runAccuracyCiHalfWidth.toFixed(2)}`,
+        integrity.runAccuracyCiHalfWidth < 0.15 ? 'ac' : 'wn',
+      ]);
+    }
+    if (integrity.runTypeCoverage != null) {
+      rows.push([
+        'run-type coverage',
+        `${Math.round(integrity.runTypeCoverage * 100)}%`,
+        integrity.runTypeCoverage >= 0.99 ? 'ac' : (integrity.runTypeCoverage >= 0.67 ? 'wn' : 'dn'),
+      ]);
+    }
+    if (integrity.runCount != null) {
+      rows.push(['run count', fmtNum(integrity.runCount), integrity.runCount >= 8 ? 'ac' : 'wn']);
+    }
+    if (integrity.hiddenSetCount != null) {
+      rows.push(['hidden-set runs', fmtNum(integrity.hiddenSetCount), integrity.hiddenSetCount > 0 ? 'ac' : 'wn']);
+    }
+    rows.push([
+      'counterfactual status',
+      labelize(integrity.counterfactualStatus),
+      integrity.counterfactualStatus === 'ok' ? 'ac' : 'wn',
+    ]);
+    if (integrity.aggregateMethod) {
+      const ok = integrity.variantsOk != null ? integrity.variantsOk : 0;
+      const total = integrity.variantsTotal != null ? integrity.variantsTotal : 0;
+      const summary = total > 0
+        ? `${labelize(integrity.aggregateMethod)} (${fmtNum(ok)}/${fmtNum(total)} ok)`
+        : labelize(integrity.aggregateMethod);
+      rows.push(['baseline aggregate', summary, ok > 0 ? 'ac' : 'wn']);
+    }
+    if (integrity.selectedStrategyId) {
+      rows.push(['selected baseline', integrity.selectedStrategyId, '']);
+    }
+    if (integrity.capReasons.length) {
+      rows.push(['confidence caps', integrity.capReasons.map(labelize).join(', '), 'dn']);
+    } else {
+      rows.push(['confidence caps', 'none', 'ac']);
+    }
+
+    body.innerHTML = rows.map(([k, v, cls]) =>
+      `<div class="metric-row"><span class="mk">${k}</span><span class="mv${cls ? ' ' + cls : ''}">${v}</span></div>`
+    ).join('');
+    card.style.display = '';
+  }
+
   function _cmpClass(you, top, higherBetter = true) {
     if (you == null || top == null) return '';
     if (higherBetter) return you >= top ? 'ac' : 'wn';
@@ -713,6 +833,52 @@ nav {
     if (report.orchestration != null && report.orchestration < 0.75) {
       tips.push({ priority: 'med', title: 'Improve orchestration', desc: `Orchestration score is ${fmtScore(report.orchestration)}. Reduce retries and redundant calls. Use structured output formats to avoid parse failures.`, impact: '↑ orchestration score', coachPrompt: `My orchestration score is ${fmtScore(report.orchestration)}. Suggest retry/validation/fallback improvements with minimal changes.` });
     }
+    const integrity = getCoreIntegritySignals(report);
+    if (integrity.promptJudgeMethod !== 'llm_judge') {
+      tips.push({
+        priority: 'high',
+        title: 'Restore LLM judge scoring path',
+        desc: `Prompt judging used "${labelize(integrity.promptJudgeMethod)}", which lowers confidence and can trigger score caps.`,
+        impact: '↑ credibility and score ceiling',
+        coachPrompt: `My prompt judge method was ${labelize(integrity.promptJudgeMethod)}. Give me a concrete plan to force the llm_judge path and remove fallback dependence.`,
+      });
+    }
+    if (integrity.calibrationSamples != null && integrity.calibrationSamples <= 3) {
+      tips.push({
+        priority: 'med',
+        title: 'Increase calibration evidence',
+        desc: `Only ${fmtNum(integrity.calibrationSamples)} calibration sample(s) were detected. This weakens confidence and can cap scores.`,
+        impact: '↑ confidence calibration',
+        coachPrompt: `I only had ${fmtNum(integrity.calibrationSamples)} calibration samples. How can I add stronger confidence evidence and verification signals per run?`,
+      });
+    }
+    if (integrity.runAccuracyCiHalfWidth != null && integrity.runAccuracyCiHalfWidth >= 0.15) {
+      tips.push({
+        priority: 'med',
+        title: 'Tighten run-to-run variance',
+        desc: `Run accuracy confidence interval is wide (±${integrity.runAccuracyCiHalfWidth.toFixed(2)}), which reduces score certainty.`,
+        impact: '↑ confidence interval quality',
+        coachPrompt: `My run accuracy CI half-width is ±${integrity.runAccuracyCiHalfWidth.toFixed(2)}. Suggest focused changes to reduce variance across clean/perturbed/adversarial runs.`,
+      });
+    }
+    if (integrity.capReasons.length) {
+      tips.push({
+        priority: 'high',
+        title: 'Remove active confidence caps',
+        desc: `Confidence caps were applied for: ${integrity.capReasons.map(labelize).join(', ')}.`,
+        impact: '↑ overall score ceiling',
+        coachPrompt: `My score was confidence-capped for: ${integrity.capReasons.map(labelize).join(', ')}. Give me the smallest set of prompt/code changes to eliminate each cap.`,
+      });
+    }
+    if (integrity.counterfactualStatus !== 'ok') {
+      tips.push({
+        priority: 'med',
+        title: 'Stabilize counterfactual baseline checks',
+        desc: `Counterfactual status is "${labelize(integrity.counterfactualStatus)}". Ensure baseline comparison is healthy to keep leverage scoring credible.`,
+        impact: '↑ leverage credibility',
+        coachPrompt: `Counterfactual baseline status is ${labelize(integrity.counterfactualStatus)}. Help me fix likely causes and make my strategy clearly outperform baseline variants.`,
+      });
+    }
     const leverage = report.ai_leverage || {};
     if (leverage.frontier_navigation_score != null && Number(leverage.frontier_navigation_score) < 0.65) {
       tips.push({ priority: 'high', title: 'Improve quality-cost frontier', desc: `Frontier navigation is ${fmtScore(Number(leverage.frontier_navigation_score))}. You are spending more usage than your achieved quality supports.`, impact: '↑ frontier navigation', coachPrompt: `My frontier navigation score is ${fmtScore(Number(leverage.frontier_navigation_score))}. Help me increase quality while cutting token/call waste.` });
@@ -764,6 +930,13 @@ nav {
     const credibility = report.credibility || {};
     const credibilityScore = credibility.score == null ? 'n/a' : fmtScore(Number(credibility.score));
     const credibilityBand = credibility.band == null ? 'n/a' : String(credibility.band);
+    const integrity = getCoreIntegritySignals(report);
+    const calibrationSamples = integrity.calibrationSamples == null ? 'n/a' : fmtNum(integrity.calibrationSamples);
+    const ciHalfWidth = integrity.runAccuracyCiHalfWidth == null ? 'n/a' : `±${integrity.runAccuracyCiHalfWidth.toFixed(2)}`;
+    const capSummary = integrity.capReasons.length ? integrity.capReasons.map(labelize).join(', ') : 'none';
+    const baselineAggregate = integrity.aggregateMethod
+      ? `${labelize(integrity.aggregateMethod)} (${fmtNum(integrity.variantsOk || 0)}/${fmtNum(integrity.variantsTotal || 0)} ok)`
+      : 'n/a';
 
     const deltas = (report.iteration_diff && report.iteration_diff.score_deltas) || {};
     const dOverall = deltas.overall == null ? 'n/a' : (Number(deltas.overall) > 0 ? '+' : '') + Number(deltas.overall).toFixed(2);
@@ -793,6 +966,14 @@ nav {
       `- learning velocity: ${velocity}`,
       `- leverage gain: ${gain}`,
       `- credibility: ${credibilityScore} (${credibilityBand})`,
+      '',
+      'Evaluation integrity:',
+      `- mode: ${labelize(integrity.evaluationMode)}`,
+      `- judge: ${labelize(integrity.promptJudgeMethod)} (${integrity.judgeModel || 'n/a'})`,
+      `- calibration samples: ${calibrationSamples}`,
+      `- run accuracy CI half-width: ${ciHalfWidth}`,
+      `- confidence caps: ${capSummary}`,
+      `- counterfactual: ${labelize(integrity.counterfactualStatus)}; aggregate=${baselineAggregate}`,
       '',
       `Failed runs: ${failedSummary}`,
       `Iteration deltas: overall=${dOverall}, accuracy=${dAcc}, robustness=${dRob}, efficiency=${dEff}`,
@@ -945,6 +1126,7 @@ nav {
 
       // SDK usage
       renderSDKUsage(report, sub);
+      renderCoreIntegrity(report);
       await renderTopComparison(sub.challenge_id, report);
 
     } catch (e) {

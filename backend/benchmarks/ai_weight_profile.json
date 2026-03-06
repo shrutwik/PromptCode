@@ -1,0 +1,50 @@
+{
+  "version": "2026-03-06",
+  "method": "outcome_correlation_v1",
+  "updated_at": "2026-03-06T05:58:30.718016+00:00",
+  "sample_counts": {
+    "ai_mastery_with_baseline": 0,
+    "ai_mastery_without_baseline": 0,
+    "future_readiness": 0
+  },
+  "correlations": {
+    "ai_mastery_with_baseline": {
+      "frontier_navigation": 0.0,
+      "reliance_calibration": 0.0,
+      "prompt_quality": 0.0,
+      "learning_velocity": 0.0,
+      "leverage_gain": 0.0
+    },
+    "ai_mastery_without_baseline": {
+      "frontier_navigation": 0.0,
+      "reliance_calibration": 0.0,
+      "prompt_quality": 0.0,
+      "learning_velocity": 0.0
+    },
+    "future_readiness": {
+      "verification_discipline": 0.0,
+      "efficient_leverage": 0.0,
+      "adaptation_speed": 0.0,
+      "evaluation_rigor": 0.0
+    }
+  },
+  "ai_mastery_with_baseline": {
+    "frontier_navigation": 0.3,
+    "reliance_calibration": 0.25,
+    "prompt_quality": 0.15,
+    "learning_velocity": 0.15,
+    "leverage_gain": 0.15
+  },
+  "ai_mastery_without_baseline": {
+    "frontier_navigation": 0.35,
+    "reliance_calibration": 0.3,
+    "prompt_quality": 0.2,
+    "learning_velocity": 0.15
+  },
+  "future_readiness": {
+    "verification_discipline": 0.35,
+    "efficient_leverage": 0.3,
+    "adaptation_speed": 0.2,
+    "evaluation_rigor": 0.15
+  }
+}

@@ -12,7 +12,13 @@ const PromptCodeAPI = {
 
     getUser() {
         const raw = localStorage.getItem('pc_user');
-        return raw ? JSON.parse(raw) : null;
+        if (!raw) return null;
+        try {
+            return JSON.parse(raw);
+        } catch (_) {
+            this.clearAuth();
+            return null;
+        }
     },
 
     clearAuth() {
@@ -49,14 +55,30 @@ const PromptCodeAPI = {
         return resp;
     },
 
+    async _readError(resp, fallback = 'Request failed') {
+        try {
+            const payload = await resp.json();
+            const detail = payload?.detail;
+            if (typeof detail === 'string' && detail.trim()) return detail;
+            if (Array.isArray(detail) && detail.length) {
+                return detail.map((d) => d.msg || d.message || JSON.stringify(d)).join('; ');
+            }
+            if (payload?.message) return String(payload.message);
+        } catch (_) {}
+        try {
+            const text = await resp.text();
+            if (text && text.trim()) return text.trim().slice(0, 300);
+        } catch (_) {}
+        return fallback;
+    },
+
     async signup(data) {
         const resp = await this._fetch('/auth/signup', {
             method: 'POST',
             body: JSON.stringify(data),
         });
         if (!resp.ok) {
-            const err = await resp.json();
-            throw new Error(err.detail || 'Signup failed');
+            throw new Error(await this._readError(resp, 'Signup failed'));
         }
         const result = await resp.json();
         this.setAuth(result.access_token, result.user);
@@ -69,8 +91,7 @@ const PromptCodeAPI = {
             body: JSON.stringify({ email, password }),
         });
         if (!resp.ok) {
-            const err = await resp.json();
-            throw new Error(err.detail || 'Login failed');
+            throw new Error(await this._readError(resp, 'Login failed'));
         }
         const result = await resp.json();
         this.setAuth(result.access_token, result.user);
@@ -112,10 +133,7 @@ const PromptCodeAPI = {
             body: JSON.stringify({ challenge_id: challengeId, code, entrypoint }),
         });
         if (!resp.ok) {
-            const err = await resp.json();
-            const detail = err.detail;
-            const msg = typeof detail === 'string' ? detail : (Array.isArray(detail) ? detail.map(d => d.msg || d.message || JSON.stringify(d)).join('; ') : 'Submission failed');
-            throw new Error(msg);
+            throw new Error(await this._readError(resp, 'Submission failed'));
         }
         return resp.json();
     },
@@ -152,10 +170,7 @@ const PromptCodeAPI = {
             body: JSON.stringify({ challenge_id: challengeId, messages, code }),
         });
         if (!resp.ok) {
-            const err = await resp.json();
-            const detail = err.detail;
-            const msg = typeof detail === 'string' ? detail : (Array.isArray(detail) ? detail.map(d => d.msg || d.message || JSON.stringify(d)).join('; ') : 'Chat failed');
-            throw new Error(msg);
+            throw new Error(await this._readError(resp, 'Chat failed'));
         }
         return resp.json();
     },
@@ -172,10 +187,7 @@ const PromptCodeAPI = {
             }),
         });
         if (!resp.ok) {
-            const err = await resp.json();
-            const detail = err.detail;
-            const msg = typeof detail === 'string' ? detail : 'Playground run failed';
-            throw new Error(msg);
+            throw new Error(await this._readError(resp, 'Playground run failed'));
         }
         return resp.json();
     },

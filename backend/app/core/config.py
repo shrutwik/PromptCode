@@ -22,7 +22,14 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_base_url: str = ""
     openai_model: str = "gpt-4o"
+    # Primary model used for prompt-quality judging (LLM-as-judge).
+    # Can be a single model id or a comma-separated list (priority order).
+    prompt_judge_model: str = "gpt-4o"
+    # Optional backup model used if primary prompt judge model fails.
+    prompt_judge_fallback_model: str = "gpt-4o"
     evaluation_weight_profile_path: str = ""
+    evaluation_weight_profile_lock_path: str = ""
+    evaluation_weight_profile_enforce_lock: bool = True
 
     sandbox_image: str = "promptcode-sandbox:latest"
     sandbox_timeout_seconds: int = 120

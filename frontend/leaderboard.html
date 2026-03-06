@@ -338,6 +338,12 @@ nav { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--nav-h); 
   }
 
   async function loadLeaderboard(challengeId) {
+    if (!challengeId) {
+      $('lb-count').textContent = '0';
+      renderPodium([]);
+      renderTable([]);
+      return;
+    }
     try {
       const entries = await PromptCodeAPI.getLeaderboard(challengeId);
       const list = Array.isArray(entries) ? entries : (entries.entries || entries.leaderboard || []);
@@ -378,6 +384,8 @@ nav { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--nav-h); 
     PromptCodeAPI.updateNavAuth();
 
     const select = $('challenge-select');
+    const params = new URLSearchParams(window.location.search);
+    const requestedChallengeId = params.get('id') || params.get('challenge_id');
 
     try {
       const challenges = await PromptCodeAPI.getChallenges();
@@ -394,9 +402,19 @@ nav { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--nav-h); 
         });
       }
 
-      select.addEventListener('change', () => loadLeaderboard(select.value));
+      select.addEventListener('change', async () => {
+        const nextId = select.value || '';
+        const url = new URL(window.location.href);
+        if (nextId) url.searchParams.set('id', nextId);
+        else url.searchParams.delete('id');
+        history.replaceState(null, '', url.toString());
+        await loadLeaderboard(nextId);
+      });
 
       if (list.length > 0) {
+        if (requestedChallengeId && list.some(c => c.id === requestedChallengeId)) {
+          select.value = requestedChallengeId;
+        }
         await loadLeaderboard(select.value);
       } else {
         $('lb-count').textContent = '0';

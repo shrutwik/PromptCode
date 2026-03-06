@@ -55,6 +55,9 @@ In addition to weighted overall score, evaluator computes an AI-leverage layer:
 - `ai_mastery_score`: composite of frontier navigation, reliance calibration, prompt quality, learning velocity, and leverage gain when baseline is available
 - `future_feedback`: forward-looking AI-usage guidance from behavior diagnostics (`verification_discipline`, `efficient_leverage`, `adaptation_speed`, `evaluation_rigor`)
 
+Counterfactual baseline is multi-strategy and aggregated with median-over-variants for robustness.
+AI mastery/future readiness weights are loadable from a profile file (default static weights; optional outcome-refit profile).
+
 Current composite weights:
 
 - frontier_navigation: 0.30
@@ -84,6 +87,10 @@ Weights:
 - If `rule_adherence < 0.50`, cap overall to `0.50`
 - Anti-gaming trigger caps overall to `0.45`
 - Hardcoded/no-LLM patterns zero quality metrics
+- Confidence caps:
+  - non-LLM prompt judge path caps overall (`prompt_judge_not_llm`)
+  - wide run-accuracy CI caps overall (`run_accuracy_ci_half_width` thresholds)
+  - weak calibration sample coverage caps overall (`calibration_samples` thresholds)
 
 ## Leaderboard Eligibility Gates
 
@@ -123,3 +130,12 @@ Each report includes:
 - `future_feedback` block (`readiness_score`, delegation mode, prioritized 7-day actions, next evaluation protocol)
 
 This enables deterministic replay and post-hoc auditing.
+
+## Weight Governance
+
+- Dynamic AI mastery/readiness weight profiles are lock-validated.
+- Profile updates require an approved lock (`ai_weight_profile.lock.json`) tied to:
+  - exact profile hash
+  - approved version
+  - calibration review metadata
+- If lock validation fails, evaluator falls back to static default weights.

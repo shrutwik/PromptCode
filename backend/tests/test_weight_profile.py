@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from app.core.config import get_settings
 from app.services.evaluation.scorer import score_ai_mastery
-from app.services.evaluation.weight_profile import get_weight_profile
+from app.services.evaluation.weight_profile import (
+    get_weight_profile,
+    validate_weight_profile_freeze,
+)
 
 
 def test_ai_mastery_respects_custom_weights_with_baseline():
@@ -53,6 +57,81 @@ def test_weight_profile_defaults_when_file_missing(monkeypatch):
     assert profile["version"] == "static_v1"
     assert "ai_mastery_with_baseline" in profile
     assert "future_readiness" in profile
+
+    get_settings.cache_clear()
+    get_weight_profile.cache_clear()
+
+
+def test_validate_weight_profile_freeze_passes_when_lock_matches(tmp_path: Path):
+    profile = tmp_path / "profile.json"
+    lock = tmp_path / "profile.lock.json"
+    profile.write_text(
+        """
+{
+  "version": "2026-03-06",
+  "ai_mastery_without_baseline": {"frontier_navigation": 0.35, "reliance_calibration": 0.30, "prompt_quality": 0.20, "learning_velocity": 0.15},
+  "ai_mastery_with_baseline": {"frontier_navigation": 0.30, "reliance_calibration": 0.25, "prompt_quality": 0.15, "learning_velocity": 0.15, "leverage_gain": 0.15},
+  "future_readiness": {"verification_discipline": 0.35, "efficient_leverage": 0.30, "adaptation_speed": 0.20, "evaluation_rigor": 0.15}
+}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    from app.services.evaluation.weight_profile import _profile_hash
+
+    profile_payload = json.loads(profile.read_text(encoding="utf-8"))
+    lock.write_text(
+        f"""
+{{
+  "approved": true,
+  "approved_version": "2026-03-06",
+  "profile_sha256": "{_profile_hash(profile_payload)}"
+}}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = validate_weight_profile_freeze(profile_path=profile, lock_path=lock)
+    assert result["pass"] is True
+
+
+def test_get_weight_profile_defaults_when_lock_invalid(monkeypatch, tmp_path: Path):
+    profile = tmp_path / "profile.json"
+    lock = tmp_path / "profile.lock.json"
+    profile.write_text(
+        """
+{
+  "version": "2026-03-06",
+  "method": "outcome_correlation_v1",
+  "ai_mastery_without_baseline": {"frontier_navigation": 0.10, "reliance_calibration": 0.50, "prompt_quality": 0.20, "learning_velocity": 0.20},
+  "ai_mastery_with_baseline": {"frontier_navigation": 0.10, "reliance_calibration": 0.30, "prompt_quality": 0.20, "learning_velocity": 0.20, "leverage_gain": 0.20},
+  "future_readiness": {"verification_discipline": 0.10, "efficient_leverage": 0.50, "adaptation_speed": 0.20, "evaluation_rigor": 0.20}
+}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    lock.write_text(
+        """
+{
+  "approved": true,
+  "approved_version": "2026-03-06",
+  "profile_sha256": "deadbeef"
+}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    get_settings.cache_clear()
+    get_weight_profile.cache_clear()
+    monkeypatch.setenv("PROMPTCODE_EVALUATION_WEIGHT_PROFILE_PATH", str(profile))
+    monkeypatch.setenv("PROMPTCODE_EVALUATION_WEIGHT_PROFILE_LOCK_PATH", str(lock))
+    monkeypatch.setenv("PROMPTCODE_EVALUATION_WEIGHT_PROFILE_ENFORCE_LOCK", "true")
+
+    loaded = get_weight_profile()
+    assert loaded["version"] == "static_v1"
 
     get_settings.cache_clear()
     get_weight_profile.cache_clear()

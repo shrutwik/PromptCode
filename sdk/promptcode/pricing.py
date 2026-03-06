@@ -12,14 +12,6 @@ PRICING: dict[str, dict[str, float]] = {
         "prompt": 0.15 / 1_000_000,
         "completion": 0.60 / 1_000_000,
     },
-    "gpt-4-turbo": {
-        "prompt": 10.00 / 1_000_000,
-        "completion": 30.00 / 1_000_000,
-    },
-    "gpt-3.5-turbo": {
-        "prompt": 0.50 / 1_000_000,
-        "completion": 1.50 / 1_000_000,
-    },
 }
 
 DEFAULT_PRICING = {

@@ -58,13 +58,21 @@ def run_gate(
     for s in samples:
         prompts = _normalize_prompts(s.get("prompts", []))
         human_score = float(s["human_overall"])
-        model_score = evaluate_sample(
-            {
-                "prompts": prompts,
-                "challenge_description": s.get("challenge_description", ""),
-            },
-            mode,
-        )
+        try:
+            model_score = evaluate_sample(
+                {
+                    "prompts": prompts,
+                    "challenge_description": s.get("challenge_description", ""),
+                },
+                mode,
+            )
+        except Exception as exc:
+            return {
+                "pass": False,
+                "reason": "evaluation_error",
+                "mode": mode,
+                "error": str(exc),
+            }
         human.append(human_score)
         model.append(model_score)
 

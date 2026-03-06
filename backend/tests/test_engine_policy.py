@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from app.services.evaluation.engine import (
+    _apply_confidence_caps,
     _apply_overall_caps,
     _build_counterfactual_baseline_code,
     _build_evaluation_manifest,
     _build_usage_breakdown,
+    _counterfactual_strategy_variants,
     _compute_run_type_coverage,
     _counterfactual_template_for_challenge,
     _compute_credibility,
@@ -26,6 +28,20 @@ def test_apply_overall_caps_applies_all_caps():
     assert events[0]["reason"] == "accuracy_below_0.40"
     assert events[1]["reason"] == "rule_adherence_below_0.50"
     assert events[2]["reason"] == "anti_gaming_triggered"
+
+
+def test_apply_confidence_caps_applies_low_confidence_limits():
+    overall, events = _apply_confidence_caps(
+        overall=0.93,
+        prompt_judge_method="heuristic",
+        calibration_samples=1,
+        run_accuracy_ci_half_width=0.21,
+    )
+    assert overall == 0.70
+    reasons = [e["reason"] for e in events]
+    assert "prompt_judge_not_llm" in reasons
+    assert "calibration_samples_le_1" in reasons
+    assert "run_accuracy_ci_half_width_ge_0.20" in reasons
 
 
 def test_evaluation_manifest_is_deterministic():
@@ -138,6 +154,14 @@ def test_build_counterfactual_baseline_code_contains_sdk_call():
     assert "from promptcode import llm" in code
     assert "llm.call(" in code
     assert "Return ONLY JSON" in code
+
+
+def test_counterfactual_variants_respect_config_count():
+    one = _counterfactual_strategy_variants({"counterfactual_variants": 1})
+    three = _counterfactual_strategy_variants({"counterfactual_variants": 3})
+    assert len(one) == 1
+    assert len(three) == 3
+    assert one[0]["id"] == "strict_schema"
 
 
 def test_build_usage_breakdown_aggregates_models_and_run_types():

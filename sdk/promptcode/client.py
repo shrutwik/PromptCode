@@ -27,8 +27,6 @@ _MAX_RETRIES = int(os.environ.get("PROMPTCODE_MAX_RETRIES", "3"))
 _ALLOWED_MODELS = {
     "gpt-4o",
     "gpt-4o-mini",
-    "gpt-4-turbo",
-    "gpt-3.5-turbo",
 }
 
 

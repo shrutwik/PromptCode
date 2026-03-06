@@ -22,8 +22,7 @@ from typing import Any
 import openai
 
 logger = logging.getLogger(__name__)
-
-JUDGE_MODEL = "gpt-4o"
+_ALLOWED_JUDGE_MODELS = {"gpt-4o", "gpt-4o-mini"}
 
 JUDGE_SYSTEM_PROMPT = """You are an expert prompt engineering evaluator for a competitive platform called PromptCode.
 
@@ -106,11 +105,14 @@ def _judge_with_llm(
     challenge_description: str,
 ) -> dict[str, Any]:
     from app.core.config import get_settings
-    api_key = get_settings().openai_api_key
+    settings = get_settings()
+    api_key = settings.openai_api_key
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY not available for judge")
 
-    client = openai.OpenAI(api_key=api_key)
+    base_url = settings.openai_base_url.strip() if settings.openai_base_url else ""
+    client = openai.OpenAI(api_key=api_key, base_url=base_url or None)
+    candidate_models = _resolve_judge_models(settings)
 
     prompt_listing = ""
     for i, p in enumerate(prompts, 1):
@@ -129,15 +131,30 @@ def _judge_with_llm(
         f"Evaluate the prompt engineering quality across all dimensions."
     )
 
-    response = client.chat.completions.create(
-        model=JUDGE_MODEL,
-        messages=[
-            {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
-        ],
-        temperature=0.0,
-        max_tokens=1024,
-    )
+    last_exc: Exception | None = None
+    selected_model = ""
+    response = None
+    for model in candidate_models:
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=0.0,
+                max_tokens=1024,
+            )
+            selected_model = model
+            break
+        except Exception as exc:
+            last_exc = exc
+            logger.warning("Prompt judge model '%s' failed; trying next fallback", model)
+            continue
+
+    if response is None:
+        assert last_exc is not None
+        raise last_exc
 
     text = response.choices[0].message.content or ""
     text = text.strip()
@@ -151,8 +168,35 @@ def _judge_with_llm(
         result[key] = max(0.0, min(1.0, float(result.get(key, 0.0))))
 
     result.setdefault("feedback", "")
+    result["judge_model"] = selected_model
     result["method"] = "llm_judge"
     return result
+
+
+def _resolve_judge_models(settings: Any) -> list[str]:
+    primary = str(getattr(settings, "prompt_judge_model", "") or "").strip()
+    fallback = str(getattr(settings, "prompt_judge_fallback_model", "") or "").strip()
+
+    models: list[str] = []
+    for candidate in primary.split(","):
+        model = candidate.strip()
+        if not model:
+            continue
+        if model not in _ALLOWED_JUDGE_MODELS:
+            logger.warning("Ignoring unsupported prompt judge model '%s'", model)
+            continue
+        if model not in models:
+            models.append(model)
+
+    if not models:
+        models = ["gpt-4o"]
+
+    if fallback and fallback not in _ALLOWED_JUDGE_MODELS:
+        logger.warning("Ignoring unsupported prompt judge fallback model '%s'", fallback)
+        fallback = ""
+    if fallback and fallback not in models:
+        models.append(fallback)
+    return models
 
 
 def _heuristic_score(prompts: list[dict[str, str]]) -> dict[str, Any]:

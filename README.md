@@ -201,6 +201,7 @@ The weighted overall score remains the ranking score. In addition, evaluator now
 - `credibility.score`: confidence in evaluation quality (judge mode, sample counts, run depth, run-type diversity, baseline availability, uncertainty, anti-gaming status)
 - `learning_effectiveness.coach_hit_rate`: whether previous coaching actions led to metric improvements
 - `future_feedback`: behavior-level AI-usage diagnostics plus a measurable 7-day improvement plan (`readiness_score`, `delegation_mode`, prioritized actions, eval protocol)
+- `ai_leverage.weight_profile_version`: scoring profile version used for AI mastery/readiness weighting
 
 Hard gates:
 - If `accuracy < 0.40`, overall is capped
@@ -284,6 +285,15 @@ Recommended cadence:
 - Weekly during active rubric changes
 - Bi-weekly once stable
 
+Each sample should include `reviewed_at` metadata (ISO timestamp).  
+Use freshness + calibration gates together:
+
+```bash
+cd backend
+python -m scripts.run_prompt_judge_dataset_freshness_gate --min-total 24 --min-recent 6 --recent-days 14 --require-reviewed-at
+python -m scripts.run_prompt_judge_calibration_gate --mode judge --require-judge-mode --min-samples 20 --min-pearson 0.75 --max-mae 0.25
+```
+
 ## Growth Backfill
 
 If you added growth/mastery metrics after existing submissions were already stored,
@@ -294,6 +304,34 @@ cd backend
 python -m scripts.backfill_growth_metrics --dry-run
 python -m scripts.backfill_growth_metrics
 ```
+
+## AI Weight Refit
+
+Refit AI mastery/readiness weights from historical submission outcomes:
+
+```bash
+cd backend
+python -m scripts.refit_ai_weight_profile --dry-run
+python -m scripts.refit_ai_weight_profile --output benchmarks/ai_weight_profile.json
+```
+
+Optional env override:
+- `PROMPTCODE_EVALUATION_WEIGHT_PROFILE_PATH=/absolute/path/to/ai_weight_profile.json`
+
+## Weight Freeze / Approval
+
+Weight profiles are lock-validated by default (`PROMPTCODE_EVALUATION_WEIGHT_PROFILE_ENFORCE_LOCK=true`).
+Any profile update requires explicit approval:
+
+```bash
+cd backend
+python -m scripts.approve_ai_weight_profile \
+  --reviewer "your-handle" \
+  --calibration-report /path/to/prompt_judge_gate.json
+```
+
+This writes `backend/benchmarks/ai_weight_profile.lock.json`.  
+Without a matching approved lock, evaluator falls back to static default weights.
 
 ## Tests
 
@@ -310,6 +348,13 @@ cd backend
 python -m scripts.run_reproducibility_gate --repeats 10 --stddev-threshold 0.03
 ```
 
+## Evaluator Regression Gate
+
+```bash
+cd backend
+python -m scripts.run_evaluator_regression_gate
+```
+
 ## Prompt-Judge Calibration Gate
 
 ```bash
@@ -322,4 +367,20 @@ python -m scripts.run_prompt_judge_calibration_gate --mode heuristic --min-sampl
 ```bash
 cd backend
 python -m scripts.run_challenge_publish_gate --expected-challenges 10 --min-hidden-cases 2 --min-input-examples 1
+```
+
+## Consolidated Release Gates
+
+Non-strict (PR-safe):
+
+```bash
+cd backend
+python -m scripts.run_release_quality_gates
+```
+
+Strict release mode (judge calibration + reviewed sample metadata required):
+
+```bash
+cd backend
+python -m scripts.run_release_quality_gates --strict
 ```

@@ -333,31 +333,31 @@ footer {
 <!-- SCORING -->
 <section class="section" id="scoring" style="padding-top:0">
   <div class="section-label fade-in">the scoring system</div>
-  <h2 class="section-title fade-in d1">Eight dimensions.<br>One <em>efficiency score.</em></h2>
-  <p class="section-sub fade-in d2">We don't just check if you got the right answer. We evaluate how you engineered the AI to get there.</p>
+  <h2 class="section-title fade-in d1">Seven weighted signals.<br>One <em>overall score.</em></h2>
+  <p class="section-sub fade-in d2">The overall score is weighted exactly like the evaluator engine. Rule adherence is enforced as a hard cap gate.</p>
 
   <div class="scoring-grid">
     <div class="score-card fade-in d2">
       <div class="sc-icon">◎</div>
-      <div class="sc-name">Accuracy <span style="font-size:10px;color:var(--muted);font-weight:400">· 20%</span></div>
+      <div class="sc-name">Accuracy <span style="font-size:10px;color:var(--muted);font-weight:400">· 35%</span></div>
       <div class="sc-desc">Output compared against ground truth with fuzzy matching for dates, names, numbers, and nested structures.</div>
       <div class="sc-example">correctness vs expected structured output</div>
     </div>
     <div class="score-card fade-in d3">
       <div class="sc-icon">⟡</div>
-      <div class="sc-name">Prompt Quality <span style="font-size:10px;color:var(--muted);font-weight:400">· 20%</span></div>
+      <div class="sc-name">Prompt Quality <span style="font-size:10px;color:var(--muted);font-weight:400">· 10%</span></div>
       <div class="sc-desc">How well you talked to the AI. Scored on clarity, specificity, structure, robustness, and grounding.</div>
       <div class="sc-example">LLM-as-judge evaluates your prompt engineering</div>
     </div>
     <div class="score-card fade-in d2">
       <div class="sc-icon">◇</div>
-      <div class="sc-name">Rule Adherence <span style="font-size:10px;color:var(--muted);font-weight:400">· 15%</span></div>
-      <div class="sc-desc">Does your solution follow challenge-specific rules? Skip conditions, normalization rules, cross-references.</div>
-      <div class="sc-example">challenge rules are the grading rubric</div>
+      <div class="sc-name">Robustness <span style="font-size:10px;color:var(--muted);font-weight:400">· 15%</span></div>
+      <div class="sc-desc">Pass rate under perturbed and adversarial inputs. Fragile solutions drop fast here.</div>
+      <div class="sc-example">stability under noisy and adversarial cases</div>
     </div>
     <div class="score-card fade-in d3">
       <div class="sc-icon">⟐</div>
-      <div class="sc-name">Efficiency <span style="font-size:10px;color:var(--muted);font-weight:400">· 10%</span></div>
+      <div class="sc-name">Efficiency <span style="font-size:10px;color:var(--muted);font-weight:400">· 15%</span></div>
       <div class="sc-desc">Lower token usage and cost = higher score. Batch calls, avoid redundant context.</div>
       <div class="sc-example"><b>1 call, 420 tokens</b> beats 6 calls, 2,864 tokens</div>
     </div>
@@ -375,15 +375,15 @@ footer {
     </div>
     <div class="score-card fade-in d2">
       <div class="sc-icon">⌬</div>
-      <div class="sc-name">Code Quality <span style="font-size:10px;color:var(--muted);font-weight:400">· 10%</span></div>
-      <div class="sc-desc">Static analysis of your code: function decomposition, error handling patterns, readability.</div>
-      <div class="sc-example">AST analysis + AI judge combined score</div>
+      <div class="sc-name">Calibration <span style="font-size:10px;color:var(--muted);font-weight:400">· 5%</span></div>
+      <div class="sc-desc">Confidence alignment with observed correctness. Overconfident wrong outputs are penalized.</div>
+      <div class="sc-example">confidence should match actual success rate</div>
     </div>
     <div class="score-card fade-in d3">
       <div class="sc-icon">⊘</div>
-      <div class="sc-name">Edge Cases <span style="font-size:10px;color:var(--muted);font-weight:400">· 5%</span></div>
-      <div class="sc-desc">How your solution handles OCR artifacts, missing fields, format variations, and adversarial noise.</div>
-      <div class="sc-example">malformed input, encoding issues, empty records</div>
+      <div class="sc-name">Rule Adherence Gate <span style="font-size:10px;color:var(--muted);font-weight:400">· hard cap</span></div>
+      <div class="sc-desc">Weak schema or challenge-rule adherence caps overall score, even when other metrics look strong.</div>
+      <div class="sc-example">challenge rules are non-negotiable</div>
     </div>
   </div>
 </section>
@@ -412,7 +412,7 @@ footer {
       <h2 class="section-title fade-in d1" style="font-size:36px">Every token.<br><em>Measured.</em></h2>
       <p style="font-size:13px;color:var(--muted);line-height:1.75;margin-top:16px;max-width:400px" class="fade-in d2">The PromptCode SDK wraps any LLM call. One import, zero configuration. We log every token, every call, every retry — and turn it into your score.</p>
       <div style="margin-top:24px;display:flex;flex-direction:column;gap:8px" class="fade-in d3">
-        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)"><span style="color:var(--accent)">✓</span> OpenAI, Anthropic, Gemini support</div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)"><span style="color:var(--accent)">✓</span> OpenAI 4o family support</div>
         <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)"><span style="color:var(--accent)">✓</span> Token usage + cost tracking</div>
         <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)"><span style="color:var(--accent)">✓</span> Latency measurement per call</div>
         <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)"><span style="color:var(--accent)">✓</span> Automatic retry detection</div>

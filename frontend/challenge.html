@@ -606,6 +606,8 @@ nav {
 }
 .status-dot { width: 5px; height: 5px; border-radius: 50%; }
 .status-dot.done { background: var(--success); }
+.status-dot.warn { background: var(--warn); }
+.status-dot.fail { background: var(--danger); }
 .status-dot.idle { background: var(--border-light); }
 .status-item { display: flex; align-items: center; gap: 5px; }
 .status-item b { color: var(--text); }
@@ -945,8 +947,8 @@ nav {
 
         <!-- Tips -->
         <div class="panel-card fade-in d3">
-          <div class="card-hdr"><div class="card-title">efficiency tips</div></div>
-          <div class="card-body" style="padding:8px 12px">
+          <div class="card-hdr"><div class="card-title">iteration guidance</div></div>
+          <div class="card-body" style="padding:8px 12px" id="trackingTips">
             <div class="tip-item">
               <span class="tip-arrow">→</span>
               Batch all claims in one prompt with JSON array output to reduce from 6 calls to 1
@@ -1458,6 +1460,152 @@ func main() {
     if (thresholds && thresholds.danger != null && num >= thresholds.danger) { el.classList.remove('wn'); el.classList.add('dn'); }
   }
 
+  function setTrackingStatus(kind, text) {
+    const normalized = (kind === 'done' || kind === 'warn' || kind === 'fail') ? kind : 'idle';
+    const dot = document.getElementById('trackingStatusDot');
+    const label = document.getElementById('trackingStatusText');
+    const tabDot = document.getElementById('trackingTabDot');
+    if (dot) dot.className = `status-dot ${normalized}`;
+    if (label) label.textContent = text || 'idle';
+    if (tabDot) {
+      tabDot.className = normalized === 'idle' ? 'tab-dot idle' : 'tab-dot accent';
+    }
+  }
+
+  function setRunStatus(kind, whenText) {
+    const normalized = (kind === 'done' || kind === 'warn' || kind === 'fail') ? kind : 'idle';
+    const dot = document.getElementById('statusRunDot');
+    const time = document.getElementById('statusLastRunTime');
+    if (dot) dot.className = `status-dot ${normalized}`;
+    if (time) time.textContent = whenText || '—';
+  }
+
+  function resetTrackingMetrics() {
+    document.getElementById('bestScore').textContent = '—';
+    document.getElementById('statusPasses').textContent = '—';
+    document.getElementById('runTokens').textContent = '—';
+    document.getElementById('runCost').textContent = '—';
+    document.getElementById('runCalls').textContent = '—';
+    document.getElementById('runLatency').textContent = '—';
+
+    const metricIds = [
+      'metricPromptTokens',
+      'metricCompletionTokens',
+      'metricTotalTokens',
+      'metricLlmCalls',
+      'metricRetries',
+      'metricCost',
+      'metricLatency',
+    ];
+    metricIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.textContent = '—';
+        el.className = 'mv';
+      }
+    });
+
+    const scores = [
+      'Accuracy',
+      'PromptQuality',
+      'RuleAdherence',
+      'EdgeCases',
+      'Efficiency',
+      'Reliability',
+      'Orchestration',
+      'CodeQuality',
+    ];
+    scores.forEach((id) => {
+      const el = document.getElementById('score' + id);
+      const bar = document.getElementById('bar' + id);
+      if (el) el.textContent = '—';
+      if (bar) {
+        bar.style.width = '0%';
+        bar.className = 'sc-fill fill-b';
+      }
+    });
+  }
+
+  function setTrackingTips(items) {
+    const container = document.getElementById('trackingTips');
+    if (!container) return;
+    const tips = (Array.isArray(items) ? items : [])
+      .map((item) => String(item || '').trim())
+      .filter(Boolean)
+      .slice(0, 5);
+    if (!tips.length) {
+      container.innerHTML = '<div class="tip-item"><span class="tip-arrow">→</span>No guidance available yet. Submit a run to unlock targeted coaching.</div>';
+      return;
+    }
+    container.innerHTML = tips.map((tip) =>
+      `<div class="tip-item"><span class="tip-arrow">→</span>${escapeHtml(tip)}</div>`
+    ).join('');
+  }
+
+  function _extractGateSignals(report) {
+    const credibility = report.credibility || {};
+    const signals = credibility.signals || {};
+    const ci = report.confidence_intervals || {};
+    const runCI = ci.run_accuracy || {};
+    const pq = report.prompt_quality_details || {};
+    const trail = Array.isArray(report.audit_trail) ? report.audit_trail : [];
+    const capReasons = [];
+    trail.forEach((event) => {
+      if (event && event.event === 'score_cap_applied' && event.details && event.details.reason) {
+        const reason = String(event.details.reason).trim();
+        if (reason && !capReasons.includes(reason)) capReasons.push(reason);
+      }
+    });
+    const calibrationSamplesRaw = Number(signals.calibration_samples ?? (report.calibration_details || {}).samples);
+    const runCiRaw = Number(runCI.half_width ?? signals.run_accuracy_ci_half_width);
+    return {
+      credibilityScore: Number(credibility.score),
+      promptJudgeMethod: String(signals.prompt_judge_method || pq.method || 'unknown'),
+      calibrationSamples: Number.isFinite(calibrationSamplesRaw) ? calibrationSamplesRaw : null,
+      runAccuracyCiHalfWidth: Number.isFinite(runCiRaw) ? runCiRaw : null,
+      capReasons,
+    };
+  }
+
+  function _buildTrackingTips(report) {
+    const tips = [];
+    const actions = Array.isArray(report.coaching_actions) ? report.coaching_actions : [];
+    actions.slice(0, 3).forEach((action) => {
+      const title = String(action.title || 'Action');
+      const change = String(action.suggested_change || '').trim();
+      tips.push(change ? `${title}: ${change}` : title);
+    });
+
+    const diagnostics = Array.isArray(report.diagnostics) ? report.diagnostics : [];
+    diagnostics.slice(0, 2).forEach((diag) => {
+      const msg = String(diag.message || '').trim();
+      if (msg) tips.push(msg);
+    });
+
+    const gate = _extractGateSignals(report);
+    if (gate.promptJudgeMethod !== 'llm_judge') {
+      tips.push(`Prompt judge method is "${gate.promptJudgeMethod}". Move back to llm_judge to restore score confidence.`);
+    }
+    if (gate.calibrationSamples != null && gate.calibrationSamples <= 3) {
+      tips.push(`Calibration samples are low (${gate.calibrationSamples}). Add stronger per-run confidence evidence.`);
+    }
+    if (gate.runAccuracyCiHalfWidth != null && gate.runAccuracyCiHalfWidth >= 0.15) {
+      tips.push(`Run accuracy confidence interval is wide (±${gate.runAccuracyCiHalfWidth.toFixed(2)}). Reduce run-to-run variance.`);
+    }
+    if (gate.capReasons.length) {
+      tips.push(`Confidence caps active: ${gate.capReasons.join(', ').replace(/_/g, ' ')}.`);
+    }
+    if (Number.isFinite(gate.credibilityScore) && gate.credibilityScore < 0.55) {
+      tips.push(`Score credibility is low (${gate.credibilityScore.toFixed(2)}). Focus on reproducibility and fallback reduction.`);
+    }
+
+    const leverage = report.ai_leverage || {};
+    if (leverage.leverage_gain != null && Number(leverage.leverage_gain) <= 0) {
+      tips.push(`Leverage gain is ${Number(leverage.leverage_gain).toFixed(2)}. Your strategy is not beating counterfactual baseline yet.`);
+    }
+    return tips;
+  }
+
   async function loadTrackingData(challengeId) {
     const currentUser = PromptCodeAPI.getUser();
     const currentUsername = currentUser ? currentUser.username : null;
@@ -1508,27 +1656,48 @@ func main() {
 
     // --- User submissions (best score + SDK metrics + status) ---
     if (!PromptCodeAPI.isLoggedIn()) {
-      document.getElementById('trackingStatusDot').className = 'status-dot idle';
-      document.getElementById('trackingStatusText').textContent = 'sign in to track';
+      resetTrackingMetrics();
+      setTrackingStatus('idle', 'sign in to track');
+      setRunStatus('idle', '—');
+      setTrackingTips(['Sign in and submit a run to activate live coaching, score gates, and SDK telemetry.']);
       return;
     }
 
     try {
-      const subs = await PromptCodeAPI.getMySubmissions(challengeId);
-      if (!subs || subs.length === 0) {
-        document.getElementById('trackingStatusDot').className = 'status-dot idle';
-        document.getElementById('trackingStatusText').textContent = 'no submissions';
+      const rawSubs = await PromptCodeAPI.getMySubmissions(challengeId);
+      const subs = Array.isArray(rawSubs) ? rawSubs.slice() : [];
+      if (!subs.length) {
+        resetTrackingMetrics();
+        setTrackingStatus('idle', 'no submissions');
+        setRunStatus('idle', '—');
+        setTrackingTips(['Submit your first attempt to unlock per-dimension scores, integrity checks, and guided improvements.']);
         return;
       }
 
-      document.getElementById('trackingStatusDot').className = 'status-dot done';
-      document.getElementById('trackingStatusText').textContent = 'evaluated';
+      subs.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+      const latest = subs[0];
+      const latestStatus = String(latest.status || '').toLowerCase();
+      const completedSubs = subs.filter(s => String(s.status || '').toLowerCase() === 'completed');
+      const best = completedSubs.length
+        ? completedSubs.reduce((a, b) => ((a.score_overall || 0) >= (b.score_overall || 0) ? a : b))
+        : null;
 
-      const best = subs.reduce((a, b) => ((a.score_overall || 0) >= (b.score_overall || 0) ? a : b), subs[0]);
-      const latest = subs.reduce((a, b) => (new Date(a.created_at || 0) > new Date(b.created_at || 0) ? a : b), subs[0]);
+      if (latestStatus === 'completed') {
+        setTrackingStatus('done', 'evaluated');
+        setRunStatus('done', timeAgo(latest.created_at));
+      } else if (latestStatus === 'running' || latestStatus === 'pending') {
+        setTrackingStatus('warn', latestStatus);
+        setRunStatus('warn', timeAgo(latest.created_at));
+      } else if (latestStatus === 'failed') {
+        setTrackingStatus('fail', 'failed');
+        setRunStatus('fail', timeAgo(latest.created_at));
+      } else {
+        setTrackingStatus('idle', latestStatus || 'submitted');
+        setRunStatus('idle', timeAgo(latest.created_at));
+      }
 
       // Best scores
-      const overall = best.score_overall;
+      const overall = best ? best.score_overall : null;
       document.getElementById('bestScore').textContent = overall != null ? overall.toFixed(2) : '—';
 
       const scores = [
@@ -1542,23 +1711,29 @@ func main() {
         { id: 'CodeQuality', key: 'score_code_quality' },
       ];
       scores.forEach(({ id, key }) => {
-        const val = best[key];
+        const val = best ? best[key] : null;
         const el = document.getElementById('score' + id);
         const bar = document.getElementById('bar' + id);
         if (el) el.textContent = val != null ? val.toFixed(2) : '—';
         if (bar && val != null) {
           bar.style.width = (val * 100).toFixed(0) + '%';
           bar.className = 'sc-fill ' + fillColor(val);
+        } else if (bar) {
+          bar.style.width = '0%';
+          bar.className = 'sc-fill fill-b';
         }
       });
 
-      // Status bar
-      document.getElementById('statusRunDot').className = 'status-dot done';
-      document.getElementById('statusLastRunTime').textContent = timeAgo(latest.created_at);
+      // Use latest completed report for SDK metrics and coaching.
+      const reportSource = (latestStatus === 'completed') ? latest : completedSubs[0];
+      if (!reportSource) {
+        document.getElementById('statusPasses').textContent = '—';
+        setTrackingTips(['Your latest run is still being evaluated. Completed-run guidance will appear here once scoring finishes.']);
+        return;
+      }
 
-      // Try to load report from the latest submission for SDK metrics + passes
       try {
-        const report = await PromptCodeAPI.getSubmissionReport(latest.id);
+        const report = await PromptCodeAPI.getSubmissionReport(reportSource.id);
         const m = report.metrics || report;
 
         const promptTok = m.prompt_tokens;
@@ -1597,12 +1772,20 @@ func main() {
         const total = m.tests_total != null ? m.tests_total : m.total_tests;
         if (passes != null && total != null) {
           document.getElementById('statusPasses').textContent = `${passes} / ${total}`;
+        } else {
+          document.getElementById('statusPasses').textContent = '—';
         }
+        setTrackingTips(_buildTrackingTips(m));
       } catch (re) {
         console.log('Report load failed:', re.message);
+        setTrackingTips(['Unable to load the latest report. Open the submission page for detailed diagnostics and retry after evaluation completes.']);
       }
     } catch (e) {
       console.log('Submissions load failed:', e.message);
+      resetTrackingMetrics();
+      setTrackingStatus('fail', 'unable to load');
+      setRunStatus('idle', '—');
+      setTrackingTips(['Could not load submission history from the API. Check backend health and authentication state.']);
     }
   }
 
