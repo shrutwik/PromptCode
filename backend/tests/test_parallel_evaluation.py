@@ -1,16 +1,11 @@
 """Tests for parallel evaluation execution (Week 1-2 refactoring)."""
 
 import asyncio
-import json
-import time
-
-import pytest
 
 from app.services.evaluation.engine import evaluate_submission
 
 
-@pytest.mark.asyncio
-async def test_evaluate_submission_is_async():
+def test_evaluate_submission_is_async():
     """Verify evaluate_submission is now an async function."""
     import inspect
 
@@ -19,8 +14,7 @@ async def test_evaluate_submission_is_async():
     ), "evaluate_submission should be async"
 
 
-@pytest.mark.asyncio
-async def test_parallel_evaluation_completes():
+def test_parallel_evaluation_completes():
     """Test that parallel evaluation runs without errors."""
     challenge_config = {
         "inputs": {"text": "Hello world"},
@@ -45,10 +39,12 @@ def solve(input_data):
 """
 
     try:
-        result = await evaluate_submission(
-            code=code,
-            entrypoint="solve.py",
-            challenge_config=challenge_config,
+        result = asyncio.run(
+            evaluate_submission(
+                code=code,
+                entrypoint="solve.py",
+                challenge_config=challenge_config,
+            )
         )
         # Basic validation that result is returned
         assert result is not None
@@ -61,8 +57,7 @@ def solve(input_data):
         assert "async" not in str(e).lower(), "Should not be async-related error"
 
 
-@pytest.mark.asyncio
-async def test_multiple_evaluations_in_parallel():
+def test_multiple_evaluations_in_parallel():
     """Test that multiple evaluations can run in parallel."""
     challenge_config = {
         "inputs": {"text": "test"},
@@ -75,19 +70,21 @@ async def test_multiple_evaluations_in_parallel():
 
     code = "def solve(data): return 'result'"
 
-    # Start multiple evaluations concurrently
-    tasks = [
-        evaluate_submission(
-            code=code,
-            entrypoint="test.py",
-            challenge_config=challenge_config,
-        )
-        for _ in range(3)
-    ]
+    async def _run_parallel_evaluations():
+        tasks = [
+            evaluate_submission(
+                code=code,
+                entrypoint="test.py",
+                challenge_config=challenge_config,
+            )
+            for _ in range(3)
+        ]
+
+        return await asyncio.gather(*tasks, return_exceptions=True)
 
     # This should work without deadlock
     try:
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = asyncio.run(_run_parallel_evaluations())
         assert len(results) == 3
         print(f"✅ 3 parallel evaluations completed: {len([r for r in results if r is not None])} successful")
     except Exception as e:
