@@ -1,4 +1,4 @@
-# PromptCode Scoring Specification (v1)
+# PromptCode Scoring Specification (v1.1)
 
 This document defines the scoring contract used by the evaluator for reproducible, auditable, and company-trustable results.
 
@@ -43,6 +43,28 @@ Metrics are in `[0.0, 1.0]`:
 
 `code_quality` is tracked in report details and diagnostics.
 
+## AI-Leverage Metrics
+
+In addition to weighted overall score, evaluator computes an AI-leverage layer:
+
+- `frontier_navigation_score`: how well quality is matched to usage (tokens/cost/latency/calls) against budget frontier
+- `reliance_calibration_score`: whether model reliance is supported by validation/recovery discipline and observed run quality
+- `learning_velocity_score`: iteration-to-iteration improvement efficiency (first attempt defaults to `0.5`)
+- `counterfactual_baseline_overall`: baseline score from sandbox-run naive strategy on same run plan
+- `leverage_gain`: `overall - counterfactual_baseline_overall`
+- `ai_mastery_score`: composite of frontier navigation, reliance calibration, prompt quality, learning velocity, and leverage gain when baseline is available
+
+Current composite weights:
+
+- frontier_navigation: 0.30
+- reliance_calibration: 0.25
+- prompt_quality: 0.15
+- learning_velocity: 0.15
+- leverage_gain: 0.15 (counterfactual mode)
+
+`ai_mastery_score` is currently exposed for credibility/coaching and does not replace leaderboard `overall`.
+Counterfactual baseline can be toggled via `counterfactual_baseline_enabled` in challenge config.
+
 ## Overall Score Formula
 
 Weights:
@@ -70,6 +92,13 @@ Report includes confidence intervals:
 - mean CI for run accuracy
 - Wilson CI for run pass-rate
 
+Report also includes `credibility`:
+
+- score and band (`high`/`medium`/`low`)
+- signal provenance (judge method, calibration samples, run depth, hidden coverage, counterfactual status, CI width, anti-gaming flags)
+
+This indicates how trustworthy the reported score is for decision-making.
+
 ## Auditability
 
 Each report includes:
@@ -77,5 +106,7 @@ Each report includes:
 - `evaluation_config` (seed, perturbation version, run counts, scoring weights)
 - `audit_trail` event log
 - per-run metadata and outcomes
+- `ai_leverage` block with detailed leverage signals and methods
+- `learning_effectiveness` block (`coach_hit_rate`, assessed actions, per-action deltas)
 
 This enables deterministic replay and post-hoc auditing.

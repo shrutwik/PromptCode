@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from app.services.evaluation.engine import (
     _apply_overall_caps,
+    _build_counterfactual_baseline_code,
     _build_evaluation_manifest,
+    _build_usage_breakdown,
+    _compute_credibility,
     _default_evaluation_seed,
     _detect_metric_gaming,
+    _normalize_leverage_gain,
 )
 
 
@@ -111,3 +115,73 @@ def test_detect_metric_gaming_flags_repetitive_low_schema_runs():
         robustness=0.45,
     )
     assert result["triggered"] is True
+
+
+def test_normalize_leverage_gain_bounds():
+    assert _normalize_leverage_gain(-0.5) == 0.0
+    assert _normalize_leverage_gain(0.5) == 1.0
+    mid = _normalize_leverage_gain(0.1)
+    assert 0.0 <= mid <= 1.0
+
+
+def test_build_counterfactual_baseline_code_contains_sdk_call():
+    code = _build_counterfactual_baseline_code(
+        {
+            "counterfactual_model": "gpt-4o-mini",
+            "processing_rules": {"a": 1},
+            "ground_truth": {"x": "y"},
+        },
+        "Extract fields",
+    )
+    assert "from promptcode import llm" in code
+    assert "llm.call(" in code
+    assert "Return ONLY JSON" in code
+
+
+def test_build_usage_breakdown_aggregates_models_and_run_types():
+    breakdown = _build_usage_breakdown(
+        telemetry_calls=[
+            {
+                "model": "gpt-4o",
+                "tokens_prompt": 100,
+                "tokens_completion": 40,
+                "tokens_total": 140,
+                "cost_usd": 0.01,
+                "latency_ms": 300,
+                "retry_index": 0,
+            },
+            {
+                "model": "gpt-4o-mini",
+                "tokens_prompt": 50,
+                "tokens_completion": 20,
+                "tokens_total": 70,
+                "cost_usd": 0.002,
+                "latency_ms": 120,
+                "retry_index": 1,
+            },
+        ],
+        runs=[
+            {"run_type": "clean", "status": "pass", "llm_calls": 1, "tokens_total": 140, "cost_usd": 0.01, "latency_ms": 300},
+            {"run_type": "perturbed", "status": "fail", "llm_calls": 1, "tokens_total": 70, "cost_usd": 0.002, "latency_ms": 120},
+        ],
+    )
+    assert breakdown["totals"]["calls"] == 2
+    assert breakdown["totals"]["retries"] == 1
+    assert breakdown["totals"]["total_tokens"] == 210
+    assert len(breakdown["models"]) == 2
+    assert any(r["run_type"] == "clean" for r in breakdown["run_types"])
+
+
+def test_compute_credibility_high_when_signals_are_strong():
+    result = _compute_credibility(
+        prompt_judge_method="llm_judge",
+        calibration_samples=12,
+        run_count=8,
+        hidden_set_count=2,
+        counterfactual_status="ok",
+        anti_gaming_triggered=False,
+        hardcoded=False,
+        run_accuracy_ci_half_width=0.03,
+    )
+    assert result["band"] == "high"
+    assert result["score"] >= 0.75

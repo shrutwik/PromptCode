@@ -526,6 +526,12 @@ nav {
     let totalTokens = 0;
     runs.forEach(r => { totalTokens += (r.tokens_total || 0); });
     if (totalTokens === 0 && report.llm_calls) totalTokens = report.llm_calls * 400;
+    const usage = report.usage_breakdown || {};
+    const usageTotals = usage.totals || {};
+    const models = Array.isArray(usage.models) ? usage.models : [];
+    const topModel = models.length ? models[0] : null;
+    const credibility = report.credibility || {};
+    const learningFx = report.learning_effectiveness || {};
 
     const rows = [
       ['total calls', fmtNum(calls), calls > 3 ? 'wn' : ''],
@@ -558,6 +564,26 @@ nav {
     }
     if (leverage.learning_velocity_score != null) {
       rows.push(['learning velocity', fmtScore(Number(leverage.learning_velocity_score)), Number(leverage.learning_velocity_score) >= 0.55 ? 'ac' : 'wn']);
+    }
+    if (leverage.leverage_gain != null) {
+      const gain = Number(leverage.leverage_gain);
+      const sign = gain > 0 ? '+' : '';
+      rows.push(['leverage gain', `${sign}${gain.toFixed(2)}`, gain > 0 ? 'ac' : (gain < 0 ? 'dn' : 'wn')]);
+    }
+    if (credibility.score != null) {
+      rows.push(['score credibility', fmtScore(Number(credibility.score)), Number(credibility.score) >= 0.75 ? 'ac' : 'wn']);
+    }
+    if (credibility.band) {
+      rows.push(['credibility band', String(credibility.band), String(credibility.band) === 'high' ? 'ac' : 'wn']);
+    }
+    if (learningFx.coach_hit_rate != null) {
+      rows.push(['coach hit rate', `${Math.round(Number(learningFx.coach_hit_rate) * 100)}%`, Number(learningFx.coach_hit_rate) >= 0.5 ? 'ac' : 'wn']);
+    }
+    if (topModel && topModel.model) {
+      rows.push(['top model', `${String(topModel.model)} (${fmtNum(topModel.calls || 0)} calls)`, '']);
+    }
+    if (usageTotals.avg_tokens_per_call != null) {
+      rows.push(['avg tokens/call', fmtNum(usageTotals.avg_tokens_per_call), Number(usageTotals.avg_tokens_per_call) > 1200 ? 'wn' : '']);
     }
     el.innerHTML = rows.map(([k, v, cls]) =>
       `<div class="metric-row"><span class="mk">${k}</span><span class="mv${cls ? ' ' + cls : ''}">${v}</span></div>`
@@ -653,6 +679,13 @@ nav {
     if (leverage.reliance_calibration_score != null && Number(leverage.reliance_calibration_score) < 0.65) {
       tips.push({ priority: 'high', title: 'Improve AI reliance calibration', desc: `Reliance calibration is ${fmtScore(Number(leverage.reliance_calibration_score))}. Add stronger validation/fallback around model outputs.`, impact: '↑ reliance calibration', coachPrompt: `My reliance calibration score is ${fmtScore(Number(leverage.reliance_calibration_score))}. Suggest concrete validation and retry/fallback improvements.` });
     }
+    if (leverage.leverage_gain != null && Number(leverage.leverage_gain) <= 0) {
+      tips.push({ priority: 'high', title: 'Outperform baseline strategy', desc: `Leverage gain is ${Number(leverage.leverage_gain).toFixed(2)} vs counterfactual baseline. You need a stronger AI strategy, not just more edits.`, impact: '↑ leverage gain', coachPrompt: `My leverage gain is ${Number(leverage.leverage_gain).toFixed(2)} vs baseline. Help me make targeted prompt and code changes to clearly beat baseline.` });
+    }
+    const credibility = report.credibility || {};
+    if (credibility.score != null && Number(credibility.score) < 0.55) {
+      tips.push({ priority: 'med', title: 'Increase score credibility', desc: `Credibility is ${fmtScore(Number(credibility.score))}. Improve confidence signals and reduce heuristic fallback/gaming patterns.`, impact: '↑ credibility', coachPrompt: `My score credibility is ${fmtScore(Number(credibility.score))}. Give me concrete changes to make evaluation confidence stronger.` });
+    }
     const runs = report.runs || [];
     const failedRuns = runs.filter(r => r.status !== 'passed' && r.status !== 'pass');
     if (failedRuns.length > 0) {
@@ -686,6 +719,10 @@ nav {
     const frontier = leverage.frontier_navigation_score == null ? 'n/a' : fmtScore(Number(leverage.frontier_navigation_score));
     const reliance = leverage.reliance_calibration_score == null ? 'n/a' : fmtScore(Number(leverage.reliance_calibration_score));
     const velocity = leverage.learning_velocity_score == null ? 'n/a' : fmtScore(Number(leverage.learning_velocity_score));
+    const gain = leverage.leverage_gain == null ? 'n/a' : `${Number(leverage.leverage_gain) > 0 ? '+' : ''}${Number(leverage.leverage_gain).toFixed(2)}`;
+    const credibility = report.credibility || {};
+    const credibilityScore = credibility.score == null ? 'n/a' : fmtScore(Number(credibility.score));
+    const credibilityBand = credibility.band == null ? 'n/a' : String(credibility.band);
 
     const deltas = (report.iteration_diff && report.iteration_diff.score_deltas) || {};
     const dOverall = deltas.overall == null ? 'n/a' : (Number(deltas.overall) > 0 ? '+' : '') + Number(deltas.overall).toFixed(2);
@@ -713,6 +750,8 @@ nav {
       `- frontier navigation: ${frontier}`,
       `- reliance calibration: ${reliance}`,
       `- learning velocity: ${velocity}`,
+      `- leverage gain: ${gain}`,
+      `- credibility: ${credibilityScore} (${credibilityBand})`,
       '',
       `Failed runs: ${failedSummary}`,
       `Iteration deltas: overall=${dOverall}, accuracy=${dAcc}, robustness=${dRob}, efficiency=${dEff}`,

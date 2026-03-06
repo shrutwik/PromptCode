@@ -163,11 +163,18 @@ The SDK automatically logs:
 - Full prompt and response text
 - Retry attempts
 
+Reports now include `usage_breakdown` with:
+- totals (`calls`, `retries`, tokens, cost, latency, averages)
+- per-model breakdown (calls/tokens/cost/latency)
+- per-run-type breakdown (clean/perturbed/adversarial usage and pass-rate)
+
 ## Evaluation
 
-Each submission is executed **7 times**:
-- 5 runs with randomized prompt perturbations (whitespace, casing, formatting noise)
-- 2 runs with adversarial inputs (garbage injection, field swaps, encoding noise)
+Each submission is evaluated across a deterministic run plan:
+- 1+ clean runs (`clean_runs`, default 1)
+- 5 perturbed runs (`evaluation_normal_runs`, default 5)
+- 2 adversarial runs (`evaluation_adversarial_runs`, default 2)
+- Optional hidden clean runs from `config.hidden_tests`
 
 ### Scoring (0.0 – 1.0)
 
@@ -180,6 +187,19 @@ Each submission is executed **7 times**:
 | **Prompt Design** | 10% | Prompt clarity, specificity, structure, grounding |
 | **Orchestration** | 10% | Retry discipline, validation, error handling |
 | **Calibration** | 5% | Confidence alignment with observed correctness |
+
+The weighted overall score remains the ranking score. In addition, evaluator now computes an AI-leverage layer for coaching and credibility tracking.
+
+### AI-Leverage Layer (0.0 – 1.0)
+
+- `frontier_navigation_score`: quality achieved relative to token/cost/latency/call usage
+- `reliance_calibration_score`: whether model reliance is matched by validation/recovery discipline
+- `learning_velocity_score`: iteration-to-iteration improvement efficiency (first attempt defaults to neutral)
+- `counterfactual_baseline_overall`: score produced by a naive baseline strategy run in the same sandbox/run plan
+- `leverage_gain`: `candidate_overall - counterfactual_baseline_overall`
+- `ai_mastery_score`: composite of frontier navigation, reliance calibration, prompt quality, and learning velocity
+- `credibility.score`: confidence in evaluation quality (judge mode, sample counts, run depth, baseline availability, uncertainty, anti-gaming status)
+- `learning_effectiveness.coach_hit_rate`: whether previous coaching actions led to metric improvements
 
 Hard gates:
 - If `accuracy < 0.40`, overall is capped
@@ -205,6 +225,21 @@ Reproducibility:
   "orchestration": 0.95,
   "calibration": 0.76,
   "overall": 0.86,
+  "ai_leverage": {
+    "frontier_navigation_score": 0.74,
+    "reliance_calibration_score": 0.69,
+    "learning_velocity_score": 0.58,
+    "counterfactual_baseline_overall": 0.55,
+    "leverage_gain": 0.31,
+    "ai_mastery_score": 0.69
+  },
+  "credibility": {
+    "score": 0.81,
+    "band": "high"
+  },
+  "learning_effectiveness": {
+    "coach_hit_rate": 0.5
+  },
   "cost_usd": 0.14,
   "latency_ms": 4230,
   "llm_calls": 6,

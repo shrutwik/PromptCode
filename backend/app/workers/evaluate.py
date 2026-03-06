@@ -86,6 +86,11 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
         iteration_diff=iteration_diff,
         prompt_quality=float(result.prompt_quality),
     )
+    learning_effectiveness = _compute_learning_effectiveness(
+        previous=previous,
+        current=result,
+        current_ai_leverage=ai_leverage,
+    )
     coaching_actions = _build_coaching_actions(
         result=result,
         growth=growth,
@@ -100,6 +105,7 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
     report["coaching_actions"] = coaching_actions
     report["mastery_state"] = mastery_state
     report["ai_leverage"] = ai_leverage
+    report["learning_effectiveness"] = learning_effectiveness
 
     submission.status = "completed"
     submission.report = report
@@ -501,6 +507,11 @@ def _enrich_ai_leverage(
         reliance_calibration_score=reliance,
         prompt_quality_score=prompt_quality,
         learning_velocity_score=float(learning.get("score", 0.5)),
+        leverage_gain_score=(
+            None
+            if base.get("leverage_gain_score") is None
+            else float(base.get("leverage_gain_score") or 0.0)
+        ),
     )
     signals = dict(base.get("signals") or {})
     signals["learning_velocity"] = learning
@@ -554,6 +565,101 @@ def _compute_learning_velocity_score(
         "skill_gain": round(skill_gain, 4),
         "change_efficiency": round(change_efficiency, 4),
         "method": "learning_velocity_v1",
+    }
+
+
+def _compute_learning_effectiveness(
+    *,
+    previous: Submission | None,
+    current: Any,
+    current_ai_leverage: dict[str, Any],
+) -> dict[str, Any]:
+    if not previous or not isinstance(previous.report, dict):
+        return {
+            "status": "unavailable",
+            "reason": "no_previous_submission",
+            "coach_hit_rate": None,
+            "assessed_actions": 0,
+            "successful_actions": 0,
+        }
+
+    previous_actions = previous.report.get("coaching_actions") or []
+    if not isinstance(previous_actions, list) or not previous_actions:
+        return {
+            "status": "unavailable",
+            "reason": "no_previous_actions",
+            "coach_hit_rate": None,
+            "assessed_actions": 0,
+            "successful_actions": 0,
+        }
+
+    delta_map = {
+        "overall": _delta(current.overall, previous.score_overall),
+        "accuracy": _delta(current.accuracy, previous.score_accuracy),
+        "robustness": _delta(current.edge_case_handling, previous.score_edge_cases),
+        "efficiency": _delta(current.efficiency, previous.score_efficiency),
+        "reliability": _delta(current.reliability, previous.score_reliability),
+        "orchestration": _delta(current.orchestration, previous.score_orchestration),
+        "rule_adherence": _delta(current.rule_adherence, previous.score_rule_adherence),
+        "ai_mastery": _delta(
+            float(current_ai_leverage.get("ai_mastery_score") or 0.0),
+            float((previous.report.get("ai_leverage") or {}).get("ai_mastery_score") or 0.0),
+        ),
+        "frontier_navigation": _delta(
+            float(current_ai_leverage.get("frontier_navigation_score") or 0.0),
+            float((previous.report.get("ai_leverage") or {}).get("frontier_navigation_score") or 0.0),
+        ),
+        "reliance_calibration": _delta(
+            float(current_ai_leverage.get("reliance_calibration_score") or 0.0),
+            float((previous.report.get("ai_leverage") or {}).get("reliance_calibration_score") or 0.0),
+        ),
+        "leverage_gain": _delta(
+            float(current_ai_leverage.get("leverage_gain") or 0.0),
+            float((previous.report.get("ai_leverage") or {}).get("leverage_gain") or 0.0),
+        ),
+    }
+
+    assessed = 0
+    successful = 0
+    samples: list[dict[str, Any]] = []
+    for action in previous_actions[:5]:
+        impacts = action.get("expected_impact") if isinstance(action, dict) else None
+        if not isinstance(impacts, list) or not impacts:
+            continue
+        deltas = [delta_map.get(str(metric)) for metric in impacts]
+        deltas = [d for d in deltas if d is not None]
+        if not deltas:
+            continue
+        assessed += 1
+        avg_delta = sum(deltas) / len(deltas)
+        is_success = avg_delta > 0.01
+        if is_success:
+            successful += 1
+        samples.append({
+            "title": action.get("title", "action"),
+            "expected_impact": impacts,
+            "avg_delta": round(avg_delta, 4),
+            "success": is_success,
+        })
+
+    if assessed == 0:
+        return {
+            "status": "unavailable",
+            "reason": "no_assessable_actions",
+            "coach_hit_rate": None,
+            "assessed_actions": 0,
+            "successful_actions": 0,
+        }
+
+    hit_rate = successful / assessed
+    return {
+        "status": "ok",
+        "coach_hit_rate": round(hit_rate, 4),
+        "assessed_actions": assessed,
+        "successful_actions": successful,
+        "overall_delta": _delta(current.overall, previous.score_overall),
+        "method": "action_outcome_proxy_v1",
+        "samples": samples,
     }
 
 
@@ -656,6 +762,7 @@ def _build_coaching_actions(
     frontier = float(leverage.get("frontier_navigation_score") or 0.0)
     reliance = float(leverage.get("reliance_calibration_score") or 0.0)
     velocity = leverage.get("learning_velocity_score")
+    gain = leverage.get("leverage_gain")
 
     if frontier and frontier < 0.65:
         actions.append({
@@ -675,6 +782,19 @@ def _build_coaching_actions(
             "evidence": {"reliance_calibration_score": reliance},
             "suggested_change": "Add strict JSON validation + bounded retries + explicit fallback rules before accepting model output.",
             "expected_impact": ["reliance_calibration", "reliability", "orchestration"],
+        })
+
+    if gain is not None and float(gain) <= 0.0:
+        actions.append({
+            "priority": "high",
+            "title": "Beat the counterfactual baseline",
+            "why": f"Leverage gain is {float(gain):+.2f}; your current approach is not outperforming the baseline strategy yet.",
+            "evidence": {
+                "leverage_gain": float(gain),
+                "counterfactual_baseline_overall": leverage.get("counterfactual_baseline_overall"),
+            },
+            "suggested_change": "Use a more explicit schema-constrained prompt and tighter normalization instructions, then validate output before acceptance.",
+            "expected_impact": ["leverage_gain", "ai_mastery", "overall"],
         })
 
     if velocity is not None and float(velocity) < 0.5 and growth.get("status") != "first_attempt":
@@ -716,6 +836,12 @@ def _extract_prompt_snippets(code: str, *, max_snippets: int = 8) -> list[str]:
             if len(snippets) >= max_snippets:
                 return snippets
     return snippets
+
+
+def _delta(current: float | None, previous: float | None) -> float | None:
+    if current is None or previous is None:
+        return None
+    return round(float(current) - float(previous), 4)
 
 
 def _clamp01(value: float) -> float:

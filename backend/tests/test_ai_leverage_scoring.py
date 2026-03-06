@@ -66,6 +66,9 @@ def test_ai_mastery_uses_all_components():
         reliance_calibration_score=0.8,
         prompt_quality_score=0.75,
         learning_velocity_score=0.9,
+        leverage_gain_score=0.6,
     )
     assert 0.0 <= result["score"] <= 1.0
     assert result["components"]["learning_velocity"] == 0.9
+    assert result["components"]["leverage_gain"] == 0.6
+    assert result["method"] == "ai_mastery_v2_counterfactual"

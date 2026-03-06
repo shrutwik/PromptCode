@@ -67,6 +67,8 @@ class EvaluationResult:
         diagnostics: list[dict[str, str]],
         evaluation_config: dict[str, Any],
         ai_leverage: dict[str, Any] | None = None,
+        usage_breakdown: dict[str, Any] | None = None,
+        credibility: dict[str, Any] | None = None,
         confidence_intervals: dict[str, Any] | None = None,
         audit_trail: list[dict[str, Any]] | None = None,
         evaluation_manifest: dict[str, Any] | None = None,
@@ -95,6 +97,8 @@ class EvaluationResult:
         self.diagnostics = diagnostics
         self.evaluation_config = evaluation_config
         self.ai_leverage = ai_leverage or {}
+        self.usage_breakdown = usage_breakdown or {}
+        self.credibility = credibility or {}
         self.confidence_intervals = confidence_intervals or {}
         self.audit_trail = audit_trail or []
         self.evaluation_manifest = evaluation_manifest or {}
@@ -132,6 +136,8 @@ class EvaluationResult:
             "feedback": self.diagnostics[0]["message"] if self.diagnostics else "",
             "evaluation_config": self.evaluation_config,
             "ai_leverage": self.ai_leverage,
+            "usage_breakdown": self.usage_breakdown,
+            "credibility": self.credibility,
             "confidence_intervals": self.confidence_intervals,
             "audit_trail": self.audit_trail,
             "evaluation_manifest": self.evaluation_manifest,
@@ -411,24 +417,18 @@ def evaluate_submission(
         code_analysis=code_quality_result,
         anti_gaming_triggered=metric_gaming["triggered"],
     )
-    ai_mastery_result = score_ai_mastery(
-        frontier_navigation_score=float(frontier_result.get("score", 0.0)),
-        reliance_calibration_score=float(reliance_result.get("score", 0.0)),
-        prompt_quality_score=pq,
-    )
-    if hardcoded:
-        frontier_result["score"] = 0.0
-        reliance_result["score"] = 0.0
-        ai_mastery_result["score"] = 0.0
     ai_leverage = {
         "frontier_navigation_score": round(float(frontier_result.get("score", 0.0)), 4),
         "reliance_calibration_score": round(float(reliance_result.get("score", 0.0)), 4),
         "learning_velocity_score": None,
-        "ai_mastery_score": round(float(ai_mastery_result.get("score", 0.0)), 4),
+        "counterfactual_baseline_overall": None,
+        "leverage_gain": None,
+        "leverage_gain_score": None,
+        "ai_mastery_score": 0.0,
         "signals": {
             "frontier": frontier_result,
             "reliance": reliance_result,
-            "composite": ai_mastery_result,
+            "counterfactual": {},
         },
         "method": "research_proxy_v1",
     }
@@ -449,6 +449,41 @@ def evaluate_submission(
         rule_adherence=rule_adherence,
         anti_gaming_triggered=metric_gaming["triggered"],
     )
+    if hardcoded:
+        baseline_result = {"status": "skipped", "reason": "submission_disqualified"}
+    else:
+        baseline_result = _evaluate_counterfactual_baseline(
+            run_plan=run_plan,
+            challenge_config=challenge_config,
+        )
+    baseline_overall = baseline_result.get("overall")
+    leverage_gain = None if baseline_overall is None else round(overall - float(baseline_overall), 4)
+    leverage_gain_score = None if leverage_gain is None else round(_normalize_leverage_gain(leverage_gain), 4)
+    ai_mastery_result = score_ai_mastery(
+        frontier_navigation_score=float(ai_leverage["frontier_navigation_score"]),
+        reliance_calibration_score=float(ai_leverage["reliance_calibration_score"]),
+        prompt_quality_score=pq,
+        leverage_gain_score=leverage_gain_score,
+    )
+    if hardcoded:
+        ai_mastery_result["score"] = 0.0
+        ai_mastery_result["components"]["frontier_navigation"] = 0.0
+        ai_mastery_result["components"]["reliance_calibration"] = 0.0
+        if leverage_gain_score is not None:
+            ai_mastery_result["components"]["leverage_gain"] = 0.0
+    ai_leverage.update({
+        "counterfactual_baseline_overall": baseline_overall,
+        "leverage_gain": leverage_gain,
+        "leverage_gain_score": leverage_gain_score,
+        "ai_mastery_score": round(float(ai_mastery_result.get("score", 0.0)), 4),
+    })
+    ai_leverage["signals"]["counterfactual"] = baseline_result
+    ai_leverage["signals"]["composite"] = ai_mastery_result
+    if baseline_result.get("status") == "ok":
+        ai_leverage["method"] = "counterfactual_v1"
+    else:
+        ai_leverage["method"] = "research_proxy_v1"
+
     for event in cap_events:
         audit_trail.append(
             {
@@ -458,6 +493,11 @@ def evaluate_submission(
             }
         )
 
+    leverage_gain_for_diagnostics = (
+        float(leverage_gain)
+        if (leverage_gain is not None and baseline_result.get("status") == "ok")
+        else 1.0
+    )
     diagnostics = _build_diagnostics(
         accuracy=acc,
         robustness=robustness,
@@ -470,6 +510,7 @@ def evaluate_submission(
         rule_adherence=rule_adherence,
         frontier_navigation=float(ai_leverage["frontier_navigation_score"]),
         reliance_calibration=float(ai_leverage["reliance_calibration_score"]),
+        leverage_gain=leverage_gain_for_diagnostics,
         metric_gaming=1.0 if metric_gaming["triggered"] else 0.0,
     )
     if prompt_judge_fallback:
@@ -502,6 +543,26 @@ def evaluate_submission(
             len(run_records),
         ),
     }
+    credibility = _compute_credibility(
+        prompt_judge_method=str(pq_result.get("method") or "unknown"),
+        calibration_samples=int(calibration_result.get("samples") or 0),
+        run_count=len(run_records),
+        hidden_set_count=len(hidden_cases),
+        counterfactual_status=str(baseline_result.get("status") or "unknown"),
+        anti_gaming_triggered=metric_gaming["triggered"],
+        hardcoded=hardcoded,
+        run_accuracy_ci_half_width=float((confidence_intervals.get("run_accuracy") or {}).get("half_width") or 0.0),
+    )
+    if float(credibility.get("score", 0.0)) < 0.55:
+        diagnostics.insert(
+            0,
+            {
+                "metric": "credibility",
+                "severity": "medium",
+                "message": "Score confidence is limited for this run set. Improve calibration signals and avoid heuristic fallback paths.",
+            },
+        )
+    usage_breakdown = _build_usage_breakdown(all_telemetry, run_records)
     audit_trail.append(
         {
             "event": "evaluation_completed",
@@ -530,6 +591,7 @@ def evaluate_submission(
             "rule_adherence": rule_adherence,
             "frontier_navigation": float(ai_leverage["frontier_navigation_score"]),
             "reliance_calibration": float(ai_leverage["reliance_calibration_score"]),
+            "leverage_gain": float(leverage_gain or 0.0),
             "ai_mastery": float(ai_leverage["ai_mastery_score"]),
             "overall": overall,
             "raw_overall": raw_overall,
@@ -566,6 +628,8 @@ def evaluate_submission(
             "scoring_weights": SCORE_WEIGHTS,
         },
         ai_leverage=ai_leverage,
+        usage_breakdown=usage_breakdown,
+        credibility=credibility,
         confidence_intervals=confidence_intervals,
         audit_trail=audit_trail,
         evaluation_manifest=evaluation_manifest,
@@ -643,6 +707,12 @@ def _build_diagnostics(**scores: float) -> list[dict[str, str]]:
             "metric": "reliance_calibration",
             "severity": "high",
             "message": "AI reliance is weakly calibrated. Add stronger output validation and bounded retry/fallback logic.",
+        })
+    if scores.get("leverage_gain", 0.05) <= 0.0:
+        tips.append({
+            "metric": "leverage_gain",
+            "severity": "high",
+            "message": "Submission is not outperforming counterfactual baseline. Improve your AI strategy before further tuning.",
         })
     if not tips:
         tips.append({
@@ -964,6 +1034,277 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _normalize_leverage_gain(gain: float) -> float:
+    # Maps [-0.10, +0.30] roughly to [0, 1] with clamping.
+    return max(0.0, min(1.0, (float(gain) + 0.10) / 0.40))
+
+
+def _compute_credibility(
+    *,
+    prompt_judge_method: str,
+    calibration_samples: int,
+    run_count: int,
+    hidden_set_count: int,
+    counterfactual_status: str,
+    anti_gaming_triggered: bool,
+    hardcoded: bool,
+    run_accuracy_ci_half_width: float,
+) -> dict[str, Any]:
+    score = 0.0
+
+    score += 0.22 if prompt_judge_method == "llm_judge" else 0.10
+    score += min(0.15, (max(0, calibration_samples) / 12.0) * 0.15)
+    score += min(0.15, (max(0, run_count) / 8.0) * 0.15)
+    score += 0.12 if hidden_set_count > 0 else 0.04
+    if counterfactual_status == "ok":
+        score += 0.15
+    elif counterfactual_status == "disabled":
+        score += 0.06
+    else:
+        score += 0.03
+    ci_quality = max(0.0, min(1.0, 1.0 - (max(0.0, run_accuracy_ci_half_width) / 0.20)))
+    score += ci_quality * 0.13
+
+    if anti_gaming_triggered:
+        score -= 0.25
+    if hardcoded:
+        score -= 0.50
+
+    bounded = max(0.0, min(1.0, score))
+    band = "high" if bounded >= 0.75 else ("medium" if bounded >= 0.55 else "low")
+    return {
+        "score": round(bounded, 4),
+        "band": band,
+        "signals": {
+            "prompt_judge_method": prompt_judge_method,
+            "calibration_samples": calibration_samples,
+            "run_count": run_count,
+            "hidden_set_count": hidden_set_count,
+            "counterfactual_status": counterfactual_status,
+            "anti_gaming_triggered": anti_gaming_triggered,
+            "hardcoded": hardcoded,
+            "run_accuracy_ci_half_width": round(run_accuracy_ci_half_width, 4),
+        },
+        "method": "credibility_v1",
+    }
+
+
+def _evaluate_counterfactual_baseline(
+    *,
+    run_plan: list[dict[str, Any]],
+    challenge_config: dict[str, Any],
+) -> dict[str, Any]:
+    if not bool(challenge_config.get("counterfactual_baseline_enabled", True)):
+        return {"status": "disabled", "reason": "counterfactual_baseline_disabled"}
+    if not run_plan:
+        return {"status": "error", "reason": "empty_run_plan"}
+
+    try:
+        challenge_description = str(challenge_config.get("description", ""))
+        baseline_code = _build_counterfactual_baseline_code(challenge_config, challenge_description)
+
+        run_records: list[dict[str, Any]] = []
+        clean_accuracies: list[float] = []
+        perturbed_accuracies: list[float] = []
+        adversarial_accuracies: list[float] = []
+        all_telemetry: list[dict[str, Any]] = []
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        total_cost = 0.0
+        total_latency = 0.0
+        total_calls = 0
+        total_retries = 0
+
+        for spec in run_plan:
+            result = run_in_sandbox(
+                baseline_code,
+                "counterfactual_baseline.py",
+                challenge_config,
+                input_overrides=spec["inputs"],
+            )
+            record = _process_run(
+                result,
+                spec["ground_truth"],
+                spec["accuracy_mode"],
+                spec["run_type"],
+                spec["run_index"],
+                meta=spec.get("meta"),
+            )
+            run_records.append(record)
+            if spec["run_type"] in ("clean", "hidden_clean"):
+                clean_accuracies.append(record["accuracy"])
+            elif spec["run_type"] == "perturbed":
+                perturbed_accuracies.append(record["accuracy"])
+            elif spec["run_type"] == "adversarial":
+                adversarial_accuracies.append(record["accuracy"])
+
+            all_telemetry.extend(result.telemetry)
+            total_prompt_tokens += record["tokens_prompt"]
+            total_completion_tokens += record["tokens_completion"]
+            total_cost += record["cost_usd"]
+            total_latency += record["latency_ms"]
+            total_calls += record["llm_calls"]
+            total_retries += record["retries"]
+
+        all_accuracies = clean_accuracies + perturbed_accuracies + adversarial_accuracies
+        acc = round(sum(clean_accuracies) / len(clean_accuracies), 4) if clean_accuracies else 0.0
+        robustness = _score_robustness(perturbed_accuracies, adversarial_accuracies)
+        rel = score_reliability(all_accuracies)
+        rule_adherence = _score_constraint_adherence(run_records)
+        quality_anchor = (acc * 0.5) + (robustness * 0.3) + (rel * 0.2)
+        run_count = max(1, len(run_records))
+        budgets = {
+            "token_budget": challenge_config.get("token_budget", 12_000),
+            "cost_budget_usd": challenge_config.get("cost_budget_usd", 0.20),
+            "latency_budget_ms": challenge_config.get("latency_budget_ms", 30_000),
+            "call_budget": challenge_config.get("call_budget", challenge_config.get("expected_calls", 3) * run_count),
+        }
+        eff = score_efficiency_tradeoff(
+            total_tokens=total_prompt_tokens + total_completion_tokens,
+            total_cost_usd=total_cost,
+            total_latency_ms=total_latency,
+            total_calls=total_calls,
+            quality_anchor=quality_anchor,
+            budgets=budgets,
+        )
+        pq_result = score_prompt_quality(all_telemetry, challenge_description)
+        pq = round(float(pq_result.get("overall", 0.0)), 4)
+        if pq_result.get("method") == "heuristic":
+            pq = min(pq, 0.65)
+
+        orch = score_orchestration(
+            total_calls,
+            total_retries,
+            expected_calls=challenge_config.get("expected_calls", 3),
+            code_analysis=None,
+        )
+        calibration_points = _extract_confidence_points(run_records)
+        calibration_result = score_calibration(calibration_points)
+        calibration = float(calibration_result.get("score", 0.5))
+
+        metric_gaming = _detect_metric_gaming(
+            runs=run_records,
+            total_tokens=total_prompt_tokens + total_completion_tokens,
+            total_calls=total_calls,
+            accuracy=acc,
+            robustness=robustness,
+        )
+        if metric_gaming["triggered"]:
+            eff = min(eff, 0.25)
+            orch = min(orch, 0.5)
+
+        raw_overall = round(
+            acc * SCORE_WEIGHTS["accuracy"]
+            + robustness * SCORE_WEIGHTS["robustness"]
+            + rel * SCORE_WEIGHTS["reliability"]
+            + eff * SCORE_WEIGHTS["efficiency"]
+            + pq * SCORE_WEIGHTS["prompt_quality"]
+            + orch * SCORE_WEIGHTS["orchestration"]
+            + calibration * SCORE_WEIGHTS["calibration"],
+            4,
+        )
+        overall, cap_events = _apply_overall_caps(
+            raw_overall=raw_overall,
+            accuracy=acc,
+            rule_adherence=rule_adherence,
+            anti_gaming_triggered=metric_gaming["triggered"],
+        )
+        return {
+            "status": "ok",
+            "overall": overall,
+            "raw_overall": raw_overall,
+            "metrics": {
+                "accuracy": acc,
+                "robustness": robustness,
+                "reliability": rel,
+                "efficiency": eff,
+                "prompt_quality": pq,
+                "orchestration": orch,
+                "calibration": round(calibration, 4),
+                "rule_adherence": rule_adherence,
+            },
+            "run_count": len(run_records),
+            "tests_passed": sum(1 for r in run_records if r.get("status") == "pass"),
+            "cap_events": cap_events,
+            "anti_gaming_triggered": metric_gaming["triggered"],
+            "usage": {
+                "llm_calls": total_calls,
+                "prompt_tokens": total_prompt_tokens,
+                "completion_tokens": total_completion_tokens,
+                "total_tokens": total_prompt_tokens + total_completion_tokens,
+                "cost_usd": round(total_cost, 6),
+                "latency_ms": round(total_latency, 2),
+            },
+            "method": "sandbox_counterfactual_v1",
+        }
+    except Exception as exc:
+        logger.exception("Counterfactual baseline evaluation failed")
+        return {"status": "error", "reason": str(exc)}
+
+
+def _build_counterfactual_baseline_code(
+    challenge_config: dict[str, Any],
+    challenge_description: str,
+) -> str:
+    model_name = str(challenge_config.get("counterfactual_model", "gpt-4o-mini"))
+    max_tokens = int(challenge_config.get("counterfactual_max_tokens", 1400))
+    rules_preview = json.dumps(
+        challenge_config.get("processing_rules", {}),
+        ensure_ascii=False,
+    )
+    ground_truth = challenge_config.get("ground_truth", "")
+    if isinstance(ground_truth, (dict, list)):
+        schema_preview = json.dumps(ground_truth, ensure_ascii=False)
+    else:
+        schema_preview = str(ground_truth)
+    if len(schema_preview) > 2400:
+        schema_preview = schema_preview[:2400] + " ..."
+    if len(rules_preview) > 1600:
+        rules_preview = rules_preview[:1600] + " ..."
+    description_preview = challenge_description.strip()
+    if len(description_preview) > 1600:
+        description_preview = description_preview[:1600] + " ..."
+
+    return f"""import json
+from pathlib import Path
+from promptcode import llm
+
+MODEL = {json.dumps(model_name)}
+MAX_TOKENS = {max_tokens}
+DESCRIPTION = {json.dumps(description_preview)}
+RULES = {json.dumps(rules_preview)}
+SCHEMA = {json.dumps(schema_preview)}
+
+
+def _load_input() -> str:
+    p = Path("/workspace/input.json")
+    if not p.exists():
+        return ""
+    return p.read_text()
+
+
+raw_input = _load_input()
+prompt = (
+    "Solve the task using the input payload and return only valid JSON.\\n\\n"
+    + "Task:\\n" + DESCRIPTION + "\\n\\n"
+    + "Normalization rules:\\n" + RULES + "\\n\\n"
+    + "Expected output schema example:\\n" + SCHEMA + "\\n\\n"
+    + "Input payload:\\n" + raw_input + "\\n\\n"
+    + "Return ONLY JSON with no markdown."
+)
+
+response = llm.call(
+    model=MODEL,
+    prompt=prompt,
+    system="You are a strict structured-data extraction assistant. Output JSON only.",
+    temperature=0,
+    max_tokens=MAX_TOKENS,
+    retries=1,
+)
+print(response.strip())
+"""
+
+
 def _default_evaluation_seed(challenge_config: dict[str, Any]) -> int:
     payload = {
         "accuracy_mode": challenge_config.get("accuracy_mode", "json"),
@@ -1079,3 +1420,139 @@ def _build_evaluation_manifest(
 def _hash_payload(payload: Any) -> str:
     serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _build_usage_breakdown(
+    telemetry_calls: list[dict[str, Any]],
+    runs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    model_stats: dict[str, dict[str, float | int]] = {}
+    total_prompt = 0
+    total_completion = 0
+    total_tokens = 0
+    total_cost = 0.0
+    total_latency = 0.0
+    total_calls = 0
+    total_retries = 0
+
+    for call in telemetry_calls:
+        model = str(call.get("model") or "unknown")
+        prompt_tokens = int(call.get("tokens_prompt") or 0)
+        completion_tokens = int(call.get("tokens_completion") or 0)
+        tokens_total = int(call.get("tokens_total") or (prompt_tokens + completion_tokens))
+        cost_usd = float(call.get("cost_usd") or 0.0)
+        latency_ms = float(call.get("latency_ms") or 0.0)
+        retry_index = int(call.get("retry_index") or 0)
+
+        total_prompt += prompt_tokens
+        total_completion += completion_tokens
+        total_tokens += tokens_total
+        total_cost += cost_usd
+        total_latency += latency_ms
+        total_calls += 1
+        if retry_index > 0:
+            total_retries += 1
+
+        if model not in model_stats:
+            model_stats[model] = {
+                "model": model,
+                "calls": 0,
+                "retries": 0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "cost_usd": 0.0,
+                "latency_ms": 0.0,
+            }
+        entry = model_stats[model]
+        entry["calls"] = int(entry["calls"]) + 1
+        if retry_index > 0:
+            entry["retries"] = int(entry["retries"]) + 1
+        entry["prompt_tokens"] = int(entry["prompt_tokens"]) + prompt_tokens
+        entry["completion_tokens"] = int(entry["completion_tokens"]) + completion_tokens
+        entry["total_tokens"] = int(entry["total_tokens"]) + tokens_total
+        entry["cost_usd"] = float(entry["cost_usd"]) + cost_usd
+        entry["latency_ms"] = float(entry["latency_ms"]) + latency_ms
+
+    models = sorted(
+        (
+            {
+                "model": m["model"],
+                "calls": int(m["calls"]),
+                "retries": int(m["retries"]),
+                "prompt_tokens": int(m["prompt_tokens"]),
+                "completion_tokens": int(m["completion_tokens"]),
+                "total_tokens": int(m["total_tokens"]),
+                "cost_usd": round(float(m["cost_usd"]), 6),
+                "latency_ms": round(float(m["latency_ms"]), 2),
+                "avg_tokens_per_call": round(
+                    int(m["total_tokens"]) / max(1, int(m["calls"])),
+                    2,
+                ),
+                "avg_latency_ms": round(
+                    float(m["latency_ms"]) / max(1, int(m["calls"])),
+                    2,
+                ),
+            }
+            for m in model_stats.values()
+        ),
+        key=lambda row: float(row["cost_usd"]),
+        reverse=True,
+    )
+
+    run_type_stats: dict[str, dict[str, float | int]] = {}
+    for run in runs:
+        run_type = str(run.get("run_type") or "unknown")
+        if run_type not in run_type_stats:
+            run_type_stats[run_type] = {
+                "run_type": run_type,
+                "runs": 0,
+                "passes": 0,
+                "llm_calls": 0,
+                "tokens_total": 0,
+                "cost_usd": 0.0,
+                "latency_ms": 0.0,
+            }
+        bucket = run_type_stats[run_type]
+        bucket["runs"] = int(bucket["runs"]) + 1
+        if run.get("status") == "pass":
+            bucket["passes"] = int(bucket["passes"]) + 1
+        bucket["llm_calls"] = int(bucket["llm_calls"]) + int(run.get("llm_calls") or 0)
+        bucket["tokens_total"] = int(bucket["tokens_total"]) + int(run.get("tokens_total") or 0)
+        bucket["cost_usd"] = float(bucket["cost_usd"]) + float(run.get("cost_usd") or 0.0)
+        bucket["latency_ms"] = float(bucket["latency_ms"]) + float(run.get("latency_ms") or 0.0)
+
+    run_types = sorted(
+        (
+            {
+                "run_type": r["run_type"],
+                "runs": int(r["runs"]),
+                "passes": int(r["passes"]),
+                "pass_rate": round(int(r["passes"]) / max(1, int(r["runs"])), 4),
+                "llm_calls": int(r["llm_calls"]),
+                "tokens_total": int(r["tokens_total"]),
+                "cost_usd": round(float(r["cost_usd"]), 6),
+                "latency_ms": round(float(r["latency_ms"]), 2),
+            }
+            for r in run_type_stats.values()
+        ),
+        key=lambda row: str(row["run_type"]),
+    )
+
+    return {
+        "totals": {
+            "calls": total_calls,
+            "retries": total_retries,
+            "prompt_tokens": total_prompt,
+            "completion_tokens": total_completion,
+            "total_tokens": total_tokens,
+            "cost_usd": round(total_cost, 6),
+            "latency_ms": round(total_latency, 2),
+            "avg_tokens_per_call": round(total_tokens / max(1, total_calls), 2),
+            "avg_latency_ms": round(total_latency / max(1, total_calls), 2),
+            "avg_cost_per_call": round(total_cost / max(1, total_calls), 6),
+        },
+        "models": models,
+        "run_types": run_types,
+        "method": "telemetry_aggregation_v1",
+    }

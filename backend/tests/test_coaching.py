@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from app.workers.evaluate import (
     _build_coaching,
     _build_coaching_actions,
+    _compute_learning_effectiveness,
     _compute_learning_velocity_score,
     _enrich_ai_leverage,
     _build_iteration_diff,
@@ -92,6 +93,18 @@ def test_coaching_actions_link_failed_runs():
     assert actions[0]["title"].lower().startswith("fix adversarial")
 
 
+def test_coaching_actions_include_leverage_gain_when_not_beating_baseline():
+    actions = _build_coaching_actions(
+        result=SimpleNamespace(efficiency=0.8),
+        growth={"status": "flat"},
+        runs=[],
+        diagnostics=[],
+        iteration_diff={"prompt_changes": {"added_count": 0}},
+        ai_leverage={"leverage_gain": -0.04, "counterfactual_baseline_overall": 0.62},
+    )
+    assert any("baseline" in a["title"].lower() for a in actions)
+
+
 def test_learning_velocity_defaults_to_neutral_without_previous():
     score = _compute_learning_velocity_score(
         delta_overall=None,
@@ -123,3 +136,50 @@ def test_enrich_ai_leverage_updates_mastery_with_learning_velocity():
     assert ai["learning_velocity_score"] > 0.5
     assert ai["ai_mastery_score"] > 0.6
     assert ai["signals"]["learning_velocity"]["method"] == "learning_velocity_v1"
+
+
+def test_compute_learning_effectiveness_uses_previous_actions():
+    previous = SimpleNamespace(
+        report={
+            "coaching_actions": [
+                {"title": "Improve accuracy", "expected_impact": ["accuracy", "reliability"]},
+                {"title": "Improve leverage", "expected_impact": ["leverage_gain", "ai_mastery"]},
+            ],
+            "ai_leverage": {
+                "ai_mastery_score": 0.5,
+                "frontier_navigation_score": 0.55,
+                "reliance_calibration_score": 0.52,
+                "leverage_gain": -0.02,
+            },
+        },
+        score_overall=0.58,
+        score_accuracy=0.50,
+        score_edge_cases=0.46,
+        score_efficiency=0.55,
+        score_reliability=0.48,
+        score_orchestration=0.60,
+        score_rule_adherence=0.61,
+    )
+    current = SimpleNamespace(
+        overall=0.66,
+        accuracy=0.61,
+        edge_case_handling=0.52,
+        efficiency=0.58,
+        reliability=0.56,
+        orchestration=0.63,
+        rule_adherence=0.66,
+    )
+    current_ai = {
+        "ai_mastery_score": 0.62,
+        "frontier_navigation_score": 0.64,
+        "reliance_calibration_score": 0.60,
+        "leverage_gain": 0.06,
+    }
+    result = _compute_learning_effectiveness(
+        previous=previous,
+        current=current,
+        current_ai_leverage=current_ai,
+    )
+    assert result["status"] == "ok"
+    assert result["assessed_actions"] >= 1
+    assert result["coach_hit_rate"] is not None

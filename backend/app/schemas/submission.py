@@ -93,8 +93,11 @@ class SubmissionReport(BaseModel):
     evaluation_config: dict[str, Any] = {}
     evaluation_manifest: dict[str, Any] = {}
     ai_leverage: dict[str, Any] = {}
+    usage_breakdown: dict[str, Any] = {}
+    credibility: dict[str, Any] = {}
     confidence_intervals: dict[str, Any] = {}
     growth: dict[str, Any] = {}
+    learning_effectiveness: dict[str, Any] = {}
     coaching: dict[str, Any] = {}
     coaching_actions: list[dict[str, Any]] = []
     iteration_diff: dict[str, Any] = {}

@@ -571,24 +571,39 @@ def score_ai_mastery(
     reliance_calibration_score: float,
     prompt_quality_score: float,
     learning_velocity_score: float | None = None,
+    leverage_gain_score: float | None = None,
 ) -> dict[str, Any]:
     """Composite score for AI leverage quality with transparent components."""
     learning_velocity = 0.5 if learning_velocity_score is None else _clamp01(learning_velocity_score)
-    score = (
-        _clamp01(frontier_navigation_score) * 0.35
-        + _clamp01(reliance_calibration_score) * 0.30
-        + _clamp01(prompt_quality_score) * 0.20
-        + learning_velocity * 0.15
-    )
+    components = {
+        "frontier_navigation": round(_clamp01(frontier_navigation_score), 4),
+        "reliance_calibration": round(_clamp01(reliance_calibration_score), 4),
+        "prompt_quality": round(_clamp01(prompt_quality_score), 4),
+        "learning_velocity": round(learning_velocity, 4),
+    }
+    if leverage_gain_score is None:
+        score = (
+            _clamp01(frontier_navigation_score) * 0.35
+            + _clamp01(reliance_calibration_score) * 0.30
+            + _clamp01(prompt_quality_score) * 0.20
+            + learning_velocity * 0.15
+        )
+        method = "ai_mastery_v1"
+    else:
+        leverage = _clamp01(leverage_gain_score)
+        components["leverage_gain"] = round(leverage, 4)
+        score = (
+            _clamp01(frontier_navigation_score) * 0.30
+            + _clamp01(reliance_calibration_score) * 0.25
+            + _clamp01(prompt_quality_score) * 0.15
+            + learning_velocity * 0.15
+            + leverage * 0.15
+        )
+        method = "ai_mastery_v2_counterfactual"
     return {
         "score": round(_clamp01(score), 4),
-        "components": {
-            "frontier_navigation": round(_clamp01(frontier_navigation_score), 4),
-            "reliance_calibration": round(_clamp01(reliance_calibration_score), 4),
-            "prompt_quality": round(_clamp01(prompt_quality_score), 4),
-            "learning_velocity": round(learning_velocity, 4),
-        },
-        "method": "ai_mastery_v1",
+        "components": components,
+        "method": method,
     }
 
 
