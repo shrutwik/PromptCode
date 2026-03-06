@@ -9,7 +9,11 @@ from unittest.mock import patch
 import pytest
 
 from app.services.sandbox.relay import RelayError, SandboxLLMBudget, SandboxLLMRelay
-from app.services.sandbox.runner import _build_container_environment, _build_sandbox_llm_budget
+from app.services.sandbox.runner import (
+    _build_container_environment,
+    _build_sandbox_llm_budget,
+    _sandbox_temp_root,
+)
 
 
 def _fake_sender(payload):
@@ -180,3 +184,13 @@ def test_sdk_uses_sandbox_proxy_without_openai_key(monkeypatch, tmp_path):
     record = json.loads(telemetry_lines[0])
     assert record["model"] == "gpt-4o-mini"
     assert record["response"] == "relay-ok"
+
+
+def test_sandbox_temp_root_uses_configured_shared_directory(monkeypatch, tmp_path):
+    shared_root = tmp_path / "sandbox-shared"
+    monkeypatch.setenv("PROMPTCODE_SANDBOX_HOST_WORKDIR", str(shared_root))
+
+    resolved = _sandbox_temp_root()
+
+    assert resolved == shared_root
+    assert shared_root.exists()

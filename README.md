@@ -55,6 +55,8 @@ docker compose up --build -d
 This starts PostgreSQL, builds the sandbox image, and launches the FastAPI backend on `http://localhost:8000`.
 The compose stack always uses the internal Postgres service URL, even if your local `.env` uses SQLite for non-container development.
 The local Postgres container is published on host port `5433` by default to avoid colliding with an existing local database on `5432`.
+The backend image now includes the static frontend and challenge definitions, so `/` serves the website and challenge seeding works inside the container.
+The compose stack also mounts a shared sandbox workspace path so nested Docker sandbox runs can bind the submitted code correctly.
 
 The compose stack now includes a `worker` service for resilient async scoring.
 If you run the backend outside compose, start the queue worker in a second shell:
@@ -67,9 +69,7 @@ python -m scripts.run_queue_worker
 ### 3. Seed the first challenge
 
 ```bash
-cd backend
-pip install -r requirements.txt
-python -m scripts.seed_challenge
+docker compose exec backend python -m scripts.seed_challenge
 ```
 
 ### 4. Verify

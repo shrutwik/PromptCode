@@ -15,6 +15,7 @@ x-backend-env: &backend-env
     PROMPTCODE_EVALUATION_WEIGHT_PROFILE_LOCK_PATH: ${PROMPTCODE_EVALUATION_WEIGHT_PROFILE_LOCK_PATH:-}
     PROMPTCODE_EVALUATION_WEIGHT_PROFILE_ENFORCE_LOCK: ${PROMPTCODE_EVALUATION_WEIGHT_PROFILE_ENFORCE_LOCK:-true}
     PROMPTCODE_SANDBOX_IMAGE: promptcode-sandbox:latest
+    PROMPTCODE_SANDBOX_HOST_WORKDIR: ${PROMPTCODE_SANDBOX_HOST_WORKDIR:-/tmp/promptcode_sandbox_work}
     PROMPTCODE_SANDBOX_TIMEOUT_SECONDS: ${PROMPTCODE_SANDBOX_TIMEOUT_SECONDS:-120}
     PROMPTCODE_SANDBOX_MEMORY_LIMIT: ${PROMPTCODE_SANDBOX_MEMORY_LIMIT:-512m}
     PROMPTCODE_SANDBOX_CPU_LIMIT: ${PROMPTCODE_SANDBOX_CPU_LIMIT:-1.0}
@@ -60,6 +61,7 @@ services:
         condition: service_completed_successfully
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ${PROMPTCODE_SANDBOX_HOST_WORKDIR:-/tmp/promptcode_sandbox_work}:${PROMPTCODE_SANDBOX_HOST_WORKDIR:-/tmp/promptcode_sandbox_work}
 
   worker:
     build:
@@ -74,6 +76,7 @@ services:
         condition: service_completed_successfully
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ${PROMPTCODE_SANDBOX_HOST_WORKDIR:-/tmp/promptcode_sandbox_work}:${PROMPTCODE_SANDBOX_HOST_WORKDIR:-/tmp/promptcode_sandbox_work}
 
 volumes:
   pgdata:

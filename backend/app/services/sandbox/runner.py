@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 import tempfile
 import uuid
@@ -78,7 +79,12 @@ def run_in_sandbox(
             error="Unsafe entrypoint path",
         )
 
-    with tempfile.TemporaryDirectory(prefix=f"pc_{run_id}_") as tmpdir:
+    temp_dir_kwargs: dict[str, str] = {}
+    sandbox_root = _sandbox_temp_root()
+    if sandbox_root is not None:
+        temp_dir_kwargs["dir"] = str(sandbox_root)
+
+    with tempfile.TemporaryDirectory(prefix=f"pc_{run_id}_", **temp_dir_kwargs) as tmpdir:
         workspace = Path(tmpdir)
         telemetry_dir = workspace / "telemetry"
         telemetry_dir.mkdir()
@@ -233,6 +239,16 @@ def _build_container_environment(*, relay: SandboxLLMRelay, budget: SandboxLLMBu
         "PROMPTCODE_LLM_PROXY_TOKEN": relay.token,
         "PROMPTCODE_ALLOWED_MODELS": ",".join(budget.allowed_models),
     }
+
+
+def _sandbox_temp_root() -> Path | None:
+    raw = str(os.environ.get("PROMPTCODE_SANDBOX_HOST_WORKDIR") or "").strip()
+    if not raw:
+        return None
+
+    root = Path(raw)
+    root.mkdir(parents=True, exist_ok=True)
+    return root
 
 
 def _build_extra_hosts() -> dict[str, str] | None:

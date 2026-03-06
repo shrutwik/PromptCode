@@ -9,9 +9,7 @@ __pycache__/
 .DS_Store
 .swarm
 .claude
-frontend/
 docs/
-challenges/
 backend/tests/
 backend/.pytest_cache/
 backend/__pycache__/

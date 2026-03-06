@@ -11,6 +11,8 @@ RUN pip install --no-cache-dir -r requirements.lock
 
 COPY backend/ .
 COPY sdk/ /sdk/
+COPY frontend/ /frontend/
+COPY challenges/ /challenges/
 RUN pip install --no-cache-dir /sdk/
 
 EXPOSE 8000
