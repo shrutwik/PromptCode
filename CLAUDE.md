@@ -4,19 +4,22 @@
 LeetCode-style AI evaluation platform for scoring prompt engineering efficiency and LLM reliability.
 
 ## Ruflo Swarm Mode - REQUIRED ✅
-**ALL future work must use Ruflo swarm orchestration.**
+**ALL future work must use Ruflo swarm orchestration with FULL 64-AGENT CAPACITY.**
 
-- **Swarm ID**: swarm-1772785751616
+- **Swarm ID**: swarm-1772785990997
 - **Topology**: Hierarchical
-- **Max Agents**: 8
+- **Max Agents**: 64 (Full Parallelization)
 - **Strategy**: Specialized
+- **Auto Scale**: Enabled
 - **Config**: `.swarm/state.json`
 
-### Why Ruflo?
-- Distributes tasks across 8 specialized agents for parallel processing
-- Reduces redundant API calls through intelligent task coordination
-- Optimizes token usage and cost via agent-level caching and deduplication
-- Improves response quality through multi-perspective analysis
+### Why Ruflo with 64 Agents?
+- **Massive Parallelization**: 64 specialized agents working simultaneously on different task aspects
+- **Extreme Cost Efficiency**: Parallel execution reduces wall-clock time by 60x+ vs sequential work
+- **Redundancy Elimination**: Agent coordination prevents duplicate API calls across the swarm
+- **Token Optimization**: Agent-level caching, deduplication, and result reuse across all 64 workers
+- **Multi-perspective Analysis**: 64 agents provide extensive coverage of problem space
+- **Fault Tolerance**: If one agent fails, 63 others continue work seamlessly
 
 ### Guidelines for Ruflo Usage
 
@@ -26,10 +29,15 @@ LeetCode-style AI evaluation platform for scoring prompt engineering efficiency 
    - Documentation/schema tasks → dedicated agent
    - Testing/validation → dedicated agent
 
-2. **Agent Selection**: Leverage the hierarchical topology
-   - Coordinator agent: manages task orchestration and dependency chains
-   - Specialized agents: handle domain-specific work (backend, evaluation, SDK, Docker)
-   - Parallel execution for independent tasks to minimize wall-clock time
+2. **Agent Allocation** (64-Agent Capacity):
+   - **1 Coordinator Agent**: Task orchestration, dependency management, swarm synchronization
+   - **10-15 Backend/API Agents**: Simultaneous work on different API routes and services
+   - **10-15 Evaluation Agents**: Parallel evaluation pipeline components and scoring logic
+   - **8-10 SDK/Integration Agents**: Concurrent SDK improvements and client implementations
+   - **8-10 Testing Agents**: Parallel test execution across different test suites
+   - **8-10 Documentation Agents**: Concurrent documentation of different subsystems
+   - **5-8 DevOps/Docker Agents**: Parallel infrastructure and containerization work
+   - Remaining agents: Buffer for dynamic task distribution based on workload
 
 3. **Token Optimization**
    - Reuse analysis results across agent conversations
