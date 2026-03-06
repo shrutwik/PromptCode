@@ -17,3 +17,7 @@ node_modules/
 .DS_Store
 *.db
 /pgdata/
+
+# Claude Code
+MEMORY.md
+.planning/
