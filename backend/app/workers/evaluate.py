@@ -66,7 +66,7 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
     eval_config.setdefault("challenge_title", challenge.title)
     eval_config.setdefault("challenge_category", challenge.category)
 
-    result = evaluate_submission(
+    result = await evaluate_submission(
         code=submission.code,
         entrypoint=submission.entrypoint,
         challenge_config=eval_config,

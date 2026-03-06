@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import logging
@@ -40,41 +39,6 @@ SCORE_WEIGHTS = {
     "calibration": 0.05,
 }
 PERTURBATION_CONFIG_VERSION = "v1"
-
-
-async def _run_all_specs_in_parallel(
-    run_plan: list[dict[str, Any]],
-    code: str,
-    entrypoint: str,
-    challenge_config: dict[str, Any],
-) -> list[tuple[dict[str, Any], SandboxResult]]:
-    """Execute all specs in parallel using asyncio thread pool.
-
-    Returns list of (spec, result) tuples in order.
-
-    Speedup: 8x (all runs concurrent) vs sequential execution.
-    """
-    loop = asyncio.get_event_loop()
-
-    async def run_spec(spec: dict[str, Any]) -> tuple[dict[str, Any], SandboxResult]:
-        # Use functools.partial to pass kwargs to thread pool
-        from functools import partial
-        runner = partial(
-            run_in_sandbox,
-            code,
-            entrypoint,
-            challenge_config,
-            input_overrides=spec["inputs"],
-        )
-        result = await loop.run_in_executor(None, runner)
-        return (spec, result)
-
-    # Create tasks for all runs
-    tasks = [run_spec(spec) for spec in run_plan]
-
-    # Run all in parallel - this is the 8x speedup!
-    results = await asyncio.gather(*tasks)
-    return results
 
 
 class EvaluationResult:
@@ -198,16 +162,12 @@ class EvaluationResult:
         return report
 
 
-async def evaluate_submission(
+def evaluate_submission(
     code: str,
     entrypoint: str,
     challenge_config: dict[str, Any],
 ) -> EvaluationResult:
-    """Run full evaluation across clean, perturbed, and adversarial runs.
-
-    All 8 runs (1 clean + 5 perturbed + 2 adversarial) execute in parallel
-    using asyncio thread pool for 8x speedup vs sequential execution.
-    """
+    """Run full evaluation across clean, perturbed, and adversarial runs."""
 
     ground_truth = challenge_config.get("ground_truth", "")
     if isinstance(ground_truth, (list, dict)):
@@ -320,11 +280,8 @@ async def evaluate_submission(
             }
         )
 
-    # PARALLELIZATION: Run all specs concurrently (8x speedup)
-    spec_results = await _run_all_specs_in_parallel(run_plan, code, entrypoint, challenge_config)
-
-    # Process results in order (preserves determinism)
-    for spec, result in spec_results:
+    for spec in run_plan:
+        result = run_in_sandbox(code, entrypoint, challenge_config, input_overrides=spec["inputs"])
         record = _process_run(
             result,
             spec["ground_truth"],
