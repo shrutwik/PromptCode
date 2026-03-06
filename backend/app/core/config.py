@@ -3,9 +3,15 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 _ENV_FILE = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+_INSECURE_JWT_SECRETS = {
+    "",
+    "change-me-in-production-use-a-real-secret-key",
+    "local-dev-secret-change-in-production",
+}
 
 
 class Settings(BaseSettings):
@@ -39,7 +45,7 @@ class Settings(BaseSettings):
     evaluation_normal_runs: int = 5
     evaluation_adversarial_runs: int = 2
 
-    jwt_secret: str = "change-me-in-production-use-a-real-secret-key"
+    jwt_secret: str = ""
 
     cors_origins: list[str] = [
         "http://localhost:3000",
@@ -48,6 +54,18 @@ class Settings(BaseSettings):
     ]
 
     model_config = {"env_prefix": "PROMPTCODE_", "env_file": str(_ENV_FILE)}
+
+    @model_validator(mode="after")
+    def validate_security_settings(self) -> "Settings":
+        secret = str(self.jwt_secret or "").strip()
+        if not secret:
+            raise ValueError("PROMPTCODE_JWT_SECRET must be set.")
+        self.jwt_secret = secret
+        if not self.debug and secret in _INSECURE_JWT_SECRETS:
+            raise ValueError(
+                "PROMPTCODE_JWT_SECRET must be changed from the development default when PROMPTCODE_DEBUG is false."
+            )
+        return self
 
 
 @lru_cache

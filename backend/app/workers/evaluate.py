@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import async_session_factory
@@ -188,37 +190,84 @@ async def _upsert_leaderboard(db: AsyncSession, submission: Submission) -> None:
         )
         return
 
-    result = await db.execute(
-        select(LeaderboardEntry).where(
-            LeaderboardEntry.challenge_id == submission.challenge_id,
-            LeaderboardEntry.user_id == submission.user_id,
+    if submission.score_overall is None:
+        return
+
+    values = {
+        "id": _uuid.uuid4(),
+        "challenge_id": submission.challenge_id,
+        "user_id": submission.user_id,
+        "submission_id": submission.id,
+        "score_overall": submission.score_overall,
+        "score_accuracy": submission.score_accuracy or 0.0,
+        "score_prompt_quality": submission.score_prompt_quality or 0.0,
+        "score_efficiency": submission.score_efficiency or 0.0,
+        "score_reliability": submission.score_reliability or 0.0,
+        "score_orchestration": submission.score_orchestration or 0.0,
+        "score_code_quality": submission.score_code_quality or 0.0,
+        "score_rule_adherence": submission.score_rule_adherence or 0.0,
+        "score_edge_cases": submission.score_edge_cases or 0.0,
+        "total_cost_usd": submission.total_cost_usd or 0.0,
+        "total_llm_calls": submission.total_llm_calls or 0,
+        "updated_at": datetime.now(timezone.utc),
+    }
+
+    bind = db.get_bind()
+    dialect_name = bind.dialect.name
+    if dialect_name == "postgresql":
+        insert_stmt = pg_insert(LeaderboardEntry).values(**values)
+    elif dialect_name == "sqlite":
+        insert_stmt = sqlite_insert(LeaderboardEntry).values(**values)
+    else:
+        result = await db.execute(
+            select(LeaderboardEntry).where(
+                LeaderboardEntry.challenge_id == submission.challenge_id,
+                LeaderboardEntry.user_id == submission.user_id,
+            )
         )
+        entry = result.scalar_one_or_none()
+        if entry is None:
+            entry = LeaderboardEntry(**values)
+            db.add(entry)
+            return
+        if entry.score_overall is None or submission.score_overall > entry.score_overall:
+            entry.submission_id = submission.id
+            entry.score_overall = submission.score_overall
+            entry.score_accuracy = submission.score_accuracy or 0.0
+            entry.score_prompt_quality = submission.score_prompt_quality or 0.0
+            entry.score_efficiency = submission.score_efficiency or 0.0
+            entry.score_reliability = submission.score_reliability or 0.0
+            entry.score_orchestration = submission.score_orchestration or 0.0
+            entry.score_code_quality = submission.score_code_quality or 0.0
+            entry.score_rule_adherence = submission.score_rule_adherence or 0.0
+            entry.score_edge_cases = submission.score_edge_cases or 0.0
+            entry.total_cost_usd = submission.total_cost_usd or 0.0
+            entry.total_llm_calls = submission.total_llm_calls or 0
+            entry.updated_at = values["updated_at"]
+        return
+
+    update_values = {
+        "submission_id": submission.id,
+        "score_overall": submission.score_overall,
+        "score_accuracy": submission.score_accuracy or 0.0,
+        "score_prompt_quality": submission.score_prompt_quality or 0.0,
+        "score_efficiency": submission.score_efficiency or 0.0,
+        "score_reliability": submission.score_reliability or 0.0,
+        "score_orchestration": submission.score_orchestration or 0.0,
+        "score_code_quality": submission.score_code_quality or 0.0,
+        "score_rule_adherence": submission.score_rule_adherence or 0.0,
+        "score_edge_cases": submission.score_edge_cases or 0.0,
+        "total_cost_usd": submission.total_cost_usd or 0.0,
+        "total_llm_calls": submission.total_llm_calls or 0,
+        "updated_at": values["updated_at"],
+    }
+
+    upsert_stmt = insert_stmt.on_conflict_do_update(
+        index_elements=["challenge_id", "user_id"],
+        set_=update_values,
+        where=insert_stmt.excluded.score_overall > LeaderboardEntry.score_overall,
     )
-    entry = result.scalar_one_or_none()
-
-    if entry is None:
-        entry = LeaderboardEntry(
-            challenge_id=submission.challenge_id,
-            user_id=submission.user_id,
-            submission_id=submission.id,
-        )
-        db.add(entry)
-
-    if submission.score_overall is not None and (
-        entry.score_overall is None or submission.score_overall > entry.score_overall
-    ):
-        entry.submission_id = submission.id
-        entry.score_overall = submission.score_overall
-        entry.score_accuracy = submission.score_accuracy or 0.0
-        entry.score_prompt_quality = submission.score_prompt_quality or 0.0
-        entry.score_efficiency = submission.score_efficiency or 0.0
-        entry.score_reliability = submission.score_reliability or 0.0
-        entry.score_orchestration = submission.score_orchestration or 0.0
-        entry.score_code_quality = submission.score_code_quality or 0.0
-        entry.score_rule_adherence = submission.score_rule_adherence or 0.0
-        entry.score_edge_cases = submission.score_edge_cases or 0.0
-        entry.total_cost_usd = submission.total_cost_usd or 0.0
-        entry.total_llm_calls = submission.total_llm_calls or 0
+    await db.execute(upsert_stmt)
 
 
 def _eligible_for_leaderboard(submission: Submission) -> bool:

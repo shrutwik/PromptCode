@@ -77,6 +77,18 @@ async def _run_all_specs_in_parallel(
     return results
 
 
+async def _score_prompt_quality_async(
+    telemetry_calls: list[dict[str, Any]],
+    challenge_description: str,
+) -> dict[str, Any]:
+    """Run the synchronous prompt-quality judge off the event loop."""
+    return await asyncio.to_thread(
+        score_prompt_quality,
+        telemetry_calls,
+        challenge_description,
+    )
+
+
 class EvaluationResult:
     def __init__(
         self,
@@ -373,7 +385,7 @@ async def evaluate_submission(
 
     code_analysis_result = analyze_code(code, entrypoint)
     code_quality_result = score_code_quality(code_analysis_result)
-    pq_result = score_prompt_quality(all_telemetry, challenge_description)
+    pq_result = await _score_prompt_quality_async(all_telemetry, challenge_description)
 
     acc = round(sum(clean_accuracies) / len(clean_accuracies), 4) if clean_accuracies else 0.0
     robustness = _score_robustness(perturbed_accuracies, adversarial_accuracies)
@@ -518,7 +530,7 @@ async def evaluate_submission(
     if hardcoded:
         baseline_result = {"status": "skipped", "reason": "submission_disqualified"}
     else:
-        baseline_result = _evaluate_counterfactual_baseline(
+        baseline_result = await _evaluate_counterfactual_baseline_async(
             run_plan=run_plan,
             challenge_config=challenge_config,
         )
@@ -1174,7 +1186,20 @@ def _compute_credibility(
     }
 
 
-def _evaluate_counterfactual_baseline(
+async def _evaluate_counterfactual_baseline_async(
+    *,
+    run_plan: list[dict[str, Any]],
+    challenge_config: dict[str, Any],
+) -> dict[str, Any]:
+    """Run the blocking counterfactual baseline off the event loop."""
+    return await asyncio.to_thread(
+        _evaluate_counterfactual_baseline_sync,
+        run_plan=run_plan,
+        challenge_config=challenge_config,
+    )
+
+
+def _evaluate_counterfactual_baseline_sync(
     *,
     run_plan: list[dict[str, Any]],
     challenge_config: dict[str, Any],

@@ -2,7 +2,7 @@
 
 Executes user-submitted code inside an isolated container with:
 - the promptcode SDK pre-installed
-- OPENAI_API_KEY injected
+- a short-lived local LLM relay token instead of the raw upstream API key
 - telemetry directory mounted
 - time and resource limits enforced
 """
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 import tempfile
 import uuid
 from pathlib import Path
@@ -21,6 +22,7 @@ import docker
 from docker.errors import APIError, ContainerError, ImageNotFound
 
 from app.core.config import get_settings
+from app.services.sandbox.relay import SandboxLLMBudget, SandboxLLMRelay
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -95,37 +97,42 @@ def run_in_sandbox(
         container = None
 
         try:
-            container = client.containers.run(
-                image=settings.sandbox_image,
-                command=["python", f"/workspace/{entrypoint}"],
-                volumes={
-                    str(code_dir): {"bind": "/workspace", "mode": "ro"},
-                    str(telemetry_dir): {"bind": "/tmp/promptcode_telemetry", "mode": "rw"},
-                },
-                environment={
-                    "OPENAI_API_KEY": settings.openai_api_key,
-                    "PROMPTCODE_TELEMETRY_DIR": "/tmp/promptcode_telemetry",
-                },
-                mem_limit=settings.sandbox_memory_limit,
-                nano_cpus=int(settings.sandbox_cpu_limit * 1e9),
-                network_disabled=False,  # needs outbound for OpenAI
-                detach=True,
-                stdout=True,
-                stderr=True,
-                remove=False,
-            )
-            wait_result = container.wait(timeout=settings.sandbox_timeout_seconds)
-            exit_code = int(wait_result.get("StatusCode", 1))
-            logs = container.logs(stdout=True, stderr=True)
-            stdout = logs.decode("utf-8", errors="replace") if isinstance(logs, (bytes, bytearray)) else str(logs)
-            if exit_code != 0:
-                raise ContainerError(
-                    container=container,
-                    exit_status=exit_code,
-                    command=f"python /workspace/{entrypoint}",
+            llm_budget = _build_sandbox_llm_budget(challenge_config)
+            with SandboxLLMRelay(
+                api_key=settings.openai_api_key,
+                base_url=settings.openai_base_url,
+                host_alias=_sandbox_host_alias(),
+                budget=llm_budget,
+            ) as relay:
+                container = client.containers.run(
                     image=settings.sandbox_image,
-                    stderr=stdout.encode("utf-8", errors="ignore"),
+                    command=["python", f"/workspace/{entrypoint}"],
+                    volumes={
+                        str(code_dir): {"bind": "/workspace", "mode": "ro"},
+                        str(telemetry_dir): {"bind": "/tmp/promptcode_telemetry", "mode": "rw"},
+                    },
+                    environment=_build_container_environment(relay=relay, budget=llm_budget),
+                    mem_limit=settings.sandbox_memory_limit,
+                    nano_cpus=int(settings.sandbox_cpu_limit * 1e9),
+                    network_disabled=False,
+                    detach=True,
+                    stdout=True,
+                    stderr=True,
+                    remove=False,
+                    extra_hosts=_build_extra_hosts(),
                 )
+                wait_result = container.wait(timeout=settings.sandbox_timeout_seconds)
+                exit_code = int(wait_result.get("StatusCode", 1))
+                logs = container.logs(stdout=True, stderr=True)
+                stdout = logs.decode("utf-8", errors="replace") if isinstance(logs, (bytes, bytearray)) else str(logs)
+                if exit_code != 0:
+                    raise ContainerError(
+                        container=container,
+                        exit_status=exit_code,
+                        command=f"python /workspace/{entrypoint}",
+                        image=settings.sandbox_image,
+                        stderr=stdout.encode("utf-8", errors="ignore"),
+                    )
 
         except ContainerError as exc:
             logger.warning("Container exited with error: %s", exc)
@@ -192,3 +199,47 @@ def _read_telemetry(telemetry_dir: Path) -> list[dict[str, Any]]:
         except json.JSONDecodeError:
             logger.warning("Skipping malformed telemetry line")
     return records
+
+
+def _build_sandbox_llm_budget(challenge_config: dict[str, Any]) -> SandboxLLMBudget:
+    constraints = challenge_config.get("constraints", {}) or {}
+    raw_allowed_models = constraints.get("allowed_models")
+    allowed_models = tuple(
+        str(model).strip()
+        for model in (raw_allowed_models or ("gpt-4o", "gpt-4o-mini"))
+        if str(model).strip()
+    ) or ("gpt-4o", "gpt-4o-mini")
+
+    max_llm_calls = int(constraints.get("max_llm_calls") or max(4, int(challenge_config.get("expected_calls", 3)) * 3))
+    max_prompt_chars = int(challenge_config.get("max_prompt_chars") or 20_000)
+    max_completion_tokens = int(challenge_config.get("max_completion_tokens") or 2_048)
+    max_total_tokens = int(challenge_config.get("token_budget") or 12_000)
+    max_total_cost_usd = float(challenge_config.get("cost_budget_usd") or 0.20)
+
+    return SandboxLLMBudget(
+        allowed_models=allowed_models,
+        max_calls=max(1, max_llm_calls),
+        max_prompt_chars=max(1_000, max_prompt_chars),
+        max_completion_tokens=max(128, max_completion_tokens),
+        max_total_tokens=max(1_000, max_total_tokens),
+        max_total_cost_usd=max(0.01, max_total_cost_usd),
+    )
+
+
+def _build_container_environment(*, relay: SandboxLLMRelay, budget: SandboxLLMBudget) -> dict[str, str]:
+    return {
+        "PROMPTCODE_TELEMETRY_DIR": "/tmp/promptcode_telemetry",
+        "PROMPTCODE_LLM_PROXY_URL": relay.proxy_url,
+        "PROMPTCODE_LLM_PROXY_TOKEN": relay.token,
+        "PROMPTCODE_ALLOWED_MODELS": ",".join(budget.allowed_models),
+    }
+
+
+def _build_extra_hosts() -> dict[str, str] | None:
+    if sys.platform.startswith("linux"):
+        return {"host.docker.internal": "host-gateway"}
+    return None
+
+
+def _sandbox_host_alias() -> str:
+    return "host.docker.internal"

@@ -21,6 +21,7 @@ async def enqueue_evaluation_job(
     submission_id: uuid.UUID,
     *,
     max_attempts: int = 3,
+    commit: bool = True,
 ) -> EvaluationJob:
     job = EvaluationJob(
         submission_id=submission_id,
@@ -28,8 +29,11 @@ async def enqueue_evaluation_job(
         max_attempts=max_attempts,
     )
     db.add(job)
-    await db.commit()
-    await db.refresh(job)
+    if commit:
+        await db.commit()
+        await db.refresh(job)
+    else:
+        await db.flush()
     return job
 
 

@@ -1,14 +1,14 @@
 """Tests for parallel evaluation execution (Week 1-2 refactoring)."""
 
 import asyncio
+import inspect
 
+from app.services.evaluation import engine
 from app.services.evaluation.engine import evaluate_submission
 
 
 def test_evaluate_submission_is_async():
     """Verify evaluate_submission is now an async function."""
-    import inspect
-
     assert inspect.iscoroutinefunction(
         evaluate_submission
     ), "evaluate_submission should be async"
@@ -96,9 +96,61 @@ def test_parallel_helper_exists():
     """Verify the parallel execution helper function exists."""
     from app.services.evaluation.engine import _run_all_specs_in_parallel
 
-    import inspect
-
     assert inspect.iscoroutinefunction(
         _run_all_specs_in_parallel
     ), "_run_all_specs_in_parallel should be async"
     print("✅ Parallel helper function exists and is async")
+
+
+def test_prompt_quality_helper_uses_to_thread(monkeypatch):
+    """Verify prompt-quality judging is offloaded from the event loop."""
+    to_thread_calls = []
+
+    def fake_score_prompt_quality(telemetry_calls, challenge_description):
+        assert telemetry_calls == [{"prompt": "hello"}]
+        assert challenge_description == "Test challenge"
+        return {"overall": 0.75, "method": "heuristic"}
+
+    async def fake_to_thread(func, *args, **kwargs):
+        to_thread_calls.append(func.__name__)
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(engine, "score_prompt_quality", fake_score_prompt_quality)
+    monkeypatch.setattr(engine.asyncio, "to_thread", fake_to_thread)
+
+    result = asyncio.run(
+        engine._score_prompt_quality_async(
+            [{"prompt": "hello"}],
+            "Test challenge",
+        )
+    )
+
+    assert result["overall"] == 0.75
+    assert to_thread_calls == ["fake_score_prompt_quality"]
+
+
+def test_counterfactual_baseline_helper_uses_to_thread(monkeypatch):
+    """Verify counterfactual baseline execution is offloaded from the event loop."""
+    to_thread_calls = []
+
+    def fake_counterfactual_sync(*, run_plan, challenge_config):
+        assert run_plan == [{"run_type": "clean"}]
+        assert challenge_config == {"description": "Test"}
+        return {"status": "ok", "overall": 0.4}
+
+    async def fake_to_thread(func, *args, **kwargs):
+        to_thread_calls.append(func.__name__)
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(engine, "_evaluate_counterfactual_baseline_sync", fake_counterfactual_sync)
+    monkeypatch.setattr(engine.asyncio, "to_thread", fake_to_thread)
+
+    result = asyncio.run(
+        engine._evaluate_counterfactual_baseline_async(
+            run_plan=[{"run_type": "clean"}],
+            challenge_config={"description": "Test"},
+        )
+    )
+
+    assert result["status"] == "ok"
+    assert to_thread_calls == ["fake_counterfactual_sync"]

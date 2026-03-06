@@ -155,6 +155,7 @@ def upgrade() -> None:
             sa.Column("rank", sa.Integer(), nullable=True),
             sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
             sa.UniqueConstraint("submission_id", name="uq_leaderboard_submission_id"),
+            sa.UniqueConstraint("challenge_id", "user_id", name="uq_leaderboard_challenge_user"),
         )
         op.create_index("ix_leaderboard_challenge_id", "leaderboard", ["challenge_id"], unique=False)
         op.create_index("ix_leaderboard_user_id", "leaderboard", ["user_id"], unique=False)

@@ -72,10 +72,11 @@ async def create_submission(
         entrypoint=payload.entrypoint,
     )
     db.add(submission)
+    await db.flush()
+    job = await enqueue_evaluation_job(db, submission.id, commit=False)
     await db.commit()
     await db.refresh(submission)
-
-    job = await enqueue_evaluation_job(db, submission.id)
+    await db.refresh(job)
     # Opportunistic in-process execution for low-latency MVP behavior.
     # Persistent queue workers can process the same job if this process restarts.
     background_tasks.add_task(process_job, str(job.id))
