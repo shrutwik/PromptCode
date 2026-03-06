@@ -66,6 +66,8 @@ class PlaygroundRunResponse(BaseModel):
 _MODEL_PRICING: dict[str, tuple[float, float]] = {
     "gpt-4o": (2.50 / 1_000_000, 10.00 / 1_000_000),
     "gpt-4o-mini": (0.15 / 1_000_000, 0.60 / 1_000_000),
+    "gpt-4-turbo": (10.00 / 1_000_000, 30.00 / 1_000_000),
+    "gpt-3.5-turbo": (0.50 / 1_000_000, 1.50 / 1_000_000),
 }
 _DEFAULT_PRICING = (5.00 / 1_000_000, 15.00 / 1_000_000)
 _SUPPORTED_MODELS = OPENAI_CHAT_MODELS
@@ -84,6 +86,7 @@ _CONTINUE_PROMPT = (
     "Continue exactly where you stopped. "
     "Do not repeat prior text. Keep the same format and finish the answer."
 )
+_COACH_TRUNCATION_NOTICE = '[Output may still be truncated. Ask "continue" for more.]'
 _CompletionRequester = Callable[[list[dict[str, Any]]], Awaitable[tuple[dict[str, Any], float]]]
 
 
@@ -218,6 +221,7 @@ async def _run_completion_with_auto_continue(
     model: str,
     request_completion: _CompletionRequester,
     max_auto_continuations: int = _MAX_AUTO_CONTINUATIONS,
+    truncation_notice: str | None = None,
 ) -> tuple[str, str, dict[str, int], float, str]:
     request_messages = [{"role": str(m["role"]), "content": str(m["content"])} for m in base_messages]
 
@@ -258,8 +262,13 @@ async def _run_completion_with_auto_continue(
         request_messages.append({"role": "user", "content": _CONTINUE_PROMPT})
 
     reply = "".join(reply_chunks).strip()
-    if final_finish_reason == "length" and continuation_count >= max_auto_continuations and reply:
-        reply += '\n\n[Output may still be truncated. Ask "continue" for more.]'
+    if (
+        final_finish_reason == "length"
+        and continuation_count >= max_auto_continuations
+        and reply
+        and truncation_notice
+    ):
+        reply += f"\n\n{truncation_notice}"
 
     usage = {
         "prompt_tokens": total_prompt_tokens,
@@ -401,6 +410,7 @@ async def chat(
                 base_messages=messages,
                 model=canonical_model,
                 request_completion=_request_completion,
+                truncation_notice=_COACH_TRUNCATION_NOTICE,
             )
     except HTTPException:
         raise

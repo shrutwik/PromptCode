@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-OPENAI_CHAT_MODELS: tuple[str, ...] = ("gpt-4o", "gpt-4o-mini")
+OPENAI_CHAT_MODELS: tuple[str, ...] = (
+    "gpt-4o",
+    "gpt-4o-mini",
+    "gpt-4-turbo",
+    "gpt-3.5-turbo",
+)
 _MODEL_PREFIX_SEPARATORS: tuple[str, ...] = ("/", ":", ".")
 
 
