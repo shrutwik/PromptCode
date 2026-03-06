@@ -336,18 +336,6 @@ nav {
         <div class="card-body" id="feedbackBody" style="font-size:12px;line-height:1.7;color:var(--muted)"></div>
       </div>
 
-      <!-- ITERATION DELTA -->
-      <div class="card fade-in d5" id="iterationCard" style="display:none">
-        <div class="card-hdr"><span class="card-title">iteration delta</span></div>
-        <div class="card-body" id="iterationBody" style="font-size:12px;line-height:1.7;color:var(--muted)"></div>
-      </div>
-
-      <!-- IMPROVEMENT TIPS -->
-      <div class="card fade-in d6" id="tipsCard" style="display:none">
-        <div class="card-hdr"><span class="card-title">improvement suggestions</span></div>
-        <div class="tip-list" id="tipsList"></div>
-      </div>
-
     </div>
 
     <!-- RIGHT COLUMN -->
@@ -531,7 +519,6 @@ nav {
     if (!el) return;
     const calls = report.llm_calls || 0;
     const latMs = report.latency_ms || 0;
-    const avgLat = calls > 0 ? Math.round(latMs / calls) : 0;
     const runs = report.runs || [];
     let totalTokens = 0;
     runs.forEach(r => { totalTokens += (r.tokens_total || 0); });
@@ -541,9 +528,6 @@ nav {
     const models = Array.isArray(usage.models) ? usage.models : [];
     const topModel = models.length ? models[0] : null;
     const credibility = report.credibility || {};
-    const learningFx = report.learning_effectiveness || {};
-    const future = report.future_feedback || {};
-    const behavior = future.behavior_scores || {};
 
     const rows = [
       ['total calls', fmtNum(calls), calls > 3 ? 'wn' : ''],
@@ -552,30 +536,9 @@ nav {
       ['total latency', fmtMs(latMs), ''],
       ['total cost', fmtCost(report.cost_usd), ''],
     ];
-    const growth = report.growth || {};
-    if (growth.growth_score != null) {
-      rows.push(['growth score', fmtScore(growth.growth_score), growth.growth_score >= 0.55 ? 'ac' : 'wn']);
-    }
-    if (growth.delta_overall != null) {
-      const d = Number(growth.delta_overall);
-      const sign = d > 0 ? '+' : '';
-      rows.push(['delta overall', `${sign}${d.toFixed(2)}`, d > 0 ? 'ac' : (d < 0 ? 'dn' : '')]);
-    }
-    if (report.mastery_state) {
-      rows.push(['mastery state', String(report.mastery_state), report.mastery_state === 'mastered' ? 'ac' : '']);
-    }
     const leverage = report.ai_leverage || {};
-    if (leverage.ai_mastery_score != null) {
-      rows.push(['ai mastery', fmtScore(Number(leverage.ai_mastery_score)), Number(leverage.ai_mastery_score) >= 0.7 ? 'ac' : 'wn']);
-    }
-    if (leverage.frontier_navigation_score != null) {
-      rows.push(['frontier navigation', fmtScore(Number(leverage.frontier_navigation_score)), Number(leverage.frontier_navigation_score) >= 0.65 ? 'ac' : 'wn']);
-    }
     if (leverage.reliance_calibration_score != null) {
       rows.push(['reliance calibration', fmtScore(Number(leverage.reliance_calibration_score)), Number(leverage.reliance_calibration_score) >= 0.65 ? 'ac' : 'wn']);
-    }
-    if (leverage.learning_velocity_score != null) {
-      rows.push(['learning velocity', fmtScore(Number(leverage.learning_velocity_score)), Number(leverage.learning_velocity_score) >= 0.55 ? 'ac' : 'wn']);
     }
     if (leverage.leverage_gain != null) {
       const gain = Number(leverage.leverage_gain);
@@ -587,24 +550,6 @@ nav {
     }
     if (credibility.band) {
       rows.push(['credibility band', String(credibility.band), String(credibility.band) === 'high' ? 'ac' : 'wn']);
-    }
-    if (learningFx.coach_hit_rate != null) {
-      rows.push(['coach hit rate', `${Math.round(Number(learningFx.coach_hit_rate) * 100)}%`, Number(learningFx.coach_hit_rate) >= 0.5 ? 'ac' : 'wn']);
-    }
-    if (future.readiness_score != null) {
-      rows.push(['ai readiness', fmtScore(Number(future.readiness_score)), Number(future.readiness_score) >= 0.7 ? 'ac' : 'wn']);
-    }
-    if (future.readiness_band) {
-      rows.push(['readiness band', String(future.readiness_band), String(future.readiness_band) === 'high' ? 'ac' : 'wn']);
-    }
-    if (future.delegation_mode) {
-      rows.push(['delegation mode', String(future.delegation_mode).replace(/_/g, ' '), String(future.delegation_mode) === 'balanced' ? 'ac' : 'wn']);
-    }
-    if (behavior.verification_discipline != null) {
-      rows.push(['verification discipline', fmtScore(Number(behavior.verification_discipline)), Number(behavior.verification_discipline) >= 0.7 ? 'ac' : 'wn']);
-    }
-    if (behavior.efficient_leverage != null) {
-      rows.push(['efficient leverage', fmtScore(Number(behavior.efficient_leverage)), Number(behavior.efficient_leverage) >= 0.7 ? 'ac' : 'wn']);
     }
     if (topModel && topModel.model) {
       rows.push(['top model', `${String(topModel.model)} (${fmtNum(topModel.calls || 0)} calls)`, '']);
@@ -775,274 +720,6 @@ nav {
     }
   }
 
-  function generateTips(report) {
-    const actionItems = Array.isArray(report.coaching_actions) ? report.coaching_actions : [];
-    const future = report.future_feedback || {};
-    const futurePlan = Array.isArray(future.next_7_days) ? future.next_7_days : [];
-    const futureTips = futurePlan.map((item) => {
-      const actions = Array.isArray(item.actions) ? item.actions : [];
-      const summary = actions.slice(0, 2).join(' ');
-      const goal = String(item.goal || 'Future improvement goal');
-      const metric = String(item.success_metric || 'improve targeted metrics');
-      const planPrompt = [
-        'I want to execute this 7-day AI-improvement plan from PromptCode.',
-        `Goal: ${goal}`,
-        `Actions: ${actions.join(' | ')}`,
-        `Success metric: ${metric}`,
-        'Give me a minimal patch + daily checkpoint plan tied to these metrics.',
-      ].join('\n');
-      return {
-        priority: String(item.priority || 'medium').toLowerCase() === 'high' ? 'high' : 'med',
-        title: goal,
-        desc: summary || metric,
-        impact: `target: ${metric}`,
-        coachPrompt: planPrompt,
-      };
-    });
-
-    if (actionItems.length) {
-      const baseTips = actionItems.map(a => {
-        const p = (a.priority || 'medium').toLowerCase();
-        const why = `${a.why || ''}`.trim();
-        const change = `${a.suggested_change || ''}`.trim();
-        const coachPrompt = `I want to improve my PromptCode submission.\nAction: ${a.title || 'Action item'}\nWhy: ${why}\nSuggested change: ${change}\nPlease give me a minimal code/prompt patch and explain expected score impact.`;
-        return {
-          priority: p === 'high' ? 'high' : (p === 'low' ? 'low' : 'med'),
-          title: a.title || 'Action item',
-          desc: `${why} ${change}`.trim(),
-          impact: Array.isArray(a.expected_impact) && a.expected_impact.length
-            ? `↑ ${a.expected_impact.join(', ')}`
-            : 'improve targeted metrics',
-          coachPrompt,
-        };
-      });
-      return [...baseTips, ...futureTips].slice(0, 6);
-    }
-
-    const tips = [...futureTips];
-    const growth = report.growth || {};
-    if (report.efficiency != null && report.efficiency < 0.75) {
-      tips.push({ priority: 'high', title: 'Improve efficiency', desc: `Your efficiency score is ${fmtScore(report.efficiency)}. Consider batching LLM calls or reducing token usage to lower cost and latency.`, impact: '↑ efficiency score', coachPrompt: `My efficiency score is ${fmtScore(report.efficiency)}. Help me reduce tokens/cost/latency with minimal code and prompt changes.` });
-    }
-    if (report.accuracy != null && report.accuracy < 0.85) {
-      tips.push({ priority: 'high', title: 'Improve accuracy', desc: `Accuracy is ${fmtScore(report.accuracy)}. Review failing passes and add stricter output formatting instructions to your prompt.`, impact: '↑ accuracy score', coachPrompt: `My accuracy score is ${fmtScore(report.accuracy)}. Suggest precise prompt/code changes to increase correctness on clean runs.` });
-    }
-    if (report.reliability != null && report.reliability < 0.85) {
-      tips.push({ priority: 'med', title: 'Improve reliability', desc: `Reliability is ${fmtScore(report.reliability)}. Ensure consistent outputs under perturbed inputs by constraining the output schema.`, impact: '↑ reliability score', coachPrompt: `My reliability score is ${fmtScore(report.reliability)}. Help me make outputs more stable across perturbed/adversarial runs.` });
-    }
-    if (report.orchestration != null && report.orchestration < 0.75) {
-      tips.push({ priority: 'med', title: 'Improve orchestration', desc: `Orchestration score is ${fmtScore(report.orchestration)}. Reduce retries and redundant calls. Use structured output formats to avoid parse failures.`, impact: '↑ orchestration score', coachPrompt: `My orchestration score is ${fmtScore(report.orchestration)}. Suggest retry/validation/fallback improvements with minimal changes.` });
-    }
-    const integrity = getCoreIntegritySignals(report);
-    if (integrity.promptJudgeMethod !== 'llm_judge') {
-      tips.push({
-        priority: 'high',
-        title: 'Restore LLM judge scoring path',
-        desc: `Prompt judging used "${labelize(integrity.promptJudgeMethod)}", which lowers confidence and can trigger score caps.`,
-        impact: '↑ credibility and score ceiling',
-        coachPrompt: `My prompt judge method was ${labelize(integrity.promptJudgeMethod)}. Give me a concrete plan to force the llm_judge path and remove fallback dependence.`,
-      });
-    }
-    if (integrity.calibrationSamples != null && integrity.calibrationSamples <= 3) {
-      tips.push({
-        priority: 'med',
-        title: 'Increase calibration evidence',
-        desc: `Only ${fmtNum(integrity.calibrationSamples)} calibration sample(s) were detected. This weakens confidence and can cap scores.`,
-        impact: '↑ confidence calibration',
-        coachPrompt: `I only had ${fmtNum(integrity.calibrationSamples)} calibration samples. How can I add stronger confidence evidence and verification signals per run?`,
-      });
-    }
-    if (integrity.runAccuracyCiHalfWidth != null && integrity.runAccuracyCiHalfWidth >= 0.15) {
-      tips.push({
-        priority: 'med',
-        title: 'Tighten run-to-run variance',
-        desc: `Run accuracy confidence interval is wide (±${integrity.runAccuracyCiHalfWidth.toFixed(2)}), which reduces score certainty.`,
-        impact: '↑ confidence interval quality',
-        coachPrompt: `My run accuracy CI half-width is ±${integrity.runAccuracyCiHalfWidth.toFixed(2)}. Suggest focused changes to reduce variance across clean/perturbed/adversarial runs.`,
-      });
-    }
-    if (integrity.capReasons.length) {
-      tips.push({
-        priority: 'high',
-        title: 'Remove active confidence caps',
-        desc: `Confidence caps were applied for: ${integrity.capReasons.map(labelize).join(', ')}.`,
-        impact: '↑ overall score ceiling',
-        coachPrompt: `My score was confidence-capped for: ${integrity.capReasons.map(labelize).join(', ')}. Give me the smallest set of prompt/code changes to eliminate each cap.`,
-      });
-    }
-    if (integrity.counterfactualStatus !== 'ok') {
-      tips.push({
-        priority: 'med',
-        title: 'Stabilize counterfactual baseline checks',
-        desc: `Counterfactual status is "${labelize(integrity.counterfactualStatus)}". Ensure baseline comparison is healthy to keep leverage scoring credible.`,
-        impact: '↑ leverage credibility',
-        coachPrompt: `Counterfactual baseline status is ${labelize(integrity.counterfactualStatus)}. Help me fix likely causes and make my strategy clearly outperform baseline variants.`,
-      });
-    }
-    const leverage = report.ai_leverage || {};
-    if (leverage.frontier_navigation_score != null && Number(leverage.frontier_navigation_score) < 0.65) {
-      tips.push({ priority: 'high', title: 'Improve quality-cost frontier', desc: `Frontier navigation is ${fmtScore(Number(leverage.frontier_navigation_score))}. You are spending more usage than your achieved quality supports.`, impact: '↑ frontier navigation', coachPrompt: `My frontier navigation score is ${fmtScore(Number(leverage.frontier_navigation_score))}. Help me increase quality while cutting token/call waste.` });
-    }
-    if (leverage.reliance_calibration_score != null && Number(leverage.reliance_calibration_score) < 0.65) {
-      tips.push({ priority: 'high', title: 'Improve AI reliance calibration', desc: `Reliance calibration is ${fmtScore(Number(leverage.reliance_calibration_score))}. Add stronger validation/fallback around model outputs.`, impact: '↑ reliance calibration', coachPrompt: `My reliance calibration score is ${fmtScore(Number(leverage.reliance_calibration_score))}. Suggest concrete validation and retry/fallback improvements.` });
-    }
-    if (leverage.leverage_gain != null && Number(leverage.leverage_gain) <= 0) {
-      tips.push({ priority: 'high', title: 'Outperform baseline strategy', desc: `Leverage gain is ${Number(leverage.leverage_gain).toFixed(2)} vs counterfactual baseline. You need a stronger AI strategy, not just more edits.`, impact: '↑ leverage gain', coachPrompt: `My leverage gain is ${Number(leverage.leverage_gain).toFixed(2)} vs baseline. Help me make targeted prompt and code changes to clearly beat baseline.` });
-    }
-    const credibility = report.credibility || {};
-    if (credibility.score != null && Number(credibility.score) < 0.55) {
-      tips.push({ priority: 'med', title: 'Increase score credibility', desc: `Credibility is ${fmtScore(Number(credibility.score))}. Improve confidence signals and reduce heuristic fallback/gaming patterns.`, impact: '↑ credibility', coachPrompt: `My score credibility is ${fmtScore(Number(credibility.score))}. Give me concrete changes to make evaluation confidence stronger.` });
-    }
-    const runs = report.runs || [];
-    const failedRuns = runs.filter(r => r.status !== 'passed' && r.status !== 'pass');
-    if (failedRuns.length > 0) {
-      tips.push({ priority: 'high', title: `${failedRuns.length} pass${failedRuns.length > 1 ? 'es' : ''} did not fully pass`, desc: `Review the evaluation passes table — runs of type "${failedRuns.map(r => r.run_type).join(', ')}" need attention.`, impact: '↑ overall score', coachPrompt: `I failed ${failedRuns.length} runs (${failedRuns.map(r => r.run_type).join(', ')}). Help me prioritize fixes and provide a minimal patch plan.` });
-    }
-    if (growth.delta_overall != null && growth.delta_overall < -0.02) {
-      tips.push({ priority: 'med', title: 'You regressed vs your last attempt', desc: `Overall changed by ${growth.delta_overall.toFixed(2)}. Compare your last prompt version and reintroduce the parts that improved reliability.`, impact: '↑ growth score', coachPrompt: `I regressed by ${growth.delta_overall.toFixed(2)} vs last attempt. Help me identify likely changes to revert and what to keep.` });
-    } else if (growth.delta_overall != null && growth.delta_overall > 0.02) {
-      tips.push({ priority: 'low', title: 'Solid iteration improvement', desc: `Overall improved by +${growth.delta_overall.toFixed(2)}. Keep the same strategy and push robustness next.`, impact: 'maintain progress', coachPrompt: `I improved by +${growth.delta_overall.toFixed(2)}. What is the highest-impact next step to improve robustness without regressing efficiency?` });
-    }
-    return tips;
-  }
-
-  function buildCoachUrl(promptText) {
-    if (!_currentChallengeId) return '/challenges.html';
-    const params = new URLSearchParams({
-      id: _currentChallengeId,
-      coach: (promptText || '').slice(0, 1400),
-    });
-    return `/challenge.html?${params.toString()}`;
-  }
-
-  function buildCoachPromptWithEvidence(report, tip) {
-    const runs = Array.isArray(report.runs) ? report.runs : [];
-    const failed = runs.filter(r => (r.status !== 'pass' && r.status !== 'passed')).slice(0, 3);
-    const failedSummary = failed.length
-      ? failed.map(r => `${r.run_type || 'run'}#${(Number(r.run_index || 0) + 1)} acc=${fmtScore(r.accuracy)}`).join(', ')
-      : 'none';
-    const leverage = report.ai_leverage || {};
-    const aiMastery = leverage.ai_mastery_score == null ? 'n/a' : fmtScore(Number(leverage.ai_mastery_score));
-    const frontier = leverage.frontier_navigation_score == null ? 'n/a' : fmtScore(Number(leverage.frontier_navigation_score));
-    const reliance = leverage.reliance_calibration_score == null ? 'n/a' : fmtScore(Number(leverage.reliance_calibration_score));
-    const velocity = leverage.learning_velocity_score == null ? 'n/a' : fmtScore(Number(leverage.learning_velocity_score));
-    const gain = leverage.leverage_gain == null ? 'n/a' : `${Number(leverage.leverage_gain) > 0 ? '+' : ''}${Number(leverage.leverage_gain).toFixed(2)}`;
-    const credibility = report.credibility || {};
-    const credibilityScore = credibility.score == null ? 'n/a' : fmtScore(Number(credibility.score));
-    const credibilityBand = credibility.band == null ? 'n/a' : String(credibility.band);
-    const integrity = getCoreIntegritySignals(report);
-    const calibrationSamples = integrity.calibrationSamples == null ? 'n/a' : fmtNum(integrity.calibrationSamples);
-    const ciHalfWidth = integrity.runAccuracyCiHalfWidth == null ? 'n/a' : `±${integrity.runAccuracyCiHalfWidth.toFixed(2)}`;
-    const capSummary = integrity.capReasons.length ? integrity.capReasons.map(labelize).join(', ') : 'none';
-    const baselineAggregate = integrity.aggregateMethod
-      ? `${labelize(integrity.aggregateMethod)} (${fmtNum(integrity.variantsOk || 0)}/${fmtNum(integrity.variantsTotal || 0)} ok)`
-      : 'n/a';
-
-    const deltas = (report.iteration_diff && report.iteration_diff.score_deltas) || {};
-    const dOverall = deltas.overall == null ? 'n/a' : (Number(deltas.overall) > 0 ? '+' : '') + Number(deltas.overall).toFixed(2);
-    const dAcc = deltas.accuracy == null ? 'n/a' : (Number(deltas.accuracy) > 0 ? '+' : '') + Number(deltas.accuracy).toFixed(2);
-    const dRob = deltas.robustness == null ? 'n/a' : (Number(deltas.robustness) > 0 ? '+' : '') + Number(deltas.robustness).toFixed(2);
-    const dEff = deltas.efficiency == null ? 'n/a' : (Number(deltas.efficiency) > 0 ? '+' : '') + Number(deltas.efficiency).toFixed(2);
-
-    const base = tip.coachPrompt || `${tip.title}. ${tip.desc}`;
-    return [
-      'I want a minimal patch plan for this PromptCode submission.',
-      '',
-      `Action focus: ${tip.title}`,
-      `Reason: ${tip.desc}`,
-      '',
-      'Current scores:',
-      `- overall: ${fmtScore(report.overall)}`,
-      `- accuracy: ${fmtScore(report.accuracy)}`,
-      `- robustness: ${fmtScore(report.edge_case_handling)}`,
-      `- efficiency: ${fmtScore(report.efficiency)}`,
-      `- reliability: ${fmtScore(report.reliability)}`,
-      `- orchestration: ${fmtScore(report.orchestration)}`,
-      '',
-      'AI leverage:',
-      `- ai mastery: ${aiMastery}`,
-      `- frontier navigation: ${frontier}`,
-      `- reliance calibration: ${reliance}`,
-      `- learning velocity: ${velocity}`,
-      `- leverage gain: ${gain}`,
-      `- credibility: ${credibilityScore} (${credibilityBand})`,
-      '',
-      'Evaluation integrity:',
-      `- mode: ${labelize(integrity.evaluationMode)}`,
-      `- judge: ${labelize(integrity.promptJudgeMethod)} (${integrity.judgeModel || 'n/a'})`,
-      `- calibration samples: ${calibrationSamples}`,
-      `- run accuracy CI half-width: ${ciHalfWidth}`,
-      `- confidence caps: ${capSummary}`,
-      `- counterfactual: ${labelize(integrity.counterfactualStatus)}; aggregate=${baselineAggregate}`,
-      '',
-      `Failed runs: ${failedSummary}`,
-      `Iteration deltas: overall=${dOverall}, accuracy=${dAcc}, robustness=${dRob}, efficiency=${dEff}`,
-      '',
-      `Original ask: ${base}`,
-      '',
-      'Give:',
-      '1) exact prompt edits',
-      '2) exact code edits',
-      '3) why this should improve the targeted metrics',
-      '4) one quick validation checklist before resubmitting',
-    ].join('\n').slice(0, 1800);
-  }
-
-  function renderIterationDiff(report) {
-    const card = document.getElementById('iterationCard');
-    const body = document.getElementById('iterationBody');
-    if (!card || !body) return;
-    const diff = report.iteration_diff || {};
-    if (!diff || !diff.status) {
-      card.style.display = 'none';
-      return;
-    }
-    card.style.display = '';
-
-    const code = diff.code_changes || {};
-    const prompts = diff.prompt_changes || {};
-    const deltas = diff.score_deltas || {};
-    const trend = String(diff.status || 'flat');
-    const trendColor = trend === 'improved' ? 'var(--success)' : (trend === 'regressed' ? 'var(--danger)' : 'var(--warn)');
-    const fmtDelta = (v) => v == null ? '—' : `${Number(v) > 0 ? '+' : ''}${Number(v).toFixed(2)}`;
-
-    body.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <span style="color:${trendColor};text-transform:uppercase;font-size:10px;letter-spacing:.06em">${trend}</span>
-        <span style="font-size:11px;color:var(--muted)">prev: ${diff.previous_submission_id ? String(diff.previous_submission_id).slice(0, 8) : 'none'}</span>
-      </div>
-      <div style="margin-bottom:10px">${diff.summary || ''}</div>
-      <div class="metric-row"><span class="mk">code +lines</span><span class="mv">${fmtNum(code.added_lines || 0)}</span></div>
-      <div class="metric-row"><span class="mk">code -lines</span><span class="mv">${fmtNum(code.removed_lines || 0)}</span></div>
-      <div class="metric-row"><span class="mk">code change ratio</span><span class="mv">${code.changed_ratio != null ? Number(code.changed_ratio).toFixed(2) : '—'}</span></div>
-      <div class="metric-row"><span class="mk">prompt snippets added</span><span class="mv">${fmtNum(prompts.added_count || 0)}</span></div>
-      <div class="metric-row"><span class="mk">prompt snippets removed</span><span class="mv">${fmtNum(prompts.removed_count || 0)}</span></div>
-      <div class="metric-row"><span class="mk">Δ overall</span><span class="mv">${fmtDelta(deltas.overall)}</span></div>
-      <div class="metric-row"><span class="mk">Δ accuracy</span><span class="mv">${fmtDelta(deltas.accuracy)}</span></div>
-      <div class="metric-row"><span class="mk">Δ robustness</span><span class="mv">${fmtDelta(deltas.robustness)}</span></div>
-      <div class="metric-row"><span class="mk">Δ efficiency</span><span class="mv">${fmtDelta(deltas.efficiency)}</span></div>
-    `;
-  }
-
-  function renderTips(report) {
-    const tips = generateTips(report);
-    const card = document.getElementById('tipsCard');
-    const list = document.getElementById('tipsList');
-    if (!tips.length) { card.style.display = 'none'; return; }
-    card.style.display = '';
-    list.innerHTML = tips.map(t => {
-      const pClass = t.priority === 'high' ? 'tip-p-high' : t.priority === 'med' ? 'tip-p-med' : 'tip-p-low';
-      const pLabel = t.priority === 'high' ? 'high impact' : t.priority === 'med' ? 'medium impact' : 'low impact';
-      const coachHref = buildCoachUrl(buildCoachPromptWithEvidence(report, t));
-      return `<div class="tip-item">
-        <div class="tip-header"><span class="tip-priority ${pClass}">${pLabel}</span><span class="tip-title">${t.title}</span></div>
-        <div class="tip-desc">${t.desc}</div>
-        <div class="tip-impact">${t.impact}</div>
-        <div style="margin-top:8px"><a class="btn btn-ghost btn-sm" href="${coachHref}">open in coach →</a></div>
-      </div>`;
-    }).join('');
-  }
-
   async function loadReport(submissionId, sub) {
     try {
       const report = await PromptCodeAPI.getSubmissionReport(submissionId);
@@ -1069,13 +746,7 @@ nav {
       if (timeEl && sub) timeEl.textContent = 'submitted ' + timeAgo(sub.created_at);
       const heroSub = document.getElementById('heroScoreSub');
       if (heroSub) {
-        const growth = report.growth || {};
-        if (report.mastery_state) {
-          const delta = growth.delta_overall != null ? ` · Δ ${Number(growth.delta_overall).toFixed(2)}` : '';
-          heroSub.textContent = `${String(report.mastery_state)}${delta}`;
-        } else {
-          heroSub.textContent = 'overall';
-        }
+        heroSub.textContent = 'overall';
       }
 
       // Passes table
@@ -1097,29 +768,13 @@ nav {
       const feedbackCard = document.getElementById('feedbackCard');
       const feedbackTitle = document.getElementById('feedbackTitle');
       const feedbackBody = document.getElementById('feedbackBody');
-      const coaching = report.coaching || {};
-      const future = report.future_feedback || {};
-      if (report.feedback || coaching.summary || future.summary) {
+      if (report.feedback) {
         feedbackCard.style.display = '';
-        if (feedbackTitle) feedbackTitle.textContent = coaching.summary ? 'coaching summary' : 'feedback';
-        const parts = [];
-        if (coaching.summary) parts.push(coaching.summary);
-        if (coaching.next_focus) {
-          const focus = `Next focus: ${coaching.next_focus}. ${coaching.next_focus_explanation || ''}`.trim();
-          parts.push(focus);
-        }
-        if (future.summary) parts.push(`Future guidance: ${future.summary}`);
-        if (Array.isArray(future.next_7_days) && future.next_7_days.length > 0) {
-          const topGoal = future.next_7_days[0];
-          parts.push(`7-day target: ${topGoal.goal || 'Improve AI usage discipline'}. ${topGoal.success_metric || ''}`.trim());
-        }
-        if (report.feedback) parts.push(report.feedback);
-        feedbackBody.textContent = parts.join('\n\n');
+        if (feedbackTitle) feedbackTitle.textContent = 'feedback';
+        feedbackBody.textContent = String(report.feedback);
+      } else {
+        feedbackCard.style.display = 'none';
       }
-
-      // Tips
-      renderTips(report);
-      renderIterationDiff(report);
 
       // JSON report
       renderJsonReport(report);

@@ -179,26 +179,36 @@ def _resolve_judge_models(settings: Any) -> list[str]:
     fallback = str(getattr(settings, "prompt_judge_fallback_model", "") or "").strip()
 
     models: list[str] = []
+    canonical_seen: set[str] = set()
+
+    def _append_if_supported(raw_model: str, *, setting_name: str) -> None:
+        canonical_model = resolve_allowed_model(raw_model, _ALLOWED_JUDGE_MODELS)
+        if not canonical_model:
+            logger.warning("Ignoring unsupported prompt judge %s '%s'", setting_name, raw_model)
+            return
+        if canonical_model in canonical_seen:
+            return
+        models.append(raw_model)
+        canonical_seen.add(canonical_model)
+
     for candidate in primary.split(","):
         raw_model = candidate.strip()
         if not raw_model:
             continue
-        model = resolve_allowed_model(raw_model, _ALLOWED_JUDGE_MODELS)
-        if not model:
-            logger.warning("Ignoring unsupported prompt judge model '%s'", raw_model)
-            continue
-        if model not in models:
-            models.append(model)
+        _append_if_supported(raw_model, setting_name="model")
 
     if not models:
-        models = ["gpt-4o"]
+        default_model = str(getattr(settings, "openai_model", "") or "").strip() or "gpt-4o"
+        default_canonical = resolve_allowed_model(default_model, _ALLOWED_JUDGE_MODELS)
+        if default_canonical:
+            models = [default_model]
+            canonical_seen.add(default_canonical)
+        else:
+            models = ["gpt-4o"]
+            canonical_seen.add("gpt-4o")
 
     if fallback:
-        fallback_model = resolve_allowed_model(fallback, _ALLOWED_JUDGE_MODELS)
-        if not fallback_model:
-            logger.warning("Ignoring unsupported prompt judge fallback model '%s'", fallback)
-        elif fallback_model not in models:
-            models.append(fallback_model)
+        _append_if_supported(fallback, setting_name="fallback model")
     return models
 
 

@@ -38,4 +38,14 @@ def test_resolve_judge_models_normalizes_provider_prefixed_models():
         prompt_judge_fallback_model="openai/gpt-4o",
     )
     models = _resolve_judge_models(settings)
-    assert models == ["gpt-4o-mini", "gpt-4o"]
+    assert models == ["protected.gpt-4o-mini", "openai:gpt-4o"]
+
+
+def test_resolve_judge_models_defaults_to_openai_model_when_supported():
+    settings = SimpleNamespace(
+        prompt_judge_model="",
+        prompt_judge_fallback_model="",
+        openai_model="protected.gpt-4o",
+    )
+    models = _resolve_judge_models(settings)
+    assert models == ["protected.gpt-4o"]

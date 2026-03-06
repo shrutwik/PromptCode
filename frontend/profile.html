@@ -406,13 +406,6 @@ nav {
     return 'diff-med';
   }
 
-  function masteryClass(state) {
-    const s = String(state || '').toLowerCase();
-    if (s === 'mastered') return 'diff-easy';
-    if (s === 'proficient') return 'diff-med';
-    return 'diff-hard';
-  }
-
   function escHtml(str) {
     const d = document.createElement('div');
     d.textContent = str || '';
@@ -523,9 +516,8 @@ nav {
         a.href = `/submission.html?id=${s.id}`;
         a.style.gridTemplateColumns = '1fr 70px 70px 80px 70px';
         const growth = s.growth_score != null ? fmt(s.growth_score) : '—';
-        const mastery = s.mastery_state ? `<span class="diff-badge ${masteryClass(s.mastery_state)}">${escHtml(s.mastery_state)}</span>` : '';
         a.innerHTML = `
-          <div><div class="sh-name">${escHtml(s.challenge_title || 'Challenge #' + s.challenge_id)}</div><div class="sh-desc"><span class="diff-badge ${statusClass(s.status)}">${escHtml(s.status)}</span> ${mastery}</div></div>
+          <div><div class="sh-name">${escHtml(s.challenge_title || 'Challenge #' + s.challenge_id)}</div><div class="sh-desc"><span class="diff-badge ${statusClass(s.status)}">${escHtml(s.status)}</span></div></div>
           <span class="sh-score">${s.score_overall != null ? fmt(s.score_overall) : '—'}</span>
           <span class="sh-val">${growth}</span>
           <span class="sh-val">${s.total_cost_usd != null ? '$' + fmt(s.total_cost_usd) : '—'}</span>
@@ -598,9 +590,8 @@ nav {
       a.href = `/submission.html?id=${s.id}`;
       a.style.gridTemplateColumns = '1fr 70px 70px 80px 70px';
       const growth = s.growth_score != null ? fmt(s.growth_score) : '—';
-      const mastery = s.mastery_state ? `<span class="diff-badge ${masteryClass(s.mastery_state)}">${escHtml(s.mastery_state)}</span>` : '';
       a.innerHTML = `
-        <div><div class="sh-name">${escHtml(s.challenge_title || 'Challenge #' + s.challenge_id)}</div><div class="sh-desc"><span class="diff-badge ${statusClass(s.status)}">${escHtml(s.status)}</span> ${mastery}</div></div>
+        <div><div class="sh-name">${escHtml(s.challenge_title || 'Challenge #' + s.challenge_id)}</div><div class="sh-desc"><span class="diff-badge ${statusClass(s.status)}">${escHtml(s.status)}</span></div></div>
         <span class="sh-score">${s.score_overall != null ? fmt(s.score_overall) : '—'}</span>
         <span class="sh-val">${growth}</span>
         <span class="sh-val">${s.total_cost_usd != null ? '$' + fmt(s.total_cost_usd) : '—'}</span>
