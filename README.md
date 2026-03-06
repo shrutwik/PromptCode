@@ -198,8 +198,9 @@ The weighted overall score remains the ranking score. In addition, evaluator now
 - `counterfactual_baseline_overall`: score produced by a naive baseline strategy run in the same sandbox/run plan
 - `leverage_gain`: `candidate_overall - counterfactual_baseline_overall`
 - `ai_mastery_score`: composite of frontier navigation, reliance calibration, prompt quality, and learning velocity
-- `credibility.score`: confidence in evaluation quality (judge mode, sample counts, run depth, baseline availability, uncertainty, anti-gaming status)
+- `credibility.score`: confidence in evaluation quality (judge mode, sample counts, run depth, run-type diversity, baseline availability, uncertainty, anti-gaming status)
 - `learning_effectiveness.coach_hit_rate`: whether previous coaching actions led to metric improvements
+- `future_feedback`: behavior-level AI-usage diagnostics plus a measurable 7-day improvement plan (`readiness_score`, `delegation_mode`, prioritized actions, eval protocol)
 
 Hard gates:
 - If `accuracy < 0.40`, overall is capped
@@ -246,6 +247,11 @@ Reproducibility:
   },
   "learning_effectiveness": {
     "coach_hit_rate": 0.5
+  },
+  "future_feedback": {
+    "readiness_score": 0.68,
+    "readiness_band": "medium",
+    "delegation_mode": "balanced"
   },
   "cost_usd": 0.14,
   "latency_ms": 4230,

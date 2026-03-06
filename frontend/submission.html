@@ -532,6 +532,8 @@ nav {
     const topModel = models.length ? models[0] : null;
     const credibility = report.credibility || {};
     const learningFx = report.learning_effectiveness || {};
+    const future = report.future_feedback || {};
+    const behavior = future.behavior_scores || {};
 
     const rows = [
       ['total calls', fmtNum(calls), calls > 3 ? 'wn' : ''],
@@ -578,6 +580,21 @@ nav {
     }
     if (learningFx.coach_hit_rate != null) {
       rows.push(['coach hit rate', `${Math.round(Number(learningFx.coach_hit_rate) * 100)}%`, Number(learningFx.coach_hit_rate) >= 0.5 ? 'ac' : 'wn']);
+    }
+    if (future.readiness_score != null) {
+      rows.push(['ai readiness', fmtScore(Number(future.readiness_score)), Number(future.readiness_score) >= 0.7 ? 'ac' : 'wn']);
+    }
+    if (future.readiness_band) {
+      rows.push(['readiness band', String(future.readiness_band), String(future.readiness_band) === 'high' ? 'ac' : 'wn']);
+    }
+    if (future.delegation_mode) {
+      rows.push(['delegation mode', String(future.delegation_mode).replace(/_/g, ' '), String(future.delegation_mode) === 'balanced' ? 'ac' : 'wn']);
+    }
+    if (behavior.verification_discipline != null) {
+      rows.push(['verification discipline', fmtScore(Number(behavior.verification_discipline)), Number(behavior.verification_discipline) >= 0.7 ? 'ac' : 'wn']);
+    }
+    if (behavior.efficient_leverage != null) {
+      rows.push(['efficient leverage', fmtScore(Number(behavior.efficient_leverage)), Number(behavior.efficient_leverage) >= 0.7 ? 'ac' : 'wn']);
     }
     if (topModel && topModel.model) {
       rows.push(['top model', `${String(topModel.model)} (${fmtNum(topModel.calls || 0)} calls)`, '']);
@@ -640,8 +657,31 @@ nav {
 
   function generateTips(report) {
     const actionItems = Array.isArray(report.coaching_actions) ? report.coaching_actions : [];
+    const future = report.future_feedback || {};
+    const futurePlan = Array.isArray(future.next_7_days) ? future.next_7_days : [];
+    const futureTips = futurePlan.map((item) => {
+      const actions = Array.isArray(item.actions) ? item.actions : [];
+      const summary = actions.slice(0, 2).join(' ');
+      const goal = String(item.goal || 'Future improvement goal');
+      const metric = String(item.success_metric || 'improve targeted metrics');
+      const planPrompt = [
+        'I want to execute this 7-day AI-improvement plan from PromptCode.',
+        `Goal: ${goal}`,
+        `Actions: ${actions.join(' | ')}`,
+        `Success metric: ${metric}`,
+        'Give me a minimal patch + daily checkpoint plan tied to these metrics.',
+      ].join('\n');
+      return {
+        priority: String(item.priority || 'medium').toLowerCase() === 'high' ? 'high' : 'med',
+        title: goal,
+        desc: summary || metric,
+        impact: `target: ${metric}`,
+        coachPrompt: planPrompt,
+      };
+    });
+
     if (actionItems.length) {
-      return actionItems.map(a => {
+      const baseTips = actionItems.map(a => {
         const p = (a.priority || 'medium').toLowerCase();
         const why = `${a.why || ''}`.trim();
         const change = `${a.suggested_change || ''}`.trim();
@@ -656,9 +696,10 @@ nav {
           coachPrompt,
         };
       });
+      return [...baseTips, ...futureTips].slice(0, 6);
     }
 
-    const tips = [];
+    const tips = [...futureTips];
     const growth = report.growth || {};
     if (report.efficiency != null && report.efficiency < 0.75) {
       tips.push({ priority: 'high', title: 'Improve efficiency', desc: `Your efficiency score is ${fmtScore(report.efficiency)}. Consider batching LLM calls or reducing token usage to lower cost and latency.`, impact: '↑ efficiency score', coachPrompt: `My efficiency score is ${fmtScore(report.efficiency)}. Help me reduce tokens/cost/latency with minimal code and prompt changes.` });
@@ -876,7 +917,8 @@ nav {
       const feedbackTitle = document.getElementById('feedbackTitle');
       const feedbackBody = document.getElementById('feedbackBody');
       const coaching = report.coaching || {};
-      if (report.feedback || coaching.summary) {
+      const future = report.future_feedback || {};
+      if (report.feedback || coaching.summary || future.summary) {
         feedbackCard.style.display = '';
         if (feedbackTitle) feedbackTitle.textContent = coaching.summary ? 'coaching summary' : 'feedback';
         const parts = [];
@@ -884,6 +926,11 @@ nav {
         if (coaching.next_focus) {
           const focus = `Next focus: ${coaching.next_focus}. ${coaching.next_focus_explanation || ''}`.trim();
           parts.push(focus);
+        }
+        if (future.summary) parts.push(`Future guidance: ${future.summary}`);
+        if (Array.isArray(future.next_7_days) && future.next_7_days.length > 0) {
+          const topGoal = future.next_7_days[0];
+          parts.push(`7-day target: ${topGoal.goal || 'Improve AI usage discipline'}. ${topGoal.success_metric || ''}`.trim());
         }
         if (report.feedback) parts.push(report.feedback);
         feedbackBody.textContent = parts.join('\n\n');

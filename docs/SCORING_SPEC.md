@@ -53,6 +53,7 @@ In addition to weighted overall score, evaluator computes an AI-leverage layer:
 - `counterfactual_baseline_overall`: baseline score from sandbox-run naive strategy on same run plan
 - `leverage_gain`: `overall - counterfactual_baseline_overall`
 - `ai_mastery_score`: composite of frontier navigation, reliance calibration, prompt quality, learning velocity, and leverage gain when baseline is available
+- `future_feedback`: forward-looking AI-usage guidance from behavior diagnostics (`verification_discipline`, `efficient_leverage`, `adaptation_speed`, `evaluation_rigor`)
 
 Current composite weights:
 
@@ -106,7 +107,7 @@ Report includes confidence intervals:
 Report also includes `credibility`:
 
 - score and band (`high`/`medium`/`low`)
-- signal provenance (judge method, calibration samples, run depth, hidden coverage, counterfactual status, CI width, anti-gaming flags)
+- signal provenance (judge method, calibration samples, run depth, hidden coverage, run-type coverage, counterfactual status, CI width, anti-gaming flags)
 
 This indicates how trustworthy the reported score is for decision-making.
 
@@ -119,5 +120,6 @@ Each report includes:
 - per-run metadata and outcomes
 - `ai_leverage` block with detailed leverage signals and methods
 - `learning_effectiveness` block (`coach_hit_rate`, assessed actions, per-action deltas)
+- `future_feedback` block (`readiness_score`, delegation mode, prioritized 7-day actions, next evaluation protocol)
 
 This enables deterministic replay and post-hoc auditing.

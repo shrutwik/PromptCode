@@ -98,6 +98,13 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
         current=result,
         current_ai_leverage=ai_leverage,
     )
+    future_feedback = _build_future_feedback(
+        result=result,
+        ai_leverage=ai_leverage,
+        credibility=report.get("credibility") or {},
+        learning_effectiveness=learning_effectiveness,
+        growth=growth,
+    )
     coaching_actions = _build_coaching_actions(
         result=result,
         growth=growth,
@@ -113,6 +120,7 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
     report["mastery_state"] = mastery_state
     report["ai_leverage"] = ai_leverage
     report["learning_effectiveness"] = learning_effectiveness
+    report["future_feedback"] = future_feedback
 
     submission.status = "completed"
     submission.report = report
@@ -683,6 +691,201 @@ def _compute_learning_effectiveness(
         "method": "action_outcome_proxy_v1",
         "samples": samples,
     }
+
+
+def _build_future_feedback(
+    *,
+    result: Any,
+    ai_leverage: dict[str, Any],
+    credibility: dict[str, Any],
+    learning_effectiveness: dict[str, Any],
+    growth: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    runs = result.runs if isinstance(result.runs, list) else []
+    run_types = {
+        str(r.get("run_type", "")).strip().lower()
+        for r in runs
+        if isinstance(r, dict)
+    }
+    required_types = {"clean", "perturbed", "adversarial"}
+    required_coverage = len(run_types.intersection(required_types)) / len(required_types)
+    hidden_bonus = 0.1 if "hidden_clean" in run_types else 0.0
+    run_type_coverage = _clamp01(required_coverage + hidden_bonus)
+
+    credibility_score = _clamp01(float(credibility.get("score") or 0.0))
+    frontier = _clamp01(float(ai_leverage.get("frontier_navigation_score") or 0.0))
+    reliance = _clamp01(float(ai_leverage.get("reliance_calibration_score") or 0.0))
+    velocity = _clamp01(float(ai_leverage.get("learning_velocity_score") or 0.5))
+    leverage_gain = ai_leverage.get("leverage_gain")
+    leverage_gain_norm = 0.5 if leverage_gain is None else _normalize_leverage_gain_for_feedback(leverage_gain)
+
+    coach_hit_rate = learning_effectiveness.get("coach_hit_rate")
+    if coach_hit_rate is None:
+        coach_hit = 0.5
+    else:
+        coach_hit = _clamp01(float(coach_hit_rate))
+
+    rule_adherence = _clamp01(float(getattr(result, "rule_adherence", 0.0) or 0.0))
+    reliability = _clamp01(float(getattr(result, "reliability", 0.0) or 0.0))
+
+    verification_discipline = _clamp01((reliance * 0.50) + (rule_adherence * 0.25) + (reliability * 0.25))
+    efficient_leverage = _clamp01((frontier * 0.65) + (leverage_gain_norm * 0.35))
+    adaptation_speed = _clamp01((velocity * 0.65) + (coach_hit * 0.35))
+    evaluation_rigor = _clamp01((credibility_score * 0.75) + (run_type_coverage * 0.25))
+
+    behavior_scores = {
+        "verification_discipline": round(verification_discipline, 4),
+        "efficient_leverage": round(efficient_leverage, 4),
+        "adaptation_speed": round(adaptation_speed, 4),
+        "evaluation_rigor": round(evaluation_rigor, 4),
+    }
+
+    readiness_score = _clamp01(
+        (verification_discipline * 0.35)
+        + (efficient_leverage * 0.30)
+        + (adaptation_speed * 0.20)
+        + (evaluation_rigor * 0.15)
+    )
+    readiness_score = round(readiness_score, 4)
+    readiness_band = (
+        "high"
+        if readiness_score >= 0.75
+        else ("medium" if readiness_score >= 0.55 else "low")
+    )
+
+    calls_per_run = float(getattr(result, "llm_calls", 0) or 0) / max(1, len(runs))
+    if calls_per_run > 2.5 and reliance < 0.65:
+        delegation_mode = "over_delegating"
+    elif calls_per_run < 0.8 and frontier < 0.55:
+        delegation_mode = "under_leveraging"
+    else:
+        delegation_mode = "balanced"
+
+    ranked_dims = sorted(
+        behavior_scores.items(),
+        key=lambda item: item[1],
+    )
+    next_7_days: list[dict[str, Any]] = []
+    for dimension, score in ranked_dims:
+        if score >= 0.70 and len(next_7_days) >= 1:
+            continue
+        next_7_days.append(
+            _future_action_for_dimension(
+                dimension=dimension,
+                score=score,
+                leverage_gain=leverage_gain,
+            )
+        )
+        if len(next_7_days) >= 3:
+            break
+
+    if not next_7_days:
+        next_7_days = [
+            {
+                "priority": "medium",
+                "goal": "Protect gains while pushing hard-case robustness",
+                "actions": [
+                    "Keep one-change-per-iteration discipline with explicit regression checks.",
+                    "Shift effort from easy-case tuning to perturbed/adversarial hard cases.",
+                ],
+                "success_metric": "Hold reliability >= 0.75 while improving robustness by >= 0.05.",
+            }
+        ]
+
+    protocol = [
+        "Run one controlled prompt/code change per iteration and compare against previous submission.",
+        "Require strict schema validation + bounded retries before accepting model output.",
+        "Evaluate across clean, perturbed, adversarial, and hidden cases when available before publish.",
+        "Track leverage gain and keep it positive while reducing unnecessary calls/tokens.",
+    ]
+    if growth and growth.get("status") == "regressed":
+        protocol.insert(
+            1,
+            "First recover baseline: revert highest-risk edits, then introduce only one targeted fix.",
+        )
+
+    if readiness_band == "high":
+        summary = "AI usage is strong and disciplined. Focus on raising leverage gain without losing reliability."
+    elif readiness_band == "medium":
+        summary = "Core AI usage habits are present, but weak dimensions are capping consistent score growth."
+    else:
+        summary = "Current AI usage is too fragile for reliable gains. Prioritize verification and evaluation discipline first."
+
+    return {
+        "method": "future_feedback_v1",
+        "summary": summary,
+        "readiness_score": readiness_score,
+        "readiness_band": readiness_band,
+        "delegation_mode": delegation_mode,
+        "behavior_scores": behavior_scores,
+        "next_7_days": next_7_days,
+        "next_eval_protocol": protocol,
+        "signals": {
+            "calls_per_run": round(calls_per_run, 4),
+            "run_type_coverage": round(run_type_coverage, 4),
+            "credibility_score": round(credibility_score, 4),
+            "frontier_navigation_score": round(frontier, 4),
+            "reliance_calibration_score": round(reliance, 4),
+            "learning_velocity_score": round(velocity, 4),
+            "coach_hit_rate": None if coach_hit_rate is None else round(coach_hit, 4),
+            "leverage_gain": None if leverage_gain is None else round(float(leverage_gain), 4),
+        },
+    }
+
+
+def _future_action_for_dimension(
+    *,
+    dimension: str,
+    score: float,
+    leverage_gain: Any,
+) -> dict[str, Any]:
+    if dimension == "verification_discipline":
+        return {
+            "priority": "high" if score < 0.60 else "medium",
+            "goal": "Increase verification discipline",
+            "actions": [
+                "Add strict JSON/schema validation before scoring output as success.",
+                "Use bounded retries (max 2) with explicit fallback behavior for invalid outputs.",
+            ],
+            "success_metric": "Raise reliance calibration to >= 0.70 and rule adherence to >= 0.75.",
+        }
+    if dimension == "efficient_leverage":
+        gain_suffix = ""
+        if leverage_gain is not None:
+            gain_suffix = f" Current leverage gain is {float(leverage_gain):+.2f}."
+        return {
+            "priority": "high" if score < 0.60 else "medium",
+            "goal": "Improve quality-cost frontier use",
+            "actions": [
+                "Reduce prompt/context redundancy and combine low-value LLM calls.",
+                "Tighten output schema constraints so first-pass quality improves without extra retries.",
+            ],
+            "success_metric": f"Reach frontier navigation >= 0.70 and positive leverage gain.{gain_suffix}".strip(),
+        }
+    if dimension == "adaptation_speed":
+        return {
+            "priority": "high" if score < 0.60 else "medium",
+            "goal": "Increase learning velocity",
+            "actions": [
+                "Ship one focused change per iteration and measure only the target metric impact.",
+                "Keep a short change log mapping each edit to expected metric movement before re-run.",
+            ],
+            "success_metric": "Reach learning velocity >= 0.60 and positive delta_overall on next attempt.",
+        }
+    return {
+        "priority": "high" if score < 0.60 else "medium",
+        "goal": "Strengthen evaluation rigor",
+        "actions": [
+            "Test all required run types (clean, perturbed, adversarial) plus hidden cases when available.",
+            "Treat low-credibility runs as non-publishable and iterate until confidence improves.",
+        ],
+        "success_metric": "Reach credibility >= 0.75 and maintain full run-type coverage.",
+    }
+
+
+def _normalize_leverage_gain_for_feedback(gain: Any) -> float:
+    value = float(gain or 0.0)
+    return _clamp01((value + 0.10) / 0.30)
 
 
 def _build_coaching_actions(

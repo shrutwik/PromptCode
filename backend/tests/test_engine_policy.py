@@ -5,6 +5,7 @@ from app.services.evaluation.engine import (
     _build_counterfactual_baseline_code,
     _build_evaluation_manifest,
     _build_usage_breakdown,
+    _compute_run_type_coverage,
     _counterfactual_template_for_challenge,
     _compute_credibility,
     _default_evaluation_seed,
@@ -179,6 +180,7 @@ def test_compute_credibility_high_when_signals_are_strong():
         calibration_samples=12,
         run_count=8,
         hidden_set_count=2,
+        run_type_coverage=1.0,
         counterfactual_status="ok",
         anti_gaming_triggered=False,
         hardcoded=False,
@@ -193,3 +195,15 @@ def test_counterfactual_template_is_challenge_specific():
         {"challenge_slug": "resume-parsing-pipeline", "challenge_category": "extraction"}
     )
     assert "resume" in template["system_prompt"].lower()
+
+
+def test_run_type_coverage_rewards_diverse_eval_runs():
+    coverage = _compute_run_type_coverage(
+        [
+            {"run_type": "clean"},
+            {"run_type": "perturbed"},
+            {"run_type": "adversarial"},
+            {"run_type": "hidden_clean"},
+        ]
+    )
+    assert coverage == 1.0

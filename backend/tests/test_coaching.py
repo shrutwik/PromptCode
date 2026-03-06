@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from app.workers.evaluate import (
     _build_coaching,
     _build_coaching_actions,
+    _build_future_feedback,
     _compute_learning_effectiveness,
     _compute_learning_velocity_score,
     _enrich_ai_leverage,
@@ -183,3 +184,59 @@ def test_compute_learning_effectiveness_uses_previous_actions():
     assert result["status"] == "ok"
     assert result["assessed_actions"] >= 1
     assert result["coach_hit_rate"] is not None
+
+
+def test_build_future_feedback_flags_low_readiness_and_prioritizes_verification():
+    result = _build_future_feedback(
+        result=SimpleNamespace(
+            runs=[
+                {"run_type": "clean"},
+                {"run_type": "perturbed"},
+            ],
+            llm_calls=8,
+            reliability=0.42,
+            rule_adherence=0.48,
+        ),
+        ai_leverage={
+            "frontier_navigation_score": 0.45,
+            "reliance_calibration_score": 0.40,
+            "learning_velocity_score": 0.35,
+            "leverage_gain": -0.06,
+        },
+        credibility={"score": 0.44},
+        learning_effectiveness={"coach_hit_rate": 0.2},
+        growth={"status": "regressed"},
+    )
+    assert result["readiness_band"] == "low"
+    assert result["delegation_mode"] == "over_delegating"
+    assert result["next_7_days"]
+    assert any("verification" in str(item.get("goal", "")).lower() for item in result["next_7_days"])
+    assert "recover baseline" in " ".join(result["next_eval_protocol"]).lower()
+
+
+def test_build_future_feedback_reports_high_readiness_for_strong_signals():
+    result = _build_future_feedback(
+        result=SimpleNamespace(
+            runs=[
+                {"run_type": "clean"},
+                {"run_type": "perturbed"},
+                {"run_type": "adversarial"},
+                {"run_type": "hidden_clean"},
+            ],
+            llm_calls=5,
+            reliability=0.84,
+            rule_adherence=0.86,
+        ),
+        ai_leverage={
+            "frontier_navigation_score": 0.82,
+            "reliance_calibration_score": 0.80,
+            "learning_velocity_score": 0.74,
+            "leverage_gain": 0.12,
+        },
+        credibility={"score": 0.86},
+        learning_effectiveness={"coach_hit_rate": 0.7},
+        growth={"status": "improved"},
+    )
+    assert result["readiness_band"] == "high"
+    assert result["behavior_scores"]["evaluation_rigor"] >= 0.85
+    assert result["signals"]["run_type_coverage"] == 1.0

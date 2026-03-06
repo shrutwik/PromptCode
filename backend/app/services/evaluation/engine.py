@@ -543,11 +543,13 @@ def evaluate_submission(
             len(run_records),
         ),
     }
+    run_type_coverage = _compute_run_type_coverage(run_records)
     credibility = _compute_credibility(
         prompt_judge_method=str(pq_result.get("method") or "unknown"),
         calibration_samples=int(calibration_result.get("samples") or 0),
         run_count=len(run_records),
         hidden_set_count=len(hidden_cases),
+        run_type_coverage=run_type_coverage,
         counterfactual_status=str(baseline_result.get("status") or "unknown"),
         anti_gaming_triggered=metric_gaming["triggered"],
         hardcoded=hardcoded,
@@ -661,6 +663,21 @@ def _extract_confidence_points(runs: list[dict[str, Any]]) -> list[tuple[float, 
         outcome = 1.0 if run.get("status") == "pass" else 0.0
         points.append((float(conf), outcome))
     return points
+
+
+def _compute_run_type_coverage(runs: list[dict[str, Any]]) -> float:
+    if not runs:
+        return 0.0
+    required = {"clean", "perturbed", "adversarial"}
+    observed = {
+        str(r.get("run_type", "")).strip().lower()
+        for r in runs
+        if isinstance(r, dict)
+    }
+    coverage = len(required.intersection(observed)) / len(required)
+    if "hidden_clean" in observed:
+        coverage = min(1.0, coverage + 0.1)
+    return round(max(0.0, min(1.0, coverage)), 4)
 
 
 def _build_diagnostics(**scores: float) -> list[dict[str, str]]:
@@ -1045,6 +1062,7 @@ def _compute_credibility(
     calibration_samples: int,
     run_count: int,
     hidden_set_count: int,
+    run_type_coverage: float,
     counterfactual_status: str,
     anti_gaming_triggered: bool,
     hardcoded: bool,
@@ -1055,7 +1073,8 @@ def _compute_credibility(
     score += 0.22 if prompt_judge_method == "llm_judge" else 0.10
     score += min(0.15, (max(0, calibration_samples) / 12.0) * 0.15)
     score += min(0.15, (max(0, run_count) / 8.0) * 0.15)
-    score += 0.12 if hidden_set_count > 0 else 0.04
+    score += 0.10 if hidden_set_count > 0 else 0.03
+    score += max(0.0, min(1.0, float(run_type_coverage))) * 0.08
     if counterfactual_status == "ok":
         score += 0.15
     elif counterfactual_status == "disabled":
@@ -1080,6 +1099,7 @@ def _compute_credibility(
             "calibration_samples": calibration_samples,
             "run_count": run_count,
             "hidden_set_count": hidden_set_count,
+            "run_type_coverage": round(float(run_type_coverage), 4),
             "counterfactual_status": counterfactual_status,
             "anti_gaming_triggered": anti_gaming_triggered,
             "hardcoded": hardcoded,
