@@ -12,6 +12,8 @@ from app.services.sandbox.relay import RelayError, SandboxLLMBudget, SandboxLLMR
 from app.services.sandbox.runner import (
     _build_container_environment,
     _build_sandbox_llm_budget,
+    _sandbox_host_alias,
+    _sandbox_network_mode,
     _sandbox_temp_root,
 )
 
@@ -133,6 +135,44 @@ def test_sandbox_llm_relay_enforces_model_and_call_limits():
     assert over_budget.value.status_code == 429
 
 
+def test_sandbox_llm_relay_tries_provider_specific_model_aliases():
+    attempted_models: list[str] = []
+
+    def _sender(payload):
+        attempted_models.append(payload["model"])
+        if payload["model"] == "gpt-4o":
+            raise RelayError(400, '{"detail":"Model not found"}')
+        return _fake_sender(payload)
+
+    budget = SandboxLLMBudget(
+        allowed_models=("gpt-4o", "gpt-4o-mini"),
+        max_calls=2,
+        max_prompt_chars=10_000,
+        max_completion_tokens=1024,
+        max_total_tokens=5000,
+        max_total_cost_usd=0.10,
+    )
+    relay = SandboxLLMRelay(
+        api_key="sk-test",
+        base_url="https://api.openai.com/v1",
+        host_alias="127.0.0.1",
+        budget=budget,
+        default_model="protected.gpt-4o",
+        request_sender=_sender,
+    )
+
+    response = relay.handle_request(
+        {
+            "model": "gpt-4o",
+            "prompt": "Hello from the relay",
+            "max_tokens": 200,
+        }
+    )
+
+    assert response["content"] == "relay-ok"
+    assert attempted_models[:2] == ["gpt-4o", "protected.gpt-4o"]
+
+
 def test_sdk_uses_sandbox_proxy_without_openai_key(monkeypatch, tmp_path):
     sdk_root = Path(__file__).resolve().parents[2] / "sdk"
     monkeypatch.syspath_prepend(str(sdk_root))
@@ -194,3 +234,21 @@ def test_sandbox_temp_root_uses_configured_shared_directory(monkeypatch, tmp_pat
 
     assert resolved == shared_root
     assert shared_root.exists()
+
+
+def test_sandbox_network_mode_uses_current_container_namespace(monkeypatch):
+    monkeypatch.setenv("PROMPTCODE_SANDBOX_NETWORK_MODE", "container")
+    monkeypatch.setenv("HOSTNAME", "7b2c9c35d4ea")
+
+    resolved = _sandbox_network_mode()
+
+    assert resolved == "container:7b2c9c35d4ea"
+    assert _sandbox_host_alias(resolved) == "127.0.0.1"
+
+
+def test_sandbox_network_mode_ignores_invalid_container_hostname(monkeypatch):
+    monkeypatch.setenv("PROMPTCODE_SANDBOX_NETWORK_MODE", "container")
+    monkeypatch.setenv("HOSTNAME", "promptcode-worker")
+
+    assert _sandbox_network_mode() is None
+    assert _sandbox_host_alias(None) == "host.docker.internal"

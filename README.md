@@ -57,6 +57,7 @@ The compose stack always uses the internal Postgres service URL, even if your lo
 The local Postgres container is published on host port `5433` by default to avoid colliding with an existing local database on `5432`.
 The backend image now includes the static frontend and challenge definitions, so `/` serves the website and challenge seeding works inside the container.
 The compose stack also mounts a shared sandbox workspace path so nested Docker sandbox runs can bind the submitted code correctly.
+It sets `PROMPTCODE_SANDBOX_NETWORK_MODE=container` so each nested sandbox shares the caller container network namespace and can reach the local relay on `127.0.0.1`.
 
 The compose stack now includes a `worker` service for resilient async scoring.
 If you run the backend outside compose, start the queue worker in a second shell:

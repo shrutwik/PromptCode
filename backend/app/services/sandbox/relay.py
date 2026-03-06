@@ -53,12 +53,14 @@ class SandboxLLMRelay:
         base_url: str,
         host_alias: str,
         budget: SandboxLLMBudget,
+        default_model: str = "",
         request_sender: RequestSender | None = None,
     ):
         self._api_key = api_key
         self._base_url = str(base_url or "https://api.openai.com/v1").rstrip("/")
         self._host_alias = host_alias
         self._budget = budget
+        self._default_model = str(default_model or "").strip()
         self._request_sender = request_sender or self._send_upstream_request
         self._token = uuid.uuid4().hex
         self._lock = threading.Lock()
@@ -163,7 +165,8 @@ class SandboxLLMRelay:
         return RelayHandler
 
     def handle_request(self, payload: dict[str, Any]) -> dict[str, Any]:
-        model = _validate_model(str(payload.get("model") or ""), self._budget.allowed_models)
+        requested_model = str(payload.get("model") or "")
+        model = _validate_model(requested_model, self._budget.allowed_models)
         prompt = str(payload.get("prompt") or "")
         system = str(payload.get("system") or "")
         if not prompt.strip():
@@ -189,17 +192,17 @@ class SandboxLLMRelay:
                 raise RelayError(HTTPStatus.TOO_MANY_REQUESTS, "Sandbox cost budget exhausted.")
             self._calls_started += 1
 
-        upstream_payload = {
-            "model": model,
-            "messages": _build_messages(system=system, prompt=prompt),
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "stream": False,
-        }
-        data, latency_ms = self._request_sender(upstream_payload)
+        data, latency_ms, attempted_model = self._send_upstream_request_with_fallback(
+            requested_model=requested_model,
+            canonical_model=model,
+            system=system,
+            prompt=prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
         content, response_model, prompt_tokens, completion_tokens, total_tokens = _parse_upstream_payload(
             data,
-            fallback_model=model,
+            fallback_model=attempted_model,
         )
         cost_usd = _estimate_cost(response_model, prompt_tokens, completion_tokens)
 
@@ -244,15 +247,61 @@ class SandboxLLMRelay:
         latency_ms = (time.perf_counter() - start) * 1000
 
         if response.status_code == 401:
-            raise RelayError(HTTPStatus.BAD_GATEWAY, "Invalid upstream OpenAI API key.")
+            raise RelayError(HTTPStatus.UNAUTHORIZED, "Invalid upstream OpenAI API key.")
         if response.status_code != 200:
-            detail = response.text[:300]
-            raise RelayError(
-                HTTPStatus.BAD_GATEWAY,
-                f"Upstream model request failed with {response.status_code}: {detail}",
-            )
+            raise RelayError(response.status_code, response.text[:300])
 
         return response.json(), latency_ms
+
+    def _send_upstream_request_with_fallback(
+        self,
+        *,
+        requested_model: str,
+        canonical_model: str,
+        system: str,
+        prompt: str,
+        temperature: float,
+        max_tokens: int,
+    ) -> tuple[dict[str, Any], float, str]:
+        candidates = _build_model_candidates(
+            raw_model=requested_model,
+            canonical_model=canonical_model,
+            default_model=self._default_model,
+            allowed_models=self._budget.allowed_models,
+        )
+        latency_total_ms = 0.0
+
+        for idx, candidate in enumerate(candidates):
+            payload = {
+                "model": candidate,
+                "messages": _build_messages(system=system, prompt=prompt),
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "stream": False,
+            }
+            try:
+                data, latency_ms = self._request_sender(payload)
+                latency_total_ms += latency_ms
+                return data, latency_total_ms, candidate
+            except RelayError as exc:
+                latency_total_ms += 0.0
+                if exc.status_code == HTTPStatus.UNAUTHORIZED:
+                    raise RelayError(HTTPStatus.BAD_GATEWAY, exc.detail) from exc
+                if _is_model_not_found_error(exc.status_code, exc.detail) and idx < (len(candidates) - 1):
+                    continue
+                if _is_model_not_found_error(exc.status_code, exc.detail):
+                    tried = ", ".join(candidates)
+                    raise RelayError(
+                        HTTPStatus.BAD_GATEWAY,
+                        f"Model not found for tried ids: {tried}",
+                    ) from exc
+                raise RelayError(
+                    HTTPStatus.BAD_GATEWAY,
+                    f"Upstream model request failed with {exc.status_code}: {exc.detail}",
+                ) from exc
+
+        tried = ", ".join(candidates)
+        raise RelayError(HTTPStatus.BAD_GATEWAY, f"Model selection failed for all tried ids: {tried}")
 
 
 def _build_messages(*, system: str, prompt: str) -> list[dict[str, str]]:
@@ -272,6 +321,37 @@ def _validate_model(model: str, allowed_models: tuple[str, ...]) -> str:
             f"Model '{model}' is not allowed in the sandbox. Choose one of: {supported}.",
         )
     return canonical_model
+
+
+def _build_model_candidates(
+    *,
+    raw_model: str,
+    canonical_model: str,
+    default_model: str,
+    allowed_models: tuple[str, ...],
+) -> list[str]:
+    candidates: list[str] = []
+
+    def _add(model_id: str) -> None:
+        candidate = str(model_id or "").strip()
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+
+    _add(raw_model)
+    if default_model and resolve_allowed_model(default_model, allowed_models) == canonical_model:
+        _add(default_model)
+    _add(canonical_model)
+    _add(f"protected.{canonical_model}")
+    _add(f"openai/{canonical_model}")
+    _add(f"openai:{canonical_model}")
+    return candidates
+
+
+def _is_model_not_found_error(status_code: int, detail: str) -> bool:
+    if status_code not in (HTTPStatus.BAD_REQUEST, HTTPStatus.NOT_FOUND):
+        return False
+    text = str(detail or "").lower()
+    return "model not found" in text or "model_not_found" in text or "unknown model" in text
 
 
 def _parse_upstream_payload(

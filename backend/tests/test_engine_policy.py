@@ -159,6 +159,20 @@ def test_build_counterfactual_baseline_code_contains_sdk_call():
     assert "Return ONLY JSON" in code
 
 
+def test_build_counterfactual_baseline_code_defaults_to_canonical_openai_model(monkeypatch):
+    monkeypatch.setattr(counterfactual, "get_settings", lambda: SimpleNamespace(openai_model="protected.gpt-4o"))
+
+    code = _build_counterfactual_baseline_code(
+        {
+            "processing_rules": {"a": 1},
+            "ground_truth": {"x": "y"},
+        },
+        "Extract fields",
+    )
+
+    assert 'MODEL = "gpt-4o"' in code
+
+
 def test_counterfactual_variants_respect_config_count():
     one = _counterfactual_strategy_variants({"counterfactual_variants": 1})
     three = _counterfactual_strategy_variants({"counterfactual_variants": 3})

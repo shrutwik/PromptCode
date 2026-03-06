@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 _ALLOWED_JUDGE_MODELS = set(OPENAI_CHAT_MODELS)
 _PROMPT_JUDGE_ERRORS = (
     openai.OpenAIError,
+    AttributeError,
     json.JSONDecodeError,
     KeyError,
     IndexError,
@@ -166,7 +167,7 @@ def _judge_with_llm(
         assert last_exc is not None
         raise last_exc
 
-    text = response.choices[0].message.content or ""
+    text = _extract_judge_response_text(response)
     text = text.strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
@@ -186,19 +187,32 @@ def _judge_with_llm(
 def _resolve_judge_models(settings: Any) -> list[str]:
     primary = str(getattr(settings, "prompt_judge_model", "") or "").strip()
     fallback = str(getattr(settings, "prompt_judge_fallback_model", "") or "").strip()
+    configured_openai_model = str(getattr(settings, "openai_model", "") or "").strip()
+    default_model = configured_openai_model or "gpt-4o"
 
     models: list[str] = []
+    raw_seen: set[str] = set()
     canonical_seen: set[str] = set()
 
-    def _append_if_supported(raw_model: str, *, setting_name: str) -> None:
+    def _append_if_supported(
+        raw_model: str,
+        *,
+        setting_name: str,
+        allow_same_canonical: bool = False,
+    ) -> str | None:
         canonical_model = resolve_allowed_model(raw_model, _ALLOWED_JUDGE_MODELS)
         if not canonical_model:
             logger.warning("Ignoring unsupported prompt judge %s '%s'", setting_name, raw_model)
-            return
-        if canonical_model in canonical_seen:
-            return
+            return None
+        normalized_raw = raw_model.strip()
+        if normalized_raw in raw_seen:
+            return canonical_model
+        if canonical_model in canonical_seen and not allow_same_canonical:
+            return canonical_model
         models.append(raw_model)
+        raw_seen.add(normalized_raw)
         canonical_seen.add(canonical_model)
+        return canonical_model
 
     for candidate in primary.split(","):
         raw_model = candidate.strip()
@@ -207,18 +221,84 @@ def _resolve_judge_models(settings: Any) -> list[str]:
         _append_if_supported(raw_model, setting_name="model")
 
     if not models:
-        default_model = str(getattr(settings, "openai_model", "") or "").strip() or "gpt-4o"
         default_canonical = resolve_allowed_model(default_model, _ALLOWED_JUDGE_MODELS)
         if default_canonical:
             models = [default_model]
+            raw_seen.add(default_model)
             canonical_seen.add(default_canonical)
         else:
             models = ["gpt-4o"]
+            raw_seen.add("gpt-4o")
             canonical_seen.add("gpt-4o")
+    elif configured_openai_model:
+        default_canonical = resolve_allowed_model(configured_openai_model, _ALLOWED_JUDGE_MODELS)
+        if default_canonical and default_canonical in canonical_seen:
+            _append_if_supported(
+                configured_openai_model,
+                setting_name="provider default model",
+                allow_same_canonical=True,
+            )
 
     if fallback:
         _append_if_supported(fallback, setting_name="fallback model")
     return models
+
+
+def _extract_judge_response_text(response: Any) -> str:
+    if isinstance(response, str):
+        text = response.strip()
+        if text.startswith("data:"):
+            streamed = _extract_text_from_event_stream(text)
+            if streamed:
+                return streamed
+        return response
+
+    if isinstance(response, dict):
+        choices = response.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise RuntimeError("Prompt judge returned malformed payload (missing choices).")
+        message = choices[0].get("message") or {}
+        return str(message.get("content") or "")
+
+    choices = getattr(response, "choices", None)
+    if not choices:
+        raise RuntimeError("Prompt judge returned malformed payload (missing choices).")
+
+    message = getattr(choices[0], "message", None)
+    if isinstance(message, dict):
+        return str(message.get("content") or "")
+    return str(getattr(message, "content", "") or "")
+
+
+def _extract_text_from_event_stream(raw: str) -> str:
+    chunks: list[str] = []
+
+    for block in raw.split("\n\n"):
+        line = block.strip()
+        if not line.startswith("data:"):
+            continue
+        payload = line[5:].strip()
+        if not payload or payload == "[DONE]":
+            continue
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+
+        choices = data.get("choices")
+        if not isinstance(choices, list) or not choices:
+            continue
+        choice = choices[0] or {}
+        message = choice.get("message") or {}
+        if isinstance(message, dict) and message.get("content"):
+            return str(message.get("content"))
+        delta = choice.get("delta") or {}
+        if isinstance(delta, dict):
+            piece = delta.get("content")
+            if piece:
+                chunks.append(str(piece))
+
+    return "".join(chunks)
 
 
 def _heuristic_score(prompts: list[dict[str, str]]) -> dict[str, Any]:

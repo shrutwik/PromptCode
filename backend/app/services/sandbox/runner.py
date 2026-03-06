@@ -17,6 +17,7 @@ import tempfile
 import uuid
 from pathlib import Path
 from pathlib import PurePosixPath
+import re
 from typing import Any
 
 import docker
@@ -104,29 +105,37 @@ def run_in_sandbox(
 
         try:
             llm_budget = _build_sandbox_llm_budget(challenge_config)
+            network_mode = _sandbox_network_mode()
             with SandboxLLMRelay(
                 api_key=settings.openai_api_key,
                 base_url=settings.openai_base_url,
-                host_alias=_sandbox_host_alias(),
+                host_alias=_sandbox_host_alias(network_mode),
                 budget=llm_budget,
+                default_model=settings.openai_model,
             ) as relay:
-                container = client.containers.run(
-                    image=settings.sandbox_image,
-                    command=["python", f"/workspace/{entrypoint}"],
-                    volumes={
+                run_kwargs: dict[str, Any] = {
+                    "image": settings.sandbox_image,
+                    "command": ["python", f"/workspace/{entrypoint}"],
+                    "volumes": {
                         str(code_dir): {"bind": "/workspace", "mode": "ro"},
                         str(telemetry_dir): {"bind": "/tmp/promptcode_telemetry", "mode": "rw"},
                     },
-                    environment=_build_container_environment(relay=relay, budget=llm_budget),
-                    mem_limit=settings.sandbox_memory_limit,
-                    nano_cpus=int(settings.sandbox_cpu_limit * 1e9),
-                    network_disabled=False,
-                    detach=True,
-                    stdout=True,
-                    stderr=True,
-                    remove=False,
-                    extra_hosts=_build_extra_hosts(),
-                )
+                    "environment": _build_container_environment(relay=relay, budget=llm_budget),
+                    "mem_limit": settings.sandbox_memory_limit,
+                    "nano_cpus": int(settings.sandbox_cpu_limit * 1e9),
+                    "network_disabled": False,
+                    "detach": True,
+                    "stdout": True,
+                    "stderr": True,
+                    "remove": False,
+                }
+                extra_hosts = _build_extra_hosts(network_mode)
+                if extra_hosts:
+                    run_kwargs["extra_hosts"] = extra_hosts
+                if network_mode:
+                    run_kwargs["network_mode"] = network_mode
+
+                container = client.containers.run(**run_kwargs)
                 wait_result = container.wait(timeout=settings.sandbox_timeout_seconds)
                 exit_code = int(wait_result.get("StatusCode", 1))
                 logs = container.logs(stdout=True, stderr=True)
@@ -251,11 +260,38 @@ def _sandbox_temp_root() -> Path | None:
     return root
 
 
-def _build_extra_hosts() -> dict[str, str] | None:
+def _build_extra_hosts(network_mode: str | None = None) -> dict[str, str] | None:
+    if network_mode and network_mode.startswith("container:"):
+        return None
     if sys.platform.startswith("linux"):
         return {"host.docker.internal": "host-gateway"}
     return None
 
 
-def _sandbox_host_alias() -> str:
+def _sandbox_host_alias(network_mode: str | None = None) -> str:
+    if network_mode and network_mode.startswith("container:"):
+        return "127.0.0.1"
     return "host.docker.internal"
+
+
+def _sandbox_network_mode() -> str | None:
+    raw = str(os.environ.get("PROMPTCODE_SANDBOX_NETWORK_MODE") or "").strip().lower()
+    if not raw:
+        return None
+    if raw == "container":
+        container_id = _current_container_id()
+        if container_id:
+            return f"container:{container_id}"
+        logger.warning("PROMPTCODE_SANDBOX_NETWORK_MODE=container but HOSTNAME is not a container id")
+        return None
+    if raw in {"host", "bridge", "none"} or raw.startswith("container:"):
+        return raw
+    logger.warning("Ignoring unsupported PROMPTCODE_SANDBOX_NETWORK_MODE=%s", raw)
+    return None
+
+
+def _current_container_id() -> str | None:
+    raw = str(os.environ.get("HOSTNAME") or "").strip()
+    if re.fullmatch(r"[0-9a-f]{12,64}", raw):
+        return raw
+    return None

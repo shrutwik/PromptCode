@@ -6,6 +6,8 @@ import json
 import logging
 from typing import Any
 
+from app.core.config import get_settings
+from app.core.model_policy import OPENAI_CHAT_MODELS, resolve_allowed_model
 from app.services.evaluation.constants import SCORE_WEIGHTS
 from app.services.evaluation.helpers import (
     _detect_metric_gaming,
@@ -29,6 +31,12 @@ from app.services.evaluation.scorer import (
 from app.services.sandbox.runner import run_in_sandbox
 
 logger = logging.getLogger(__name__)
+
+
+def _default_counterfactual_model() -> str:
+    raw_model = str(get_settings().openai_model or "").strip()
+    canonical_model = resolve_allowed_model(raw_model, OPENAI_CHAT_MODELS)
+    return canonical_model or "gpt-4o"
 
 
 def _evaluate_counterfactual_baseline_sync(
@@ -286,7 +294,7 @@ def _build_counterfactual_baseline_code(
     strategy_prompt: str = "",
 ) -> str:
     template = _counterfactual_template_for_challenge(challenge_config)
-    model_name = str(challenge_config.get("counterfactual_model", "gpt-4o-mini"))
+    model_name = str(challenge_config.get("counterfactual_model") or _default_counterfactual_model())
     max_tokens = int(challenge_config.get("counterfactual_max_tokens", 1400))
     max_retries = max(1, min(3, int(challenge_config.get("counterfactual_retries", 2) or 2)))
     rules_preview = json.dumps(
