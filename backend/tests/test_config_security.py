@@ -39,3 +39,15 @@ def test_settings_allow_non_default_secret_in_production():
     )
 
     assert settings.jwt_secret == "prod-secret-with-real-entropy"
+
+
+def test_settings_reject_worker_timeout_shorter_than_interval():
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            debug=True,
+            jwt_secret="local-dev-secret-change-in-production",
+            worker_heartbeat_interval_seconds=10,
+            worker_heartbeat_timeout_seconds=5,
+        )
+
+    assert "WORKER_HEARTBEAT_TIMEOUT_SECONDS" in str(exc_info.value)

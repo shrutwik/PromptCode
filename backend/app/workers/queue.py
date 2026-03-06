@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
+from dataclasses import dataclass
 import logging
+import socket
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -12,9 +15,19 @@ from app.core.config import get_settings
 from app.db.session import async_session_factory
 from app.models.evaluation_job import EvaluationJob
 from app.models.submission import Submission
+from app.models.worker_heartbeat import WorkerHeartbeat
 from app.workers.evaluate import run_evaluation_pipeline
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _WorkerState:
+    worker_id: str
+    hostname: str
+    status: str = "idle"
+    current_job_id: str | None = None
+    last_error: str | None = None
 
 
 async def enqueue_evaluation_job(
@@ -51,24 +64,53 @@ async def process_job(job_id: str) -> None:
 
 async def worker_loop(*, poll_interval_seconds: float = 1.0) -> None:
     """Queue worker loop for persistent processing outside request lifecycle."""
-    logger.info("Evaluation queue worker started")
-    while True:
-        try:
-            processed = await _process_one_available_job()
-            if not processed:
+    worker_state = _WorkerState(
+        worker_id=_worker_identity(),
+        hostname=socket.gethostname(),
+    )
+    heartbeat_task = asyncio.create_task(_heartbeat_loop(worker_state))
+    logger.info("Evaluation queue worker started", extra={"worker_id": worker_state.worker_id})
+    try:
+        while True:
+            try:
+                worker_state.last_error = None
+                processed = await _process_one_available_job(worker_state=worker_state)
+                if not processed:
+                    await asyncio.sleep(poll_interval_seconds)
+            except Exception as exc:  # pragma: no cover
+                worker_state.status = "error"
+                worker_state.current_job_id = None
+                worker_state.last_error = str(exc)[:1500]
+                logger.exception("Queue worker iteration failed")
                 await asyncio.sleep(poll_interval_seconds)
-        except Exception:  # pragma: no cover
-            logger.exception("Queue worker iteration failed")
-            await asyncio.sleep(poll_interval_seconds)
+    finally:
+        heartbeat_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await heartbeat_task
 
 
-async def _process_one_available_job() -> bool:
+async def _process_one_available_job(
+    *,
+    worker_state: _WorkerState | None = None,
+) -> bool:
     async with async_session_factory() as db:
         await _recover_stuck_jobs(db)
         job = await _claim_next_job(db)
         if not job:
+            if worker_state is not None:
+                worker_state.status = "idle"
+                worker_state.current_job_id = None
             return False
-        await _run_job(db, job)
+        if worker_state is not None:
+            worker_state.status = "running"
+            worker_state.current_job_id = str(job.id)
+            worker_state.last_error = None
+        try:
+            await _run_job(db, job)
+        finally:
+            if worker_state is not None:
+                worker_state.status = "idle"
+                worker_state.current_job_id = None
         return True
 
 
@@ -122,6 +164,21 @@ async def _claim_job_by_id(db: AsyncSession, job_id: uuid.UUID) -> EvaluationJob
 def _evaluation_job_timeout_seconds() -> float:
     configured = float(get_settings().evaluation_job_timeout_seconds or 0)
     return max(60.0, configured)
+
+
+def _worker_identity() -> str:
+    configured = str(get_settings().worker_id or "").strip()
+    return configured or socket.gethostname()
+
+
+def _worker_heartbeat_interval_seconds() -> float:
+    configured = float(get_settings().worker_heartbeat_interval_seconds or 0)
+    return max(1.0, configured)
+
+
+def _worker_heartbeat_timeout_seconds() -> float:
+    configured = float(get_settings().worker_heartbeat_timeout_seconds or 0)
+    return max(_worker_heartbeat_interval_seconds(), configured)
 
 
 def _stuck_job_recovery_seconds() -> float:
@@ -206,6 +263,40 @@ async def _recover_stuck_jobs(
 
     await db.commit()
     return recovered
+
+
+async def _heartbeat_loop(worker_state: _WorkerState) -> None:
+    interval_seconds = _worker_heartbeat_interval_seconds()
+    while True:
+        try:
+            await _write_worker_heartbeat(worker_state)
+        except Exception:  # pragma: no cover
+            logger.exception("Failed to update worker heartbeat for %s", worker_state.worker_id)
+        await asyncio.sleep(interval_seconds)
+
+
+async def _write_worker_heartbeat(worker_state: _WorkerState) -> None:
+    now = datetime.now(timezone.utc)
+    async with async_session_factory() as db:
+        heartbeat = await db.get(WorkerHeartbeat, worker_state.worker_id)
+        if heartbeat is None:
+            heartbeat = WorkerHeartbeat(
+                worker_id=worker_state.worker_id,
+                hostname=worker_state.hostname,
+                status=worker_state.status,
+                current_job_id=worker_state.current_job_id,
+                last_error=(worker_state.last_error or "")[:1500] or None,
+                started_at=now,
+                last_seen_at=now,
+            )
+            db.add(heartbeat)
+        else:
+            heartbeat.hostname = worker_state.hostname
+            heartbeat.status = worker_state.status
+            heartbeat.current_job_id = worker_state.current_job_id
+            heartbeat.last_error = (worker_state.last_error or "")[:1500] or None
+            heartbeat.last_seen_at = now
+        await db.commit()
 
 
 async def _run_job(db: AsyncSession, job: EvaluationJob) -> None:

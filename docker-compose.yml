@@ -22,7 +22,10 @@ x-backend-env: &backend-env
     PROMPTCODE_SANDBOX_CPU_LIMIT: ${PROMPTCODE_SANDBOX_CPU_LIMIT:-1.0}
     PROMPTCODE_EVALUATION_NORMAL_RUNS: ${PROMPTCODE_EVALUATION_NORMAL_RUNS:-5}
     PROMPTCODE_EVALUATION_ADVERSARIAL_RUNS: ${PROMPTCODE_EVALUATION_ADVERSARIAL_RUNS:-2}
+    PROMPTCODE_EVALUATION_JOB_TIMEOUT_SECONDS: ${PROMPTCODE_EVALUATION_JOB_TIMEOUT_SECONDS:-1800}
     PROMPTCODE_SUBMISSION_INLINE_QUEUE_PROCESSING: ${PROMPTCODE_SUBMISSION_INLINE_QUEUE_PROCESSING:-false}
+    PROMPTCODE_WORKER_HEARTBEAT_INTERVAL_SECONDS: ${PROMPTCODE_WORKER_HEARTBEAT_INTERVAL_SECONDS:-5}
+    PROMPTCODE_WORKER_HEARTBEAT_TIMEOUT_SECONDS: ${PROMPTCODE_WORKER_HEARTBEAT_TIMEOUT_SECONDS:-30}
 
 services:
   db:
@@ -56,11 +59,24 @@ services:
     ports:
       - "8000:8000"
     <<: *backend-env
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
       sandbox:
         condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${PROMPTCODE_SANDBOX_HOST_WORKDIR:-/tmp/promptcode_sandbox_work}:${PROMPTCODE_SANDBOX_HOST_WORKDIR:-/tmp/promptcode_sandbox_work}
@@ -69,13 +85,20 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.backend
-    command: ["python", "-m", "scripts.run_queue_worker"]
+    command: ["python", "-m", "scripts.run_with_migrations", "python", "-m", "scripts.run_queue_worker"]
     <<: *backend-env
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
       sandbox:
         condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-m", "scripts.check_worker_health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${PROMPTCODE_SANDBOX_HOST_WORKDIR:-/tmp/promptcode_sandbox_work}:${PROMPTCODE_SANDBOX_HOST_WORKDIR:-/tmp/promptcode_sandbox_work}

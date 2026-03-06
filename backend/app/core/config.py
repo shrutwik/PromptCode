@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     evaluation_adversarial_runs: int = 2
     evaluation_job_timeout_seconds: int = 1800
     submission_inline_queue_processing: bool = True
+    worker_id: str = ""
+    worker_heartbeat_interval_seconds: int = 5
+    worker_heartbeat_timeout_seconds: int = 30
 
     jwt_secret: str = ""
 
@@ -66,6 +69,13 @@ class Settings(BaseSettings):
         if not self.debug and secret in _INSECURE_JWT_SECRETS:
             raise ValueError(
                 "PROMPTCODE_JWT_SECRET must be changed from the development default when PROMPTCODE_DEBUG is false."
+            )
+        self.worker_id = str(self.worker_id or "").strip()
+        if self.worker_heartbeat_interval_seconds < 1:
+            raise ValueError("PROMPTCODE_WORKER_HEARTBEAT_INTERVAL_SECONDS must be at least 1.")
+        if self.worker_heartbeat_timeout_seconds < self.worker_heartbeat_interval_seconds:
+            raise ValueError(
+                "PROMPTCODE_WORKER_HEARTBEAT_TIMEOUT_SECONDS must be greater than or equal to PROMPTCODE_WORKER_HEARTBEAT_INTERVAL_SECONDS."
             )
         return self
 

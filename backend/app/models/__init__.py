@@ -4,5 +4,14 @@ from app.models.leaderboard import LeaderboardEntry
 from app.models.run import Run
 from app.models.submission import Submission
 from app.models.user import User
+from app.models.worker_heartbeat import WorkerHeartbeat
 
-__all__ = ["Challenge", "EvaluationJob", "LeaderboardEntry", "Run", "Submission", "User"]
+__all__ = [
+    "Challenge",
+    "EvaluationJob",
+    "LeaderboardEntry",
+    "Run",
+    "Submission",
+    "User",
+    "WorkerHeartbeat",
+]

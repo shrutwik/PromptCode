@@ -11,6 +11,7 @@ from app.db.base import Base
 import app.models  # noqa: F401
 from app.models.evaluation_job import EvaluationJob
 from app.models.submission import Submission
+from app.models.worker_heartbeat import WorkerHeartbeat
 from app.workers import queue
 
 
@@ -229,6 +230,46 @@ def test_run_job_times_out_and_retries(monkeypatch: pytest.MonkeyPatch):
             assert saved_job.available_at is not None
             assert saved_job.last_error is not None
             assert "Evaluation timed out after" in saved_job.last_error
+
+        await engine.dispose()
+
+    asyncio.run(_run())
+
+
+def test_write_worker_heartbeat_inserts_and_updates(monkeypatch: pytest.MonkeyPatch):
+    async def _run():
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+        monkeypatch.setattr(queue, "async_session_factory", session_factory)
+
+        worker_state = queue._WorkerState(
+            worker_id="worker-a",
+            hostname="host-a",
+            status="idle",
+        )
+        await queue._write_worker_heartbeat(worker_state)
+
+        async with session_factory() as db:
+            heartbeat = await db.get(WorkerHeartbeat, "worker-a")
+            assert heartbeat is not None
+            assert heartbeat.hostname == "host-a"
+            assert heartbeat.status == "idle"
+            assert heartbeat.current_job_id is None
+
+        worker_state.status = "running"
+        worker_state.current_job_id = str(uuid.uuid4())
+        worker_state.last_error = "still healthy"
+        await queue._write_worker_heartbeat(worker_state)
+
+        async with session_factory() as db:
+            heartbeat = await db.get(WorkerHeartbeat, "worker-a")
+            assert heartbeat is not None
+            assert heartbeat.status == "running"
+            assert heartbeat.current_job_id == worker_state.current_job_id
+            assert heartbeat.last_error == "still healthy"
 
         await engine.dispose()
 

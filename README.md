@@ -61,11 +61,13 @@ It sets `PROMPTCODE_SANDBOX_NETWORK_MODE=container` so each nested sandbox share
 
 The compose stack now includes a `worker` service for resilient async scoring.
 It disables in-process submission evaluation in the web container, so queued jobs are handled only by the worker service.
+Both the backend and worker containers now run `alembic upgrade head` before starting their main process.
+The backend readiness check requires a fresh worker heartbeat when inline queue processing is disabled, and the worker publishes a matching healthcheck.
 If you run the backend outside compose, start the queue worker in a second shell:
 
 ```bash
 cd backend
-python -m scripts.run_queue_worker
+python -m scripts.run_with_migrations python -m scripts.run_queue_worker
 ```
 
 ### 3. Seed the first challenge
@@ -78,7 +80,16 @@ docker compose exec backend python -m scripts.seed_challenge
 
 ```bash
 curl http://localhost:8000/health
+curl http://localhost:8000/ready
 curl http://localhost:8000/api/challenges/
+```
+
+`/health` is a liveness check. `/ready` verifies database connectivity and, when inline queue processing is disabled, also requires a fresh worker heartbeat.
+For a live end-to-end deployment smoke, run:
+
+```bash
+cd backend
+python -m scripts.run_deploy_smoke --base-url http://127.0.0.1:8000
 ```
 
 ## Using Supabase as the database
@@ -124,10 +135,10 @@ No need to run PostgreSQL in Docker; start only the FastAPI app:
 
 ```bash
 cd backend
-uvicorn app.main:app --reload --port 8000
+python -m scripts.run_with_migrations uvicorn app.main:app --reload --port 8000
 ```
 
-The app will create tables on first startup if they don’t exist (`Base.metadata.create_all`). For a clean schema, prefer `alembic upgrade head` after pointing to a new Supabase database.
+The startup wrapper runs `alembic upgrade head` before launching the app. The FastAPI lifespan still keeps a best-effort `Base.metadata.create_all()` fallback for local resilience, but deploys should rely on Alembic as the schema authority.
 
 ## API Endpoints
 
