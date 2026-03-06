@@ -92,6 +92,7 @@ class SubmissionReport(BaseModel):
     scorecard: dict[str, float] = {}
     evaluation_config: dict[str, Any] = {}
     evaluation_manifest: dict[str, Any] = {}
+    ai_leverage: dict[str, Any] = {}
     confidence_intervals: dict[str, Any] = {}
     growth: dict[str, Any] = {}
     coaching: dict[str, Any] = {}

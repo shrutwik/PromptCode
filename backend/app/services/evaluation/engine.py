@@ -14,10 +14,13 @@ from app.services.evaluation.code_analysis import analyze_code, score_code_quali
 from app.services.evaluation.perturbation import perturb_adversarial, perturb_normal
 from app.services.evaluation.prompt_quality import score_prompt_quality
 from app.services.evaluation.scorer import (
+    score_ai_mastery,
     score_accuracy,
     score_calibration,
     score_efficiency_tradeoff,
+    score_frontier_navigation,
     score_orchestration,
+    score_reliance_calibration,
     score_reliability,
 )
 from app.services.sandbox.runner import SandboxResult, run_in_sandbox
@@ -63,6 +66,7 @@ class EvaluationResult:
         calibration_details: dict[str, Any],
         diagnostics: list[dict[str, str]],
         evaluation_config: dict[str, Any],
+        ai_leverage: dict[str, Any] | None = None,
         confidence_intervals: dict[str, Any] | None = None,
         audit_trail: list[dict[str, Any]] | None = None,
         evaluation_manifest: dict[str, Any] | None = None,
@@ -90,6 +94,7 @@ class EvaluationResult:
         self.calibration_details = calibration_details
         self.diagnostics = diagnostics
         self.evaluation_config = evaluation_config
+        self.ai_leverage = ai_leverage or {}
         self.confidence_intervals = confidence_intervals or {}
         self.audit_trail = audit_trail or []
         self.evaluation_manifest = evaluation_manifest or {}
@@ -126,6 +131,7 @@ class EvaluationResult:
             "diagnostics": self.diagnostics,
             "feedback": self.diagnostics[0]["message"] if self.diagnostics else "",
             "evaluation_config": self.evaluation_config,
+            "ai_leverage": self.ai_leverage,
             "confidence_intervals": self.confidence_intervals,
             "audit_trail": self.audit_trail,
             "evaluation_manifest": self.evaluation_manifest,
@@ -137,6 +143,7 @@ class EvaluationResult:
                 "prompt_design": self.prompt_quality,
                 "orchestration": self.orchestration,
                 "calibration": self.calibration,
+                "ai_mastery": float(self.ai_leverage.get("ai_mastery_score", 0.0)),
             },
         }
         if self.hardcoded:
@@ -335,18 +342,19 @@ def evaluate_submission(
 
     quality_anchor = (acc * 0.5) + (robustness * 0.3) + (rel * 0.2)
     run_count = max(1, len(run_records))
+    budgets = {
+        "token_budget": challenge_config.get("token_budget", 12_000),
+        "cost_budget_usd": challenge_config.get("cost_budget_usd", 0.20),
+        "latency_budget_ms": challenge_config.get("latency_budget_ms", 30_000),
+        "call_budget": challenge_config.get("call_budget", challenge_config.get("expected_calls", 3) * run_count),
+    }
     eff = score_efficiency_tradeoff(
         total_tokens=total_prompt_tokens + total_completion_tokens,
         total_cost_usd=total_cost,
         total_latency_ms=total_latency,
         total_calls=total_calls,
         quality_anchor=quality_anchor,
-        budgets={
-            "token_budget": challenge_config.get("token_budget", 12_000),
-            "cost_budget_usd": challenge_config.get("cost_budget_usd", 0.20),
-            "latency_budget_ms": challenge_config.get("latency_budget_ms", 30_000),
-            "call_budget": challenge_config.get("call_budget", challenge_config.get("expected_calls", 3) * run_count),
-        },
+        budgets=budgets,
     )
 
     calibration_points = _extract_confidence_points(run_records)
@@ -387,6 +395,44 @@ def evaluate_submission(
             }
         )
 
+    quality_anchor_final = (acc * 0.5) + (robustness * 0.3) + (rel * 0.2)
+    frontier_result = score_frontier_navigation(
+        total_tokens=total_prompt_tokens + total_completion_tokens,
+        total_cost_usd=total_cost,
+        total_latency_ms=total_latency,
+        total_calls=total_calls,
+        quality_anchor=quality_anchor_final,
+        budgets=budgets,
+    )
+    reliance_result = score_reliance_calibration(
+        calibration_score=calibration,
+        runs=run_records,
+        expected_calls=int(challenge_config.get("expected_calls", 3)),
+        code_analysis=code_quality_result,
+        anti_gaming_triggered=metric_gaming["triggered"],
+    )
+    ai_mastery_result = score_ai_mastery(
+        frontier_navigation_score=float(frontier_result.get("score", 0.0)),
+        reliance_calibration_score=float(reliance_result.get("score", 0.0)),
+        prompt_quality_score=pq,
+    )
+    if hardcoded:
+        frontier_result["score"] = 0.0
+        reliance_result["score"] = 0.0
+        ai_mastery_result["score"] = 0.0
+    ai_leverage = {
+        "frontier_navigation_score": round(float(frontier_result.get("score", 0.0)), 4),
+        "reliance_calibration_score": round(float(reliance_result.get("score", 0.0)), 4),
+        "learning_velocity_score": None,
+        "ai_mastery_score": round(float(ai_mastery_result.get("score", 0.0)), 4),
+        "signals": {
+            "frontier": frontier_result,
+            "reliance": reliance_result,
+            "composite": ai_mastery_result,
+        },
+        "method": "research_proxy_v1",
+    }
+
     raw_overall = round(
         acc * SCORE_WEIGHTS["accuracy"]
         + robustness * SCORE_WEIGHTS["robustness"]
@@ -422,6 +468,8 @@ def evaluate_submission(
         calibration=calibration,
         code_quality=cq,
         rule_adherence=rule_adherence,
+        frontier_navigation=float(ai_leverage["frontier_navigation_score"]),
+        reliance_calibration=float(ai_leverage["reliance_calibration_score"]),
         metric_gaming=1.0 if metric_gaming["triggered"] else 0.0,
     )
     if prompt_judge_fallback:
@@ -480,6 +528,9 @@ def evaluate_submission(
             "orchestration": orch,
             "calibration": calibration,
             "rule_adherence": rule_adherence,
+            "frontier_navigation": float(ai_leverage["frontier_navigation_score"]),
+            "reliance_calibration": float(ai_leverage["reliance_calibration_score"]),
+            "ai_mastery": float(ai_leverage["ai_mastery_score"]),
             "overall": overall,
             "raw_overall": raw_overall,
         },
@@ -514,6 +565,7 @@ def evaluate_submission(
             "hidden_set_count": len(hidden_cases),
             "scoring_weights": SCORE_WEIGHTS,
         },
+        ai_leverage=ai_leverage,
         confidence_intervals=confidence_intervals,
         audit_trail=audit_trail,
         evaluation_manifest=evaluation_manifest,
@@ -579,6 +631,18 @@ def _build_diagnostics(**scores: float) -> list[dict[str, str]]:
             "metric": "calibration",
             "severity": "low",
             "message": "Confidence signals are missing or miscalibrated. Emit confidence per output and calibrate thresholds.",
+        })
+    if scores.get("frontier_navigation", 1.0) < 0.65:
+        tips.append({
+            "metric": "frontier_navigation",
+            "severity": "high",
+            "message": "Quality is not matching resource spend. Improve prompt precision and reduce redundant context/calls.",
+        })
+    if scores.get("reliance_calibration", 1.0) < 0.65:
+        tips.append({
+            "metric": "reliance_calibration",
+            "severity": "high",
+            "message": "AI reliance is weakly calibrated. Add stronger output validation and bounded retry/fallback logic.",
         })
     if not tips:
         tips.append({

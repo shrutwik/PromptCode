@@ -446,3 +446,151 @@ def score_calibration(confidence_points: list[tuple[float, float]]) -> dict[str,
         "samples": n,
         "method": "ece_brier",
     }
+
+
+# ---------------------------------------------------------------------------
+# AI leverage metrics
+# ---------------------------------------------------------------------------
+
+def score_frontier_navigation(
+    *,
+    total_tokens: int,
+    total_cost_usd: float,
+    total_latency_ms: float,
+    total_calls: int,
+    quality_anchor: float,
+    budgets: dict[str, float],
+) -> dict[str, Any]:
+    """Score how well the candidate balances quality vs resource frontier.
+
+    High-quality outputs with disciplined resource usage should score highest.
+    """
+    token_budget = max(1.0, float(budgets.get("token_budget", 12_000)))
+    cost_budget = max(0.0001, float(budgets.get("cost_budget_usd", 0.20)))
+    latency_budget = max(1.0, float(budgets.get("latency_budget_ms", 30_000)))
+    call_budget = max(1.0, float(budgets.get("call_budget", 20)))
+
+    token_ratio = total_tokens / token_budget
+    cost_ratio = total_cost_usd / cost_budget
+    latency_ratio = total_latency_ms / latency_budget
+    call_ratio = total_calls / call_budget
+
+    weighted_usage = (
+        token_ratio * 0.35
+        + cost_ratio * 0.35
+        + latency_ratio * 0.20
+        + call_ratio * 0.10
+    )
+
+    q = _clamp01(quality_anchor)
+    # Better quality can justify more usage, but only to a point.
+    expected_usage = max(0.45, 1.10 - (0.70 * q))
+    frontier_gap = max(0.0, weighted_usage - expected_usage)
+    proximity = _clamp01(1.0 - (frontier_gap / 1.25))
+
+    # Guardrail: low-quality answers should not appear frontier-optimal.
+    if q < 0.45:
+        proximity *= q / 0.45
+
+    score = _clamp01((0.65 * proximity) + (0.35 * q))
+    return {
+        "score": round(score, 4),
+        "quality_anchor": round(q, 4),
+        "weighted_usage": round(weighted_usage, 4),
+        "expected_usage": round(expected_usage, 4),
+        "frontier_gap": round(frontier_gap, 4),
+        "proximity": round(proximity, 4),
+        "method": "quality_usage_frontier_v1",
+    }
+
+
+def score_reliance_calibration(
+    *,
+    calibration_score: float,
+    runs: list[dict[str, Any]],
+    expected_calls: int,
+    code_analysis: dict[str, Any] | None = None,
+    anti_gaming_triggered: bool = False,
+) -> dict[str, Any]:
+    """Score whether the candidate uses AI with appropriate verification discipline."""
+    if not runs:
+        return {
+            "score": 0.0,
+            "verification_coverage": 0.0,
+            "schema_valid_rate": 0.0,
+            "pass_rate": 0.0,
+            "calls_per_run": 0.0,
+            "over_reliance_penalty": 0.0,
+            "method": "reliance_calibration_v1",
+        }
+
+    run_count = len(runs)
+    schema_valid_rate = sum(1 for r in runs if r.get("schema_valid")) / run_count
+    pass_rate = sum(1 for r in runs if r.get("status") == "pass") / run_count
+    calls_per_run = sum(float(r.get("llm_calls", 0) or 0) for r in runs) / run_count
+
+    analysis = (code_analysis or {}).get("analysis", {})
+    has_validation = bool(analysis.get("has_json_validation", False))
+    has_recovery = bool(
+        analysis.get("has_try_except", False)
+        or analysis.get("has_llm_error_handling", False)
+    )
+    verification_coverage = (float(has_validation) + float(has_recovery)) / 2.0
+
+    operational_quality = (schema_valid_rate * 0.5) + (pass_rate * 0.5)
+    call_pressure = calls_per_run / max(1.0, float(expected_calls))
+
+    over_reliance_penalty = 0.0
+    if operational_quality < 0.75 and call_pressure > 1.40:
+        over_reliance_penalty = min(0.25, (call_pressure - 1.40) * 0.18)
+    if anti_gaming_triggered:
+        over_reliance_penalty = min(0.35, over_reliance_penalty + 0.15)
+
+    score = (
+        _clamp01(calibration_score) * 0.35
+        + operational_quality * 0.35
+        + verification_coverage * 0.30
+        - over_reliance_penalty
+    )
+    score = _clamp01(score)
+
+    return {
+        "score": round(score, 4),
+        "verification_coverage": round(verification_coverage, 4),
+        "schema_valid_rate": round(schema_valid_rate, 4),
+        "pass_rate": round(pass_rate, 4),
+        "calls_per_run": round(calls_per_run, 4),
+        "over_reliance_penalty": round(over_reliance_penalty, 4),
+        "method": "reliance_calibration_v1",
+    }
+
+
+def score_ai_mastery(
+    *,
+    frontier_navigation_score: float,
+    reliance_calibration_score: float,
+    prompt_quality_score: float,
+    learning_velocity_score: float | None = None,
+) -> dict[str, Any]:
+    """Composite score for AI leverage quality with transparent components."""
+    learning_velocity = 0.5 if learning_velocity_score is None else _clamp01(learning_velocity_score)
+    score = (
+        _clamp01(frontier_navigation_score) * 0.35
+        + _clamp01(reliance_calibration_score) * 0.30
+        + _clamp01(prompt_quality_score) * 0.20
+        + learning_velocity * 0.15
+    )
+    return {
+        "score": round(_clamp01(score), 4),
+        "components": {
+            "frontier_navigation": round(_clamp01(frontier_navigation_score), 4),
+            "reliance_calibration": round(_clamp01(reliance_calibration_score), 4),
+            "prompt_quality": round(_clamp01(prompt_quality_score), 4),
+            "learning_velocity": round(learning_velocity, 4),
+        },
+        "method": "ai_mastery_v1",
+    }
+
+
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))

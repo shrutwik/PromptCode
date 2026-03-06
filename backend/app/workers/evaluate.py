@@ -18,6 +18,7 @@ from app.models.leaderboard import LeaderboardEntry
 from app.models.run import Run
 from app.models.submission import Submission
 from app.services.evaluation.engine import evaluate_submission
+from app.services.evaluation.scorer import score_ai_mastery
 
 logger = logging.getLogger(__name__)
 MIN_LEADERBOARD_TESTS = 6
@@ -79,18 +80,26 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
         current=submission,
         growth=growth,
     )
+    ai_leverage = _enrich_ai_leverage(
+        ai_leverage=report.get("ai_leverage", {}),
+        growth=growth,
+        iteration_diff=iteration_diff,
+        prompt_quality=float(result.prompt_quality),
+    )
     coaching_actions = _build_coaching_actions(
         result=result,
         growth=growth,
         runs=result.runs,
         diagnostics=result.diagnostics,
         iteration_diff=iteration_diff,
+        ai_leverage=ai_leverage,
     )
     report["growth"] = growth
     report["coaching"] = coaching
     report["iteration_diff"] = iteration_diff
     report["coaching_actions"] = coaching_actions
     report["mastery_state"] = mastery_state
+    report["ai_leverage"] = ai_leverage
 
     submission.status = "completed"
     submission.report = report
@@ -470,6 +479,84 @@ def _build_iteration_diff(
     }
 
 
+def _enrich_ai_leverage(
+    *,
+    ai_leverage: dict[str, Any],
+    growth: dict[str, Any],
+    iteration_diff: dict[str, Any],
+    prompt_quality: float,
+) -> dict[str, Any]:
+    base = dict(ai_leverage or {})
+    learning = _compute_learning_velocity_score(
+        delta_overall=growth.get("delta_overall"),
+        delta_accuracy=growth.get("delta_accuracy"),
+        delta_robustness=growth.get("delta_robustness"),
+        delta_efficiency=growth.get("delta_efficiency"),
+        changed_ratio=((iteration_diff.get("code_changes") or {}).get("changed_ratio")),
+    )
+    frontier = float(base.get("frontier_navigation_score") or 0.0)
+    reliance = float(base.get("reliance_calibration_score") or 0.0)
+    mastery = score_ai_mastery(
+        frontier_navigation_score=frontier,
+        reliance_calibration_score=reliance,
+        prompt_quality_score=prompt_quality,
+        learning_velocity_score=float(learning.get("score", 0.5)),
+    )
+    signals = dict(base.get("signals") or {})
+    signals["learning_velocity"] = learning
+    signals["composite"] = mastery
+    base.update({
+        "learning_velocity_score": round(float(learning.get("score", 0.5)), 4),
+        "ai_mastery_score": round(float(mastery.get("score", 0.0)), 4),
+        "signals": signals,
+        "method": "research_proxy_v1",
+    })
+    return base
+
+
+def _compute_learning_velocity_score(
+    *,
+    delta_overall: float | None,
+    delta_accuracy: float | None,
+    delta_robustness: float | None,
+    delta_efficiency: float | None,
+    changed_ratio: float | None,
+) -> dict[str, Any]:
+    if delta_overall is None:
+        return {
+            "score": 0.5,
+            "progress": 0.5,
+            "skill_gain": 0.5,
+            "change_efficiency": 0.5,
+            "method": "learning_velocity_v1",
+        }
+
+    progress = _clamp01((float(delta_overall) + 0.08) / 0.16)
+
+    dim_norms: list[float] = []
+    for delta in (delta_accuracy, delta_robustness, delta_efficiency):
+        if delta is None:
+            continue
+        dim_norms.append(_clamp01((float(delta) + 0.06) / 0.12))
+    skill_gain = sum(dim_norms) / len(dim_norms) if dim_norms else progress
+
+    ratio = float(changed_ratio or 0.0)
+    improvement_per_change = float(delta_overall) / max(0.05, ratio)
+    change_efficiency = _clamp01((improvement_per_change + 0.05) / 0.25)
+
+    score = (progress * 0.45) + (skill_gain * 0.30) + (change_efficiency * 0.25)
+    if float(delta_overall) < -0.08:
+        score = min(score, 0.2)
+
+    return {
+        "score": round(_clamp01(score), 4),
+        "progress": round(progress, 4),
+        "skill_gain": round(skill_gain, 4),
+        "change_efficiency": round(change_efficiency, 4),
+        "method": "learning_velocity_v1",
+    }
+
+
 def _build_coaching_actions(
     *,
     result: Any,
@@ -477,6 +564,7 @@ def _build_coaching_actions(
     runs: list[dict[str, Any]],
     diagnostics: list[dict[str, Any]],
     iteration_diff: dict[str, Any],
+    ai_leverage: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
 
@@ -564,6 +652,41 @@ def _build_coaching_actions(
             "expected_impact": ["efficiency", "reliability"],
         })
 
+    leverage = ai_leverage or {}
+    frontier = float(leverage.get("frontier_navigation_score") or 0.0)
+    reliance = float(leverage.get("reliance_calibration_score") or 0.0)
+    velocity = leverage.get("learning_velocity_score")
+
+    if frontier and frontier < 0.65:
+        actions.append({
+            "priority": "high",
+            "title": "Move closer to the quality-cost frontier",
+            "why": f"Frontier navigation is {frontier:.2f}, which indicates quality is not matching token/cost spend.",
+            "evidence": {"frontier_navigation_score": frontier},
+            "suggested_change": "Tighten schema constraints in prompts and remove redundant context so each call has a clear, narrow objective.",
+            "expected_impact": ["frontier_navigation", "efficiency", "accuracy"],
+        })
+
+    if reliance and reliance < 0.65:
+        actions.append({
+            "priority": "high",
+            "title": "Improve AI reliance calibration",
+            "why": f"Reliance calibration is {reliance:.2f}; outputs are not being verified strongly enough for current call volume.",
+            "evidence": {"reliance_calibration_score": reliance},
+            "suggested_change": "Add strict JSON validation + bounded retries + explicit fallback rules before accepting model output.",
+            "expected_impact": ["reliance_calibration", "reliability", "orchestration"],
+        })
+
+    if velocity is not None and float(velocity) < 0.5 and growth.get("status") != "first_attempt":
+        actions.append({
+            "priority": "medium",
+            "title": "Increase iteration learning velocity",
+            "why": f"Learning velocity is {float(velocity):.2f}; current edits are not converting into reliable score gains.",
+            "evidence": {"learning_velocity_score": float(velocity)},
+            "suggested_change": "Ship one targeted prompt/code change at a time and measure impact on a single weak metric before stacking edits.",
+            "expected_impact": ["learning_velocity", "overall"],
+        })
+
     priority_order = {"high": 0, "medium": 1, "low": 2}
     actions.sort(key=lambda a: priority_order.get(a.get("priority", "low"), 3))
     return actions[:5]
@@ -593,3 +716,7 @@ def _extract_prompt_snippets(code: str, *, max_snippets: int = 8) -> list[str]:
             if len(snippets) >= max_snippets:
                 return snippets
     return snippets
+
+
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))

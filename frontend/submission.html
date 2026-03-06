@@ -546,6 +546,19 @@ nav {
     if (report.mastery_state) {
       rows.push(['mastery state', String(report.mastery_state), report.mastery_state === 'mastered' ? 'ac' : '']);
     }
+    const leverage = report.ai_leverage || {};
+    if (leverage.ai_mastery_score != null) {
+      rows.push(['ai mastery', fmtScore(Number(leverage.ai_mastery_score)), Number(leverage.ai_mastery_score) >= 0.7 ? 'ac' : 'wn']);
+    }
+    if (leverage.frontier_navigation_score != null) {
+      rows.push(['frontier navigation', fmtScore(Number(leverage.frontier_navigation_score)), Number(leverage.frontier_navigation_score) >= 0.65 ? 'ac' : 'wn']);
+    }
+    if (leverage.reliance_calibration_score != null) {
+      rows.push(['reliance calibration', fmtScore(Number(leverage.reliance_calibration_score)), Number(leverage.reliance_calibration_score) >= 0.65 ? 'ac' : 'wn']);
+    }
+    if (leverage.learning_velocity_score != null) {
+      rows.push(['learning velocity', fmtScore(Number(leverage.learning_velocity_score)), Number(leverage.learning_velocity_score) >= 0.55 ? 'ac' : 'wn']);
+    }
     el.innerHTML = rows.map(([k, v, cls]) =>
       `<div class="metric-row"><span class="mk">${k}</span><span class="mv${cls ? ' ' + cls : ''}">${v}</span></div>`
     ).join('');
@@ -633,6 +646,13 @@ nav {
     if (report.orchestration != null && report.orchestration < 0.75) {
       tips.push({ priority: 'med', title: 'Improve orchestration', desc: `Orchestration score is ${fmtScore(report.orchestration)}. Reduce retries and redundant calls. Use structured output formats to avoid parse failures.`, impact: '↑ orchestration score', coachPrompt: `My orchestration score is ${fmtScore(report.orchestration)}. Suggest retry/validation/fallback improvements with minimal changes.` });
     }
+    const leverage = report.ai_leverage || {};
+    if (leverage.frontier_navigation_score != null && Number(leverage.frontier_navigation_score) < 0.65) {
+      tips.push({ priority: 'high', title: 'Improve quality-cost frontier', desc: `Frontier navigation is ${fmtScore(Number(leverage.frontier_navigation_score))}. You are spending more usage than your achieved quality supports.`, impact: '↑ frontier navigation', coachPrompt: `My frontier navigation score is ${fmtScore(Number(leverage.frontier_navigation_score))}. Help me increase quality while cutting token/call waste.` });
+    }
+    if (leverage.reliance_calibration_score != null && Number(leverage.reliance_calibration_score) < 0.65) {
+      tips.push({ priority: 'high', title: 'Improve AI reliance calibration', desc: `Reliance calibration is ${fmtScore(Number(leverage.reliance_calibration_score))}. Add stronger validation/fallback around model outputs.`, impact: '↑ reliance calibration', coachPrompt: `My reliance calibration score is ${fmtScore(Number(leverage.reliance_calibration_score))}. Suggest concrete validation and retry/fallback improvements.` });
+    }
     const runs = report.runs || [];
     const failedRuns = runs.filter(r => r.status !== 'passed' && r.status !== 'pass');
     if (failedRuns.length > 0) {
@@ -661,6 +681,11 @@ nav {
     const failedSummary = failed.length
       ? failed.map(r => `${r.run_type || 'run'}#${(Number(r.run_index || 0) + 1)} acc=${fmtScore(r.accuracy)}`).join(', ')
       : 'none';
+    const leverage = report.ai_leverage || {};
+    const aiMastery = leverage.ai_mastery_score == null ? 'n/a' : fmtScore(Number(leverage.ai_mastery_score));
+    const frontier = leverage.frontier_navigation_score == null ? 'n/a' : fmtScore(Number(leverage.frontier_navigation_score));
+    const reliance = leverage.reliance_calibration_score == null ? 'n/a' : fmtScore(Number(leverage.reliance_calibration_score));
+    const velocity = leverage.learning_velocity_score == null ? 'n/a' : fmtScore(Number(leverage.learning_velocity_score));
 
     const deltas = (report.iteration_diff && report.iteration_diff.score_deltas) || {};
     const dOverall = deltas.overall == null ? 'n/a' : (Number(deltas.overall) > 0 ? '+' : '') + Number(deltas.overall).toFixed(2);
@@ -682,6 +707,12 @@ nav {
       `- efficiency: ${fmtScore(report.efficiency)}`,
       `- reliability: ${fmtScore(report.reliability)}`,
       `- orchestration: ${fmtScore(report.orchestration)}`,
+      '',
+      'AI leverage:',
+      `- ai mastery: ${aiMastery}`,
+      `- frontier navigation: ${frontier}`,
+      `- reliance calibration: ${reliance}`,
+      `- learning velocity: ${velocity}`,
       '',
       `Failed runs: ${failedSummary}`,
       `Iteration deltas: overall=${dOverall}, accuracy=${dAcc}, robustness=${dRob}, efficiency=${dEff}`,

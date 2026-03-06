@@ -5,6 +5,8 @@ from types import SimpleNamespace
 from app.workers.evaluate import (
     _build_coaching,
     _build_coaching_actions,
+    _compute_learning_velocity_score,
+    _enrich_ai_leverage,
     _build_iteration_diff,
 )
 
@@ -88,3 +90,36 @@ def test_coaching_actions_link_failed_runs():
     )
     assert actions
     assert actions[0]["title"].lower().startswith("fix adversarial")
+
+
+def test_learning_velocity_defaults_to_neutral_without_previous():
+    score = _compute_learning_velocity_score(
+        delta_overall=None,
+        delta_accuracy=None,
+        delta_robustness=None,
+        delta_efficiency=None,
+        changed_ratio=None,
+    )
+    assert score["score"] == 0.5
+
+
+def test_enrich_ai_leverage_updates_mastery_with_learning_velocity():
+    ai = _enrich_ai_leverage(
+        ai_leverage={
+            "frontier_navigation_score": 0.7,
+            "reliance_calibration_score": 0.8,
+            "ai_mastery_score": 0.0,
+            "signals": {},
+        },
+        growth={
+            "delta_overall": 0.04,
+            "delta_accuracy": 0.02,
+            "delta_robustness": 0.03,
+            "delta_efficiency": 0.01,
+        },
+        iteration_diff={"code_changes": {"changed_ratio": 0.25}},
+        prompt_quality=0.75,
+    )
+    assert ai["learning_velocity_score"] > 0.5
+    assert ai["ai_mastery_score"] > 0.6
+    assert ai["signals"]["learning_velocity"]["method"] == "learning_velocity_v1"
