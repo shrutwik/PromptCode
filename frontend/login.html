@@ -167,13 +167,13 @@ nav {
 
     <form onsubmit="handleLogin(event)" class="fade-in d2">
       <div class="form-group">
-        <label class="form-label">email</label>
+        <label class="form-label" for="email">email</label>
         <input class="form-input" type="email" placeholder="you@company.com" id="email">
       </div>
       <div class="form-group">
-        <label class="form-label">password</label>
-        <input class="form-input" type="password" placeholder="••••••••••" id="password">
-        <div class="form-error" id="loginError">incorrect email or password</div>
+        <label class="form-label" for="password">password</label>
+        <input class="form-input" type="password" placeholder="••••••••••" id="password" aria-describedby="loginError">
+        <div class="form-error" id="loginError" role="alert">incorrect email or password</div>
       </div>
       <div class="form-row">
         <label class="checkbox-row">

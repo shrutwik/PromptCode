@@ -35,3 +35,12 @@ jobs:
 
       - name: Run release quality gates
         run: python -m scripts.run_release_quality_gates
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build backend Docker image
+        run: docker build -f docker/Dockerfile.backend .

@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import PurePosixPath
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.deps import get_current_user
 from app.db.session import get_db
+from app.models.auth_rate_limit import AuthRateLimitEvent
 from app.models.challenge import Challenge
 from app.models.evaluation_job import EvaluationJob
 from app.models.submission import Submission
@@ -18,6 +20,35 @@ from app.schemas.submission import SubmissionCreate, SubmissionReport, Submissio
 from app.workers.queue import enqueue_evaluation_job, process_job
 
 router = APIRouter()
+
+_SUBMISSION_RATE_LIMIT = 5
+_SUBMISSION_RATE_WINDOW = 60
+
+
+async def _enforce_submission_rate_limit(*, key: str, db: AsyncSession) -> None:
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=_SUBMISSION_RATE_WINDOW)
+    await db.execute(
+        delete(AuthRateLimitEvent).where(
+            AuthRateLimitEvent.client_key == key,
+            AuthRateLimitEvent.created_at < cutoff,
+        )
+    )
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(AuthRateLimitEvent)
+        .where(AuthRateLimitEvent.client_key == key)
+    )
+    count = int(count_result.scalar_one() or 0)
+    if count >= _SUBMISSION_RATE_LIMIT:
+        await db.commit()
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Retry in {_SUBMISSION_RATE_WINDOW}s.",
+            headers={"Retry-After": str(_SUBMISSION_RATE_WINDOW)},
+        )
+    db.add(AuthRateLimitEvent(client_key=key))
+    await db.commit()
 
 
 def _is_safe_python_entrypoint(entrypoint: str) -> bool:
@@ -104,6 +135,7 @@ async def create_submission(
             status_code=400,
             detail="Entrypoint must be a safe Python filename like 'main.py'.",
         )
+    await _enforce_submission_rate_limit(key=f"submission:{user.id}", db=db)
     await _guard_submission_capacity(db, user_id=user.id)
 
     submission = Submission(
