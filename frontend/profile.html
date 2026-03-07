@@ -221,6 +221,15 @@ nav {
   .stats-row,
   .badges-grid { grid-template-columns: 1fr; }
 }
+
+/* Mobile hamburger */
+.hamburger { display: none; background: none; border: 1px solid var(--border); cursor: pointer; padding: 5px 8px; border-radius: var(--radius); color: var(--text); font-size: 16px; line-height: 1; }
+@media (max-width: 960px) {
+  .hamburger { display: flex; align-items: center; }
+  .nav-links.mobile-open { display: flex !important; flex-direction: column; position: absolute; top: var(--nav-h); left: 0; right: 0; background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 16px; gap: 4px; z-index: 200; }
+  .nav-links.mobile-open a { padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .nav-links.mobile-open a:last-child { border-bottom: none; }
+}
 </style>
 </head>
 <body>
@@ -235,6 +244,7 @@ nav {
     <a class="btn btn-ghost" href="/challenges.html">← challenges</a>
     <a href="javascript:void(0)" onclick="PromptCodeAPI.logout()" style="width:28px;height:28px;border-radius:5px;background:var(--accent-dim);border:1px solid rgba(200,240,96,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:none" title="sign out" data-user-initials></a>
   </div>
+  <button class="hamburger" aria-label="Toggle navigation" onclick="var nl=this.closest('nav').querySelector('.nav-links');nl.classList.toggle('mobile-open')">&#9776;</button>
 </nav>
 
 <div class="page">

@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-import asyncio
-import time
-from collections import defaultdict, deque
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.deps import get_current_user
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.session import get_db
+from app.models.auth_rate_limit import AuthRateLimitEvent
 from app.models.user import User
 from app.schemas.user import (
     TokenResponse,
@@ -25,8 +24,6 @@ router = APIRouter()
 
 _AUTH_RATE_WINDOW = 60  # seconds
 _AUTH_RATE_LIMIT = 10  # max attempts per IP per window
-_AUTH_RATE_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
-_AUTH_RATE_LOCK = asyncio.Lock()
 
 
 def _auth_client_key(request: Request) -> str:
@@ -43,21 +40,31 @@ def _auth_client_key(request: Request) -> str:
     return "unknown"
 
 
-async def _check_auth_rate_limit(request: Request) -> None:
-    now = time.monotonic()
-    cutoff = now - _AUTH_RATE_WINDOW
+async def _check_auth_rate_limit(request: Request, db: AsyncSession) -> None:
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=_AUTH_RATE_WINDOW)
     client_ip = _auth_client_key(request)
-    async with _AUTH_RATE_LOCK:
-        bucket = _AUTH_RATE_BUCKETS[client_ip]
-        while bucket and bucket[0] < cutoff:
-            bucket.popleft()
-        if len(bucket) >= _AUTH_RATE_LIMIT:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Too many attempts. Please try again later.",
-                headers={"Retry-After": str(_AUTH_RATE_WINDOW)},
-            )
-        bucket.append(now)
+    await db.execute(
+        delete(AuthRateLimitEvent).where(
+            AuthRateLimitEvent.client_key == client_ip,
+            AuthRateLimitEvent.created_at < cutoff,
+        )
+    )
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(AuthRateLimitEvent)
+        .where(AuthRateLimitEvent.client_key == client_ip)
+    )
+    attempt_count = int(count_result.scalar_one() or 0)
+    if attempt_count >= _AUTH_RATE_LIMIT:
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many attempts. Please try again later.",
+            headers={"Retry-After": str(_AUTH_RATE_WINDOW)},
+        )
+    db.add(AuthRateLimitEvent(client_key=client_ip))
+    await db.commit()
 
 
 @router.post("/signup", response_model=TokenResponse, status_code=201)
@@ -66,7 +73,7 @@ async def signup(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    await _check_auth_rate_limit(request)
+    await _check_auth_rate_limit(request, db)
     existing = await db.execute(
         select(User).where(
             (User.email == payload.email) | (User.username == payload.username)
@@ -100,7 +107,7 @@ async def login(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    await _check_auth_rate_limit(request)
+    await _check_auth_rate_limit(request, db)
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
     if not user or not verify_password(payload.password, user.password_hash):

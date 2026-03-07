@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import logging
+import time
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,11 +15,13 @@ from sqlalchemy import text
 from app.api.routes import challenges, chat, leaderboard, submissions
 from app.api.routes import auth, users
 from app.core.config import get_settings
+from app.core.logging import configure_logging
 from app.db.base import Base
 from app.db.session import engine
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 logger = logging.getLogger(__name__)
+access_logger = logging.getLogger("app.access")
 
 
 def _content_security_policy() -> str:
@@ -57,6 +60,40 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class AccessLogMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        started_at = time.perf_counter()
+        client_ip = request.client.host if request.client else "unknown"
+        try:
+            response = await call_next(request)
+        except Exception:
+            duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+            access_logger.info(
+                "request.complete",
+                extra={
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": 500,
+                    "duration_ms": duration_ms,
+                    "client_ip": client_ip,
+                },
+            )
+            raise
+
+        duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+        access_logger.info(
+            "request.complete",
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "duration_ms": duration_ms,
+                "client_ip": client_ip,
+            },
+        )
+        return response
+
+
 async def _sandbox_executor_ready(settings) -> bool:
     executor_url = str(settings.sandbox_executor_url or "").strip()
     if not executor_url:
@@ -87,6 +124,7 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    configure_logging()
 
     app = FastAPI(
         title=settings.app_name,
@@ -110,6 +148,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(AccessLogMiddleware)
 
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(users.router, prefix="/api/users", tags=["users"])

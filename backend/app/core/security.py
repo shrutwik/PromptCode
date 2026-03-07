@@ -4,7 +4,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
-from jose import JWTError, jwt
+from authlib.jose import jwt
+from authlib.jose.errors import JoseError
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
@@ -20,16 +21,18 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 def create_access_token(user_id: uuid.UUID, secret_key: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    payload = {"sub": str(user_id), "exp": expire}
-    return jwt.encode(payload, secret_key, algorithm=ALGORITHM)
+    payload = {"sub": str(user_id), "exp": int(expire.timestamp())}
+    token_bytes = jwt.encode({"alg": ALGORITHM}, payload, secret_key)
+    return token_bytes.decode("utf-8") if isinstance(token_bytes, bytes) else token_bytes
 
 
 def decode_access_token(token: str, secret_key: str) -> uuid.UUID | None:
     try:
-        payload = jwt.decode(token, secret_key, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
+        claims = jwt.decode(token, secret_key)
+        claims.validate()
+        user_id = claims.get("sub")
         if user_id is None:
             return None
         return uuid.UUID(user_id)
-    except (JWTError, ValueError):
+    except (JoseError, ValueError):
         return None

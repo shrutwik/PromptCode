@@ -18,12 +18,14 @@ router = APIRouter()
 async def get_leaderboard(
     challenge_id: uuid.UUID,
     limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(LeaderboardEntry)
         .where(LeaderboardEntry.challenge_id == challenge_id)
         .order_by(LeaderboardEntry.score_overall.desc())
+        .offset(offset)
         .limit(limit)
     )
     entries = result.scalars().all()
@@ -38,7 +40,7 @@ async def get_leaderboard(
     response = []
     for i, entry in enumerate(entries, start=1):
         data = LeaderboardEntryResponse.model_validate(entry)
-        data.rank = i
+        data.rank = offset + i
         data.username = user_map.get(entry.user_id, "unknown")
         response.append(data)
 

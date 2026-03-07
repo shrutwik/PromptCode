@@ -69,6 +69,9 @@ class Settings(BaseSettings):
         "http://127.0.0.1:8000",
     ]
 
+    # Sentry DSN — leave empty to disable error tracking
+    sentry_dsn: str = ""
+
     model_config = {"env_prefix": "PROMPTCODE_", "env_file": str(_ENV_FILE)}
 
     @model_validator(mode="after")

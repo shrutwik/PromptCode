@@ -31,7 +31,7 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Run backend tests
-        run: pytest tests
+        run: pytest tests -q --tb=short -x
 
       - name: Run release quality gates
         run: python -m scripts.run_release_quality_gates

@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.requests import Request
 
 from app.api.routes import auth as auth_routes
 from app.api.routes.chat import ChatMessage, _validate_messages
 from app.api.routes.submissions import _is_safe_python_entrypoint
+from app.db.base import Base
 from app.schemas.user import UserCreate
 from app.services.sandbox.runner import _is_safe_entrypoint
 
@@ -47,8 +50,7 @@ def test_validate_messages_rejects_invalid_payloads():
     assert getattr(excinfo.value, "status_code", None) == 400
 
 
-def test_auth_rate_limit_uses_forwarded_ip_and_sets_retry_after():
-    auth_routes._AUTH_RATE_BUCKETS.clear()
+def test_auth_rate_limit_is_shared_across_sessions(tmp_path: Path):
     request = Request(
         {
             "type": "http",
@@ -56,18 +58,28 @@ def test_auth_rate_limit_uses_forwarded_ip_and_sets_retry_after():
             "client": ("127.0.0.1", 1234),
         }
     )
+    db_path = tmp_path / "auth-rate-limit.db"
+    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
     async def exercise_limit():
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
         for _ in range(auth_routes._AUTH_RATE_LIMIT):
-            await auth_routes._check_auth_rate_limit(request)
+            async with session_factory() as session:
+                await auth_routes._check_auth_rate_limit(request, session)
 
-        with pytest.raises(HTTPException) as excinfo:
-            await auth_routes._check_auth_rate_limit(request)
+        async with session_factory() as session:
+            with pytest.raises(HTTPException) as excinfo:
+                await auth_routes._check_auth_rate_limit(request, session)
 
-        assert getattr(excinfo.value, "status_code", None) == 429
-        assert excinfo.value.headers == {
-            "Retry-After": str(auth_routes._AUTH_RATE_WINDOW)
-        }
+            assert getattr(excinfo.value, "status_code", None) == 429
+            assert excinfo.value.headers == {
+                "Retry-After": str(auth_routes._AUTH_RATE_WINDOW)
+            }
+
+        await engine.dispose()
 
     asyncio.run(exercise_limit())
     assert auth_routes._auth_client_key(request) == "203.0.113.10"

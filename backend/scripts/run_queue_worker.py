@@ -7,13 +7,13 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import logging
 
+from app.core.logging import configure_logging
 from app.workers.queue import worker_loop
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO)
+    configure_logging()
     asyncio.run(worker_loop())
 
 
