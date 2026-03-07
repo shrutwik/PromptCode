@@ -8,11 +8,12 @@ import socket
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import Select, select, update
+from sqlalchemy import Select, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.db.session import async_session_factory
+from app.models.auth_rate_limit import AuthRateLimitEvent
 from app.models.evaluation_job import EvaluationJob
 from app.models.submission import Submission
 from app.models.worker_heartbeat import WorkerHeartbeat
@@ -69,6 +70,7 @@ async def worker_loop(*, poll_interval_seconds: float = 1.0) -> None:
         hostname=socket.gethostname(),
     )
     heartbeat_task = asyncio.create_task(_heartbeat_loop(worker_state))
+    cleanup_task = asyncio.create_task(_rate_limit_cleanup_loop())
     logger.info("Evaluation queue worker started", extra={"worker_id": worker_state.worker_id})
     try:
         while True:
@@ -85,8 +87,11 @@ async def worker_loop(*, poll_interval_seconds: float = 1.0) -> None:
                 await asyncio.sleep(poll_interval_seconds)
     finally:
         heartbeat_task.cancel()
+        cleanup_task.cancel()
         with suppress(asyncio.CancelledError):
             await heartbeat_task
+        with suppress(asyncio.CancelledError):
+            await cleanup_task
 
 
 async def _process_one_available_job(
@@ -263,6 +268,33 @@ async def _recover_stuck_jobs(
 
     await db.commit()
     return recovered
+
+
+_RATE_LIMIT_CLEANUP_INTERVAL_SECONDS = 300  # run every 5 minutes
+_RATE_LIMIT_EVENT_MAX_AGE_SECONDS = 120  # 2× the 60 s rate-limit window; safe to delete
+
+
+async def _rate_limit_cleanup_loop() -> None:
+    """Periodically delete expired auth_rate_limit_events rows for all keys.
+
+    Per-request cleanup only prunes rows for the requesting key, so rows for
+    idle keys accumulate indefinitely.  This loop does a global sweep so the
+    table stays bounded regardless of traffic patterns.
+    """
+    while True:
+        await asyncio.sleep(_RATE_LIMIT_CLEANUP_INTERVAL_SECONDS)
+        try:
+            cutoff = datetime.now(timezone.utc) - timedelta(
+                seconds=_RATE_LIMIT_EVENT_MAX_AGE_SECONDS
+            )
+            async with async_session_factory() as db:
+                await db.execute(
+                    delete(AuthRateLimitEvent).where(AuthRateLimitEvent.created_at < cutoff)
+                )
+                await db.commit()
+                logger.debug("Rate limit event cleanup complete")
+        except Exception:  # pragma: no cover
+            logger.warning("Rate limit event cleanup failed", exc_info=True)
 
 
 async def _heartbeat_loop(worker_state: _WorkerState) -> None:
