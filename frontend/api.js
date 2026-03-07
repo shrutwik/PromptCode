@@ -5,9 +5,14 @@ const PromptCodeAPI = {
         return localStorage.getItem('pc_token');
     },
 
-    setAuth(token, user) {
+    setAuth(token, user, refreshToken) {
         localStorage.setItem('pc_token', token);
         localStorage.setItem('pc_user', JSON.stringify(user));
+        if (refreshToken) localStorage.setItem('pc_refresh_token', refreshToken);
+    },
+
+    getRefreshToken() {
+        return localStorage.getItem('pc_refresh_token');
     },
 
     getUser() {
@@ -23,6 +28,7 @@ const PromptCodeAPI = {
 
     clearAuth() {
         localStorage.removeItem('pc_token');
+        localStorage.removeItem('pc_refresh_token');
         localStorage.removeItem('pc_user');
     },
 
@@ -38,7 +44,25 @@ const PromptCodeAPI = {
         return (f + l).toLowerCase() || user.username.substring(0, 2);
     },
 
-    async _fetch(path, options = {}) {
+    async _tryRefresh() {
+        const rt = this.getRefreshToken();
+        if (!rt) return false;
+        try {
+            const resp = await fetch(API_BASE + '/auth/refresh', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refresh_token: rt }),
+            });
+            if (!resp.ok) return false;
+            const data = await resp.json();
+            this.setAuth(data.access_token, data.user, data.refresh_token);
+            return true;
+        } catch (_) {
+            return false;
+        }
+    },
+
+    async _fetch(path, options = {}, _isRetry = false) {
         const headers = { 'Content-Type': 'application/json', ...options.headers };
         const token = this.getToken();
         if (token) {
@@ -46,6 +70,9 @@ const PromptCodeAPI = {
         }
         const resp = await fetch(API_BASE + path, { ...options, headers });
         if (resp.status === 401) {
+            if (!_isRetry && await this._tryRefresh()) {
+                return this._fetch(path, options, true);
+            }
             this.clearAuth();
             if (!window.location.pathname.includes('login') && !window.location.pathname.includes('signup')) {
                 window.location.href = '/login.html';
@@ -81,7 +108,7 @@ const PromptCodeAPI = {
             throw new Error(await this._readError(resp, 'Signup failed'));
         }
         const result = await resp.json();
-        this.setAuth(result.access_token, result.user);
+        this.setAuth(result.access_token, result.user, result.refresh_token);
         return result;
     },
 
@@ -94,7 +121,7 @@ const PromptCodeAPI = {
             throw new Error(await this._readError(resp, 'Login failed'));
         }
         const result = await resp.json();
-        this.setAuth(result.access_token, result.user);
+        this.setAuth(result.access_token, result.user, result.refresh_token);
         return result;
     },
 
@@ -204,7 +231,26 @@ const PromptCodeAPI = {
         return resp.json();
     },
 
-    logout() {
+    async logout() {
+        const rt = this.getRefreshToken();
+        const token = this.getToken();
+        if (rt && token) {
+            try {
+                await Promise.race([
+                    fetch(API_BASE + '/auth/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({ refresh_token: rt }),
+                    }),
+                    new Promise(resolve => setTimeout(resolve, 3000)),
+                ]);
+            } catch (_) {
+                // best-effort: local logout always proceeds
+            }
+        }
         this.clearAuth();
         window.location.href = '/index.html';
     },
