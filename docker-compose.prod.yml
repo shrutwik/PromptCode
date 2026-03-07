@@ -7,15 +7,20 @@
 #   PROMPTCODE_JWT_SECRET             — JWT signing secret (min 32 chars)
 #   PROMPTCODE_SANDBOX_EXECUTOR_TOKEN — Shared secret between backend and executor
 #   PROMPTCODE_OPENAI_API_KEY         — OpenAI key for evaluation
+#   DOMAIN                            — Public hostname for Caddy TLS (e.g. api.example.com)
 #
 # Optional (production defaults shown):
 #   PROMPTCODE_METRICS_TOKEN          — Bearer token for /metrics scraping
 #   PROMPTCODE_SENTRY_DSN             — Sentry DSN for error tracking
 #   PROMPTCODE_DATABASE_SSL_REQUIRE   — true (set false only on trusted VPCs)
 
+volumes:
+  caddy_data:
+  caddy_config:
+
 x-image: &backend-image
   image: ghcr.io/shrutwik/promptcode/backend:${IMAGE_TAG:-latest}
-  pull_policy: always
+  pull_policy: missing  # CI pre-pulls before `up -d`; missing allows rollback from cached images
 
 services:
   db:
@@ -29,19 +34,45 @@ services:
   backend:
     <<: *backend-image
     build: null
+    ports: []  # do not expose port 8000 externally; Caddy routes internally via backend:8000
     environment:
       PROMPTCODE_DEBUG: "false"
       PROMPTCODE_DATABASE_SSL_REQUIRE: ${PROMPTCODE_DATABASE_SSL_REQUIRE:-false}
       PROMPTCODE_METRICS_TOKEN: ${PROMPTCODE_METRICS_TOKEN:-}
+      # Allow requests from the public domain served by Caddy.
+      # If the frontend is on a different origin, add it here (comma-separated JSON list).
+      PROMPTCODE_CORS_ORIGINS: '["https://${DOMAIN}"]'
 
   worker:
     <<: *backend-image
     build: null
+    command: ["python", "-m", "scripts.run_queue_worker"]  # backend owns migrations; skip wrapper
+    depends_on:
+      backend:
+        condition: service_healthy
     environment:
       PROMPTCODE_DEBUG: "false"
 
   worker-b:
     <<: *backend-image
     build: null
+    command: ["python", "-m", "scripts.run_queue_worker"]  # backend owns migrations; skip wrapper
+    depends_on:
+      backend:
+        condition: service_healthy
     environment:
       PROMPTCODE_DEBUG: "false"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    volumes:
+      - ./docker/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend

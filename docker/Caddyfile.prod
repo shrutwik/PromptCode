@@ -1,0 +1,7 @@
+# Replace {$DOMAIN} with your actual domain (set in /opt/promptcode/.env as DOMAIN=example.com).
+# Caddy will automatically obtain and renew a TLS certificate via Let's Encrypt.
+# For local/staging use without DNS, replace {$DOMAIN} with ":80" to disable TLS.
+
+{$DOMAIN} {
+    reverse_proxy backend:8000
+}

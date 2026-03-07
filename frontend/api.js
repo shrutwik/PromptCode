@@ -1,6 +1,8 @@
 const API_BASE = window.location.origin + '/api';
 
 const PromptCodeAPI = {
+    _refreshPromise: null,
+
     getToken() {
         return localStorage.getItem('pc_token');
     },
@@ -45,21 +47,27 @@ const PromptCodeAPI = {
     },
 
     async _tryRefresh() {
+        if (this._refreshPromise) return this._refreshPromise;
         const rt = this.getRefreshToken();
         if (!rt) return false;
-        try {
-            const resp = await fetch(API_BASE + '/auth/refresh', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ refresh_token: rt }),
-            });
-            if (!resp.ok) return false;
-            const data = await resp.json();
-            this.setAuth(data.access_token, data.user, data.refresh_token);
-            return true;
-        } catch (_) {
-            return false;
-        }
+        this._refreshPromise = (async () => {
+            try {
+                const resp = await fetch(API_BASE + '/auth/refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh_token: rt }),
+                });
+                if (!resp.ok) return false;
+                const data = await resp.json();
+                this.setAuth(data.access_token, data.user, data.refresh_token);
+                return true;
+            } catch (_) {
+                return false;
+            } finally {
+                this._refreshPromise = null;
+            }
+        })();
+        return this._refreshPromise;
     },
 
     async _fetch(path, options = {}, _isRetry = false) {

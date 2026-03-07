@@ -82,7 +82,10 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set lowercase image name
-        run: echo "IMAGE_NAME=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')/backend" >> $GITHUB_ENV
+        run: |
+          BASE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_NAME=${BASE}/backend" >> $GITHUB_ENV
+          echo "SANDBOX_IMAGE_NAME=${BASE}/sandbox" >> $GITHUB_ENV
 
       - name: Build and push backend image
         uses: docker/build-push-action@v5
@@ -94,6 +97,16 @@ jobs:
             ${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_NAME }}:${{ github.sha }}
 
+      - name: Build and push sandbox image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.sandbox
+          push: true
+          tags: |
+            ${{ env.SANDBOX_IMAGE_NAME }}:latest
+            ${{ env.SANDBOX_IMAGE_NAME }}:${{ github.sha }}
+
       - name: Deploy to production host
         if: env.DEPLOY_HOST != ''
         uses: appleboy/ssh-action@v1.0.3
@@ -102,8 +115,25 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
+            # Record previous deployment tag before overwriting (for rollback reference)
+            [ -f /opt/promptcode/.current-image-tag ] && cp /opt/promptcode/.current-image-tag /opt/promptcode/.previous-image-tag || true
+            echo "${{ github.sha }}" > /opt/promptcode/.current-image-tag
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker pull ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            docker pull ${{ env.SANDBOX_IMAGE_NAME }}:${{ github.sha }}
+            docker tag ${{ env.SANDBOX_IMAGE_NAME }}:${{ github.sha }} promptcode-sandbox:latest
             cd /opt/promptcode
             IMAGE_TAG=${{ github.sha }} docker compose -f docker-compose.prod.yml up -d --no-build
             docker image prune -f
+            echo "Waiting for /ready..."
+            for i in $(seq 1 24); do
+              if docker compose -f docker-compose.prod.yml exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3).read()" 2>/dev/null; then
+                echo "App is healthy."
+                exit 0
+              fi
+              echo "Not ready yet ($i/24), sleeping 5s..."
+              sleep 5
+            done
+            echo "ERROR: App did not become ready within 120s." >&2
+            docker compose -f docker-compose.prod.yml logs --tail=50 backend
+            exit 1
