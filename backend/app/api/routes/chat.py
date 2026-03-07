@@ -1,21 +1,22 @@
 from __future__ import annotations
 
-import asyncio
 import time
 import uuid
-from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.deps import get_current_user
 from app.core.model_policy import OPENAI_CHAT_MODELS, resolve_allowed_model
 from app.db.session import get_db
+from app.models.auth_rate_limit import AuthRateLimitEvent
 from app.models.challenge import Challenge
 from app.models.user import User
 
@@ -80,8 +81,6 @@ _MAX_AUTO_CONTINUATIONS = 3
 _RATE_WINDOW_SECONDS = 60
 _COACH_RATE_LIMIT = 20
 _PLAYGROUND_RATE_LIMIT = 30
-_RATE_LIMIT_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
-_RATE_LIMIT_LOCK = asyncio.Lock()
 _CONTINUE_PROMPT = (
     "Continue exactly where you stopped. "
     "Do not repeat prior text. Keep the same format and finish the answer."
@@ -278,19 +277,36 @@ async def _run_completion_with_auto_continue(
     return reply, model_name, usage, round(latency_total_ms, 1), raw_id
 
 
-async def _enforce_rate_limit(*, key: str, max_requests: int, window_seconds: int = _RATE_WINDOW_SECONDS) -> None:
-    now = time.time()
-    async with _RATE_LIMIT_LOCK:
-        bucket = _RATE_LIMIT_BUCKETS[key]
-        while bucket and (now - bucket[0]) > window_seconds:
-            bucket.popleft()
-        if len(bucket) >= max_requests:
-            retry_after = max(1, int(window_seconds - (now - bucket[0])))
-            raise HTTPException(
-                status_code=429,
-                detail=f"Rate limit exceeded. Retry in {retry_after}s.",
-            )
-        bucket.append(now)
+async def _enforce_rate_limit(
+    *,
+    key: str,
+    max_requests: int,
+    window_seconds: int = _RATE_WINDOW_SECONDS,
+    db: AsyncSession,
+) -> None:
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=window_seconds)
+    await db.execute(
+        delete(AuthRateLimitEvent).where(
+            AuthRateLimitEvent.client_key == key,
+            AuthRateLimitEvent.created_at < cutoff,
+        )
+    )
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(AuthRateLimitEvent)
+        .where(AuthRateLimitEvent.client_key == key)
+    )
+    count = int(count_result.scalar_one() or 0)
+    if count >= max_requests:
+        await db.commit()
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Retry in {window_seconds}s.",
+            headers={"Retry-After": str(window_seconds)},
+        )
+    db.add(AuthRateLimitEvent(client_key=key))
+    await db.commit()
 
 
 def _validate_messages(messages: list[ChatMessage] | list[PlaygroundMessage]) -> None:
@@ -352,7 +368,7 @@ async def chat(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await _enforce_rate_limit(key=f"coach:{user.id}", max_requests=_COACH_RATE_LIMIT)
+    await _enforce_rate_limit(key=f"coach:{user.id}", max_requests=_COACH_RATE_LIMIT, db=db)
     _validate_messages(payload.messages)
     if len(payload.code) > _MAX_CODE_CHARS:
         raise HTTPException(
@@ -440,8 +456,9 @@ async def chat(
 async def playground_run(
     payload: PlaygroundRunRequest,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    await _enforce_rate_limit(key=f"playground:{user.id}", max_requests=_PLAYGROUND_RATE_LIMIT)
+    await _enforce_rate_limit(key=f"playground:{user.id}", max_requests=_PLAYGROUND_RATE_LIMIT, db=db)
     _validate_messages(payload.messages)
     if len(payload.system) > _MAX_SYSTEM_CHARS:
         raise HTTPException(
