@@ -8,11 +8,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.deps import get_current_user
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+    hash_password,
+    verify_password,
+)
 from app.db.session import get_db
 from app.models.auth_rate_limit import AuthRateLimitEvent
 from app.models.user import User
 from app.schemas.user import (
+    RefreshRequest,
     TokenResponse,
     UserCreate,
     UserLogin,
@@ -97,8 +104,13 @@ async def signup(
     await db.refresh(user)
 
     settings = get_settings()
-    token = create_access_token(user.id, settings.jwt_secret)
-    return TokenResponse(access_token=token, user=UserResponse.model_validate(user))
+    access_token = create_access_token(user.id, settings.jwt_secret)
+    refresh_token = create_refresh_token(user.id, settings.jwt_secret)
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        user=UserResponse.model_validate(user),
+    )
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -117,8 +129,42 @@ async def login(
         )
 
     settings = get_settings()
-    token = create_access_token(user.id, settings.jwt_secret)
-    return TokenResponse(access_token=token, user=UserResponse.model_validate(user))
+    access_token = create_access_token(user.id, settings.jwt_secret)
+    refresh_token = create_refresh_token(user.id, settings.jwt_secret)
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        user=UserResponse.model_validate(user),
+    )
+
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh_token_endpoint(
+    payload: RefreshRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    await _check_auth_rate_limit(request, db)
+    settings = get_settings()
+    user_id = decode_refresh_token(payload.refresh_token, settings.jwt_secret)
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+    user = await db.get(User, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+    new_access = create_access_token(user.id, settings.jwt_secret)
+    new_refresh = create_refresh_token(user.id, settings.jwt_secret)
+    return TokenResponse(
+        access_token=new_access,
+        refresh_token=new_refresh,
+        user=UserResponse.model_validate(user),
+    )
 
 
 @router.get("/me", response_model=UserResponse)

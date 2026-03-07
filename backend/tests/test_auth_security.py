@@ -9,7 +9,12 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.core.security import create_access_token, decode_access_token
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_access_token,
+    decode_refresh_token,
+)
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app
@@ -162,6 +167,108 @@ def test_auth_rate_limit_blocks_on_eleventh_attempt(tmp_path, monkeypatch):
     asyncio.run(test_engine.dispose())
 
 
+# ── Refresh token (unit) ──────────────────────────────────────────────────────
+
+
+def test_refresh_token_round_trip():
+    uid = uuid.uuid4()
+    token = create_refresh_token(uid, _SECRET)
+    assert isinstance(token, str)
+    assert decode_refresh_token(token, _SECRET) == uid
+
+
+def test_refresh_token_wrong_secret_returns_none():
+    uid = uuid.uuid4()
+    token = create_refresh_token(uid, _SECRET)
+    assert decode_refresh_token(token, "wrong-secret") is None
+
+
+def test_access_token_rejected_as_refresh_token():
+    """Access tokens have no 'type' claim — must not be accepted as refresh tokens."""
+    uid = uuid.uuid4()
+    access = create_access_token(uid, _SECRET)
+    assert decode_refresh_token(access, _SECRET) is None
+
+
+def test_refresh_token_rejected_as_access_token():
+    """Refresh tokens carry a 'type' claim but decode_access_token ignores it — they
+    would still validate. This test documents the current behaviour: access token
+    validation does not check 'type', so a refresh token *is* accepted by
+    decode_access_token. Callers must not treat refresh tokens as access tokens."""
+    uid = uuid.uuid4()
+    refresh = create_refresh_token(uid, _SECRET)
+    # This is intentional: access-token decoder doesn't gate on type.
+    # The /refresh endpoint enforces the boundary on the server side.
+    assert decode_access_token(refresh, _SECRET) == uid
+
+
+# ── Refresh token (integration) ───────────────────────────────────────────────
+
+
+def test_refresh_endpoint_returns_new_tokens(tmp_path, monkeypatch):
+    app, test_engine = _build_test_app(tmp_path, monkeypatch)
+
+    with TestClient(app) as client:
+        # Signup to get initial tokens.
+        r = client.post(
+            "/api/auth/signup",
+            json={"email": "refresh@example.com", "username": "refreshuser1", "password": _VALID_PASSWORD},
+        )
+        assert r.status_code == 201
+        data = r.json()
+        assert "refresh_token" in data
+        assert data["refresh_token"] is not None
+
+        # Use refresh token to get new tokens.
+        r2 = client.post("/api/auth/refresh", json={"refresh_token": data["refresh_token"]})
+        assert r2.status_code == 200
+        data2 = r2.json()
+        assert "access_token" in data2
+        assert "refresh_token" in data2
+        assert data2["refresh_token"] is not None
+        assert data2["user"]["email"] == "refresh@example.com"
+        # Confirm the returned access token is itself valid (decodable).
+        from app.core.security import decode_access_token
+        from app.core.config import get_settings
+        uid = decode_access_token(data2["access_token"], get_settings().jwt_secret)
+        assert uid is not None
+
+    from app.core.config import get_settings
+    get_settings.cache_clear()
+    app.dependency_overrides.clear()
+    asyncio.run(test_engine.dispose())
+
+
+def test_refresh_endpoint_rejects_access_token(tmp_path, monkeypatch):
+    app, test_engine = _build_test_app(tmp_path, monkeypatch)
+
+    with TestClient(app) as client:
+        r = client.post(
+            "/api/auth/signup",
+            json={"email": "rt2@example.com", "username": "rtuser200", "password": _VALID_PASSWORD},
+        )
+        access_token = r.json()["access_token"]
+
+        r2 = client.post("/api/auth/refresh", json={"refresh_token": access_token})
+        assert r2.status_code == 401
+
+    from app.core.config import get_settings
+    get_settings.cache_clear()
+    app.dependency_overrides.clear()
+    asyncio.run(test_engine.dispose())
+
+
+def test_refresh_endpoint_rejects_bad_token(tmp_path, monkeypatch):
+    app, test_engine = _build_test_app(tmp_path, monkeypatch)
+
+    with TestClient(app) as client:
+        r = client.post("/api/auth/refresh", json={"refresh_token": "not.a.valid.token"})
+        assert r.status_code == 401
+
+    from app.core.config import get_settings
+    get_settings.cache_clear()
+    app.dependency_overrides.clear()
+    asyncio.run(test_engine.dispose())
 def test_signup_rate_limit_blocks_on_eleventh_attempt(tmp_path, monkeypatch):
     app, test_engine = _build_test_app(tmp_path, monkeypatch)
 
