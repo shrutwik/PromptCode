@@ -1,10 +1,30 @@
 from __future__ import annotations
 
+import contextvars
+from contextvars import ContextVar
 from datetime import datetime, timezone
 import json
 import logging
 
 _STANDARD_LOG_RECORD_KEYS = set(logging.makeLogRecord({}).__dict__.keys())
+
+_request_id_ctx: ContextVar[str] = ContextVar("request_id", default="-")
+
+
+def set_request_id(request_id: str) -> contextvars.Token:
+    return _request_id_ctx.set(request_id)
+
+
+def reset_request_id(token: contextvars.Token) -> None:
+    _request_id_ctx.reset(token)
+
+
+class RequestIdFilter(logging.Filter):
+    """Injects the current request_id ContextVar into every log record."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.request_id = _request_id_ctx.get()
+        return True
 
 
 class JsonFormatter(logging.Formatter):
@@ -28,15 +48,18 @@ def configure_logging(level: int = logging.INFO) -> None:
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
 
+    _filter = RequestIdFilter()
     formatter = JsonFormatter()
     for handler in root_logger.handlers:
         handler.setFormatter(formatter)
         handler.setLevel(level)
+        handler.addFilter(_filter)
 
     if not root_logger.handlers:
         handler = logging.StreamHandler()
         handler.setLevel(level)
         handler.setFormatter(formatter)
+        handler.addFilter(_filter)
         root_logger.addHandler(handler)
 
     _init_sentry()

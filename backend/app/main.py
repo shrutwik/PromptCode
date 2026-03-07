@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import logging
 import time
+import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +16,7 @@ from sqlalchemy import text
 from app.api.routes import challenges, chat, leaderboard, submissions
 from app.api.routes import auth, users
 from app.core.config import get_settings
-from app.core.logging import configure_logging
+from app.core.logging import configure_logging, reset_request_id, set_request_id
 from app.db.base import Base
 from app.db.session import engine
 
@@ -62,36 +63,41 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 class AccessLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        rid = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        token = set_request_id(rid)
         started_at = time.perf_counter()
         client_ip = request.client.host if request.client else "unknown"
         try:
-            response = await call_next(request)
-        except Exception:
+            try:
+                response = await call_next(request)
+            except Exception:
+                duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+                access_logger.info(
+                    "request.complete",
+                    extra={
+                        "method": request.method,
+                        "path": request.url.path,
+                        "status_code": 500,
+                        "duration_ms": duration_ms,
+                        "client_ip": client_ip,
+                    },
+                )
+                raise
+            response.headers["X-Request-ID"] = rid
             duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
             access_logger.info(
                 "request.complete",
                 extra={
                     "method": request.method,
                     "path": request.url.path,
-                    "status_code": 500,
+                    "status_code": response.status_code,
                     "duration_ms": duration_ms,
                     "client_ip": client_ip,
                 },
             )
-            raise
-
-        duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
-        access_logger.info(
-            "request.complete",
-            extra={
-                "method": request.method,
-                "path": request.url.path,
-                "status_code": response.status_code,
-                "duration_ms": duration_ms,
-                "client_ip": client_ip,
-            },
-        )
-        return response
+            return response
+        finally:
+            reset_request_id(token)
 
 
 async def _sandbox_executor_ready(settings) -> bool:
