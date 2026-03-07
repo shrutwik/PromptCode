@@ -36,6 +36,7 @@ def test_settings_allow_non_default_secret_in_production():
     settings = Settings(
         debug=False,
         jwt_secret="prod-secret-with-real-entropy",
+        database_url="postgresql+asyncpg://user:pass@db.example.com:5432/promptcode",
     )
 
     assert settings.jwt_secret == "prod-secret-with-real-entropy"
