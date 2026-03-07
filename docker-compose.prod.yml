@@ -1,0 +1,47 @@
+# Production override — use with:
+#   IMAGE_TAG=<sha> docker compose -f docker-compose.prod.yml up -d --no-build
+#
+# Required env on the host (set in /opt/promptcode/.env or export):
+#   IMAGE_TAG                         — Git SHA of the image to deploy (set by CI)
+#   PROMPTCODE_DB_PASSWORD            — Postgres password
+#   PROMPTCODE_JWT_SECRET             — JWT signing secret (min 32 chars)
+#   PROMPTCODE_SANDBOX_EXECUTOR_TOKEN — Shared secret between backend and executor
+#   PROMPTCODE_OPENAI_API_KEY         — OpenAI key for evaluation
+#
+# Optional (production defaults shown):
+#   PROMPTCODE_METRICS_TOKEN          — Bearer token for /metrics scraping
+#   PROMPTCODE_SENTRY_DSN             — Sentry DSN for error tracking
+#   PROMPTCODE_DATABASE_SSL_REQUIRE   — true (set false only on trusted VPCs)
+
+x-image: &backend-image
+  image: ghcr.io/shrutwik/promptcode/backend:${IMAGE_TAG:-latest}
+  pull_policy: always
+
+services:
+  db:
+    # No changes — keep postgres-16-alpine with pgdata volume
+    ports: []  # do not expose db port externally in production
+
+  sandbox-executor:
+    <<: *backend-image
+    build: null
+
+  backend:
+    <<: *backend-image
+    build: null
+    environment:
+      PROMPTCODE_DEBUG: "false"
+      PROMPTCODE_DATABASE_SSL_REQUIRE: ${PROMPTCODE_DATABASE_SSL_REQUIRE:-false}
+      PROMPTCODE_METRICS_TOKEN: ${PROMPTCODE_METRICS_TOKEN:-}
+
+  worker:
+    <<: *backend-image
+    build: null
+    environment:
+      PROMPTCODE_DEBUG: "false"
+
+  worker-b:
+    <<: *backend-image
+    build: null
+    environment:
+      PROMPTCODE_DEBUG: "false"
