@@ -7,16 +7,18 @@ import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 import httpx
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy import text
 
 from app.api.routes import challenges, chat, leaderboard, submissions
 from app.api.routes import auth, users
 from app.core.config import get_settings
 from app.core.logging import configure_logging, reset_request_id, set_request_id
+from app.core.metrics import http_request_duration_seconds, http_requests_total
 from app.db.base import Base
 from app.db.session import engine
 
@@ -72,6 +74,14 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                 response = await call_next(request)
             except Exception:
                 duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+                route = request.scope.get("route")
+                path_label = route.path if route else request.url.path
+                http_requests_total.labels(
+                    method=request.method, path=path_label, status_code="500"
+                ).inc()
+                http_request_duration_seconds.labels(
+                    method=request.method, path=path_label
+                ).observe(duration_ms / 1000.0)
                 access_logger.info(
                     "request.complete",
                     extra={
@@ -83,8 +93,18 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                     },
                 )
                 raise
-            response.headers["X-Request-ID"] = rid
+            route = request.scope.get("route")
+            path_label = route.path if route else request.url.path
             duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+            http_requests_total.labels(
+                method=request.method,
+                path=path_label,
+                status_code=str(response.status_code),
+            ).inc()
+            http_request_duration_seconds.labels(
+                method=request.method, path=path_label
+            ).observe(duration_ms / 1000.0)
+            response.headers["X-Request-ID"] = rid
             access_logger.info(
                 "request.complete",
                 extra={
@@ -203,6 +223,10 @@ def create_app() -> FastAPI:
                 content={"status": "error", "detail": "sandbox executor unavailable"},
             )
         return {"status": "ok"}
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics_endpoint():
+        return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     if FRONTEND_DIR.exists():
         @app.get("/", response_class=HTMLResponse)
