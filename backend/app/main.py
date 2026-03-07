@@ -18,7 +18,11 @@ from app.api.routes import challenges, chat, leaderboard, submissions
 from app.api.routes import auth, users
 from app.core.config import get_settings
 from app.core.logging import configure_logging, reset_request_id, set_request_id
-from app.core.metrics import http_request_duration_seconds, http_requests_total
+from app.core.metrics import (
+    get_metrics_registry,
+    http_request_duration_seconds,
+    http_requests_total,
+)
 from app.db.base import Base
 from app.db.session import engine
 
@@ -226,7 +230,7 @@ def create_app() -> FastAPI:
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics_endpoint():
-        return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+        return PlainTextResponse(generate_latest(get_metrics_registry()), media_type=CONTENT_TYPE_LATEST)
 
     if FRONTEND_DIR.exists():
         @app.get("/", response_class=HTMLResponse)

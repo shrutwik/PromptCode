@@ -123,24 +123,24 @@ nav { height:52px; display:flex; align-items:center; justify-content:space-betwe
       <div class="form-row-2">
         <div class="form-group">
           <label class="form-label" for="fname">first name</label>
-          <input class="form-input" type="text" placeholder="Jordan" id="fname">
+          <input class="form-input" type="text" placeholder="Jordan" id="fname" autocomplete="given-name">
         </div>
         <div class="form-group">
           <label class="form-label" for="lname">last name</label>
-          <input class="form-input" type="text" placeholder="Lee" id="lname">
+          <input class="form-input" type="text" placeholder="Lee" id="lname" autocomplete="family-name">
         </div>
       </div>
       <div class="form-group">
         <label class="form-label" for="email">email</label>
-        <input class="form-input" type="email" placeholder="you@company.com" id="email" oninput="validateEmail(this)">
+        <input class="form-input" type="email" placeholder="you@company.com" id="email" autocomplete="email" oninput="validateEmail(this)">
       </div>
       <div class="form-group">
         <label class="form-label" for="username">username</label>
-        <input class="form-input" type="text" placeholder="your_handle" id="username" oninput="validateUsername(this)">
+        <input class="form-input" type="text" placeholder="your_handle" id="username" autocomplete="username" oninput="validateUsername(this)">
       </div>
       <div class="form-group">
         <label class="form-label" for="password">password</label>
-        <input class="form-input" type="password" placeholder="min. 8 characters" id="password" oninput="checkStrength(this.value)" aria-describedby="pwLabel">
+        <input class="form-input" type="password" placeholder="min. 8 characters" id="password" autocomplete="new-password" oninput="checkStrength(this.value)" aria-describedby="pwLabel">
         <div class="pw-strength">
           <div class="pw-bars">
             <div class="pw-bar" id="b1"></div>

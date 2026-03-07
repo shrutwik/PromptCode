@@ -316,7 +316,7 @@ nav { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--nav-h); 
       <button class="filter-btn" onclick="setFilter(this,'extraction')">extraction</button>
       <button class="filter-btn" onclick="setFilter(this,'classification')">classification</button>
       <button class="filter-btn" onclick="setFilter(this,'generation')">generation</button>
-      <input class="search-input" placeholder="search challenges..." oninput="filterSearch(this.value)">
+      <input class="search-input" placeholder="search challenges..." aria-label="Search challenges" oninput="filterSearch(this.value)">
     </div>
 
     <!-- TABLE -->

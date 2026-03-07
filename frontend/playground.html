@@ -343,7 +343,7 @@ nav {
       <button class="btn btn-ghost btn-sm" onclick="newPrompt()">+ new</button>
     </div>
     <div class="saved-search">
-      <input class="search-input" placeholder="search prompts..." oninput="filterSaved(this.value)">
+      <input class="search-input" placeholder="search prompts..." aria-label="Search saved prompts" oninput="filterSaved(this.value)">
     </div>
     <div class="panel-body">
       <div class="saved-list" id="savedList">
@@ -389,19 +389,19 @@ nav {
     <!-- Config bar -->
     <div class="config-bar">
       <span class="config-label">model</span>
-      <select class="config-select" id="modelSelect" onchange="updateConfig()">
+      <select class="config-select" id="modelSelect" aria-label="Model" onchange="updateConfig()">
         <option value="gpt-4o">gpt-4o</option>
         <option value="gpt-4o-mini">gpt-4o-mini</option>
       </select>
       <div class="config-divider"></div>
       <span class="config-label">temp</span>
-      <input class="config-input" type="number" id="tempInput" value="0" min="0" max="2" step="0.1" style="width:52px" oninput="updateConfig()">
+      <input class="config-input" type="number" id="tempInput" aria-label="Temperature" value="0" min="0" max="2" step="0.1" style="width:52px" oninput="updateConfig()">
       <div class="config-divider"></div>
       <span class="config-label">max tokens</span>
-      <input class="config-input" type="number" id="maxTokensInput" value="1000" min="1" max="4096" style="width:68px" oninput="updateConfig()">
+      <input class="config-input" type="number" id="maxTokensInput" aria-label="Max tokens" value="1000" min="1" max="4096" style="width:68px" oninput="updateConfig()">
       <div class="config-divider"></div>
       <span class="config-label">mode</span>
-      <select class="config-select" id="modeSelect" onchange="toggleCompare()">
+      <select class="config-select" id="modeSelect" aria-label="Mode" onchange="toggleCompare()">
         <option value="single">single</option>
         <option value="compare">compare A/B</option>
       </select>
@@ -417,7 +417,7 @@ nav {
         <span style="font-size:10px;color:var(--muted)" id="sysCharCount">0 chars</span>
       </div>
       <div id="sysBody" style="display:none">
-        <textarea class="sys-textarea" id="sysPrompt" placeholder="optional system prompt..." rows="3" oninput="countSys()">You are a precise data extraction assistant. Always respond with valid JSON only. Never include explanations or markdown.</textarea>
+        <textarea class="sys-textarea" id="sysPrompt" aria-label="System prompt" placeholder="optional system prompt..." rows="3" oninput="countSys()">You are a precise data extraction assistant. Always respond with valid JSON only. Never include explanations or markdown.</textarea>
       </div>
     </div>
 
@@ -431,7 +431,7 @@ nav {
             <button class="btn btn-danger btn-sm" onclick="deleteMsg('userMsg1')">×</button>
           </div>
         </div>
-        <textarea class="msg-textarea" id="userPrompt" placeholder="write your prompt here..." oninput="estimateTokens()" rows="8">Extract the following fields from this insurance claim report and return as JSON:
+        <textarea class="msg-textarea" id="userPrompt" aria-label="User prompt" placeholder="write your prompt here..." oninput="estimateTokens()" rows="8">Extract the following fields from this insurance claim report and return as JSON:
 - claim_id
 - claimant_name  
 - injury_category (normalize to: upper_extremity_injury | lower_extremity_injury | back_spine_injury | head_neck_injury | other)
@@ -455,7 +455,7 @@ Claim report:
       <div style="font-size:10px;color:var(--muted);margin-bottom:6px;letter-spacing:0.06em;text-transform:uppercase">variables</div>
       <div style="display:grid;grid-template-columns:auto 1fr;gap:6px;align-items:start">
         <span style="font-size:11px;color:var(--accent);padding-top:7px">{document}</span>
-        <textarea id="varDocument" style="background:var(--surface2);border:1px solid var(--border-light);border-radius:var(--radius);padding:6px 10px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text);resize:none;outline:none;line-height:1.6;transition:border-color 0.15s" rows="3" placeholder="paste sample claim report here..." onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border-light)'">Claim #: CLM-2024-00392
+        <textarea id="varDocument" aria-label="Document variable" style="background:var(--surface2);border:1px solid var(--border-light);border-radius:var(--radius);padding:6px 10px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text);resize:none;outline:none;line-height:1.6;transition:border-color 0.15s" rows="3" placeholder="paste sample claim report here..." onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border-light)'">Claim #: CLM-2024-00392
 Name: J. Harrington (claimant)
 What happened: Fell off loading dock, twisted ankle badly
 When: sometime in March, think the 14th
