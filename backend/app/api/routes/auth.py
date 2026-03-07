@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.deps import get_current_user
 from app.core.security import (
+    REFRESH_TOKEN_EXPIRE_DAYS,
     create_access_token,
     create_refresh_token,
     decode_refresh_token,
@@ -17,8 +19,10 @@ from app.core.security import (
 )
 from app.db.session import get_db
 from app.models.auth_rate_limit import AuthRateLimitEvent
+from app.models.revoked_token import RevokedToken
 from app.models.user import User
 from app.schemas.user import (
+    LogoutRequest,
     RefreshRequest,
     TokenResponse,
     UserCreate,
@@ -31,6 +35,11 @@ router = APIRouter()
 
 _AUTH_RATE_WINDOW = 60  # seconds
 _AUTH_RATE_LIMIT = 10  # max attempts per IP per window
+
+
+def _hash_token(token: str) -> str:
+    """SHA-256 hex digest of a raw token string (64 chars)."""
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def _auth_client_key(request: Request) -> str:
@@ -152,6 +161,14 @@ async def refresh_token_endpoint(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
+    revoked = await db.execute(
+        select(RevokedToken).where(RevokedToken.token_hash == _hash_token(payload.refresh_token))
+    )
+    if revoked.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked",
+        )
     user = await db.get(User, user_id)
     if user is None:
         raise HTTPException(
@@ -165,6 +182,32 @@ async def refresh_token_endpoint(
         refresh_token=new_refresh,
         user=UserResponse.model_validate(user),
     )
+
+
+@router.post("/logout", status_code=204)
+async def logout(
+    payload: LogoutRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Revoke a refresh token. Requires a valid access token."""
+    user_id = decode_refresh_token(payload.refresh_token, get_settings().jwt_secret)
+    if user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token does not belong to the current user",
+        )
+    now = datetime.now(timezone.utc)
+    token_hash = _hash_token(payload.refresh_token)
+    expires_at = now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    # Opportunistic GC of expired entries
+    await db.execute(delete(RevokedToken).where(RevokedToken.expires_at < now))
+    existing = await db.execute(
+        select(RevokedToken).where(RevokedToken.token_hash == token_hash)
+    )
+    if existing.scalar_one_or_none() is None:
+        db.add(RevokedToken(token_hash=token_hash, expires_at=expires_at))
+    await db.commit()
 
 
 @router.get("/me", response_model=UserResponse)

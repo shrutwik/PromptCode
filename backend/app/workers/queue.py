@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.db.session import async_session_factory
 from app.models.auth_rate_limit import AuthRateLimitEvent
+from app.models.revoked_token import RevokedToken
 from app.models.evaluation_job import EvaluationJob
 from app.models.submission import Submission
 from app.models.worker_heartbeat import WorkerHeartbeat
@@ -291,8 +292,12 @@ async def _rate_limit_cleanup_loop() -> None:
                 await db.execute(
                     delete(AuthRateLimitEvent).where(AuthRateLimitEvent.created_at < cutoff)
                 )
+                now = datetime.now(timezone.utc)
+                await db.execute(
+                    delete(RevokedToken).where(RevokedToken.expires_at < now)
+                )
                 await db.commit()
-                logger.debug("Rate limit event cleanup complete")
+                logger.debug("Rate limit event and revoked token cleanup complete")
         except Exception:  # pragma: no cover
             logger.warning("Rate limit event cleanup failed", exc_info=True)
 

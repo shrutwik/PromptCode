@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     # Sentry DSN — leave empty to disable error tracking
     sentry_dsn: str = ""
 
+    # Prometheus /metrics — set a non-empty value to require Authorization: Bearer <token>
+    metrics_token: str = ""
+
     model_config = {"env_prefix": "PROMPTCODE_", "env_file": str(_ENV_FILE)}
 
     @model_validator(mode="after")

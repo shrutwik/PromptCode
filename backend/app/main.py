@@ -229,7 +229,10 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     @app.get("/metrics", include_in_schema=False)
-    async def metrics_endpoint():
+    async def metrics_endpoint(request: Request):
+        token = get_settings().metrics_token.strip()
+        if token and request.headers.get("Authorization") != f"Bearer {token}":
+            return PlainTextResponse("Unauthorized", status_code=401)
         return PlainTextResponse(generate_latest(get_metrics_registry()), media_type=CONTENT_TYPE_LATEST)
 
     if FRONTEND_DIR.exists():

@@ -269,6 +269,90 @@ def test_refresh_endpoint_rejects_bad_token(tmp_path, monkeypatch):
     get_settings.cache_clear()
     app.dependency_overrides.clear()
     asyncio.run(test_engine.dispose())
+# ── Logout / token revocation ─────────────────────────────────────────────────
+
+
+def test_logout_revokes_refresh_token(tmp_path, monkeypatch):
+    """Full revocation flow: signup → logout → refresh must return 401."""
+    app, test_engine = _build_test_app(tmp_path, monkeypatch)
+
+    with TestClient(app) as client:
+        r = client.post(
+            "/api/auth/signup",
+            json={"email": "lo1@example.com", "username": "logoutuser1", "password": _VALID_PASSWORD},
+        )
+        assert r.status_code == 201
+        data = r.json()
+        access_token = data["access_token"]
+        refresh_token = data["refresh_token"]
+
+        # Logout — revokes the refresh token
+        r2 = client.post(
+            "/api/auth/logout",
+            json={"refresh_token": refresh_token},
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert r2.status_code == 204
+
+        # Refresh must now be rejected
+        r3 = client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
+        assert r3.status_code == 401
+        assert "revoked" in r3.json()["detail"].lower()
+
+    from app.core.config import get_settings
+    get_settings.cache_clear()
+    app.dependency_overrides.clear()
+    asyncio.run(test_engine.dispose())
+
+
+def test_logout_requires_valid_access_token(tmp_path, monkeypatch):
+    """Logout without a valid access token must return 401."""
+    app, test_engine = _build_test_app(tmp_path, monkeypatch)
+
+    with TestClient(app) as client:
+        r = client.post(
+            "/api/auth/logout",
+            json={"refresh_token": "some.token.value"},
+        )
+        assert r.status_code == 401
+
+    from app.core.config import get_settings
+    get_settings.cache_clear()
+    app.dependency_overrides.clear()
+    asyncio.run(test_engine.dispose())
+
+
+def test_logout_rejects_foreign_refresh_token(tmp_path, monkeypatch):
+    """User A cannot revoke user B's refresh token."""
+    app, test_engine = _build_test_app(tmp_path, monkeypatch)
+
+    with TestClient(app) as client:
+        # Signup two users
+        r_a = client.post(
+            "/api/auth/signup",
+            json={"email": "loa@example.com", "username": "logoutuserA1", "password": _VALID_PASSWORD},
+        )
+        r_b = client.post(
+            "/api/auth/signup",
+            json={"email": "lob@example.com", "username": "logoutuserB1", "password": _VALID_PASSWORD},
+        )
+        token_a = r_a.json()["access_token"]
+        refresh_b = r_b.json()["refresh_token"]
+
+        # User A tries to revoke user B's refresh token — must be rejected
+        r = client.post(
+            "/api/auth/logout",
+            json={"refresh_token": refresh_b},
+            headers={"Authorization": f"Bearer {token_a}"},
+        )
+        assert r.status_code == 401
+
+    from app.core.config import get_settings
+    get_settings.cache_clear()
+    app.dependency_overrides.clear()
+    asyncio.run(test_engine.dispose())
+
+
 def test_signup_rate_limit_blocks_on_eleventh_attempt(tmp_path, monkeypatch):
     app, test_engine = _build_test_app(tmp_path, monkeypatch)
 

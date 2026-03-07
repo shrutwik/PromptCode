@@ -30,6 +30,21 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
+      - name: Check model schema integrity
+        run: |
+          python -c "
+          import asyncio, app.models
+          from sqlalchemy.ext.asyncio import create_async_engine
+          from app.db.base import Base
+          async def check():
+              e = create_async_engine('sqlite+aiosqlite:///:memory:')
+              async with e.begin() as conn:
+                  await conn.run_sync(Base.metadata.create_all)
+              await e.dispose()
+              print('Schema OK — all models created cleanly')
+          asyncio.run(check())
+          "
+
       - name: Run backend tests
         run: pytest tests -q --tb=short -x
 
@@ -44,3 +59,32 @@ jobs:
 
       - name: Build backend Docker image
         run: docker build -f docker/Dockerfile.backend .
+
+  deploy:
+    name: Push image to ghcr.io
+    runs-on: ubuntu-latest
+    needs: [backend-tests, docker-build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.backend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/backend:latest
+            ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
