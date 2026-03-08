@@ -7,9 +7,13 @@ import time
 from pathlib import Path
 
 import pytest
+from sqlalchemy import String, UniqueConstraint, types
 
+from app.db.alembic_compare import compare_type
+from app.db.types import GUID
 from app.db.types import JSONType
 from app.models.challenge import Challenge
+from app.models.evaluation_job import EvaluationJob
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -569,6 +573,29 @@ def test_validate_env_script_allows_known_operational_env_vars(tmp_path: Path):
 
 def test_challenge_tags_column_uses_json_contract():
     assert isinstance(Challenge.__table__.c.tags.type, JSONType)
+
+
+def test_alembic_compare_treats_guid_wrapper_as_equivalent_to_baseline_varchar() -> None:
+    assert compare_type(None, None, None, String(36), GUID()) is False
+    assert compare_type(None, None, None, String(12), GUID()) is None
+
+
+def test_alembic_compare_treats_json_wrapper_as_equivalent_to_baseline_json() -> None:
+    assert compare_type(None, None, None, types.JSON(), JSONType()) is False
+
+
+def test_evaluation_job_submission_constraint_matches_baseline_schema() -> None:
+    unique_constraints = {
+        constraint.name
+        for constraint in EvaluationJob.__table__.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+    submission_indexes = {
+        index.name: index.unique for index in EvaluationJob.__table__.indexes
+    }
+
+    assert "uq_evaluation_jobs_submission_id" in unique_constraints
+    assert submission_indexes["ix_evaluation_jobs_submission_id"] is False
 
 
 def test_deploy_workflow_seeds_challenges_before_smoke() -> None:
