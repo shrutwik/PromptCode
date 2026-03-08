@@ -4,7 +4,8 @@
 - Do not treat this markdown file as the sign-off record.
 - Do not mark rollback rehearsal complete until `Ops Rehearsals` shows a green rollback run in the Actions tab.
 
-- [ ] Compose render verified clean (no 8000/5433/build:)
+- [x] Compose render clean in CI — clean, run: 22829895405
+- [x] Schema drift gate passes in CI — clean, run: 22829895405
 - [ ] Localhost port check passed on the deploy host: `127.0.0.1:8000` refused and `127.0.0.1:5433` refused
 - [ ] External port check passed from outside the host network: `nc -zv <PROD_HOST_IP> 8000` refused or timed out, and `nc -zv <PROD_HOST_IP> 5433` refused or timed out
 - [ ] Host `.env` validated by `scripts/validate-host-env.sh`
@@ -19,4 +20,4 @@
 - [ ] Rollback rehearsal completed (bad deploy -> auto-rollback -> healthy)
 - [ ] Rollback rehearsal migration boundary reviewed and accepted
 - [ ] check-prod-health.sh cron running and producing output
-- [ ] 38+ deployment hardening tests passing on the deploy SHA
+- [x] 249+ tests passing on deploy SHA — 249 passed, SHA: a77e801f6299ed688564f0a9968e60f0cedcb5fc
