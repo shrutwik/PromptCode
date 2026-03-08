@@ -214,7 +214,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: "docker-compose.yml,docker-compose.prod.yml,docker/Caddyfile.prod,scripts/backup-db.sh,scripts/restore-db.sh,scripts/seed-prod-data.sh,scripts/check-prod-health.sh,scripts/validate-host-env.sh,scripts/setup-ghcr-login.sh"
+          source: "docker-compose.yml,docker-compose.prod.yml,docker/Caddyfile.prod,scripts/backup-db.sh,scripts/restore-db.sh,scripts/seed-prod-data.sh,scripts/check-prod-health.sh,scripts/validate-host-env.sh,scripts/setup-ghcr-login.sh,scripts/validate-prod-host.sh"
           target: "/opt/promptcode"
 
       - name: Deploy to production host
@@ -226,7 +226,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             cd /opt/promptcode
-            bash /opt/promptcode/scripts/validate-host-env.sh
+            bash /opt/promptcode/scripts/validate-prod-host.sh
             bash /opt/promptcode/scripts/setup-ghcr-login.sh
             docker pull ${{ env.IMAGE_NAME }}:${{ github.sha }}
             docker pull ${{ env.SANDBOX_IMAGE_NAME }}:${{ github.sha }}

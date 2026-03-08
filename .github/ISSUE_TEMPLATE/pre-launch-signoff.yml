@@ -44,6 +44,8 @@ body:
       options:
         - label: "I populated `.env` with real values and `scripts/validate-host-env.sh` passes."
           required: true
+        - label: "I ran `scripts/validate-prod-host.sh` on the host and it passed."
+          required: true
         - label: "I configured GHCR pull auth on the host, or intentionally set `PROMPTCODE_GHCR_PUBLIC_IMAGES=true` because both packages are public."
           required: true
 

@@ -17,6 +17,7 @@
 3. Validate the host env and configure GHCR pull auth:
    - `bash /opt/promptcode/scripts/validate-host-env.sh`
    - `bash /opt/promptcode/scripts/setup-ghcr-login.sh`
+   - `bash /opt/promptcode/scripts/validate-prod-host.sh`
 4. Point DNS for `DOMAIN` at the production host before expecting Caddy TLS issuance.
 
 ## First deploy

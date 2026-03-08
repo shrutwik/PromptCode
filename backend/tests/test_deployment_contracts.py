@@ -19,6 +19,7 @@ BACKUP_DB_SCRIPT = REPO_ROOT / "scripts" / "backup-db.sh"
 RESTORE_DB_SCRIPT = REPO_ROOT / "scripts" / "restore-db.sh"
 SETUP_GHCR_LOGIN_SCRIPT = REPO_ROOT / "scripts" / "setup-ghcr-login.sh"
 VALIDATE_HOST_ENV_SCRIPT = REPO_ROOT / "scripts" / "validate-host-env.sh"
+VALIDATE_PROD_HOST_SCRIPT = REPO_ROOT / "scripts" / "validate-prod-host.sh"
 BACKEND_CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "backend-ci.yml"
 OPS_REHEARSALS_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ops-rehearsals.yml"
 
@@ -92,6 +93,94 @@ cat >> "${FAKE_GHCR_CAPTURE}"
     ), capture_path
 
 
+def _run_validate_prod_host(
+    tmp_path: Path,
+    *,
+    include_rclone: bool = True,
+    cron_entries: str = "",
+):
+    deploy_dir = tmp_path / "deploy"
+    fake_bin = tmp_path / "bin"
+    deploy_scripts = deploy_dir / "scripts"
+    deploy_scripts.mkdir(parents=True)
+    fake_bin.mkdir(parents=True)
+    _write(
+        deploy_dir / ".env",
+        "\n".join(
+            [
+                "DOMAIN=api.example.com",
+                "PROMPTCODE_DB_PASSWORD=prod-db-password",
+                "PROMPTCODE_JWT_SECRET=prod-jwt-secret-0123456789abcdef",
+                "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=prod-sandbox-secret-0123456789",
+                "PROMPTCODE_OPENAI_API_KEY=sk-live-prod-key",
+                "PROMPTCODE_METRICS_TOKEN=metrics-secret",
+                "RCLONE_REMOTE=s3:promptcode/backups",
+                "GHCR_USERNAME=promptcode-bot",
+                "GHCR_TOKEN=ghp_example_token",
+                "",
+            ],
+        ),
+    )
+    _write(deploy_dir / "docker-compose.yml", "services: {}\n")
+    _write(deploy_dir / "docker-compose.prod.yml", "services: {}\n")
+    for script_path in (
+        "backup-db.sh",
+        "restore-db.sh",
+        "check-prod-health.sh",
+        "validate-host-env.sh",
+        "setup-ghcr-login.sh",
+    ):
+        target = deploy_scripts / script_path
+        target.write_text((REPO_ROOT / "scripts" / script_path).read_text(encoding="utf-8"), encoding="utf-8")
+        target.chmod(0o755)
+    _write(
+        fake_bin / "docker",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$*" == "info" ]]; then
+  exit 0
+elif [[ "$*" == "compose version" ]]; then
+  echo "Docker Compose version v2.24.0"
+else
+  echo "unexpected docker invocation: $*" >&2
+  exit 1
+fi
+""",
+    )
+    if include_rclone:
+        _write(
+            fake_bin / "rclone",
+            "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n",
+        )
+        (fake_bin / "rclone").chmod(0o755)
+    _write(
+        fake_bin / "crontab",
+        f"""#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == "-l" ]]; then
+  printf '%s' {cron_entries!r}
+else
+  echo "unexpected crontab invocation: $*" >&2
+  exit 1
+fi
+""",
+    )
+    for path in fake_bin.iterdir():
+        path.chmod(0o755)
+
+    return subprocess.run(
+        ["bash", str(VALIDATE_PROD_HOST_SCRIPT)],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            **os.environ,
+            "DEPLOY_DIR": str(deploy_dir),
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        },
+    )
+
+
 def _run_bootstrap_prod_host(
     tmp_path: Path,
     *,
@@ -111,6 +200,8 @@ if [[ "$*" == "--version" ]]; then
   echo "Docker version 26.1.0"
 elif [[ "$*" == "compose version" ]]; then
   echo "Docker Compose version v2.24.0"
+elif [[ "$*" == "info" ]]; then
+  exit 0
 else
   echo "unexpected docker invocation: $*" >&2
   exit 1
@@ -152,6 +243,26 @@ fi
 cat > "${FAKE_CRON_FILE}"
 """,
     )
+    _write(
+        fake_bin / "apt-get",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == "update" ]]; then
+  exit 0
+elif [[ "$1" == "install" && "$2" == "-y" && "$3" == "rclone" ]]; then
+  cat > "${FAKE_BIN_DIR}/rclone" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+exit 0
+EOF
+  chmod +x "${FAKE_BIN_DIR}/rclone"
+  exit 0
+else
+  echo "unexpected apt-get invocation: $*" >&2
+  exit 1
+fi
+""",
+    )
     for path in fake_bin.iterdir():
         path.chmod(0o755)
 
@@ -159,6 +270,7 @@ cat > "${FAKE_CRON_FILE}"
     env["PATH"] = f"{fake_bin}:{env['PATH']}"
     env["DEPLOY_DIR"] = str(deploy_dir)
     env["FAKE_CRON_FILE"] = str(cron_file)
+    env["FAKE_BIN_DIR"] = str(fake_bin)
     if allow_external_firewall:
         env["PROMPTCODE_ALLOW_EXTERNAL_FIREWALL"] = "1"
 
@@ -491,7 +603,7 @@ def test_deploy_workflow_rollback_uses_previous_tag_without_build() -> None:
 def test_deploy_workflow_validates_host_env_and_refreshes_ghcr_before_pull() -> None:
     workflow_text = BACKEND_CI_WORKFLOW.read_text(encoding="utf-8")
 
-    validate_step = "            bash /opt/promptcode/scripts/validate-host-env.sh"
+    validate_step = "            bash /opt/promptcode/scripts/validate-prod-host.sh"
     ghcr_step = "            bash /opt/promptcode/scripts/setup-ghcr-login.sh"
     pull_step = "            docker pull ${{ env.IMAGE_NAME }}:${{ github.sha }}"
 
@@ -500,6 +612,7 @@ def test_deploy_workflow_validates_host_env_and_refreshes_ghcr_before_pull() -> 
     assert pull_step in workflow_text
     assert workflow_text.index(validate_step) < workflow_text.index(pull_step)
     assert workflow_text.index(ghcr_step) < workflow_text.index(pull_step)
+    assert "scripts/validate-prod-host.sh" in workflow_text
 
 
 def test_deploy_workflow_does_not_print_full_merged_compose_on_validation_failure() -> None:
@@ -583,6 +696,43 @@ def test_validate_host_env_script_rejects_missing_ghcr_setup_for_private_images(
     assert "GHCR_TOKEN must be set" in result.stderr
 
 
+def test_validate_prod_host_script_passes_with_required_dependencies(tmp_path: Path):
+    result = _run_validate_prod_host(
+        tmp_path,
+        cron_entries=(
+            "0 3 * * * bash /opt/promptcode/scripts/backup-db.sh\n"
+            "*/5 * * * * bash /opt/promptcode/scripts/check-prod-health.sh\n"
+        ),
+    )
+
+    assert result.returncode == 0
+    assert "Production host preflight OK" in result.stdout
+
+
+def test_validate_prod_host_script_requires_rclone(tmp_path: Path):
+    result = _run_validate_prod_host(
+        tmp_path,
+        include_rclone=False,
+        cron_entries=(
+            "0 3 * * * bash /opt/promptcode/scripts/backup-db.sh\n"
+            "*/5 * * * * bash /opt/promptcode/scripts/check-prod-health.sh\n"
+        ),
+    )
+
+    assert result.returncode == 1
+    assert "rclone must be installed" in result.stderr
+
+
+def test_validate_prod_host_script_requires_backup_and_health_crons(tmp_path: Path):
+    result = _run_validate_prod_host(
+        tmp_path,
+        cron_entries="0 3 * * * bash /opt/promptcode/scripts/backup-db.sh\n",
+    )
+
+    assert result.returncode == 1
+    assert "Health-check cron is missing" in result.stderr
+
+
 def test_setup_ghcr_login_script_logs_in_with_host_credentials(tmp_path: Path):
     result, capture_path = _run_setup_ghcr_login(
         tmp_path,
@@ -635,6 +785,7 @@ def test_bootstrap_prod_host_allows_explicit_external_firewall_management(tmp_pa
     assert "relying on an external firewall" in result.stdout
     assert (deploy_dir / "scripts" / "validate-host-env.sh").exists()
     assert (deploy_dir / "scripts" / "setup-ghcr-login.sh").exists()
+    assert (deploy_dir / "scripts" / "validate-prod-host.sh").exists()
 
 
 def test_backup_db_script_creates_local_backup_and_uploads_off_host(tmp_path: Path):

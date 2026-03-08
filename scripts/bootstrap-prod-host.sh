@@ -6,11 +6,12 @@
 #
 # What it does:
 #   1. Installs Docker Engine + Docker Compose plugin (if absent)
-#   2. Creates /opt/promptcode and copies the repo files in
-#   3. Creates /opt/promptcode/.env from .env.example if no .env exists yet
-#   4. Opens ports 80 and 443 via ufw (if ufw is active)
-#   5. Adds the current user to the docker group
-#   6. Installs a daily backup cron job (03:00) for the deploy user
+#   2. Installs rclone (if absent)
+#   3. Creates /opt/promptcode and copies the repo files in
+#   4. Creates /opt/promptcode/.env from .env.example if no .env exists yet
+#   5. Opens ports 80 and 443 via ufw (if ufw is active)
+#   6. Adds the current user to the docker group
+#   7. Installs a daily backup cron job (03:00) for the deploy user
 #
 # After running:
 #   1. Edit /opt/promptcode/.env — fill in all required secrets
@@ -42,6 +43,19 @@ if ! docker compose version &>/dev/null; then
   exit 1
 fi
 
+if ! command -v rclone &>/dev/null; then
+  if command -v apt-get &>/dev/null; then
+    echo "Installing rclone..."
+    apt-get update
+    apt-get install -y rclone
+  else
+    echo "ERROR: rclone not found and apt-get is unavailable. Install rclone manually." >&2
+    exit 1
+  fi
+else
+  echo "rclone already installed."
+fi
+
 # ── 2. Deploy directory ───────────────────────────────────────────────────────
 echo "Setting up ${DEPLOY_DIR}..."
 mkdir -p "${DEPLOY_DIR}/docker" "${DEPLOY_DIR}/scripts" "${DEPLOY_DIR}/backups"
@@ -56,12 +70,14 @@ cp "${REPO_DIR}/scripts/seed-prod-data.sh"   "${DEPLOY_DIR}/scripts/seed-prod-da
 cp "${REPO_DIR}/scripts/check-prod-health.sh" "${DEPLOY_DIR}/scripts/check-prod-health.sh"
 cp "${REPO_DIR}/scripts/validate-host-env.sh" "${DEPLOY_DIR}/scripts/validate-host-env.sh"
 cp "${REPO_DIR}/scripts/setup-ghcr-login.sh" "${DEPLOY_DIR}/scripts/setup-ghcr-login.sh"
+cp "${REPO_DIR}/scripts/validate-prod-host.sh" "${DEPLOY_DIR}/scripts/validate-prod-host.sh"
 chmod +x "${DEPLOY_DIR}/scripts/backup-db.sh"
 chmod +x "${DEPLOY_DIR}/scripts/restore-db.sh"
 chmod +x "${DEPLOY_DIR}/scripts/seed-prod-data.sh"
 chmod +x "${DEPLOY_DIR}/scripts/check-prod-health.sh"
 chmod +x "${DEPLOY_DIR}/scripts/validate-host-env.sh"
 chmod +x "${DEPLOY_DIR}/scripts/setup-ghcr-login.sh"
+chmod +x "${DEPLOY_DIR}/scripts/validate-prod-host.sh"
 
 # ── 3. .env ───────────────────────────────────────────────────────────────────
 if [[ ! -f "${DEPLOY_DIR}/.env" ]]; then
@@ -127,6 +143,7 @@ echo "       (GHCR_USERNAME/GHCR_TOKEN) or PROMPTCODE_GHCR_PUBLIC_IMAGES=true"
 echo "  2. Validate the host env and configure GHCR pulls:"
 echo "       bash ${DEPLOY_DIR}/scripts/validate-host-env.sh"
 echo "       bash ${DEPLOY_DIR}/scripts/setup-ghcr-login.sh"
+echo "       bash ${DEPLOY_DIR}/scripts/validate-prod-host.sh"
 echo "  3. cd ${DEPLOY_DIR}"
 echo "  4. First deploy is triggered automatically by CI on push to main."
 echo "  5. If ufw is intentionally inactive, rerun bootstrap with PROMPTCODE_ALLOW_EXTERNAL_FIREWALL=1"
