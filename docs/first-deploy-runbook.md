@@ -17,13 +17,12 @@
 ## First deploy
 
 1. Push to `main` and let GitHub Actions deploy the current SHA.
-2. After the stack is healthy, seed required challenge data:
+2. The deploy workflow seeds challenge data before the post-deploy smoke test runs.
+3. If you need to re-seed manually after adding or updating challenge content:
 
 ```bash
 bash /opt/promptcode/scripts/seed-prod-data.sh
 ```
-
-3. Re-run the deploy smoke or trigger another deploy after seeding so the zero-challenge check passes.
 
 ## Ongoing ops checks
 

@@ -264,6 +264,17 @@ jobs:
             fi
             echo "Deploy complete."
 
+      - name: Seed production challenge data
+        if: env.DEPLOY_HOST != ''
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 3m
+          script: |
+            bash /opt/promptcode/scripts/seed-prod-data.sh
+
       - name: Post-deploy smoke test
         if: env.DEPLOY_HOST != ''
         uses: appleboy/ssh-action@v1.0.3

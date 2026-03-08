@@ -33,6 +33,12 @@ def test_metrics_endpoint_returns_prometheus_text(monkeypatch):
 def test_metrics_endpoint_requires_token_in_non_debug_mode(monkeypatch):
     monkeypatch.setenv("PROMPTCODE_DEBUG", "false")
     monkeypatch.setenv("PROMPTCODE_JWT_SECRET", "prod-metrics-test-secret")
+    monkeypatch.setenv("DOMAIN", "api.example.com")
+    monkeypatch.setenv(
+        "PROMPTCODE_DATABASE_URL",
+        "postgresql+asyncpg://user:pass@db.example.com:5432/promptcode",
+    )
+    monkeypatch.setenv("PROMPTCODE_OPENAI_API_KEY", "sk-live-metrics-test-key")
     monkeypatch.delenv("PROMPTCODE_METRICS_TOKEN", raising=False)
     async_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     monkeypatch.setattr(main_module, "engine", async_engine)
@@ -53,6 +59,12 @@ def test_metrics_endpoint_requires_token_in_non_debug_mode(monkeypatch):
 def test_metrics_endpoint_accepts_bearer_token_in_non_debug_mode(monkeypatch):
     monkeypatch.setenv("PROMPTCODE_DEBUG", "false")
     monkeypatch.setenv("PROMPTCODE_JWT_SECRET", "prod-metrics-test-secret")
+    monkeypatch.setenv("DOMAIN", "api.example.com")
+    monkeypatch.setenv(
+        "PROMPTCODE_DATABASE_URL",
+        "postgresql+asyncpg://user:pass@db.example.com:5432/promptcode",
+    )
+    monkeypatch.setenv("PROMPTCODE_OPENAI_API_KEY", "sk-live-metrics-test-key")
     monkeypatch.setenv("PROMPTCODE_METRICS_TOKEN", "metrics-secret")
     async_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     monkeypatch.setattr(main_module, "engine", async_engine)
