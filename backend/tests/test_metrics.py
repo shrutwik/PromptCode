@@ -10,6 +10,7 @@ from app.core.config import get_settings
 
 
 def test_metrics_endpoint_returns_prometheus_text(monkeypatch):
+    monkeypatch.setenv("PROMPTCODE_DEBUG", "true")
     async_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     monkeypatch.setattr(main_module, "engine", async_engine)
     get_settings.cache_clear()
@@ -24,6 +25,46 @@ def test_metrics_endpoint_returns_prometheus_text(monkeypatch):
     assert response.status_code == 200
     assert "http_requests_total" in response.text
     assert "http_request_duration_seconds" in response.text
+
+    get_settings.cache_clear()
+    asyncio.run(async_engine.dispose())
+
+
+def test_metrics_endpoint_requires_token_in_non_debug_mode(monkeypatch):
+    monkeypatch.setenv("PROMPTCODE_DEBUG", "false")
+    monkeypatch.setenv("PROMPTCODE_JWT_SECRET", "prod-metrics-test-secret")
+    monkeypatch.delenv("PROMPTCODE_METRICS_TOKEN", raising=False)
+    async_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    monkeypatch.setattr(main_module, "engine", async_engine)
+    get_settings.cache_clear()
+
+    app = main_module.create_app()
+
+    with TestClient(app) as client:
+        response = client.get("/metrics")
+
+    assert response.status_code == 401
+    assert response.text == "Unauthorized"
+
+    get_settings.cache_clear()
+    asyncio.run(async_engine.dispose())
+
+
+def test_metrics_endpoint_accepts_bearer_token_in_non_debug_mode(monkeypatch):
+    monkeypatch.setenv("PROMPTCODE_DEBUG", "false")
+    monkeypatch.setenv("PROMPTCODE_JWT_SECRET", "prod-metrics-test-secret")
+    monkeypatch.setenv("PROMPTCODE_METRICS_TOKEN", "metrics-secret")
+    async_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    monkeypatch.setattr(main_module, "engine", async_engine)
+    get_settings.cache_clear()
+
+    app = main_module.create_app()
+
+    with TestClient(app) as client:
+        response = client.get("/metrics", headers={"Authorization": "Bearer metrics-secret"})
+
+    assert response.status_code == 200
+    assert "http_requests_total" in response.text
 
     get_settings.cache_clear()
     asyncio.run(async_engine.dispose())

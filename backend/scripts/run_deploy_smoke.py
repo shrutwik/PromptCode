@@ -101,6 +101,11 @@ def main() -> None:
     parser.add_argument("--timeout-seconds", type=int, default=120)
     parser.add_argument("--poll-interval-seconds", type=float, default=2.0)
     parser.add_argument(
+        "--skip-poll",
+        action="store_true",
+        help="Exit after verifying submission acceptance without waiting for evaluation.",
+    )
+    parser.add_argument(
         "--code",
         default="def solve(data):\n    return {}\n",
         help="Python submission code to send during the smoke test.",
@@ -114,7 +119,20 @@ def main() -> None:
         raise SystemExit(f"Readiness check failed: {status} {body}")
 
     token = _signup_or_login(base_url, args.email, args.password)
-    challenge_id = _pick_challenge(base_url, args.challenge_id or None)
+
+    try:
+        challenge_id = _pick_challenge(base_url, args.challenge_id or None)
+    except RuntimeError:
+        if args.skip_poll:
+            print(
+                json.dumps(
+                    {"ready": True, "smoke": "no challenges seeded — skipping submission"},
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return
+        raise
 
     submission_payload = {
         "challenge_id": challenge_id,
@@ -131,6 +149,22 @@ def main() -> None:
         raise SystemExit(f"Submission creation failed: {status} {body}")
 
     submission_id = str(body["id"])
+
+    if args.skip_poll:
+        print(
+            json.dumps(
+                {
+                    "ready": True,
+                    "challenge_id": challenge_id,
+                    "submission_id": submission_id,
+                    "smoke": "submission accepted",
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return
+
     final_status = _poll_submission(
         base_url,
         submission_id,

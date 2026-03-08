@@ -7,7 +7,6 @@ from pydantic import BaseModel
 
 class LeaderboardEntryResponse(BaseModel):
     rank: int | None
-    user_id: uuid.UUID
     username: str = ""
     submission_id: uuid.UUID
     score_overall: float

@@ -44,6 +44,20 @@ class _FailingEngine:
         return None
 
 
+class _BeginForbiddenEngine:
+    def __init__(self, delegate):
+        self._delegate = delegate
+
+    def begin(self):
+        raise AssertionError("startup should not call engine.begin()")
+
+    def connect(self):
+        return self._delegate.connect()
+
+    async def dispose(self):
+        await self._delegate.dispose()
+
+
 def test_health_and_ready_are_ok_with_live_database(monkeypatch):
     async_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     monkeypatch.setattr(main_module, "engine", async_engine)
@@ -129,6 +143,24 @@ def test_ready_returns_503_when_database_is_unavailable(monkeypatch):
     assert ready.status_code == 503
     assert ready.json() == {"status": "error", "detail": "database unavailable"}
     get_settings.cache_clear()
+
+
+def test_startup_does_not_attempt_schema_creation(monkeypatch):
+    async_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    monkeypatch.setattr(main_module, "engine", _BeginForbiddenEngine(async_engine))
+    get_settings.cache_clear()
+
+    app = main_module.create_app()
+
+    with TestClient(app) as client:
+        health = client.get("/health")
+        ready = client.get("/ready")
+
+    assert health.status_code == 200
+    assert ready.status_code == 200
+
+    get_settings.cache_clear()
+    asyncio.run(async_engine.dispose())
 
 
 def test_ready_returns_503_when_sandbox_executor_is_unavailable(monkeypatch):

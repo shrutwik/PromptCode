@@ -23,7 +23,6 @@ from app.core.metrics import (
     http_request_duration_seconds,
     http_requests_total,
 )
-from app.db.base import Base
 from app.db.session import engine
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
@@ -141,13 +140,6 @@ async def _sandbox_executor_ready(settings) -> bool:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Try to ensure tables exist, but don't block startup if the DB
-    # (e.g., Supabase) is temporarily unavailable.
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-    except Exception as exc:  # pragma: no cover - best-effort guard
-        logger.error("Database initialization failed during startup", exc_info=exc)
     yield
     await engine.dispose()
 
@@ -231,7 +223,10 @@ def create_app() -> FastAPI:
     @app.get("/metrics", include_in_schema=False)
     async def metrics_endpoint(request: Request):
         token = get_settings().metrics_token.strip()
-        if token and request.headers.get("Authorization") != f"Bearer {token}":
+        if token:
+            if request.headers.get("Authorization") != f"Bearer {token}":
+                return PlainTextResponse("Unauthorized", status_code=401)
+        elif not settings.debug:
             return PlainTextResponse("Unauthorized", status_code=401)
         return PlainTextResponse(generate_latest(get_metrics_registry()), media_type=CONTENT_TYPE_LATEST)
 

@@ -75,7 +75,6 @@ class UserResponse(BaseModel):
 
 
 class UserPublicResponse(BaseModel):
-    id: uuid.UUID
     username: str
     first_name: str
     last_name: str
@@ -83,6 +82,37 @@ class UserPublicResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class UserProfileStatsResponse(BaseModel):
+    total_submissions: int
+    challenges_solved: int
+    total_challenges: int
+    avg_score: float
+    avg_accuracy: float
+    avg_efficiency: float
+    avg_reliability: float
+    avg_orchestration: float
+    avg_growth_score: float
+    total_cost_usd: float
+    avg_latency_ms: float
+
+
+class UserProfileSubmissionResponse(BaseModel):
+    id: uuid.UUID
+    challenge_id: uuid.UUID
+    challenge_title: str
+    status: str
+    score_overall: float | None = None
+    growth_score: float | None = None
+    total_cost_usd: float | None = None
+    created_at: datetime | None = None
+
+
+class UserProfileResponse(BaseModel):
+    user: UserPublicResponse
+    stats: UserProfileStatsResponse
+    recent_submissions: list[UserProfileSubmissionResponse]
 
 
 class RefreshRequest(BaseModel):

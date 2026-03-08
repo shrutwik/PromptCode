@@ -254,7 +254,7 @@ def test_leaderboard_response_shape(tmp_path, monkeypatch):
         assert isinstance(e["username"], str) and e["username"] != ""
         assert isinstance(e["score_overall"], float)
         assert "submission_id" in e
-        assert "user_id" in e
+        assert "user_id" not in e
     _teardown(app, engine)
 
 
@@ -279,4 +279,68 @@ def test_leaderboard_pagination(tmp_path, monkeypatch):
         offset_entries = r_offset.json()
         assert len(offset_entries) == 2
         assert offset_entries[0]["rank"] == 2
+    _teardown(app, engine)
+
+
+def test_public_profile_omits_unused_submission_metrics(tmp_path, monkeypatch):
+    app, engine, sf = _build_test_app(tmp_path, monkeypatch)
+
+    async def _seed_profile() -> None:
+        challenge_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        submission_id = uuid.uuid4()
+
+        async with sf() as db:
+            db.add(
+                User(
+                    id=user_id,
+                    email="profile-public@example.com",
+                    username="profilepublic1",
+                    password_hash=hash_password("dummy-pass"),
+                )
+            )
+            db.add(
+                Challenge(
+                    id=challenge_id,
+                    slug="profile-public-challenge",
+                    title="Profile Public Challenge",
+                    description="test",
+                )
+            )
+            db.add(
+                Submission(
+                    id=submission_id,
+                    challenge_id=challenge_id,
+                    user_id=user_id,
+                    code="x=1",
+                    status="completed",
+                    score_overall=0.91,
+                    score_accuracy=0.83,
+                    delta_overall=0.12,
+                    growth_score=0.66,
+                    mastery_state="proficient",
+                    total_cost_usd=0.42,
+                    total_latency_ms=1500,
+                )
+            )
+            await db.commit()
+
+    asyncio.run(_seed_profile())
+
+    with TestClient(app) as client:
+        response = client.get("/api/users/profilepublic1")
+        assert response.status_code == 200
+        payload = response.json()
+        assert "id" not in payload["user"]
+        stats = payload["stats"]
+        recent = payload["recent_submissions"][0]
+
+        assert "improving_submissions" not in stats
+        assert "improving_rate" not in stats
+        assert "score_accuracy" not in recent
+        assert "delta_overall" not in recent
+        assert "mastery_state" not in recent
+        assert recent["growth_score"] == 0.66
+        assert recent["total_cost_usd"] == 0.42
+
     _teardown(app, engine)

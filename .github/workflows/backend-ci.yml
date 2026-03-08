@@ -149,14 +149,23 @@ jobs:
             done
             docker image prune -f
             echo "Waiting for /ready..."
+            READY=false
             for i in $(seq 1 24); do
               if docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3).read()" 2>/dev/null; then
                 echo "App is healthy."
-                exit 0
+                READY=true
+                break
               fi
               echo "Not ready yet ($i/24), sleeping 5s..."
               sleep 5
             done
-            echo "ERROR: App did not become ready within 120s." >&2
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=50 backend
-            exit 1
+            if [ "$READY" != "true" ]; then
+              echo "ERROR: App did not become ready within 120s." >&2
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=50 backend
+              exit 1
+            fi
+            echo "Running post-deploy smoke test..."
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+              exec -T backend python -m scripts.run_deploy_smoke \
+              --skip-poll --base-url http://127.0.0.1:8000
+            echo "Deploy and smoke test complete."
