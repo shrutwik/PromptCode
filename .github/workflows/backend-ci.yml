@@ -137,7 +137,7 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.prod.yml config > /tmp/merged-prod-compose.yml
           if grep -Eq 'published: "(8000|5433)"|^[[:space:]]+build:' /tmp/merged-prod-compose.yml; then
             echo "Merged production compose still exposes dev ports or build contexts." >&2
-            cat /tmp/merged-prod-compose.yml
+            grep -En 'published: "(8000|5433)"|^[[:space:]]+build:' /tmp/merged-prod-compose.yml >&2 || true
             exit 1
           fi
 
@@ -214,7 +214,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: "docker-compose.yml,docker-compose.prod.yml,docker/Caddyfile.prod,scripts/backup-db.sh,scripts/restore-db.sh,scripts/seed-prod-data.sh,scripts/check-prod-health.sh"
+          source: "docker-compose.yml,docker-compose.prod.yml,docker/Caddyfile.prod,scripts/backup-db.sh,scripts/restore-db.sh,scripts/seed-prod-data.sh,scripts/check-prod-health.sh,scripts/validate-host-env.sh,scripts/setup-ghcr-login.sh"
           target: "/opt/promptcode"
 
       - name: Deploy to production host
@@ -225,15 +225,16 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
+            cd /opt/promptcode
+            bash /opt/promptcode/scripts/validate-host-env.sh
+            bash /opt/promptcode/scripts/setup-ghcr-login.sh
+            docker pull ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            docker pull ${{ env.SANDBOX_IMAGE_NAME }}:${{ github.sha }}
+            docker tag ${{ env.SANDBOX_IMAGE_NAME }}:${{ github.sha }} promptcode-sandbox:latest
             # Record previous deployment tag before overwriting (for rollback reference)
             [ -f /opt/promptcode/.current-image-tag ] && cp /opt/promptcode/.current-image-tag /opt/promptcode/.previous-image-tag || true
             echo "${{ github.sha }}" > /opt/promptcode/.current-image-tag
             printf 'deploying %s %s\n' "$(date -u +%s)" "${{ github.sha }}" > /opt/promptcode/.last-deploy-status
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker pull ${{ env.IMAGE_NAME }}:${{ github.sha }}
-            docker pull ${{ env.SANDBOX_IMAGE_NAME }}:${{ github.sha }}
-            docker tag ${{ env.SANDBOX_IMAGE_NAME }}:${{ github.sha }} promptcode-sandbox:latest
-            cd /opt/promptcode
             IMAGE_TAG=${{ github.sha }} docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
             # Smart image cleanup: keep current SHA, previous SHA, and :latest; prune the rest
             PREV_TAG="$(cat /opt/promptcode/.previous-image-tag 2>/dev/null || echo 'NO_PREVIOUS')"
@@ -335,6 +336,8 @@ jobs:
           script: |
             set -euo pipefail
             cd /opt/promptcode
+            bash /opt/promptcode/scripts/validate-host-env.sh
+            bash /opt/promptcode/scripts/setup-ghcr-login.sh
             if [ ! -f /opt/promptcode/.previous-image-tag ]; then
               echo "No previous deployment tag available for automatic rollback." >&2
               exit 1
@@ -346,6 +349,9 @@ jobs:
             fi
             echo "Rolling back deployment to ${ROLLBACK_TAG}."
             echo "If the failed deploy already ran Alembic migrations, downgrade one revision before relying on the old image."
+            docker pull ${{ env.IMAGE_NAME }}:${ROLLBACK_TAG}
+            docker pull ${{ env.SANDBOX_IMAGE_NAME }}:${ROLLBACK_TAG}
+            docker tag ${{ env.SANDBOX_IMAGE_NAME }}:${ROLLBACK_TAG} promptcode-sandbox:latest
             IMAGE_TAG="$ROLLBACK_TAG" docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
             echo "$ROLLBACK_TAG" > /opt/promptcode/.current-image-tag
             printf 'rolled_back %s %s\n' "$(date -u +%s)" "$ROLLBACK_TAG" > /opt/promptcode/.last-deploy-status

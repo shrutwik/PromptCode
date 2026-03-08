@@ -65,6 +65,12 @@ COMPOSE_FILES = [
 ]
 
 errors: list[str] = []
+known_operational_env_vars = {
+    "GHCR_TOKEN",
+    "GHCR_USERNAME",
+    "PROMPTCODE_GHCR_PUBLIC_IMAGES",
+    "RCLONE_REMOTE",
+}
 
 for path in [ENV_FILE, CONFIG_FILE, *COMPOSE_FILES]:
     if not path.exists():
@@ -127,7 +133,7 @@ for node in tree.body:
     break
 
 missing_required = sorted(compose_required_vars - env_vars)
-dead_env_vars = sorted(env_vars - compose_referenced_vars - config_env_vars)
+dead_env_vars = sorted(env_vars - compose_referenced_vars - config_env_vars - known_operational_env_vars)
 
 if missing_required:
     errors.append(

@@ -3,6 +3,8 @@
 ## Before first deploy
 
 1. Bootstrap the host with `scripts/bootstrap-prod-host.sh`.
+   - If `ufw` is intentionally inactive, rerun with `PROMPTCODE_ALLOW_EXTERNAL_FIREWALL=1`
+     only after confirming your cloud firewall/security group exposes `80/443` and blocks backend/db ports.
 2. Edit `/opt/promptcode/.env` and set real values for:
    - `DOMAIN`
    - `PROMPTCODE_DB_PASSWORD`
@@ -11,7 +13,10 @@
    - `PROMPTCODE_OPENAI_API_KEY`
    - `PROMPTCODE_METRICS_TOKEN`
    - `RCLONE_REMOTE`
-3. Store a persistent GHCR credential on the host for restart and rollback.
+   - Either `GHCR_USERNAME` + `GHCR_TOKEN`, or `PROMPTCODE_GHCR_PUBLIC_IMAGES=true`
+3. Validate the host env and configure GHCR pull auth:
+   - `bash /opt/promptcode/scripts/validate-host-env.sh`
+   - `bash /opt/promptcode/scripts/setup-ghcr-login.sh`
 4. Point DNS for `DOMAIN` at the production host before expecting Caddy TLS issuance.
 
 ## First deploy
@@ -76,7 +81,7 @@ Launch is blocked until a restore rehearsal succeeds end to end.
 2. Initial `/opt/promptcode/.env` population, including `DOMAIN`, DB password, JWT secret, sandbox token, OpenAI key, metrics token, and backup remote.
    Responsible: deploy operator with secret-management access.
    When: before any production deploy or rollback attempt.
-3. GHCR authentication on the host for restarts and rollbacks.
+3. GHCR authentication on the host for restarts and rollbacks, unless both GHCR packages are intentionally public.
    Responsible: deploy operator or repo admin.
    When: before the first deploy and whenever the stored PAT rotates.
 4. Restore rehearsal sign-off.

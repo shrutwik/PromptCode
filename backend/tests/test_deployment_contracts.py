@@ -17,6 +17,8 @@ VALIDATE_ENV_SCRIPT = REPO_ROOT / "scripts" / "validate-env.sh"
 CHECK_PROD_HEALTH_SCRIPT = REPO_ROOT / "scripts" / "check-prod-health.sh"
 BACKUP_DB_SCRIPT = REPO_ROOT / "scripts" / "backup-db.sh"
 RESTORE_DB_SCRIPT = REPO_ROOT / "scripts" / "restore-db.sh"
+SETUP_GHCR_LOGIN_SCRIPT = REPO_ROOT / "scripts" / "setup-ghcr-login.sh"
+VALIDATE_HOST_ENV_SCRIPT = REPO_ROOT / "scripts" / "validate-host-env.sh"
 BACKEND_CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "backend-ci.yml"
 OPS_REHEARSALS_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ops-rehearsals.yml"
 
@@ -45,6 +47,129 @@ def _run_validate_env(tmp_path: Path, *, env_text: str, compose_text: str, confi
         text=True,
         check=False,
     )
+
+
+def _run_validate_host_env(tmp_path: Path, env_text: str):
+    deploy_dir = tmp_path / "deploy"
+    deploy_dir.mkdir(parents=True)
+    _write(deploy_dir / ".env", env_text)
+    return subprocess.run(
+        ["bash", str(VALIDATE_HOST_ENV_SCRIPT)],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "DEPLOY_DIR": str(deploy_dir)},
+    )
+
+
+def _run_setup_ghcr_login(tmp_path: Path, env_text: str):
+    deploy_dir = tmp_path / "deploy"
+    fake_bin = tmp_path / "bin"
+    capture_path = tmp_path / "ghcr-login.txt"
+    deploy_dir.mkdir(parents=True)
+    fake_bin.mkdir(parents=True)
+    _write(deploy_dir / ".env", env_text)
+    _write(
+        fake_bin / "docker",
+        """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s|%s|' "$*" "${FAKE_GHCR_CAPTURE}" > "${FAKE_GHCR_CAPTURE}"
+cat >> "${FAKE_GHCR_CAPTURE}"
+""",
+    )
+    (fake_bin / "docker").chmod(0o755)
+    return subprocess.run(
+        ["bash", str(SETUP_GHCR_LOGIN_SCRIPT)],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            **os.environ,
+            "DEPLOY_DIR": str(deploy_dir),
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "FAKE_GHCR_CAPTURE": str(capture_path),
+        },
+    ), capture_path
+
+
+def _run_bootstrap_prod_host(
+    tmp_path: Path,
+    *,
+    ufw_active: bool,
+    allow_external_firewall: bool = False,
+):
+    deploy_dir = tmp_path / "deploy"
+    fake_bin = tmp_path / "bin"
+    cron_file = tmp_path / "crontab.txt"
+    fake_bin.mkdir(parents=True)
+
+    _write(
+        fake_bin / "docker",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$*" == "--version" ]]; then
+  echo "Docker version 26.1.0"
+elif [[ "$*" == "compose version" ]]; then
+  echo "Docker Compose version v2.24.0"
+else
+  echo "unexpected docker invocation: $*" >&2
+  exit 1
+fi
+""",
+    )
+    _write(
+        fake_bin / "ufw",
+        f"""#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == "status" ]]; then
+  echo "Status: {'active' if ufw_active else 'inactive'}"
+elif [[ "$1" == "allow" ]]; then
+  exit 0
+else
+  echo "unexpected ufw invocation: $*" >&2
+  exit 1
+fi
+""",
+    )
+    _write(
+        fake_bin / "groups",
+        """#!/usr/bin/env bash
+set -euo pipefail
+echo "tester : tester docker"
+""",
+    )
+    _write(
+        fake_bin / "crontab",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == "-l" ]]; then
+  if [[ -f "${FAKE_CRON_FILE}" ]]; then
+    cat "${FAKE_CRON_FILE}"
+    exit 0
+  fi
+  exit 1
+fi
+cat > "${FAKE_CRON_FILE}"
+""",
+    )
+    for path in fake_bin.iterdir():
+        path.chmod(0o755)
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+    env["DEPLOY_DIR"] = str(deploy_dir)
+    env["FAKE_CRON_FILE"] = str(cron_file)
+    if allow_external_firewall:
+        env["PROMPTCODE_ALLOW_EXTERNAL_FIREWALL"] = "1"
+
+    result = subprocess.run(
+        ["bash", str(REPO_ROOT / "scripts" / "bootstrap-prod-host.sh")],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    return result, deploy_dir
 
 
 def _run_check_prod_health(
@@ -307,6 +432,29 @@ def test_validate_env_script_rejects_dead_env_var(tmp_path: Path):
     assert "UNUSED_VAR" in result.stderr
 
 
+def test_validate_env_script_allows_known_operational_env_vars(tmp_path: Path):
+    result = _run_validate_env(
+        tmp_path,
+        env_text=(
+            "PROMPTCODE_JWT_SECRET=test-secret\n"
+            "RCLONE_REMOTE=s3:bucket/path\n"
+            "PROMPTCODE_GHCR_PUBLIC_IMAGES=false\n"
+            "GHCR_USERNAME=promptcode\n"
+            "GHCR_TOKEN=ghp-secret\n"
+        ),
+        compose_text=(
+            "services:\n"
+            "  backend:\n"
+            "    environment:\n"
+            "      PROMPTCODE_JWT_SECRET: ${PROMPTCODE_JWT_SECRET:?set PROMPTCODE_JWT_SECRET}\n"
+        ),
+        config_text="class Settings:\n    jwt_secret: str = ''\n",
+    )
+
+    assert result.returncode == 0
+    assert "Environment contract OK" in result.stdout
+
+
 def test_challenge_tags_column_uses_json_contract():
     assert isinstance(Challenge.__table__.c.tags.type, JSONType)
 
@@ -327,6 +475,11 @@ def test_deploy_workflow_rollback_uses_previous_tag_without_build() -> None:
 
     assert "      - name: Roll back failed deploy" in workflow_text
     assert 'ROLLBACK_TAG="$(cat /opt/promptcode/.previous-image-tag)"' in workflow_text
+    assert "bash /opt/promptcode/scripts/validate-host-env.sh" in workflow_text
+    assert "bash /opt/promptcode/scripts/setup-ghcr-login.sh" in workflow_text
+    assert 'docker pull ${{ env.IMAGE_NAME }}:${ROLLBACK_TAG}' in workflow_text
+    assert 'docker pull ${{ env.SANDBOX_IMAGE_NAME }}:${ROLLBACK_TAG}' in workflow_text
+    assert 'docker tag ${{ env.SANDBOX_IMAGE_NAME }}:${ROLLBACK_TAG} promptcode-sandbox:latest' in workflow_text
     assert (
         'IMAGE_TAG="$ROLLBACK_TAG" docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build'
         in workflow_text
@@ -335,11 +488,153 @@ def test_deploy_workflow_rollback_uses_previous_tag_without_build() -> None:
     assert "rolled_back %s %s" in workflow_text
 
 
+def test_deploy_workflow_validates_host_env_and_refreshes_ghcr_before_pull() -> None:
+    workflow_text = BACKEND_CI_WORKFLOW.read_text(encoding="utf-8")
+
+    validate_step = "            bash /opt/promptcode/scripts/validate-host-env.sh"
+    ghcr_step = "            bash /opt/promptcode/scripts/setup-ghcr-login.sh"
+    pull_step = "            docker pull ${{ env.IMAGE_NAME }}:${{ github.sha }}"
+
+    assert validate_step in workflow_text
+    assert ghcr_step in workflow_text
+    assert pull_step in workflow_text
+    assert workflow_text.index(validate_step) < workflow_text.index(pull_step)
+    assert workflow_text.index(ghcr_step) < workflow_text.index(pull_step)
+
+
+def test_deploy_workflow_does_not_print_full_merged_compose_on_validation_failure() -> None:
+    workflow_text = BACKEND_CI_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "cat /tmp/merged-prod-compose.yml" not in workflow_text
+    assert "grep -En 'published: \"(8000|5433)\"|^[[:space:]]+build:' /tmp/merged-prod-compose.yml >&2 || true" in workflow_text
+
+
 def test_backup_db_script_requires_off_host_remote(tmp_path: Path):
     result, _, _ = _run_backup_db(tmp_path, set_rclone_remote=False)
 
     assert result.returncode == 1
     assert "RCLONE_REMOTE must be set for off-host backups" in result.stderr
+
+
+def test_validate_host_env_script_accepts_private_ghcr_credentials(tmp_path: Path):
+    result = _run_validate_host_env(
+        tmp_path,
+        "\n".join(
+            [
+                "DOMAIN=api.example.com",
+                "PROMPTCODE_DB_PASSWORD=prod-db-password",
+                "PROMPTCODE_JWT_SECRET=prod-jwt-secret-0123456789abcdef",
+                "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=prod-sandbox-secret-0123456789",
+                "PROMPTCODE_OPENAI_API_KEY=sk-live-prod-key",
+                "PROMPTCODE_METRICS_TOKEN=metrics-secret",
+                "RCLONE_REMOTE=s3:promptcode/backups",
+                "GHCR_USERNAME=promptcode-bot",
+                "GHCR_TOKEN=ghp_example_token",
+                "",
+            ],
+        ),
+    )
+
+    assert result.returncode == 0
+    assert "Host environment OK" in result.stdout
+
+
+def test_validate_host_env_script_accepts_public_ghcr_images_without_credentials(tmp_path: Path):
+    result = _run_validate_host_env(
+        tmp_path,
+        "\n".join(
+            [
+                "DOMAIN=api.example.com",
+                "PROMPTCODE_DB_PASSWORD=prod-db-password",
+                "PROMPTCODE_JWT_SECRET=prod-jwt-secret-0123456789abcdef",
+                "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=prod-sandbox-secret-0123456789",
+                "PROMPTCODE_OPENAI_API_KEY=sk-live-prod-key",
+                "PROMPTCODE_METRICS_TOKEN=metrics-secret",
+                "RCLONE_REMOTE=s3:promptcode/backups",
+                "PROMPTCODE_GHCR_PUBLIC_IMAGES=true",
+                "",
+            ],
+        ),
+    )
+
+    assert result.returncode == 0
+    assert "public images" in result.stdout
+
+
+def test_validate_host_env_script_rejects_missing_ghcr_setup_for_private_images(tmp_path: Path):
+    result = _run_validate_host_env(
+        tmp_path,
+        "\n".join(
+            [
+                "DOMAIN=api.example.com",
+                "PROMPTCODE_DB_PASSWORD=prod-db-password",
+                "PROMPTCODE_JWT_SECRET=prod-jwt-secret-0123456789abcdef",
+                "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=prod-sandbox-secret-0123456789",
+                "PROMPTCODE_OPENAI_API_KEY=sk-live-prod-key",
+                "PROMPTCODE_METRICS_TOKEN=metrics-secret",
+                "RCLONE_REMOTE=s3:promptcode/backups",
+                "",
+            ],
+        ),
+    )
+
+    assert result.returncode == 1
+    assert "GHCR_USERNAME must be set" in result.stderr
+    assert "GHCR_TOKEN must be set" in result.stderr
+
+
+def test_setup_ghcr_login_script_logs_in_with_host_credentials(tmp_path: Path):
+    result, capture_path = _run_setup_ghcr_login(
+        tmp_path,
+        "\n".join(
+            [
+                "GHCR_USERNAME=promptcode-bot",
+                "GHCR_TOKEN=ghp_example_token",
+                "",
+            ],
+        ),
+    )
+
+    assert result.returncode == 0
+    assert "GHCR login refreshed" in result.stdout
+    capture = capture_path.read_text(encoding="utf-8")
+    assert "login ghcr.io -u promptcode-bot --password-stdin" in capture
+    assert capture.endswith("ghp_example_token")
+
+
+def test_setup_ghcr_login_script_skips_for_public_images(tmp_path: Path):
+    result, capture_path = _run_setup_ghcr_login(
+        tmp_path,
+        "PROMPTCODE_GHCR_PUBLIC_IMAGES=true\n",
+    )
+
+    assert result.returncode == 0
+    assert "Skipping GHCR login" in result.stdout
+    assert not capture_path.exists()
+
+
+def test_bootstrap_prod_host_fails_closed_when_no_firewall_is_active(tmp_path: Path):
+    result, _ = _run_bootstrap_prod_host(
+        tmp_path,
+        ufw_active=False,
+    )
+
+    assert result.returncode == 1
+    assert "ufw is not active" in result.stderr
+    assert "PROMPTCODE_ALLOW_EXTERNAL_FIREWALL=1" in result.stderr
+
+
+def test_bootstrap_prod_host_allows_explicit_external_firewall_management(tmp_path: Path):
+    result, deploy_dir = _run_bootstrap_prod_host(
+        tmp_path,
+        ufw_active=False,
+        allow_external_firewall=True,
+    )
+
+    assert result.returncode == 0
+    assert "relying on an external firewall" in result.stdout
+    assert (deploy_dir / "scripts" / "validate-host-env.sh").exists()
+    assert (deploy_dir / "scripts" / "setup-ghcr-login.sh").exists()
 
 
 def test_backup_db_script_creates_local_backup_and_uploads_off_host(tmp_path: Path):

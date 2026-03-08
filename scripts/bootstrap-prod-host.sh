@@ -24,7 +24,7 @@
 
 set -euo pipefail
 
-DEPLOY_DIR="/opt/promptcode"
+DEPLOY_DIR="${DEPLOY_DIR:-/opt/promptcode}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "=== PromptCode production host bootstrap ==="
@@ -54,10 +54,14 @@ cp "${REPO_DIR}/scripts/backup-db.sh"        "${DEPLOY_DIR}/scripts/backup-db.sh
 cp "${REPO_DIR}/scripts/restore-db.sh"       "${DEPLOY_DIR}/scripts/restore-db.sh"
 cp "${REPO_DIR}/scripts/seed-prod-data.sh"   "${DEPLOY_DIR}/scripts/seed-prod-data.sh"
 cp "${REPO_DIR}/scripts/check-prod-health.sh" "${DEPLOY_DIR}/scripts/check-prod-health.sh"
+cp "${REPO_DIR}/scripts/validate-host-env.sh" "${DEPLOY_DIR}/scripts/validate-host-env.sh"
+cp "${REPO_DIR}/scripts/setup-ghcr-login.sh" "${DEPLOY_DIR}/scripts/setup-ghcr-login.sh"
 chmod +x "${DEPLOY_DIR}/scripts/backup-db.sh"
 chmod +x "${DEPLOY_DIR}/scripts/restore-db.sh"
 chmod +x "${DEPLOY_DIR}/scripts/seed-prod-data.sh"
 chmod +x "${DEPLOY_DIR}/scripts/check-prod-health.sh"
+chmod +x "${DEPLOY_DIR}/scripts/validate-host-env.sh"
+chmod +x "${DEPLOY_DIR}/scripts/setup-ghcr-login.sh"
 
 # ── 3. .env ───────────────────────────────────────────────────────────────────
 if [[ ! -f "${DEPLOY_DIR}/.env" ]]; then
@@ -74,8 +78,11 @@ if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
   ufw allow 80/tcp
   ufw allow 443/tcp
   ufw allow 443/udp   # HTTP/3
+elif [[ "${PROMPTCODE_ALLOW_EXTERNAL_FIREWALL:-false}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
+  echo "ufw not active — relying on an external firewall because PROMPTCODE_ALLOW_EXTERNAL_FIREWALL is set."
 else
-  echo "ufw not active — skipping firewall config. Open ports 80 and 443 manually."
+  echo "ERROR: ufw is not active. Enable ufw or rerun with PROMPTCODE_ALLOW_EXTERNAL_FIREWALL=1 if a cloud firewall/security group already restricts ingress." >&2
+  exit 1
 fi
 
 # ── 5. Docker group ───────────────────────────────────────────────────────────
@@ -115,12 +122,15 @@ echo "=== Bootstrap complete ==="
 echo "Next steps:"
 echo "  1. Edit ${DEPLOY_DIR}/.env — fill in PROMPTCODE_DB_PASSWORD, PROMPTCODE_JWT_SECRET,"
 echo "       PROMPTCODE_SANDBOX_EXECUTOR_TOKEN, PROMPTCODE_OPENAI_API_KEY, DOMAIN,"
-echo "       PROMPTCODE_METRICS_TOKEN, and RCLONE_REMOTE"
-echo "  2. Store a persistent GHCR credential for rollbacks (GITHUB_TOKEN from CI expires):"
-echo "       Create a GitHub PAT with read:packages scope, then run:"
-echo "       echo <PAT> | docker login ghcr.io -u <github-username> --password-stdin"
+echo "       PROMPTCODE_METRICS_TOKEN, RCLONE_REMOTE, and either GHCR credentials"
+echo "       (GHCR_USERNAME/GHCR_TOKEN) or PROMPTCODE_GHCR_PUBLIC_IMAGES=true"
+echo "  2. Validate the host env and configure GHCR pulls:"
+echo "       bash ${DEPLOY_DIR}/scripts/validate-host-env.sh"
+echo "       bash ${DEPLOY_DIR}/scripts/setup-ghcr-login.sh"
 echo "  3. cd ${DEPLOY_DIR}"
 echo "  4. First deploy is triggered automatically by CI on push to main."
+echo "  5. If ufw is intentionally inactive, rerun bootstrap with PROMPTCODE_ALLOW_EXTERNAL_FIREWALL=1"
+echo "       only after confirming your cloud firewall/security group exposes 80/443 and blocks backend/db ports."
 echo ""
 echo "Rollback procedure:"
 echo "  If NO schema migration ran between the broken and previous deploy:"

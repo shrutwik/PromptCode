@@ -7,7 +7,8 @@
 - [ ] Compose render verified clean (no 8000/5433/build:)
 - [ ] Localhost port check passed on the deploy host: `127.0.0.1:8000` refused and `127.0.0.1:5433` refused
 - [ ] External port check passed from outside the host network: `nc -zv <PROD_HOST_IP> 8000` refused or timed out, and `nc -zv <PROD_HOST_IP> 5433` refused or timed out
-- [ ] .env populated with no placeholders, DOMAIN set
+- [ ] Host `.env` validated by `scripts/validate-host-env.sh`
+- [ ] GHCR pull auth configured on the host, or `PROMPTCODE_GHCR_PUBLIC_IMAGES=true` intentionally set
 - [ ] DNS resolves to host, Caddy obtains TLS cert
 - [ ] HTTPS ingress verified: `https://DOMAIN/health` returns 200 and `http://DOMAIN/health` redirects to HTTPS
 - [ ] Challenges seeded, seed script ran twice (idempotency verified)

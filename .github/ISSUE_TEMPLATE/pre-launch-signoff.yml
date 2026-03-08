@@ -42,7 +42,9 @@ body:
     attributes:
       label: Production .env populated
       options:
-        - label: "I populated `.env` with real values, left no placeholders, and set `DOMAIN`."
+        - label: "I populated `.env` with real values and `scripts/validate-host-env.sh` passes."
+          required: true
+        - label: "I configured GHCR pull auth on the host, or intentionally set `PROMPTCODE_GHCR_PUBLIC_IMAGES=true` because both packages are public."
           required: true
 
   - type: checkboxes
