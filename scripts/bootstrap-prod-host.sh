@@ -10,11 +10,12 @@
 #   3. Creates /opt/promptcode/.env from .env.example if no .env exists yet
 #   4. Opens ports 80 and 443 via ufw (if ufw is active)
 #   5. Adds the current user to the docker group
+#   6. Installs a daily backup cron job (03:00) for the deploy user
 #
 # After running:
 #   1. Edit /opt/promptcode/.env — fill in all required secrets
 #   2. cd /opt/promptcode
-#   3. IMAGE_TAG=<sha> docker compose -f docker-compose.prod.yml up -d
+#   3. IMAGE_TAG=<sha> docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
 # The CI deploy job (via appleboy/ssh-action) expects:
 #   - Docker installed and accessible without sudo for DEPLOY_USER
@@ -43,12 +44,14 @@ fi
 
 # ── 2. Deploy directory ───────────────────────────────────────────────────────
 echo "Setting up ${DEPLOY_DIR}..."
-mkdir -p "${DEPLOY_DIR}/docker"
+mkdir -p "${DEPLOY_DIR}/docker" "${DEPLOY_DIR}/scripts" "${DEPLOY_DIR}/backups"
 
-# Copy compose files and Caddyfile
-cp "${REPO_DIR}/docker-compose.yml"       "${DEPLOY_DIR}/docker-compose.yml"
-cp "${REPO_DIR}/docker-compose.prod.yml"  "${DEPLOY_DIR}/docker-compose.prod.yml"
-cp "${REPO_DIR}/docker/Caddyfile.prod"    "${DEPLOY_DIR}/docker/Caddyfile.prod"
+# Copy compose files, Caddyfile, and operational scripts
+cp "${REPO_DIR}/docker-compose.yml"          "${DEPLOY_DIR}/docker-compose.yml"
+cp "${REPO_DIR}/docker-compose.prod.yml"     "${DEPLOY_DIR}/docker-compose.prod.yml"
+cp "${REPO_DIR}/docker/Caddyfile.prod"       "${DEPLOY_DIR}/docker/Caddyfile.prod"
+cp "${REPO_DIR}/scripts/backup-db.sh"        "${DEPLOY_DIR}/scripts/backup-db.sh"
+chmod +x "${DEPLOY_DIR}/scripts/backup-db.sh"
 
 # ── 3. .env ───────────────────────────────────────────────────────────────────
 if [[ ! -f "${DEPLOY_DIR}/.env" ]]; then
@@ -76,6 +79,24 @@ if ! groups "${CURRENT_USER}" | grep -q docker; then
   usermod -aG docker "${CURRENT_USER}"
 fi
 
+# ── 6. Backup cron (idempotent) ───────────────────────────────────────────────
+# Use 'bash script' explicitly so the cron job works even if the executable bit
+# is lost when CI re-syncs backup-db.sh via scp (scp does not preserve perms).
+BACKUP_CRON="0 3 * * * bash /opt/promptcode/scripts/backup-db.sh >> /opt/promptcode/backups/backup.log 2>&1"
+if [[ "$(id -u)" -eq 0 ]]; then
+  _ct_list()    { crontab -u "${CURRENT_USER}" -l; }
+  _ct_install() { crontab -u "${CURRENT_USER}" -; }
+else
+  _ct_list()    { crontab -l; }
+  _ct_install() { crontab -; }
+fi
+if ! _ct_list 2>/dev/null | grep -qF 'backup-db.sh'; then
+  (_ct_list 2>/dev/null || true; echo "${BACKUP_CRON}") | _ct_install
+  echo "Backup cron installed for ${CURRENT_USER}: daily at 03:00"
+else
+  echo "Backup cron already installed for ${CURRENT_USER} — skipping."
+fi
+
 echo ""
 echo "=== Bootstrap complete ==="
 echo "Next steps:"
@@ -86,5 +107,18 @@ echo "       Create a GitHub PAT with read:packages scope, then run:"
 echo "       echo <PAT> | docker login ghcr.io -u <github-username> --password-stdin"
 echo "  3. cd ${DEPLOY_DIR}"
 echo "  4. First deploy is triggered automatically by CI on push to main."
-echo "     Manual rollback: IMAGE_TAG=\$(cat ${DEPLOY_DIR}/.previous-image-tag) \\"
-echo "       docker compose -f docker-compose.prod.yml up -d"
+echo ""
+echo "Rollback procedure:"
+echo "  If NO schema migration ran between the broken and previous deploy:"
+echo "    IMAGE_TAG=\$(cat ${DEPLOY_DIR}/.previous-image-tag) \\"
+echo "      docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d"
+echo ""
+echo "  If a schema migration DID run, downgrade BEFORE rolling back the image:"
+echo "    docker compose -f docker-compose.yml -f docker-compose.prod.yml \\"
+echo "      exec backend python -m alembic downgrade -1"
+echo "    IMAGE_TAG=\$(cat ${DEPLOY_DIR}/.previous-image-tag) \\"
+echo "      docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d"
+echo ""
+echo "  Check whether a migration ran by comparing alembic history with .previous-image-tag:"
+echo "    docker compose -f docker-compose.yml -f docker-compose.prod.yml \\"
+echo "      exec backend python -m alembic current"

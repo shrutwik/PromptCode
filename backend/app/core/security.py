@@ -22,7 +22,12 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 def create_access_token(user_id: uuid.UUID, secret_key: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    payload = {"sub": str(user_id), "exp": int(expire.timestamp())}
+    payload = {
+        "sub": str(user_id),
+        "exp": int(expire.timestamp()),
+        "type": "access",
+        "jti": uuid.uuid4().hex,
+    }
     token_bytes = jwt.encode({"alg": ALGORITHM}, payload, secret_key)
     return token_bytes.decode("utf-8") if isinstance(token_bytes, bytes) else token_bytes
 
@@ -31,6 +36,9 @@ def decode_access_token(token: str, secret_key: str) -> uuid.UUID | None:
     try:
         claims = jwt.decode(token, secret_key)
         claims.validate()
+        token_type = claims.get("type")
+        if token_type not in (None, "", "access"):
+            return None
         user_id = claims.get("sub")
         if user_id is None:
             return None
@@ -41,7 +49,12 @@ def decode_access_token(token: str, secret_key: str) -> uuid.UUID | None:
 
 def create_refresh_token(user_id: uuid.UUID, secret_key: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    payload = {"sub": str(user_id), "exp": int(expire.timestamp()), "type": "refresh"}
+    payload = {
+        "sub": str(user_id),
+        "exp": int(expire.timestamp()),
+        "type": "refresh",
+        "jti": uuid.uuid4().hex,
+    }
     token_bytes = jwt.encode({"alg": ALGORITHM}, payload, secret_key)
     return token_bytes.decode("utf-8") if isinstance(token_bytes, bytes) else token_bytes
 

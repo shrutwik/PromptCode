@@ -14,6 +14,7 @@ from app.core.security import (
     create_refresh_token,
     decode_access_token,
     decode_refresh_token,
+    hash_password,
 )
 from app.db.base import Base
 from app.db.session import get_db
@@ -84,6 +85,11 @@ def test_password_no_symbol_rejected():
 def test_valid_password_accepted():
     u = UserCreate(email="a@b.com", username=_VALID_USERNAME, password=_VALID_PASSWORD)
     assert u.password == _VALID_PASSWORD
+
+
+def test_email_is_normalized_to_lowercase():
+    u = UserCreate(email="User@Example.COM", username=_VALID_USERNAME, password=_VALID_PASSWORD)
+    assert u.email == "user@example.com"
 
 
 # ── UserCreate username validation ───────────────────────────────────────────
@@ -191,15 +197,22 @@ def test_access_token_rejected_as_refresh_token():
 
 
 def test_refresh_token_rejected_as_access_token():
-    """Refresh tokens carry a 'type' claim but decode_access_token ignores it — they
-    would still validate. This test documents the current behaviour: access token
-    validation does not check 'type', so a refresh token *is* accepted by
-    decode_access_token. Callers must not treat refresh tokens as access tokens."""
+    """Refresh tokens must not be accepted by the access-token decoder."""
     uid = uuid.uuid4()
     refresh = create_refresh_token(uid, _SECRET)
-    # This is intentional: access-token decoder doesn't gate on type.
-    # The /refresh endpoint enforces the boundary on the server side.
-    assert decode_access_token(refresh, _SECRET) == uid
+    assert decode_access_token(refresh, _SECRET) is None
+
+
+def test_tokens_are_unique_even_when_issued_back_to_back():
+    uid = uuid.uuid4()
+
+    access_a = create_access_token(uid, _SECRET)
+    access_b = create_access_token(uid, _SECRET)
+    refresh_a = create_refresh_token(uid, _SECRET)
+    refresh_b = create_refresh_token(uid, _SECRET)
+
+    assert access_a != access_b
+    assert refresh_a != refresh_b
 
 
 # ── Refresh token (integration) ───────────────────────────────────────────────
@@ -232,6 +245,91 @@ def test_refresh_endpoint_returns_new_tokens(tmp_path, monkeypatch):
         from app.core.config import get_settings
         uid = decode_access_token(data2["access_token"], get_settings().jwt_secret)
         assert uid is not None
+
+    from app.core.config import get_settings
+    get_settings.cache_clear()
+    app.dependency_overrides.clear()
+    asyncio.run(test_engine.dispose())
+
+
+def test_signup_normalizes_email_and_blocks_case_variant_duplicate(tmp_path, monkeypatch):
+    app, test_engine = _build_test_app(tmp_path, monkeypatch)
+
+    with TestClient(app) as client:
+        first = client.post(
+            "/api/auth/signup",
+            json={"email": "CaseUser@Example.com", "username": "casevariant1", "password": _VALID_PASSWORD},
+        )
+        assert first.status_code == 201
+        assert first.json()["user"]["email"] == "caseuser@example.com"
+
+        duplicate = client.post(
+            "/api/auth/signup",
+            json={"email": "caseuser@example.com", "username": "casevariant2", "password": _VALID_PASSWORD},
+        )
+        assert duplicate.status_code == 409
+
+    from app.core.config import get_settings
+    get_settings.cache_clear()
+    app.dependency_overrides.clear()
+    asyncio.run(test_engine.dispose())
+
+
+def test_login_accepts_case_insensitive_email_match(tmp_path, monkeypatch):
+    app, test_engine = _build_test_app(tmp_path, monkeypatch)
+
+    async def _seed_user() -> None:
+        from app.db import session as session_module
+        from app.models.user import User
+
+        async with session_module.async_session_factory() as session:
+            session.add(
+                User(
+                    email="CaseLogin@example.com",
+                    username="caselogin01",
+                    password_hash=hash_password(_VALID_PASSWORD),
+                )
+            )
+            await session.commit()
+
+    asyncio.run(_seed_user())
+
+    with TestClient(app) as client:
+        login = client.post(
+            "/api/auth/login",
+            json={"email": "caselogin@example.com", "password": _VALID_PASSWORD},
+        )
+        assert login.status_code == 200
+        assert login.json()["user"]["email"] == "CaseLogin@example.com"
+
+    from app.core.config import get_settings
+    get_settings.cache_clear()
+    app.dependency_overrides.clear()
+    asyncio.run(test_engine.dispose())
+
+
+def test_refresh_endpoint_revokes_previous_refresh_token(tmp_path, monkeypatch):
+    app, test_engine = _build_test_app(tmp_path, monkeypatch)
+
+    with TestClient(app) as client:
+        signup = client.post(
+            "/api/auth/signup",
+            json={"email": "rotate@example.com", "username": "rotateuser1", "password": _VALID_PASSWORD},
+        )
+        assert signup.status_code == 201
+        original_refresh = signup.json()["refresh_token"]
+
+        first_refresh = client.post("/api/auth/refresh", json={"refresh_token": original_refresh})
+        assert first_refresh.status_code == 200
+        rotated_refresh = first_refresh.json()["refresh_token"]
+        assert rotated_refresh != original_refresh
+
+        replay = client.post("/api/auth/refresh", json={"refresh_token": original_refresh})
+        assert replay.status_code == 401
+        assert "revoked" in replay.json()["detail"].lower()
+
+        rotated = client.post("/api/auth/refresh", json={"refresh_token": rotated_refresh})
+        assert rotated.status_code == 200
 
     from app.core.config import get_settings
     get_settings.cache_clear()

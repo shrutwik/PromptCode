@@ -102,6 +102,18 @@ def _executor_runtime_report() -> dict[str, Any]:
     checks: dict[str, dict[str, Any]] = {}
     overall_ok = True
     client = None
+    expected_token = str(settings.sandbox_executor_token or "").strip()
+
+    if expected_token:
+        checks["auth"] = {"ok": True, "detail": "token configured"}
+    elif settings.debug:
+        checks["auth"] = {"ok": True, "detail": "debug mode allows tokenless sandbox executor"}
+    else:
+        overall_ok = False
+        checks["auth"] = {
+            "ok": False,
+            "detail": "sandbox executor token is not configured",
+        }
 
     try:
         client = docker.from_env()
@@ -189,9 +201,14 @@ async def run_sandbox(
     authorization: str | None = Header(None),
 ) -> dict:
     expected_token = str(settings.sandbox_executor_token or "").strip()
-    if expected_token:
-        if authorization != f"Bearer {expected_token}":
-            raise HTTPException(status_code=401, detail="Invalid sandbox executor token.")
+    if not expected_token:
+        if not settings.debug:
+            raise HTTPException(
+                status_code=503,
+                detail="Sandbox executor token is not configured.",
+            )
+    elif authorization != f"Bearer {expected_token}":
+        raise HTTPException(status_code=401, detail="Invalid sandbox executor token.")
 
     limiter = _executor_run_limiter()
     try:

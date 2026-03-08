@@ -1,5 +1,9 @@
-# Production override — use with:
-#   IMAGE_TAG=<sha> docker compose -f docker-compose.prod.yml up -d --no-build
+# Production override — MUST be used together with the base file:
+#   IMAGE_TAG=<sha> docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
+#
+# This file overrides build contexts, ports, commands, and adds Caddy.
+# The base docker-compose.yml provides: db image/volumes/healthcheck, backend healthcheck,
+# sandbox-executor command/volumes, and all service environment variables.
 #
 # Required env on the host (set in /opt/promptcode/.env or export):
 #   IMAGE_TAG                         — Git SHA of the image to deploy (set by CI)
@@ -13,6 +17,13 @@
 #   PROMPTCODE_METRICS_TOKEN          — Bearer token for /metrics scraping
 #   PROMPTCODE_SENTRY_DSN             — Sentry DSN for error tracking
 #   PROMPTCODE_DATABASE_SSL_REQUIRE   — true (set false only on trusted VPCs)
+#
+# GHCR package visibility:
+#   The sandbox executor spawns containers using promptcode-sandbox:latest (tagged at deploy time).
+#   CI pulls both backend and sandbox images using the ephemeral GITHUB_TOKEN.
+#   For rollbacks and host restarts, store a persistent PAT on the host:
+#     echo <PAT> | docker login ghcr.io -u <github-username> --password-stdin
+#   Alternatively, set both GHCR packages (backend, sandbox) to public in GitHub → Packages.
 
 volumes:
   caddy_data:
@@ -39,9 +50,10 @@ services:
       PROMPTCODE_DEBUG: "false"
       PROMPTCODE_DATABASE_SSL_REQUIRE: ${PROMPTCODE_DATABASE_SSL_REQUIRE:-false}
       PROMPTCODE_METRICS_TOKEN: ${PROMPTCODE_METRICS_TOKEN:-}
-      # Allow requests from the public domain served by Caddy.
-      # If the frontend is on a different origin, add it here (comma-separated JSON list).
-      PROMPTCODE_CORS_ORIGINS: '["https://${DOMAIN}"]'
+      # Defaults to the public domain served by Caddy.
+      # Override PROMPTCODE_CORS_ORIGINS in .env for split-origin deployments
+      # (e.g. frontend on a CDN domain separate from the API domain).
+      PROMPTCODE_CORS_ORIGINS: '${PROMPTCODE_CORS_ORIGINS:-["https://${DOMAIN}"]}'
 
   worker:
     <<: *backend-image
@@ -75,4 +87,5 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy

@@ -42,6 +42,23 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+async def _revoke_refresh_token(
+    db: AsyncSession,
+    *,
+    refresh_token: str,
+    now: datetime | None = None,
+) -> None:
+    now = now or datetime.now(timezone.utc)
+    token_hash = _hash_token(refresh_token)
+    expires_at = now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    await db.execute(delete(RevokedToken).where(RevokedToken.expires_at < now))
+    existing = await db.execute(
+        select(RevokedToken).where(RevokedToken.token_hash == token_hash)
+    )
+    if existing.scalar_one_or_none() is None:
+        db.add(RevokedToken(token_hash=token_hash, expires_at=expires_at))
+
+
 def _auth_client_key(request: Request) -> str:
     forwarded_for = request.headers.get("x-forwarded-for", "").strip()
     if forwarded_for:
@@ -92,7 +109,7 @@ async def signup(
     await _check_auth_rate_limit(request, db)
     existing = await db.execute(
         select(User).where(
-            (User.email == payload.email) | (User.username == payload.username)
+            (func.lower(User.email) == payload.email) | (User.username == payload.username)
         )
     )
     if existing.scalar_one_or_none():
@@ -129,7 +146,7 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     await _check_auth_rate_limit(request, db)
-    result = await db.execute(select(User).where(User.email == payload.email))
+    result = await db.execute(select(User).where(func.lower(User.email) == payload.email))
     user = result.scalar_one_or_none()
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(
@@ -175,8 +192,10 @@ async def refresh_token_endpoint(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
         )
+    await _revoke_refresh_token(db, refresh_token=payload.refresh_token)
     new_access = create_access_token(user.id, settings.jwt_secret)
     new_refresh = create_refresh_token(user.id, settings.jwt_secret)
+    await db.commit()
     return TokenResponse(
         access_token=new_access,
         refresh_token=new_refresh,
@@ -198,15 +217,11 @@ async def logout(
             detail="Refresh token does not belong to the current user",
         )
     now = datetime.now(timezone.utc)
-    token_hash = _hash_token(payload.refresh_token)
-    expires_at = now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    # Opportunistic GC of expired entries
-    await db.execute(delete(RevokedToken).where(RevokedToken.expires_at < now))
-    existing = await db.execute(
-        select(RevokedToken).where(RevokedToken.token_hash == token_hash)
+    await _revoke_refresh_token(
+        db,
+        refresh_token=payload.refresh_token,
+        now=now,
     )
-    if existing.scalar_one_or_none() is None:
-        db.add(RevokedToken(token_hash=token_hash, expires_at=expires_at))
     await db.commit()
 
 

@@ -16,6 +16,11 @@ class UserCreate(BaseModel):
     last_name: str = ""
     password: str
 
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: EmailStr) -> str:
+        return str(value).strip().lower()
+
     @field_validator("password")
     @classmethod
     def validate_password_strength(cls, value: str) -> str:
@@ -44,6 +49,11 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: EmailStr) -> str:
+        return str(value).strip().lower()
 
 
 class UserUpdate(BaseModel):

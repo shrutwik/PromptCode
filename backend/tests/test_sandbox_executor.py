@@ -61,6 +61,24 @@ def test_sandbox_executor_requires_token(monkeypatch):
     assert response.json()["detail"] == "Invalid sandbox executor token."
 
 
+def test_sandbox_executor_rejects_tokenless_production_requests(monkeypatch):
+    monkeypatch.setattr(sandbox_executor.settings, "debug", False)
+    monkeypatch.setattr(sandbox_executor.settings, "sandbox_executor_token", "")
+
+    with TestClient(sandbox_executor.app) as client:
+        response = client.post(
+            "/v1/sandbox/run",
+            json={
+                "code": "print('ok')",
+                "entrypoint": "main.py",
+                "challenge_config": {"inputs": {}},
+            },
+        )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Sandbox executor token is not configured."
+
+
 def test_sandbox_executor_forwards_run_request(monkeypatch):
     monkeypatch.setattr(sandbox_executor.settings, "sandbox_executor_token", "secret-token")
     monkeypatch.setattr(sandbox_executor, "executor_state", sandbox_executor._ExecutorState())
@@ -247,3 +265,34 @@ def test_executor_runtime_report_fails_when_docker_is_unavailable(monkeypatch):
 
     assert report["status"] == "error"
     assert report["checks"]["docker"]["ok"] is False
+
+
+def test_executor_runtime_report_fails_without_token_in_production(monkeypatch):
+    monkeypatch.setattr(sandbox_executor.settings, "debug", False)
+    monkeypatch.setattr(sandbox_executor.settings, "sandbox_executor_token", "")
+    monkeypatch.setattr(sandbox_executor, "_sandbox_temp_root", lambda: None)
+
+    class FakeImages:
+        def get(self, image_name: str):
+            assert image_name == sandbox_executor.settings.sandbox_image
+            return object()
+
+    class FakeClient:
+        def __init__(self):
+            self.images = FakeImages()
+
+        def ping(self):
+            return True
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(sandbox_executor.docker, "from_env", lambda: FakeClient())
+
+    report = sandbox_executor._executor_runtime_report()
+
+    assert report["status"] == "error"
+    assert report["checks"]["auth"] == {
+        "ok": False,
+        "detail": "sandbox executor token is not configured",
+    }
