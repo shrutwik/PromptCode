@@ -1,0 +1,100 @@
+name: Pre-Launch Sign-Off
+description: Record the required operator sign-off before the first production deploy.
+title: "Pre-launch sign-off: "
+labels:
+  - operations
+  - release
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Complete this issue before the first real production deploy.
+        Do not submit it until every checkbox below is true.
+        Leave the rollback rehearsal item unchecked until the `Ops Rehearsals` workflow shows a green rollback run in the Actions tab.
+
+  - type: input
+    id: deploy_sha
+    attributes:
+      label: Deploy SHA
+      description: Commit SHA approved for the first production launch.
+      placeholder: abcdef1234567890
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: compose_render
+    attributes:
+      label: Compose render verified clean
+      options:
+        - label: "I verified the merged production compose render contains no `8000`, `5433`, or `build:` entries."
+          required: true
+
+  - type: checkboxes
+    id: external_ports
+    attributes:
+      label: External port check completed from outside the host network
+      options:
+        - label: "I ran `nc -zv <PROD_HOST_IP> 8000` and `nc -zv <PROD_HOST_IP> 5433` from an external machine, and both were refused or timed out."
+          required: true
+
+  - type: checkboxes
+    id: env_population
+    attributes:
+      label: Production .env populated
+      options:
+        - label: "I populated `.env` with real values, left no placeholders, and set `DOMAIN`."
+          required: true
+
+  - type: checkboxes
+    id: dns_tls
+    attributes:
+      label: DNS and TLS verified
+      options:
+        - label: "DNS resolves to the host, Caddy obtained a certificate, `https://DOMAIN/health` returns 200, and `http://DOMAIN/health` redirects to HTTPS."
+          required: true
+
+  - type: checkboxes
+    id: seed_idempotency
+    attributes:
+      label: Challenge data seeded and verified
+      options:
+        - label: I ran the seed step twice and confirmed the second run was a no-op.
+          required: true
+
+  - type: checkboxes
+    id: rollback_rehearsal
+    attributes:
+      label: Rollback rehearsal accepted
+      options:
+        - label: "The `Ops Rehearsals` rollback workflow is green in Actions, and I reviewed the schema/image rollback boundary warning."
+          required: true
+
+  - type: checkboxes
+    id: backups
+    attributes:
+      label: Backup and restore path verified
+      options:
+        - label: I confirmed a successful rclone backup upload and a successful restore rehearsal from a real backup.
+          required: true
+
+  - type: checkboxes
+    id: ops_checks
+    attributes:
+      label: Ongoing operations checks verified
+      options:
+        - label: "`check-prod-health.sh` cron is installed, running, and producing output on the host."
+          required: true
+
+  - type: checkboxes
+    id: runbook_ack
+    attributes:
+      label: Runbook review complete
+      options:
+        - label: "I read and understood `docs/first-deploy-runbook.md` before approving the launch."
+          required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Operator notes
+      description: Record anything unusual about the host, firewall, DNS, or rollback rehearsal.

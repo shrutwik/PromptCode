@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import socket
 import time
 import urllib.error
 import urllib.request
@@ -34,6 +36,31 @@ def _request(
         raw = exc.read().decode("utf-8")
         payload_obj = json.loads(raw) if raw else None
         return exc.code, payload_obj
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[override]
+        return None
+
+
+def _request_without_redirects(method: str, url: str) -> tuple[int, dict[str, str]]:
+    opener = urllib.request.build_opener(_NoRedirectHandler)
+    request = urllib.request.Request(url, headers={"Accept": "application/json"}, method=method)
+    try:
+        with opener.open(request, timeout=10) as response:
+            return response.status, dict(response.headers.items())
+    except urllib.error.HTTPError as exc:
+        return exc.code, dict(exc.headers.items())
+
+
+def _assert_port_refused(host: str, port: int) -> None:
+    sock = socket.socket()
+    sock.settimeout(5)
+    try:
+        if sock.connect_ex((host, port)) == 0:
+            raise RuntimeError(f"Expected {host}:{port} to refuse connections.")
+    finally:
+        sock.close()
 
 
 def _wait_for_ready(
@@ -115,6 +142,36 @@ def _poll_submission(
     raise RuntimeError(f"Submission did not reach a terminal state: {last_status}")
 
 
+def _run_tls_checks(domain: str, host_ip: str) -> dict[str, Any]:
+    normalized_domain = str(domain or "").strip()
+    normalized_host_ip = str(host_ip or "").strip()
+    if not normalized_domain:
+        raise RuntimeError("DOMAIN must be set when TLS checks are enabled.")
+    if not normalized_host_ip:
+        raise RuntimeError("HOST_IP (or DEPLOY_HOST) must be set when TLS checks are enabled.")
+
+    https_status, https_body = _request("GET", f"https://{normalized_domain}/health")
+    if https_status != 200 or not isinstance(https_body, dict) or https_body.get("status") != "ok":
+        raise RuntimeError(f"HTTPS health check failed: {https_status} {https_body}")
+
+    http_status, http_headers = _request_without_redirects("GET", f"http://{normalized_domain}/health")
+    redirect_target = str(http_headers.get("Location", ""))
+    if http_status not in {301, 302, 307, 308}:
+        raise RuntimeError(f"HTTP health check did not redirect to HTTPS: {http_status} {http_headers}")
+    if not redirect_target.startswith(f"https://{normalized_domain}/"):
+        raise RuntimeError(
+            f"HTTP health check redirected to an unexpected location: {http_status} {redirect_target}"
+        )
+
+    _assert_port_refused(normalized_host_ip, 8000)
+    return {
+        "https_health_status": https_status,
+        "http_redirect_status": http_status,
+        "http_redirect_location": redirect_target,
+        "host_ip_port_8000_refused": True,
+    }
+
+
 def run_smoke(args: argparse.Namespace) -> dict[str, Any]:
     base_url = args.base_url.rstrip("/")
     sandbox_executor_url = args.sandbox_executor_url.rstrip("/")
@@ -169,7 +226,7 @@ def run_smoke(args: argparse.Namespace) -> dict[str, Any]:
     if report_status != 200 or not isinstance(report, dict):
         raise RuntimeError(f"Completed submission report failed: {report_status} {report}")
 
-    return {
+    result = {
         "backend_ready": backend_ready,
         "sandbox_executor_ready": sandbox_ready,
         "challenge_id": challenge_id,
@@ -177,9 +234,14 @@ def run_smoke(args: argparse.Namespace) -> dict[str, Any]:
         "final_status": final_status,
         "report_id": report.get("id"),
     }
+    if args.tls_check:
+        result["tls_checks"] = _run_tls_checks(args.domain, args.host_ip)
+    return result
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    default_domain = os.environ.get("DOMAIN", "").strip()
+    default_host_ip = os.environ.get("HOST_IP", "").strip() or os.environ.get("DEPLOY_HOST", "").strip()
     parser = argparse.ArgumentParser(description="Run a live deployment smoke test.")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--sandbox-executor-url", default="http://sandbox-executor:8090")
@@ -189,6 +251,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--ready-timeout-seconds", type=int, default=120)
     parser.add_argument("--timeout-seconds", type=int, default=120)
     parser.add_argument("--poll-interval-seconds", type=float, default=2.0)
+    parser.add_argument("--domain", default=default_domain)
+    parser.add_argument("--host-ip", default=default_host_ip)
+    parser.add_argument(
+        "--tls-check",
+        action="store_true",
+        default=bool(default_domain and default_host_ip),
+        help="Verify HTTPS health, HTTP->HTTPS redirect, and host-ip port 8000 refusal.",
+    )
     parser.add_argument(
         "--code",
         default="def solve(data):\n    return {}\n",

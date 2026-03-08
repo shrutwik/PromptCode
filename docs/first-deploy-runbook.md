@@ -52,6 +52,11 @@ The old image is not safe to trust until the database schema matches it again.
 Automatic `alembic downgrade -1` is intentionally not done by the repo because a failed rollout
 does not prove that schema changed or that the latest downgrade is safe without operator review.
 
+> WARNING: Image rollback restores the previous container image only. It does not revert database
+> schema automatically. The rollback rehearsal now explicitly proves that a schema probe remains
+> applied after the old image is restored, so the operator must decide whether `alembic downgrade -1`
+> is required before trusting the rolled-back image.
+
 ## Backups and restore rehearsal
 
 1. `scripts/backup-db.sh` requires a working `rclone` setup and a non-empty `RCLONE_REMOTE`.

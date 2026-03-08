@@ -60,7 +60,10 @@ class Settings(BaseSettings):
     # Optional CA bundle path for verified TLS connections.
     database_ssl_ca_file: str = ""
 
-    openai_api_key: str = ""
+    openai_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("PROMPTCODE_OPENAI_API_KEY", "OPENAI_API_KEY"),
+    )
     openai_base_url: str = ""
     openai_model: str = "gpt-4o"
     # Primary model used for prompt-quality judging (LLM-as-judge).

@@ -7,12 +7,22 @@ on:
         description: "Run the backup/restore rehearsal on a GitHub runner"
         required: false
         type: boolean
-        default: true
+        default: false
       run_rollback_rehearsal:
         description: "Run the rollback rehearsal against the production host"
         required: false
         type: boolean
         default: false
+      bad_image_tag:
+        description: "Existing bad backend image tag to deploy during rollback rehearsal"
+        required: false
+        type: string
+        default: ""
+      target_host:
+        description: "Override host for the rollback rehearsal"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   restore-rehearsal:
@@ -26,12 +36,16 @@ jobs:
         run: bash scripts/rehearse-restore.sh
 
   rollback-rehearsal:
-    if: inputs.run_rollback_rehearsal
+    if: inputs.run_rollback_rehearsal || inputs.bad_image_tag != '' || inputs.target_host != ''
     runs-on: ubuntu-latest
-    environment: production
     permissions:
       contents: read
       packages: write
+    env:
+      REMOTE_TIMELINE: /opt/promptcode/.rollback-rehearsal.timeline
+      REHEARSAL_SCHEMA_PROBE: rollback_boundary_probe
+      EFFECTIVE_HOST: ${{ inputs.target_host != '' && inputs.target_host || secrets.STAGING_HOST != '' && secrets.STAGING_HOST || secrets.DEPLOY_HOST }}
+      REGISTRY_TOKEN: ${{ secrets.GHCR_TOKEN != '' && secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -41,52 +55,99 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ env.REGISTRY_TOKEN }}
 
-      - name: Build and push a bad backend image
-        env:
-          BAD_IMAGE_TAG: rollback-bad-${{ github.run_id }}
+      - name: Set lowercase image name
         run: |
           BASE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
           echo "IMAGE_NAME=${BASE}/backend" >> "$GITHUB_ENV"
+          echo "SSH_TARGET=${{ secrets.DEPLOY_USER }}@${{ env.EFFECTIVE_HOST }}" >> "$GITHUB_ENV"
+          if [ -n "${{ inputs.bad_image_tag }}" ]; then
+            echo "BAD_IMAGE_TAG=${{ inputs.bad_image_tag }}" >> "$GITHUB_ENV"
+          else
+            echo "BAD_IMAGE_TAG=rollback-bad-${{ github.run_id }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Configure SSH access
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/promptcode_rehearsal_key
+          chmod 600 ~/.ssh/promptcode_rehearsal_key
+          ssh-keyscan -H "${{ env.EFFECTIVE_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Build and push a bad backend image
+        if: inputs.bad_image_tag == ''
+        run: |
           cat > /tmp/Dockerfile.rollback-bad <<'EOF'
           ARG BASE_IMAGE
           FROM ${BASE_IMAGE}
           CMD ["python", "-c", "raise SystemExit('intentional rollback rehearsal failure')"]
           EOF
-          docker build -f /tmp/Dockerfile.rollback-bad --build-arg BASE_IMAGE="${BASE}/backend:${{ github.sha }}" -t "${BASE}/backend:${BAD_IMAGE_TAG}" .
-          docker push "${BASE}/backend:${BAD_IMAGE_TAG}"
+          docker build -f /tmp/Dockerfile.rollback-bad --build-arg BASE_IMAGE="${IMAGE_NAME}:${{ github.sha }}" -t "${IMAGE_NAME}:${BAD_IMAGE_TAG}" .
+          docker push "${IMAGE_NAME}:${BAD_IMAGE_TAG}"
 
-      - name: Deploy bad image and expect failure
+      - name: Record healthy baseline and previous image tag
+        run: |
+          ssh -i ~/.ssh/promptcode_rehearsal_key "$SSH_TARGET" <<'EOF'
+          set -euo pipefail
+          cd /opt/promptcode
+          timestamp() { date -u +%s; }
+          : > /opt/promptcode/.rollback-rehearsal.timeline
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=5).read()"
+          PREV_TAG="$(cat /opt/promptcode/.current-image-tag)"
+          if [ -z "${PREV_TAG}" ]; then
+            echo "Current image tag is empty." >&2
+            exit 1
+          fi
+          echo "${PREV_TAG}" > /opt/promptcode/.previous-image-tag
+          printf '%s|healthy_before|%s\n' "$(timestamp)" "${PREV_TAG}" >> /opt/promptcode/.rollback-rehearsal.timeline
+          EOF
+
+      - name: Apply reversible schema probe
+        run: |
+          ssh -i ~/.ssh/promptcode_rehearsal_key "$SSH_TARGET" <<'EOF'
+          set -euo pipefail
+          cd /opt/promptcode
+          timestamp() { date -u +%s; }
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T db sh -lc '
+            psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'"'"'"'"'"'"'"'"'SQL'"'"'"'"'"'"'"'"'
+          DROP TABLE IF EXISTS rollback_boundary_probe;
+          CREATE TABLE rollback_boundary_probe (
+            id integer PRIMARY KEY,
+            note text NOT NULL
+          );
+          INSERT INTO rollback_boundary_probe (id, note) VALUES (1, '"'"'"'"'"'"'"'"'image rollback does not revert schema'"'"'"'"'"'"'"'"');
+          SQL
+          '
+          printf '%s|schema_probe_applied|%s\n' "$(timestamp)" "rollback_boundary_probe" >> /opt/promptcode/.rollback-rehearsal.timeline
+          EOF
+
+      - name: Deploy bad image and expect readiness failure
         id: bad_deploy
         continue-on-error: true
-        env:
-          BAD_IMAGE_TAG: rollback-bad-${{ github.run_id }}
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          command_timeout: 6m
-          script: |
-            set -euo pipefail
-            cd /opt/promptcode
-            PREV_TAG="$(cat /opt/promptcode/.current-image-tag)"
-            echo "$PREV_TAG" > /opt/promptcode/.previous-image-tag
-            echo "${BAD_IMAGE_TAG}" > /opt/promptcode/.current-image-tag
-            printf 'deploying %s %s\n' "$(date -u +%s)" "${BAD_IMAGE_TAG}" > /opt/promptcode/.last-deploy-status
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker pull ${{ env.IMAGE_NAME }}:${BAD_IMAGE_TAG}
-            IMAGE_TAG="${BAD_IMAGE_TAG}" docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
-            for i in $(seq 1 12); do
-              if docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3).read()" 2>/dev/null; then
-                echo "Bad image unexpectedly became healthy." >&2
-                exit 1
-              fi
-              sleep 5
-            done
-            echo "Bad image failed to become ready, which is the expected rehearsal outcome." >&2
-            exit 1
+        run: |
+          ssh -i ~/.ssh/promptcode_rehearsal_key "$SSH_TARGET" <<EOF
+          set -euo pipefail
+          cd /opt/promptcode
+          timestamp() { date -u +%s; }
+          printf '%s|bad_deploy_start|%s\n' "\$(timestamp)" "${BAD_IMAGE_TAG}" >> "${REMOTE_TIMELINE}"
+          echo "${BAD_IMAGE_TAG}" > /opt/promptcode/.current-image-tag
+          printf 'deploying %s %s\n' "\$(timestamp)" "${BAD_IMAGE_TAG}" > /opt/promptcode/.last-deploy-status
+          echo "${REGISTRY_TOKEN}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          docker pull "${IMAGE_NAME}:${BAD_IMAGE_TAG}"
+          IMAGE_TAG="${BAD_IMAGE_TAG}" docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
+          for i in \$(seq 1 12); do
+            if docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3).read()" 2>/dev/null; then
+              printf '%s|bad_deploy_unexpectedly_healthy|%s\n' "\$(timestamp)" "${BAD_IMAGE_TAG}" >> "${REMOTE_TIMELINE}"
+              echo "Bad image unexpectedly became healthy." >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          printf '%s|bad_deploy_failed|%s\n' "\$(timestamp)" "${BAD_IMAGE_TAG}" >> "${REMOTE_TIMELINE}"
+          echo "Bad image failed to become ready, which is the expected rehearsal outcome." >&2
+          exit 1
+          EOF
 
       - name: Confirm bad deploy failed
         if: steps.bad_deploy.outcome != 'failure'
@@ -96,43 +157,111 @@ jobs:
 
       - name: Auto rollback after failed deploy
         if: steps.bad_deploy.outcome == 'failure'
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          command_timeout: 6m
-          script: |
-            set -euo pipefail
-            cd /opt/promptcode
-            PREV_TAG="$(cat /opt/promptcode/.previous-image-tag)"
-            IMAGE_TAG="${PREV_TAG}" docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
-            echo "${PREV_TAG}" > /opt/promptcode/.current-image-tag
-            printf 'rolled_back %s %s\n' "$(date -u +%s)" "${PREV_TAG}" > /opt/promptcode/.last-deploy-status
-
-      - name: Verify service health after rollback
-        if: steps.bad_deploy.outcome == 'failure'
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          command_timeout: 6m
-          script: |
-            set -euo pipefail
-            cd /opt/promptcode
-            PREV_TAG="$(cat /opt/promptcode/.previous-image-tag)"
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=5).read()"
-            if [ "$(cat /opt/promptcode/.current-image-tag)" != "${PREV_TAG}" ]; then
-              echo "Rollback did not restore the previous image tag metadata." >&2
-              exit 1
-            fi
-            echo "Rollback rehearsal complete."
-
-      - name: Document migration rollback boundary
-        if: always() && steps.bad_deploy.outcome == 'failure'
         run: |
+          ssh -i ~/.ssh/promptcode_rehearsal_key "$SSH_TARGET" <<'EOF'
+          set -euo pipefail
+          cd /opt/promptcode
+          timestamp() { date -u +%s; }
+          PREV_TAG="$(cat /opt/promptcode/.previous-image-tag)"
+          printf '%s|rollback_start|%s\n' "$(timestamp)" "${PREV_TAG}" >> /opt/promptcode/.rollback-rehearsal.timeline
+          IMAGE_TAG="${PREV_TAG}" docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
+          echo "${PREV_TAG}" > /opt/promptcode/.current-image-tag
+          printf 'rolled_back %s %s\n' "$(timestamp)" "${PREV_TAG}" > /opt/promptcode/.last-deploy-status
+          printf '%s|rollback_image_restored|%s\n' "$(timestamp)" "${PREV_TAG}" >> /opt/promptcode/.rollback-rehearsal.timeline
+          EOF
+
+      - name: Verify service health after rollback and schema boundary
+        if: steps.bad_deploy.outcome == 'failure'
+        run: |
+          ssh -i ~/.ssh/promptcode_rehearsal_key "$SSH_TARGET" <<'EOF'
+          set -euo pipefail
+          cd /opt/promptcode
+          timestamp() { date -u +%s; }
+          PREV_TAG="$(cat /opt/promptcode/.previous-image-tag)"
+          READY=false
+          for i in $(seq 1 24); do
+            if docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=5).read()" 2>/dev/null; then
+              READY=true
+              break
+            fi
+            sleep 5
+          done
+          if [ "${READY}" != "true" ]; then
+            echo "Rollback did not restore backend readiness." >&2
+            exit 1
+          fi
+          if [ "$(cat /opt/promptcode/.current-image-tag)" != "${PREV_TAG}" ]; then
+            echo "Rollback did not restore the previous image tag metadata." >&2
+            exit 1
+          fi
+          HAS_PROBE="$(docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T db sh -lc 'psql -Atqc "SELECT to_regclass('\''public.rollback_boundary_probe'\'') IS NOT NULL" -U "$POSTGRES_USER" -d "$POSTGRES_DB"' | tr -d '[:space:]')"
+          if [ "${HAS_PROBE}" != "t" ]; then
+            echo "Schema probe table is missing after image rollback." >&2
+            exit 1
+          fi
+          printf '%s|healthy_after_rollback|%s\n' "$(timestamp)" "${PREV_TAG}" >> /opt/promptcode/.rollback-rehearsal.timeline
+          printf '%s|schema_probe_still_applied|%s\n' "$(timestamp)" "rollback_boundary_probe" >> /opt/promptcode/.rollback-rehearsal.timeline
+          EOF
+
+      - name: Clean up schema probe
+        if: always()
+        run: |
+          ssh -i ~/.ssh/promptcode_rehearsal_key "$SSH_TARGET" <<'EOF'
+          set -euo pipefail
+          cd /opt/promptcode
+          if [ ! -f /opt/promptcode/.rollback-rehearsal.timeline ]; then
+            exit 0
+          fi
+          timestamp() { date -u +%s; }
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T db sh -lc '
+            psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DROP TABLE IF EXISTS rollback_boundary_probe;"
+          '
+          printf '%s|schema_probe_cleanup|%s\n' "$(timestamp)" "rollback_boundary_probe" >> /opt/promptcode/.rollback-rehearsal.timeline
+          EOF
+
+      - name: Publish rollback rehearsal summary
+        if: always()
+        run: |
+          TIMELINE_FILE="$(mktemp)"
+          ssh -i ~/.ssh/promptcode_rehearsal_key "$SSH_TARGET" 'test -f /opt/promptcode/.rollback-rehearsal.timeline && cat /opt/promptcode/.rollback-rehearsal.timeline' > "${TIMELINE_FILE}" 2>/dev/null || true
+          START_TS="$(awk -F'|' '$2=="bad_deploy_start" {print $1; exit}' "${TIMELINE_FILE}")"
+          FAIL_TS="$(awk -F'|' '$2=="bad_deploy_failed" {print $1; exit}' "${TIMELINE_FILE}")"
+          ROLLBACK_TS="$(awk -F'|' '$2=="rollback_start" {print $1; exit}' "${TIMELINE_FILE}")"
+          HEALTHY_TS="$(awk -F'|' '$2=="healthy_after_rollback" {print $1; exit}' "${TIMELINE_FILE}")"
+          ELAPSED=""
+          if [ -n "${FAIL_TS}" ] && [ -n "${HEALTHY_TS}" ]; then
+            ELAPSED="$((HEALTHY_TS - FAIL_TS))"
+          fi
+          SCHEMA_PRESENT="missing"
+          SCHEMA_CLEANED="missing"
+          if grep -q '|schema_probe_still_applied|rollback_boundary_probe$' "${TIMELINE_FILE}"; then
+            SCHEMA_PRESENT="confirmed"
+          fi
+          if grep -q '|schema_probe_cleanup|rollback_boundary_probe$' "${TIMELINE_FILE}"; then
+            SCHEMA_CLEANED="confirmed"
+          fi
           {
-            echo "This rehearsal intentionally uses a crash-before-start image, so no Alembic migration runs."
-            echo "Automatic downgrade -1 is still not performed by the repo because it cannot safely infer whether a failed rollout changed schema or whether the latest downgrade is reversible without operator approval."
+            echo "## Rollback Rehearsal Timeline"
+            echo
+            echo "- Triggered by: @${{ github.actor }}"
+            echo "- Workflow result: ${{ job.status }}"
+            echo "- Target host: ${{ env.EFFECTIVE_HOST }}"
+            echo
+            echo "deploy started: ${START_TS:-missing} ${BAD_IMAGE_TAG}"
+            echo "readiness failed: ${FAIL_TS:-missing} intentional bad image never reached /ready"
+            echo "rollback triggered: ${ROLLBACK_TS:-missing} $(awk -F'|' '$2==\"rollback_start\" {print $3; exit}' \"${TIMELINE_FILE}\")"
+            echo "ready 200 after rollback: ${HEALTHY_TS:-missing} $(awk -F'|' '$2==\"healthy_after_rollback\" {print $3; exit}' \"${TIMELINE_FILE}\")"
+            echo "schema probe present after image rollback: ${SCHEMA_PRESENT}"
+            echo "schema probe cleaned up after test: ${SCHEMA_CLEANED}"
+            echo "elapsed failure -> healthy: ${ELAPSED:-missing} seconds"
+            echo
+            echo "| UTC epoch | Event | Detail |"
+            echo "| --- | --- | --- |"
+            cat "${TIMELINE_FILE}" \
+              | while IFS='|' read -r ts event detail; do
+                  [ -n "${ts}" ] || continue
+                  printf '| %s | %s | %s |\n' "${ts}" "${event}" "${detail}"
+                done
+            echo
+            echo "> WARNING: image rollback restores the old container image only. The schema probe remains applied until explicitly removed, which is why operators must decide whether \`alembic downgrade -1\` is safe after a failed migrated rollout."
           } >> "$GITHUB_STEP_SUMMARY"
