@@ -1,5 +1,4 @@
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import logging
 import time
@@ -37,7 +36,7 @@ def _content_security_policy() -> str:
             "script-src 'self' 'unsafe-inline' https://esm.sh",
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
             "font-src 'self' https://fonts.gstatic.com",
-            "img-src 'self' data: https:",
+            "img-src 'self' data:",
             "connect-src 'self'",
             "object-src 'none'",
             "base-uri 'self'",
@@ -188,26 +187,6 @@ def create_app() -> FastAPI:
         try:
             async with engine.connect() as conn:
                 await conn.execute(text("SELECT 1"))
-                if not settings.submission_inline_queue_processing:
-                    cutoff = datetime.now(timezone.utc) - timedelta(
-                        seconds=max(1, settings.worker_heartbeat_timeout_seconds)
-                    )
-                    worker_result = await conn.execute(
-                        text(
-                            """
-                            SELECT worker_id
-                            FROM worker_heartbeats
-                            WHERE last_seen_at >= :cutoff
-                            LIMIT 1
-                            """
-                        ),
-                        {"cutoff": cutoff},
-                    )
-                    if worker_result.first() is None:
-                        return JSONResponse(
-                            status_code=503,
-                            content={"status": "error", "detail": "worker unavailable"},
-                        )
         except Exception:
             return JSONResponse(
                 status_code=503,

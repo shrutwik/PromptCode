@@ -57,17 +57,46 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Validate merged production compose config
+        env:
+          IMAGE_TAG: ci-validate
+          DOMAIN: api.example.com
+          PROMPTCODE_DB_PASSWORD: ci-test-db-password
+          PROMPTCODE_JWT_SECRET: ci-prod-jwt-secret-0123456789abcdef
+          PROMPTCODE_SANDBOX_EXECUTOR_TOKEN: ci-sandbox-secret-0123456789
+          PROMPTCODE_OPENAI_API_KEY: ci-openai-key
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config > /tmp/merged-prod-compose.yml
+          if grep -Eq 'published: "(8000|5433)"|^[[:space:]]+build:' /tmp/merged-prod-compose.yml; then
+            echo "Merged production compose still exposes dev ports or build contexts." >&2
+            cat /tmp/merged-prod-compose.yml
+            exit 1
+          fi
+
       - name: Build backend Docker image
         run: docker build -f docker/Dockerfile.backend .
 
       - name: Build sandbox Docker image
         run: docker build -f docker/Dockerfile.sandbox .
 
+  compose-startup-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Rehearse startup graph without workers
+        run: bash scripts/rehearse-compose-startup.sh
+
   deploy:
     name: Push image to ghcr.io
     runs-on: ubuntu-latest
-    needs: [backend-tests, docker-build]
+    needs: [backend-tests, docker-build, compose-startup-integration]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    concurrency:
+      group: promptcode-production-deploy
+      cancel-in-progress: false
+    environment: production
     permissions:
       contents: read
       packages: write
@@ -117,7 +146,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: "docker-compose.yml,docker-compose.prod.yml,docker/Caddyfile.prod,scripts/backup-db.sh"
+          source: "docker-compose.yml,docker-compose.prod.yml,docker/Caddyfile.prod,scripts/backup-db.sh,scripts/restore-db.sh,scripts/seed-prod-data.sh,scripts/check-prod-health.sh"
           target: "/opt/promptcode"
 
       - name: Deploy to production host
@@ -131,6 +160,7 @@ jobs:
             # Record previous deployment tag before overwriting (for rollback reference)
             [ -f /opt/promptcode/.current-image-tag ] && cp /opt/promptcode/.current-image-tag /opt/promptcode/.previous-image-tag || true
             echo "${{ github.sha }}" > /opt/promptcode/.current-image-tag
+            printf 'deploying %s %s\n' "$(date -u +%s)" "${{ github.sha }}" > /opt/promptcode/.last-deploy-status
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker pull ${{ env.IMAGE_NAME }}:${{ github.sha }}
             docker pull ${{ env.SANDBOX_IMAGE_NAME }}:${{ github.sha }}
@@ -164,8 +194,78 @@ jobs:
               docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=50 backend
               exit 1
             fi
-            echo "Running post-deploy smoke test..."
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+            echo "Deploy complete."
+
+      - name: Post-deploy smoke test
+        if: env.DEPLOY_HOST != ''
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 3m
+          script: |
+            docker compose -f /opt/promptcode/docker-compose.yml -f /opt/promptcode/docker-compose.prod.yml \
               exec -T backend python -m scripts.run_deploy_smoke \
-              --skip-poll --base-url http://127.0.0.1:8000
-            echo "Deploy and smoke test complete."
+              --base-url http://127.0.0.1:8000 \
+              --sandbox-executor-url http://sandbox-executor:8090
+            printf 'success %s %s\n' "$(date -u +%s)" "${{ github.sha }}" > /opt/promptcode/.last-deploy-status
+            echo "Smoke test passed."
+
+      - name: Verify backend and db ports are not exposed on host
+        if: env.DEPLOY_HOST != ''
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 3m
+          script: |
+            set -euo pipefail
+            if curl -fsS --max-time 3 http://127.0.0.1:8000/health >/tmp/promptcode-direct-backend.out 2>/tmp/promptcode-direct-backend.err; then
+              echo "Backend port 8000 is still reachable from the host." >&2
+              cat /tmp/promptcode-direct-backend.out >&2 || true
+              exit 1
+            fi
+            if ! grep -qi "connection refused" /tmp/promptcode-direct-backend.err; then
+              echo "Expected connection refused when probing host port 8000." >&2
+              cat /tmp/promptcode-direct-backend.err >&2 || true
+              exit 1
+            fi
+            echo "Direct host access to backend port 8000 is refused."
+            if command -v nc >/dev/null 2>&1; then
+              if nc -z -w 3 127.0.0.1 5433; then
+                echo "Database port 5433 is still reachable from the host." >&2
+                exit 1
+              fi
+            else
+              python3 -c "import socket, sys; s=socket.socket(); s.settimeout(3); rc=s.connect_ex(('127.0.0.1', 5433)); s.close(); sys.exit(1 if rc == 0 else 0)"
+            fi
+            echo "Direct host access to database port 5433 is refused."
+
+      - name: Roll back failed deploy
+        if: failure() && env.DEPLOY_HOST != ''
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 3m
+          script: |
+            set -euo pipefail
+            cd /opt/promptcode
+            if [ ! -f /opt/promptcode/.previous-image-tag ]; then
+              echo "No previous deployment tag available for automatic rollback." >&2
+              exit 1
+            fi
+            ROLLBACK_TAG="$(cat /opt/promptcode/.previous-image-tag)"
+            if [ -z "$ROLLBACK_TAG" ]; then
+              echo "Recorded rollback tag is empty." >&2
+              exit 1
+            fi
+            echo "Rolling back deployment to ${ROLLBACK_TAG}."
+            echo "If the failed deploy already ran Alembic migrations, downgrade one revision before relying on the old image."
+            IMAGE_TAG="$ROLLBACK_TAG" docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
+            echo "$ROLLBACK_TAG" > /opt/promptcode/.current-image-tag
+            printf 'rolled_back %s %s\n' "$(date -u +%s)" "$ROLLBACK_TAG" > /opt/promptcode/.last-deploy-status
+            echo "Rollback completed to ${ROLLBACK_TAG}."

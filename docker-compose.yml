@@ -33,6 +33,7 @@ x-backend-env: &backend-env
     PROMPTCODE_WORKER_HEARTBEAT_INTERVAL_SECONDS: ${PROMPTCODE_WORKER_HEARTBEAT_INTERVAL_SECONDS:-5}
     PROMPTCODE_WORKER_HEARTBEAT_TIMEOUT_SECONDS: ${PROMPTCODE_WORKER_HEARTBEAT_TIMEOUT_SECONDS:-30}
     PROMPTCODE_SENTRY_DSN: ${PROMPTCODE_SENTRY_DSN:-}
+    DOMAIN: ${DOMAIN:-}
 
 services:
   db:
@@ -64,6 +65,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.backend
     command: ["uvicorn", "app.sandbox_executor:app", "--host", "0.0.0.0", "--port", "8090"]
+    user: "0:0"  # needs Docker socket access to launch sandbox containers
     <<: *backend-env
     restart: unless-stopped
     depends_on:

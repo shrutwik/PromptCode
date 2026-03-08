@@ -36,16 +36,19 @@ x-image: &backend-image
 services:
   db:
     # No changes — keep postgres-16-alpine with pgdata volume
-    ports: []  # do not expose db port externally in production
+    ports: !reset []  # do not expose db port externally in production
+
+  sandbox:
+    build: !reset null
 
   sandbox-executor:
     <<: *backend-image
-    build: null
+    build: !reset null
 
   backend:
     <<: *backend-image
-    build: null
-    ports: []  # do not expose port 8000 externally; Caddy routes internally via backend:8000
+    build: !reset null
+    ports: !reset []  # do not expose port 8000 externally; Caddy routes internally via backend:8000
     environment:
       PROMPTCODE_DEBUG: "false"
       PROMPTCODE_DATABASE_SSL_REQUIRE: ${PROMPTCODE_DATABASE_SSL_REQUIRE:-false}
@@ -60,7 +63,7 @@ services:
 
   worker:
     <<: *backend-image
-    build: null
+    build: !reset null
     command: ["python", "-m", "scripts.run_queue_worker"]  # backend owns migrations; skip wrapper
     depends_on:
       backend:
@@ -70,7 +73,7 @@ services:
 
   worker-b:
     <<: *backend-image
-    build: null
+    build: !reset null
     command: ["python", "-m", "scripts.run_queue_worker"]  # backend owns migrations; skip wrapper
     depends_on:
       backend:

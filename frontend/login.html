@@ -165,7 +165,7 @@ nav {
     <h1 class="form-title fade-in d1">Welcome back.</h1>
     <p class="form-sub fade-in d1">Pick up where you left off.</p>
 
-    <form onsubmit="handleLogin(event)" class="fade-in d2">
+    <form id="loginForm" class="fade-in d2">
       <div class="form-group">
         <label class="form-label" for="email">email</label>
         <input class="form-input" type="email" placeholder="you@company.com" id="email" autocomplete="email">
@@ -179,7 +179,7 @@ nav {
         <label class="checkbox-row">
           <input type="checkbox" class="checkbox"> remember me
         </label>
-        <a href="javascript:void(0)" class="forgot-link" title="Password reset coming soon — contact support for now" onclick="return false" style="opacity:0.5;cursor:default">forgot password?</a>
+        <a href="javascript:void(0)" class="forgot-link" title="Password reset coming soon — contact support for now" style="opacity:0.5;cursor:default">forgot password?</a>
       </div>
       <button type="submit" class="btn-submit">sign in →</button>
     </form>
@@ -253,35 +253,6 @@ nav {
 </div>
 
 <script src="/static/api.js"></script>
-<script>
-  if (PromptCodeAPI.isLoggedIn()) window.location.href = '/challenges.html';
-
-  async function handleLogin(e) {
-    e.preventDefault();
-    const email = document.getElementById('email').value.trim();
-    const pass = document.getElementById('password').value;
-    const err = document.getElementById('loginError');
-    if (!email || !pass) {
-      err.style.display = 'block';
-      err.textContent = 'please fill in all fields';
-      return;
-    }
-    err.style.display = 'none';
-    const btn = document.querySelector('.btn-submit');
-    btn.textContent = 'signing in...';
-    try {
-      await PromptCodeAPI.login(email, pass);
-      window.location.href = '/challenges.html';
-    } catch (error) {
-      err.style.display = 'block';
-      err.textContent = error.message || 'incorrect email or password';
-      btn.textContent = 'sign in →';
-    }
-  }
-  function oauthLogin(provider) {
-    // OAuth not yet implemented — redirect to signup
-    window.location.href = '/signup.html';
-  }
-</script>
+<script src="/static/login.js"></script>
 </body>
 </html>

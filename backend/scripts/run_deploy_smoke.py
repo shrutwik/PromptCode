@@ -36,6 +36,29 @@ def _request(
         return exc.code, payload_obj
 
 
+def _wait_for_ready(
+    label: str,
+    base_url: str,
+    *,
+    timeout_seconds: int,
+    poll_interval_seconds: float,
+) -> dict[str, Any] | list[Any] | None:
+    deadline = time.monotonic() + timeout_seconds
+    ready_url = f"{base_url.rstrip('/')}/ready"
+    last_error = "no readiness response received"
+    while time.monotonic() < deadline:
+        try:
+            status, body = _request("GET", ready_url)
+        except urllib.error.URLError as exc:
+            last_error = str(exc.reason or exc)
+        else:
+            if status == 200:
+                return body
+            last_error = f"{status} {body}"
+        time.sleep(poll_interval_seconds)
+    raise RuntimeError(f"{label} readiness failed: {last_error}")
+
+
 def _signup_or_login(base_url: str, email: str, password: str) -> str:
     username = f"smoke_{uuid.uuid4().hex[:10]}"
     signup_payload = {
@@ -92,47 +115,25 @@ def _poll_submission(
     raise RuntimeError(f"Submission did not reach a terminal state: {last_status}")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Run a live deployment smoke test.")
-    parser.add_argument("--base-url", default="http://127.0.0.1:8000")
-    parser.add_argument("--challenge-id", default="")
-    parser.add_argument("--email", default=f"smoke_{uuid.uuid4().hex[:12]}@example.com")
-    parser.add_argument("--password", default="Password123!")
-    parser.add_argument("--timeout-seconds", type=int, default=120)
-    parser.add_argument("--poll-interval-seconds", type=float, default=2.0)
-    parser.add_argument(
-        "--skip-poll",
-        action="store_true",
-        help="Exit after verifying submission acceptance without waiting for evaluation.",
-    )
-    parser.add_argument(
-        "--code",
-        default="def solve(data):\n    return {}\n",
-        help="Python submission code to send during the smoke test.",
-    )
-    args = parser.parse_args()
-
+def run_smoke(args: argparse.Namespace) -> dict[str, Any]:
     base_url = args.base_url.rstrip("/")
+    sandbox_executor_url = args.sandbox_executor_url.rstrip("/")
 
-    status, body = _request("GET", f"{base_url}/ready")
-    if status != 200:
-        raise SystemExit(f"Readiness check failed: {status} {body}")
+    backend_ready = _wait_for_ready(
+        "backend",
+        base_url,
+        timeout_seconds=args.ready_timeout_seconds,
+        poll_interval_seconds=args.poll_interval_seconds,
+    )
+    sandbox_ready = _wait_for_ready(
+        "sandbox-executor",
+        sandbox_executor_url,
+        timeout_seconds=args.ready_timeout_seconds,
+        poll_interval_seconds=args.poll_interval_seconds,
+    )
 
     token = _signup_or_login(base_url, args.email, args.password)
-
-    try:
-        challenge_id = _pick_challenge(base_url, args.challenge_id or None)
-    except RuntimeError:
-        if args.skip_poll:
-            print(
-                json.dumps(
-                    {"ready": True, "smoke": "no challenges seeded — skipping submission"},
-                    indent=2,
-                    sort_keys=True,
-                )
-            )
-            return
-        raise
+    challenge_id = _pick_challenge(base_url, args.challenge_id or None)
 
     submission_payload = {
         "challenge_id": challenge_id,
@@ -146,24 +147,9 @@ def main() -> None:
         token=token,
     )
     if status != 201 or not isinstance(body, dict):
-        raise SystemExit(f"Submission creation failed: {status} {body}")
+        raise RuntimeError(f"Submission creation failed: {status} {body}")
 
     submission_id = str(body["id"])
-
-    if args.skip_poll:
-        print(
-            json.dumps(
-                {
-                    "ready": True,
-                    "challenge_id": challenge_id,
-                    "submission_id": submission_id,
-                    "smoke": "submission accepted",
-                },
-                indent=2,
-                sort_keys=True,
-            )
-        )
-        return
 
     final_status = _poll_submission(
         base_url,
@@ -172,24 +158,54 @@ def main() -> None:
         timeout_seconds=args.timeout_seconds,
         poll_interval_seconds=args.poll_interval_seconds,
     )
+    if str(final_status.get("status")) != "completed":
+        raise RuntimeError(f"Submission did not complete successfully: {final_status}")
 
-    if str(final_status.get("status")) == "completed":
-        report_status, report = _request(
-            "GET",
-            f"{base_url}/api/submissions/{submission_id}/report",
-            token=token,
-        )
-        if report_status != 200:
-            raise SystemExit(f"Completed submission report failed: {report_status} {report}")
+    report_status, report = _request(
+        "GET",
+        f"{base_url}/api/submissions/{submission_id}/report",
+        token=token,
+    )
+    if report_status != 200 or not isinstance(report, dict):
+        raise RuntimeError(f"Completed submission report failed: {report_status} {report}")
 
+    return {
+        "backend_ready": backend_ready,
+        "sandbox_executor_ready": sandbox_ready,
+        "challenge_id": challenge_id,
+        "submission_id": submission_id,
+        "final_status": final_status,
+        "report_id": report.get("id"),
+    }
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run a live deployment smoke test.")
+    parser.add_argument("--base-url", default="http://127.0.0.1:8000")
+    parser.add_argument("--sandbox-executor-url", default="http://sandbox-executor:8090")
+    parser.add_argument("--challenge-id", default="")
+    parser.add_argument("--email", default=f"smoke_{uuid.uuid4().hex[:12]}@example.com")
+    parser.add_argument("--password", default="Password123!")
+    parser.add_argument("--ready-timeout-seconds", type=int, default=120)
+    parser.add_argument("--timeout-seconds", type=int, default=120)
+    parser.add_argument("--poll-interval-seconds", type=float, default=2.0)
+    parser.add_argument(
+        "--code",
+        default="def solve(data):\n    return {}\n",
+        help="Python submission code to send during the smoke test.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
+    try:
+        result = run_smoke(args)
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
     print(
         json.dumps(
-            {
-                "ready": True,
-                "challenge_id": challenge_id,
-                "submission_id": submission_id,
-                "final_status": final_status,
-            },
+            result,
             indent=2,
             sort_keys=True,
         )

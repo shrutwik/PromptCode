@@ -7,7 +7,7 @@ from sqlalchemy import DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
-from app.db.types import GUID, JSONType, StringList
+from app.db.types import GUID, JSONType
 
 
 class Challenge(Base):
@@ -21,7 +21,7 @@ class Challenge(Base):
     description: Mapped[str] = mapped_column(Text)
     difficulty: Mapped[str] = mapped_column(String(32), default="medium")
     category: Mapped[str] = mapped_column(String(64), default="extraction", index=True)
-    tags: Mapped[list[str]] = mapped_column(StringList(), default=list)
+    tags: Mapped[list[str]] = mapped_column(JSONType(), default=list)
     company_context: Mapped[str] = mapped_column(Text, default="")
     input_format: Mapped[str] = mapped_column(String(32), default="text")
     output_format: Mapped[str] = mapped_column(String(32), default="json")

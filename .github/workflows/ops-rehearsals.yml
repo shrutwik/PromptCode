@@ -1,0 +1,138 @@
+name: Ops Rehearsals
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_restore_rehearsal:
+        description: "Run the backup/restore rehearsal on a GitHub runner"
+        required: false
+        type: boolean
+        default: true
+      run_rollback_rehearsal:
+        description: "Run the rollback rehearsal against the production host"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  restore-rehearsal:
+    if: inputs.run_restore_rehearsal
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Rehearse backup and restore flow
+        run: bash scripts/rehearse-restore.sh
+
+  rollback-rehearsal:
+    if: inputs.run_rollback_rehearsal
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push a bad backend image
+        env:
+          BAD_IMAGE_TAG: rollback-bad-${{ github.run_id }}
+        run: |
+          BASE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_NAME=${BASE}/backend" >> "$GITHUB_ENV"
+          cat > /tmp/Dockerfile.rollback-bad <<'EOF'
+          ARG BASE_IMAGE
+          FROM ${BASE_IMAGE}
+          CMD ["python", "-c", "raise SystemExit('intentional rollback rehearsal failure')"]
+          EOF
+          docker build -f /tmp/Dockerfile.rollback-bad --build-arg BASE_IMAGE="${BASE}/backend:${{ github.sha }}" -t "${BASE}/backend:${BAD_IMAGE_TAG}" .
+          docker push "${BASE}/backend:${BAD_IMAGE_TAG}"
+
+      - name: Deploy bad image and expect failure
+        id: bad_deploy
+        continue-on-error: true
+        env:
+          BAD_IMAGE_TAG: rollback-bad-${{ github.run_id }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 6m
+          script: |
+            set -euo pipefail
+            cd /opt/promptcode
+            PREV_TAG="$(cat /opt/promptcode/.current-image-tag)"
+            echo "$PREV_TAG" > /opt/promptcode/.previous-image-tag
+            echo "${BAD_IMAGE_TAG}" > /opt/promptcode/.current-image-tag
+            printf 'deploying %s %s\n' "$(date -u +%s)" "${BAD_IMAGE_TAG}" > /opt/promptcode/.last-deploy-status
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker pull ${{ env.IMAGE_NAME }}:${BAD_IMAGE_TAG}
+            IMAGE_TAG="${BAD_IMAGE_TAG}" docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
+            for i in $(seq 1 12); do
+              if docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3).read()" 2>/dev/null; then
+                echo "Bad image unexpectedly became healthy." >&2
+                exit 1
+              fi
+              sleep 5
+            done
+            echo "Bad image failed to become ready, which is the expected rehearsal outcome." >&2
+            exit 1
+
+      - name: Confirm bad deploy failed
+        if: steps.bad_deploy.outcome != 'failure'
+        run: |
+          echo "Rollback rehearsal requires the bad deploy step to fail." >&2
+          exit 1
+
+      - name: Auto rollback after failed deploy
+        if: steps.bad_deploy.outcome == 'failure'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 6m
+          script: |
+            set -euo pipefail
+            cd /opt/promptcode
+            PREV_TAG="$(cat /opt/promptcode/.previous-image-tag)"
+            IMAGE_TAG="${PREV_TAG}" docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
+            echo "${PREV_TAG}" > /opt/promptcode/.current-image-tag
+            printf 'rolled_back %s %s\n' "$(date -u +%s)" "${PREV_TAG}" > /opt/promptcode/.last-deploy-status
+
+      - name: Verify service health after rollback
+        if: steps.bad_deploy.outcome == 'failure'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 6m
+          script: |
+            set -euo pipefail
+            cd /opt/promptcode
+            PREV_TAG="$(cat /opt/promptcode/.previous-image-tag)"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=5).read()"
+            if [ "$(cat /opt/promptcode/.current-image-tag)" != "${PREV_TAG}" ]; then
+              echo "Rollback did not restore the previous image tag metadata." >&2
+              exit 1
+            fi
+            echo "Rollback rehearsal complete."
+
+      - name: Document migration rollback boundary
+        if: always() && steps.bad_deploy.outcome == 'failure'
+        run: |
+          {
+            echo "This rehearsal intentionally uses a crash-before-start image, so no Alembic migration runs."
+            echo "Automatic downgrade -1 is still not performed by the repo because it cannot safely infer whether a failed rollout changed schema or whether the latest downgrade is reversible without operator approval."
+          } >> "$GITHUB_STEP_SUMMARY"
