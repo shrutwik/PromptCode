@@ -11,6 +11,7 @@ from starlette.requests import Request
 
 from app.api.routes import auth as auth_routes
 from app.api.routes.chat import ChatMessage, _validate_messages
+from app.core.config import get_settings
 from app.api.routes.submissions import _is_safe_python_entrypoint
 from app.db.base import Base
 from app.schemas.user import UserCreate
@@ -51,6 +52,7 @@ def test_validate_messages_rejects_invalid_payloads():
 
 
 def test_auth_rate_limit_is_shared_across_sessions(tmp_path: Path):
+    get_settings.cache_clear()
     request = Request(
         {
             "type": "http",
@@ -83,6 +85,42 @@ def test_auth_rate_limit_is_shared_across_sessions(tmp_path: Path):
 
     asyncio.run(exercise_limit())
     assert auth_routes._auth_client_key(request) == "203.0.113.10"
+    get_settings.cache_clear()
+
+
+def test_auth_client_key_ignores_forwarded_headers_from_untrusted_peer(monkeypatch):
+    monkeypatch.delenv("PROMPTCODE_AUTH_TRUSTED_PROXY_CIDRS", raising=False)
+    get_settings.cache_clear()
+
+    request = Request(
+        {
+            "type": "http",
+            "headers": [(b"x-forwarded-for", b"203.0.113.10"), (b"x-real-ip", b"203.0.113.10")],
+            "client": ("198.51.100.25", 1234),
+        }
+    )
+
+    assert auth_routes._auth_client_key(request) == "198.51.100.25"
+    get_settings.cache_clear()
+
+
+def test_auth_client_key_trusts_configured_docker_proxy_cidr(monkeypatch):
+    monkeypatch.setenv(
+        "PROMPTCODE_AUTH_TRUSTED_PROXY_CIDRS",
+        '["127.0.0.1/32","::1/128","172.16.0.0/12"]',
+    )
+    get_settings.cache_clear()
+
+    request = Request(
+        {
+            "type": "http",
+            "headers": [(b"x-forwarded-for", b"203.0.113.10, 172.20.0.10")],
+            "client": ("172.20.0.8", 1234),
+        }
+    )
+
+    assert auth_routes._auth_client_key(request) == "203.0.113.10"
+    get_settings.cache_clear()
 
 
 def test_user_create_rejects_weak_passwords():

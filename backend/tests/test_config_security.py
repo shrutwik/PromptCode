@@ -107,3 +107,14 @@ def test_settings_require_positive_scaling_limits():
         )
 
     assert "PROMPTCODE_SANDBOX_EXECUTOR_MAX_CONCURRENT_RUNS" in str(sandbox_exc.value)
+
+
+def test_settings_reject_invalid_auth_trusted_proxy_cidr():
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            debug=True,
+            jwt_secret="local-dev-secret-change-in-production",
+            auth_trusted_proxy_cidrs=["not-a-cidr"],
+        )
+
+    assert "PROMPTCODE_AUTH_TRUSTED_PROXY_CIDRS" in str(exc_info.value)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 from functools import lru_cache
 from pathlib import Path
 
@@ -17,6 +18,10 @@ _INSECURE_SANDBOX_EXECUTOR_TOKENS = {
     "",
     "local-sandbox-executor-token",
 }
+_DEFAULT_AUTH_TRUSTED_PROXY_CIDRS = [
+    "127.0.0.1/32",
+    "::1/128",
+]
 
 
 class Settings(BaseSettings):
@@ -62,6 +67,7 @@ class Settings(BaseSettings):
     worker_heartbeat_timeout_seconds: int = 30
 
     jwt_secret: str = ""
+    auth_trusted_proxy_cidrs: list[str] = list(_DEFAULT_AUTH_TRUSTED_PROXY_CIDRS)
 
     cors_origins: list[str] = [
         "http://localhost:3000",
@@ -87,6 +93,19 @@ class Settings(BaseSettings):
             raise ValueError(
                 "PROMPTCODE_JWT_SECRET must be changed from the development default when PROMPTCODE_DEBUG is false."
             )
+        normalized_proxy_cidrs: list[str] = []
+        for raw_cidr in self.auth_trusted_proxy_cidrs:
+            cidr = str(raw_cidr or "").strip()
+            if not cidr:
+                continue
+            try:
+                ipaddress.ip_network(cidr, strict=False)
+            except ValueError as exc:
+                raise ValueError(
+                    "PROMPTCODE_AUTH_TRUSTED_PROXY_CIDRS must contain valid IP addresses or CIDR ranges."
+                ) from exc
+            normalized_proxy_cidrs.append(cidr)
+        self.auth_trusted_proxy_cidrs = normalized_proxy_cidrs
         self.database_url = str(self.database_url or "").strip()
         if not self.database_url:
             raise ValueError("PROMPTCODE_DATABASE_URL must be set.")
