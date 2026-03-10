@@ -242,7 +242,7 @@ nav {
   </div>
   <div class="nav-right">
     <a class="btn btn-ghost" href="/challenges.html">← challenges</a>
-    <a href="javascript:void(0)" id="navLogoutLink" style="width:28px;height:28px;border-radius:5px;background:var(--accent-dim);border:1px solid rgba(200,240,96,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:none" title="sign out" data-user-initials></a>
+    <button type="button" id="navLogoutLink" style="width:28px;height:28px;padding:0;border-radius:5px;background:var(--accent-dim);border:1px solid rgba(200,240,96,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:none" title="sign out" data-user-initials></button>
   </div>
   <button class="hamburger" aria-label="Toggle navigation">&#9776;</button>
 </nav>
@@ -267,8 +267,8 @@ nav {
         <div class="rank-label">global rank</div>
         <div class="rank-sub" id="profileRankSub">not yet ranked</div>
       </div>
-      <a class="btn btn-ghost" href="javascript:void(0)" id="editProfileBtn" style="display:none">edit profile</a>
-      <a class="btn btn-ghost" href="javascript:void(0)" id="signOutBtn" style="display:none;border-color:rgba(240,96,96,0.3);color:var(--danger)">sign out</a>
+      <button type="button" class="btn btn-ghost" id="editProfileBtn" style="display:none">edit profile</button>
+      <button type="button" class="btn btn-ghost" id="signOutBtn" style="display:none;border-color:rgba(240,96,96,0.3);color:var(--danger)">sign out</button>
     </div>
   </div>
 

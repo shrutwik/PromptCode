@@ -207,7 +207,7 @@ nav { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--nav-h); 
     <a data-noauth-show class="btn btn-primary" href="/signup.html">get started →</a>
     <a data-auth-show href="/profile.html" style="width:28px;height:28px;border-radius:5px;background:var(--accent-dim);border:1px solid rgba(200,240,96,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:none" data-user-initials>jl</a>
   </div>
-  <button class="hamburger" aria-label="Toggle navigation" onclick="var nl=this.closest('nav').querySelector('.nav-links');nl.classList.toggle('mobile-open')">&#9776;</button>
+  <button class="hamburger" aria-label="Toggle navigation">&#9776;</button>
 </nav>
 
 <div class="layout">
@@ -246,11 +246,11 @@ nav { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--nav-h); 
 
     <div class="sidebar-section">
       <div class="sidebar-label">categories</div>
-      <a class="sidebar-link" href="javascript:void(0)" onclick="filterCat('all')">all challenges</a>
-      <a class="sidebar-link" href="javascript:void(0)" onclick="filterCat('extraction')">extraction</a>
-      <a class="sidebar-link" href="javascript:void(0)" onclick="filterCat('classification')">classification</a>
-      <a class="sidebar-link" href="javascript:void(0)" onclick="filterCat('generation')">generation</a>
-      <a class="sidebar-link" href="javascript:void(0)" onclick="filterCat('orchestration')">orchestration</a>
+      <a class="sidebar-link" href="#" data-click-action="filterCat" data-action-args='["all"]'>all challenges</a>
+      <a class="sidebar-link" href="#" data-click-action="filterCat" data-action-args='["extraction"]'>extraction</a>
+      <a class="sidebar-link" href="#" data-click-action="filterCat" data-action-args='["classification"]'>classification</a>
+      <a class="sidebar-link" href="#" data-click-action="filterCat" data-action-args='["generation"]'>generation</a>
+      <a class="sidebar-link" href="#" data-click-action="filterCat" data-action-args='["orchestration"]'>orchestration</a>
     </div>
 
     <div style="padding:0 18px;margin-top:16px" data-auth-show>
@@ -309,14 +309,14 @@ nav { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--nav-h); 
 
     <!-- FILTERS -->
     <div class="filters fade-in d2">
-      <button class="filter-btn active" onclick="setFilter(this,'all')">all</button>
-      <button class="filter-btn" onclick="setFilter(this,'easy')">easy</button>
-      <button class="filter-btn" onclick="setFilter(this,'medium')">medium</button>
-      <button class="filter-btn" onclick="setFilter(this,'hard')">hard</button>
-      <button class="filter-btn" onclick="setFilter(this,'extraction')">extraction</button>
-      <button class="filter-btn" onclick="setFilter(this,'classification')">classification</button>
-      <button class="filter-btn" onclick="setFilter(this,'generation')">generation</button>
-      <input class="search-input" placeholder="search challenges..." aria-label="Search challenges" oninput="filterSearch(this.value)">
+      <button class="filter-btn active" data-click-action="setFilter" data-pass-element="true" data-action-args='["all"]'>all</button>
+      <button class="filter-btn" data-click-action="setFilter" data-pass-element="true" data-action-args='["easy"]'>easy</button>
+      <button class="filter-btn" data-click-action="setFilter" data-pass-element="true" data-action-args='["medium"]'>medium</button>
+      <button class="filter-btn" data-click-action="setFilter" data-pass-element="true" data-action-args='["hard"]'>hard</button>
+      <button class="filter-btn" data-click-action="setFilter" data-pass-element="true" data-action-args='["extraction"]'>extraction</button>
+      <button class="filter-btn" data-click-action="setFilter" data-pass-element="true" data-action-args='["classification"]'>classification</button>
+      <button class="filter-btn" data-click-action="setFilter" data-pass-element="true" data-action-args='["generation"]'>generation</button>
+      <input class="search-input" placeholder="search challenges..." aria-label="Search challenges" data-input-action="filterSearch" data-pass-value="true">
     </div>
 
     <!-- TABLE -->
@@ -463,6 +463,7 @@ nav { position:fixed; top:0; left:0; right:0; z-index:100; height:var(--nav-h); 
   </main>
 </div>
 
+<script src="/static/site.js"></script>
 <script src="/static/api.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', async () => {

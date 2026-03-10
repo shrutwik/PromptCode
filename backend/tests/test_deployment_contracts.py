@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import gzip
 import os
+import re
 import subprocess
 import time
 import uuid
@@ -26,6 +27,7 @@ VALIDATE_PROD_HOST_SCRIPT = REPO_ROOT / "scripts" / "validate-prod-host.sh"
 BACKEND_CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "backend-ci.yml"
 OPS_REHEARSALS_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ops-rehearsals.yml"
 DOCKER_COMPOSE_PROD = REPO_ROOT / "docker-compose.prod.yml"
+DEPENDABOT_CONFIG = REPO_ROOT / ".github" / "dependabot.yml"
 
 
 def _write(path: Path, content: str) -> Path:
@@ -758,12 +760,35 @@ def test_backend_ci_runs_lint_and_type_checks() -> None:
     )
 
 
+def test_workflows_pin_third_party_actions_to_commit_shas() -> None:
+    for workflow_path in (BACKEND_CI_WORKFLOW, OPS_REHEARSALS_WORKFLOW):
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+        uses_refs = re.findall(r"uses:\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@([^\s#]+)", workflow_text)
+
+        assert uses_refs, f"{workflow_path.name} should declare at least one third-party action."
+        for action_name, ref in uses_refs:
+            assert re.fullmatch(r"[0-9a-f]{40}", ref), (
+                f"{workflow_path.name} leaves {action_name} pinned to {ref!r} instead of an immutable SHA."
+            )
+
+
 def test_backend_ci_runs_dependency_vulnerability_audit() -> None:
     workflow_text = BACKEND_CI_WORKFLOW.read_text(encoding="utf-8")
 
     assert "      - name: Audit locked dependencies for known vulnerabilities" in workflow_text
     assert "pip install pip-audit" in workflow_text
     assert "pip-audit -r requirements.lock" in workflow_text
+
+
+def test_dependabot_covers_backend_dependencies_and_workflows() -> None:
+    config_text = DEPENDABOT_CONFIG.read_text(encoding="utf-8")
+
+    assert 'package-ecosystem: "pip"' in config_text
+    assert 'directory: "/backend"' in config_text
+    assert 'package-ecosystem: "docker"' in config_text
+    assert 'directory: "/docker"' in config_text
+    assert 'package-ecosystem: "github-actions"' in config_text
+    assert 'directory: "/"' in config_text
 
 
 def test_deploy_workflow_does_not_print_full_merged_compose_on_validation_failure() -> None:

@@ -53,7 +53,7 @@ nav { height:52px; display:flex; align-items:center; justify-content:space-betwe
 .pw-label { font-size:10px; color:var(--muted); }
 
 .terms { font-size:11px; color:var(--muted); margin-bottom:18px; line-height:1.6; }
-.terms a { color:var(--accent); text-decoration:none; }
+.terms a, .terms .disabled-link { color:var(--accent); text-decoration:none; }
 
 .btn-submit { width:100%; padding:11px; background:var(--accent); border:none; border-radius:var(--radius); font-family:'DM Mono',monospace; font-size:13px; font-weight:500; color:var(--bg); cursor:pointer; transition:background 0.15s; margin-bottom:14px; }
 .btn-submit:hover { background:#d4f870; }
@@ -151,7 +151,7 @@ nav { height:52px; display:flex; align-items:center; justify-content:space-betwe
           <div class="pw-label" id="pwLabel"></div>
         </div>
       </div>
-      <p class="terms">By creating an account you agree to our <a href="javascript:void(0)">terms of service</a> and <a href="javascript:void(0)">privacy policy</a>.</p>
+      <p class="terms">By creating an account you agree to our <span class="disabled-link" aria-disabled="true">terms of service</span> and <span class="disabled-link" aria-disabled="true">privacy policy</span>.</p>
       <button type="submit" class="btn-submit" id="submitBtn">create account →</button>
     </form>
 

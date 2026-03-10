@@ -248,7 +248,7 @@ nav {
     <a class="btn btn-ghost" id="backToChallenge" href="/challenges.html">← back to challenge</a>
     <a href="/profile.html" style="width:28px;height:28px;border-radius:5px;background:var(--accent-dim);border:1px solid rgba(200,240,96,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:none" data-user-initials>jl</a>
   </div>
-  <button class="hamburger" aria-label="Toggle navigation" onclick="var nl=this.closest('nav').querySelector('.nav-links');nl.classList.toggle('mobile-open')">&#9776;</button>
+  <button class="hamburger" aria-label="Toggle navigation">&#9776;</button>
 </nav>
 
 <div class="page">
@@ -295,7 +295,7 @@ nav {
         <div class="lbl">your rank</div>
       </div>
       <a class="btn btn-primary" id="improveBtn" href="/challenges.html">improve →</a>
-      <a class="btn btn-ghost btn-sm" href="javascript:void(0)" onclick="navigator.clipboard.writeText(window.location.href);this.textContent='link copied!';setTimeout(()=>this.textContent='share report',2000)">share report</a>
+      <a class="btn btn-ghost btn-sm" href="#" data-click-action="shareReport" data-pass-element="true">share report</a>
     </div>
   </div>
 
@@ -374,7 +374,7 @@ nav {
       <div class="card fade-in d2">
         <div class="card-hdr">
           <span class="card-title">prompt efficiency report</span>
-          <button class="btn btn-ghost btn-sm" onclick="copyJSON()">copy</button>
+          <button class="btn btn-ghost btn-sm" data-click-action="copyJSON">copy</button>
         </div>
         <div class="card-body" style="padding:14px">
           <div class="json-report" id="jsonReport" style="color:var(--muted)">Loading report...</div>
@@ -426,6 +426,7 @@ nav {
   </div>
 </div>
 
+<script src="/static/site.js"></script>
 <script src="/static/api.js"></script>
 <script>
   let _reportCache = null;
@@ -920,6 +921,15 @@ nav {
     navigator.clipboard.writeText(json).catch(() => {});
     const btn = document.querySelector('.card-hdr .btn-sm');
     if (btn) { btn.textContent = 'copied!'; setTimeout(() => btn.textContent = 'copy', 2000); }
+  }
+
+  function shareReport(button) {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      button.textContent = 'link copied!';
+      setTimeout(() => {
+        button.textContent = 'share report';
+      }, 2000);
+    }).catch(() => {});
   }
 </script>
 </body>

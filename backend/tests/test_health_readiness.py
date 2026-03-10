@@ -85,7 +85,12 @@ def test_health_sets_security_headers(monkeypatch):
         response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.headers["Content-Security-Policy"].startswith("default-src 'self'")
+    csp = response.headers["Content-Security-Policy"]
+    assert csp.startswith("default-src 'self'")
+    assert "script-src 'self' https://esm.sh" in csp
+    assert "script-src-attr 'none'" in csp
+    assert "'unsafe-inline'" not in csp.partition("script-src")[2].partition(";")[0]
+    assert "'sha256-" in csp
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["X-Frame-Options"] == "DENY"
     assert response.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"

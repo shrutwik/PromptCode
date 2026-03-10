@@ -1,6 +1,10 @@
+import base64
 from contextlib import asynccontextmanager
+from functools import lru_cache
+import hashlib
 from pathlib import Path
 import logging
+import re
 import time
 import uuid
 
@@ -27,13 +31,43 @@ from app.db.session import engine
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 logger = logging.getLogger(__name__)
 access_logger = logging.getLogger("app.access")
+_INLINE_SCRIPT_RE = re.compile(
+    r"<script(?P<attrs>[^>]*)>(?P<body>.*?)</script>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+@lru_cache
+def _frontend_inline_script_hashes() -> tuple[str, ...]:
+    if not FRONTEND_DIR.exists():
+        return ()
+
+    hashes: set[str] = set()
+    for html_path in FRONTEND_DIR.glob("*.html"):
+        source = html_path.read_text(encoding="utf-8")
+        for match in _INLINE_SCRIPT_RE.finditer(source):
+            attrs = match.group("attrs") or ""
+            if re.search(r"\bsrc\s*=", attrs, re.IGNORECASE):
+                continue
+
+            body = match.group("body")
+            if not body.strip():
+                continue
+
+            digest = hashlib.sha256(body.encode("utf-8")).digest()
+            hash_b64 = base64.b64encode(digest).decode("ascii")
+            hashes.add(f"'sha256-{hash_b64}'")
+
+    return tuple(sorted(hashes))
 
 
 def _content_security_policy() -> str:
+    script_sources = ["'self'", "https://esm.sh", *_frontend_inline_script_hashes()]
     return "; ".join(
         [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' https://esm.sh",
+            f"script-src {' '.join(script_sources)}",
+            "script-src-attr 'none'",
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
             "font-src 'self' https://fonts.gstatic.com",
             "img-src 'self' data:",

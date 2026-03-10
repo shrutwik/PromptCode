@@ -737,7 +737,7 @@ nav {
 <!-- NAV -->
 <nav>
   <div class="nav-left">
-    <button class="menu-btn" onclick="toggleDrawer()" title="challenges">
+    <button class="menu-btn" data-click-action="toggleDrawer" title="challenges">
       <!-- squiggle / wavy lines svg -->
       <svg viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
         <path d="M1 2 C3.5 2 3.5 4.5 6 4.5 C8.5 4.5 8.5 2 11 2 C13.5 2 13.5 4.5 16 4.5 M1 7 C3.5 7 3.5 9.5 6 9.5 C8.5 9.5 8.5 7 11 7 C13.5 7 13.5 9.5 16 9.5 M1 12 C3.5 12 3.5 12 6 12 C8.5 12 8.5 12 11 12 C13.5 12 13.5 12 16 12"/>
@@ -763,11 +763,11 @@ nav {
     <a class="btn btn-primary" href="/signup.html" data-noauth-show>start free</a>
     <a data-auth-show href="/profile.html" style="display:flex;width:28px;height:28px;border-radius:5px;background:var(--accent-dim);border:1px solid rgba(200,240,96,0.3);align-items:center;justify-content:center;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:none" data-user-initials></a>
   </div>
-  <button class="hamburger" aria-label="Toggle navigation" onclick="var nl=this.closest('nav').querySelector('.nav-links');nl.classList.toggle('mobile-open')">&#9776;</button>
+  <button class="hamburger" aria-label="Toggle navigation">&#9776;</button>
 </nav>
 
 <!-- DRAWER OVERLAY -->
-<div class="drawer-overlay" id="overlay" onclick="toggleDrawer()"></div>
+<div class="drawer-overlay" id="overlay" data-click-action="toggleDrawer"></div>
 
 <!-- DRAWER -->
 <div class="drawer" id="drawer">
@@ -879,7 +879,7 @@ nav {
     <div class="editor-section">
       <div class="editor-toolbar">
         <div class="toolbar-left">
-          <select class="lang-select" id="langSelect" onchange="switchLanguage(this.value)">
+          <select class="lang-select" id="langSelect" data-change-action="switchLanguage" data-pass-value="true">
             <option value="python">Python 3.12</option>
           </select>
           <span style="font-size:11px;color:var(--muted)" id="entrypointLabel">main.py</span>
@@ -904,8 +904,8 @@ nav {
         <span>latency: <b id="runLatency">—</b></span>
       </div>
       <div class="run-actions">
-        <button class="btn btn-run" id="runBtn" onclick="handleRunAction()">latest run</button>
-        <button class="btn btn-primary" id="submitBtn" onclick="handleSubmit()">submit →</button>
+        <button class="btn btn-run" id="runBtn" data-click-action="handleRunAction">latest run</button>
+        <button class="btn btn-primary" id="submitBtn" data-click-action="handleSubmit">submit →</button>
       </div>
     </div>
 
@@ -926,11 +926,11 @@ nav {
 
     <!-- Tab bar -->
     <div class="right-tabs">
-      <button class="right-tab active" data-tab="chat" onclick="switchRightTab('chat')">
+      <button class="right-tab active" data-tab="chat" data-click-action="switchRightTab" data-action-args='["chat"]'>
         <div class="tab-dot accent"></div>
         ai assistant
       </button>
-      <button class="right-tab" data-tab="tracking" onclick="switchRightTab('tracking')">
+      <button class="right-tab" data-tab="tracking" data-click-action="switchRightTab" data-action-args='["tracking"]'>
         <div class="tab-dot idle" id="trackingTabDot"></div>
         tracking
       </button>
@@ -1072,8 +1072,8 @@ nav {
 
         <div class="chat-input-area">
           <div class="chat-input-row">
-            <textarea class="chat-input" id="chatInput" rows="1" placeholder="ask about prompts, logic, scoring..." onkeydown="handleKey(event)"></textarea>
-            <button class="send-btn" onclick="sendMsg()">
+            <textarea class="chat-input" id="chatInput" rows="1" placeholder="ask about prompts, logic, scoring..." data-keydown-action="handleKey" data-pass-event="true"></textarea>
+            <button class="send-btn" data-click-action="sendMsg">
               <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 7H2M8 3l4 4-4 4"/>
               </svg>
@@ -1094,6 +1094,7 @@ nav {
   <span id="notifText"></span>
 </div>
 
+<script src="/static/site.js"></script>
 <script src="/static/api.js"></script>
 <script>
   let cmView = null;
