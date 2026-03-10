@@ -1,16 +1,134 @@
-fastapi==0.120.4
-uvicorn[standard]==0.34.0
-sqlalchemy[asyncio]==2.0.37
-asyncpg==0.31.0
-pydantic==2.10.6
-pydantic-settings==2.13.1
-docker==7.1.0
-openai==2.24.0
-python-multipart==0.0.22
-passlib[bcrypt]==1.7.4
-authlib==1.6.9
-starlette==0.49.3
-email-validator==2.3.0
 alembic==1.18.4
-sentry-sdk[fastapi]==2.54.0
+    # via -r requirements.txt
+annotated-doc==0.0.4
+    # via fastapi
+annotated-types==0.7.0
+    # via pydantic
+anyio==4.12.1
+    # via
+    #   httpx
+    #   openai
+    #   starlette
+    #   watchfiles
+asyncpg==0.31.0
+    # via -r requirements.txt
+authlib==1.6.9
+    # via -r requirements.txt
+bcrypt==5.0.0
+    # via passlib
+certifi==2026.2.25
+    # via
+    #   httpcore
+    #   httpx
+    #   requests
+    #   sentry-sdk
+cffi==2.0.0
+    # via cryptography
+charset-normalizer==3.4.5
+    # via requests
+click==8.3.1
+    # via uvicorn
+cryptography==46.0.5
+    # via authlib
+distro==1.9.0
+    # via openai
+dnspython==2.8.0
+    # via email-validator
+docker==7.1.0
+    # via -r requirements.txt
+email-validator==2.3.0
+    # via -r requirements.txt
+fastapi==0.120.4
+    # via
+    #   -r requirements.txt
+    #   sentry-sdk
+greenlet==3.3.2
+    # via sqlalchemy
+h11==0.16.0
+    # via
+    #   httpcore
+    #   uvicorn
+httpcore==1.0.9
+    # via httpx
+httptools==0.7.1
+    # via uvicorn
+httpx==0.28.1
+    # via openai
+idna==3.11
+    # via
+    #   anyio
+    #   email-validator
+    #   httpx
+    #   requests
+jiter==0.13.0
+    # via openai
+mako==1.3.10
+    # via alembic
+markupsafe==3.0.3
+    # via mako
+openai==2.24.0
+    # via -r requirements.txt
+passlib==1.7.4
+    # via -r requirements.txt
 prometheus-client==0.21.1
+    # via -r requirements.txt
+pycparser==3.0
+    # via cffi
+pydantic==2.10.6
+    # via
+    #   -r requirements.txt
+    #   fastapi
+    #   openai
+    #   pydantic-settings
+pydantic-core==2.27.2
+    # via pydantic
+pydantic-settings==2.13.1
+    # via -r requirements.txt
+python-dotenv==1.2.2
+    # via
+    #   pydantic-settings
+    #   uvicorn
+python-multipart==0.0.22
+    # via -r requirements.txt
+pyyaml==6.0.3
+    # via uvicorn
+requests==2.32.5
+    # via docker
+sentry-sdk==2.54.0
+    # via -r requirements.txt
+sniffio==1.3.1
+    # via openai
+sqlalchemy==2.0.37
+    # via
+    #   -r requirements.txt
+    #   alembic
+starlette==0.49.3
+    # via fastapi
+tqdm==4.67.3
+    # via openai
+typing-extensions==4.15.0
+    # via
+    #   alembic
+    #   anyio
+    #   fastapi
+    #   openai
+    #   pydantic
+    #   pydantic-core
+    #   sqlalchemy
+    #   starlette
+    #   typing-inspection
+typing-inspection==0.4.2
+    # via pydantic-settings
+urllib3==2.6.3
+    # via
+    #   docker
+    #   requests
+    #   sentry-sdk
+uvicorn==0.34.0
+    # via -r requirements.txt
+uvloop==0.22.1
+    # via uvicorn
+watchfiles==1.1.1
+    # via uvicorn
+websockets==16.0
+    # via uvicorn
