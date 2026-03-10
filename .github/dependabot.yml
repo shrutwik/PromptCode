@@ -5,6 +5,10 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    groups:
+      all-pip-deps:
+        patterns:
+          - "*"
 
   - package-ecosystem: "docker"
     directory: "/docker"

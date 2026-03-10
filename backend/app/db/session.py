@@ -31,6 +31,7 @@ else:
         echo=settings.database_echo,
         pool_size=20,
         max_overflow=10,
+        pool_pre_ping=True,
         connect_args=_connect_args,
     )
 
@@ -43,4 +44,8 @@ async_session_factory = async_sessionmaker(
 
 async def get_db() -> AsyncSession:  # type: ignore[misc]
     async with async_session_factory() as session:
-        yield session
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise

@@ -7,6 +7,8 @@ on:
 jobs:
   backend-tests:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       PROMPTCODE_JWT_SECRET: ci-test-secret
       PROMPTCODE_DEBUG: "true"
@@ -27,14 +29,26 @@ jobs:
             backend/requirements-dev.txt
             backend/requirements.lock
 
+      - name: Regenerate requirements.lock from requirements.txt
+        run: |
+          pip install pip-tools
+          pip-compile requirements.txt --output-file=requirements.lock --strip-extras --quiet --no-header --allow-unsafe
+          if ! git diff --quiet requirements.lock; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add requirements.lock
+            git commit -m "chore: regenerate requirements.lock"
+            git push
+          fi
+
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
       - name: Run backend lint
-        run: python -m ruff check app/api/routes/auth.py app/core/config.py app/core/security.py app/schemas/user.py tests/test_auth_security.py tests/test_backend_validation.py tests/test_deployment_contracts.py --select F,E9,I
+        run: python -m ruff check app/ tests/ --select F,E9,I
 
       - name: Run backend type checks
-        run: python -m mypy --strict --follow-imports=silent --ignore-missing-imports app/api/routes/auth.py app/core/config.py app/core/security.py app/schemas/user.py
+        run: python -m mypy --strict --follow-imports=silent --ignore-missing-imports app/core/ app/api/ app/schemas/
 
       - name: Audit locked dependencies for known vulnerabilities
         run: |
