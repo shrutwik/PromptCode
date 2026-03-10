@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
 from pathlib import PurePosixPath
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.deps import get_current_user
+from app.core.ratelimit import check_rate_limit
 from app.db.session import get_db
-from app.models.auth_rate_limit import AuthRateLimitEvent
 from app.models.challenge import Challenge
 from app.models.evaluation_job import EvaluationJob
 from app.models.submission import Submission
@@ -25,30 +24,13 @@ _SUBMISSION_RATE_LIMIT = 5
 _SUBMISSION_RATE_WINDOW = 60
 
 
-async def _enforce_submission_rate_limit(*, key: str, db: AsyncSession) -> None:
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(seconds=_SUBMISSION_RATE_WINDOW)
-    await db.execute(
-        delete(AuthRateLimitEvent).where(
-            AuthRateLimitEvent.client_key == key,
-            AuthRateLimitEvent.created_at < cutoff,
-        )
-    )
-    count_result = await db.execute(
-        select(func.count())
-        .select_from(AuthRateLimitEvent)
-        .where(AuthRateLimitEvent.client_key == key)
-    )
-    count = int(count_result.scalar_one() or 0)
-    if count >= _SUBMISSION_RATE_LIMIT:
-        await db.commit()
+def _enforce_submission_rate_limit(*, key: str) -> None:
+    if not check_rate_limit(key, limit=_SUBMISSION_RATE_LIMIT, window_seconds=_SUBMISSION_RATE_WINDOW):
         raise HTTPException(
             status_code=429,
             detail=f"Rate limit exceeded. Retry in {_SUBMISSION_RATE_WINDOW}s.",
             headers={"Retry-After": str(_SUBMISSION_RATE_WINDOW)},
         )
-    db.add(AuthRateLimitEvent(client_key=key))
-    await db.commit()
 
 
 def _is_safe_python_entrypoint(entrypoint: str) -> bool:
@@ -106,6 +88,8 @@ async def _guard_submission_capacity(
 @router.get("/", response_model=list[SubmissionResponse])
 async def list_submissions(
     challenge_id: uuid.UUID | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -113,6 +97,8 @@ async def list_submissions(
         select(Submission)
         .where(Submission.user_id == user.id)
         .order_by(Submission.created_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
     if challenge_id:
         query = query.where(Submission.challenge_id == challenge_id)
@@ -135,7 +121,7 @@ async def create_submission(
             status_code=400,
             detail="Entrypoint must be a safe Python filename like 'main.py'.",
         )
-    await _enforce_submission_rate_limit(key=f"submission:{user.id}", db=db)
+    _enforce_submission_rate_limit(key=f"submission:{user.id}")
     await _guard_submission_capacity(db, user_id=user.id)
 
     submission = Submission(

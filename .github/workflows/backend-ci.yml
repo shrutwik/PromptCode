@@ -30,6 +30,12 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
+      - name: Run backend lint
+        run: python -m ruff check app/api/routes/auth.py app/core/config.py app/core/security.py app/schemas/user.py tests/test_auth_security.py tests/test_backend_validation.py tests/test_deployment_contracts.py --select F,E9,I
+
+      - name: Run backend type checks
+        run: python -m mypy --strict --follow-imports=silent --ignore-missing-imports app/api/routes/auth.py app/core/config.py app/core/security.py app/schemas/user.py
+
       - name: Audit locked dependencies for known vulnerabilities
         run: |
           pip install pip-audit
@@ -69,7 +75,7 @@ jobs:
           "
 
       - name: Run backend tests
-        run: pytest tests -q --tb=short -x
+        run: pytest tests -q --tb=short -x --cov=app --cov-report=term-missing --cov-fail-under=60
 
       - name: Run release quality gates
         run: python -m scripts.run_release_quality_gates

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import ipaddress
+import time
+from collections import deque
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -19,7 +22,6 @@ from app.core.security import (
     verify_password,
 )
 from app.db.session import get_db
-from app.models.auth_rate_limit import AuthRateLimitEvent
 from app.models.revoked_token import RevokedToken
 from app.models.user import User
 from app.schemas.user import (
@@ -36,6 +38,68 @@ router = APIRouter()
 
 _AUTH_RATE_WINDOW = 60  # seconds
 _AUTH_RATE_LIMIT = 10  # max attempts per IP per window
+
+
+class _InMemoryRateLimiter:
+    def __init__(
+        self,
+        *,
+        window_seconds: int,
+        max_attempts: int,
+        sweep_interval: int = 256,
+    ) -> None:
+        self.window_seconds = float(window_seconds)
+        self.max_attempts = max_attempts
+        self.sweep_interval = max(1, sweep_interval)
+        self._events: dict[str, deque[float]] = {}
+        self._checks_since_sweep = 0
+        self._lock = asyncio.Lock()
+
+    @staticmethod
+    def _prune_expired(events: deque[float], cutoff: float) -> None:
+        while events and events[0] <= cutoff:
+            events.popleft()
+
+    def _sweep_expired_keys(self, cutoff: float) -> None:
+        stale_keys: list[str] = []
+        for key, events in self._events.items():
+            self._prune_expired(events, cutoff)
+            if not events:
+                stale_keys.append(key)
+        for key in stale_keys:
+            self._events.pop(key, None)
+
+    async def check(self, key: str, *, now: float | None = None) -> None:
+        current_time = time.monotonic() if now is None else now
+        cutoff = current_time - self.window_seconds
+
+        async with self._lock:
+            self._checks_since_sweep += 1
+            if self._checks_since_sweep >= self.sweep_interval:
+                self._sweep_expired_keys(cutoff)
+                self._checks_since_sweep = 0
+
+            events = self._events.get(key)
+            if events is None:
+                events = deque()
+                self._events[key] = events
+            else:
+                self._prune_expired(events, cutoff)
+
+            if len(events) >= self.max_attempts:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many attempts. Please try again later.",
+                    headers={"Retry-After": str(int(self.window_seconds))},
+                )
+
+            events.append(current_time)
+
+
+_auth_rate_limiter = _InMemoryRateLimiter(
+    window_seconds=_AUTH_RATE_WINDOW,
+    max_attempts=_AUTH_RATE_LIMIT,
+)
 
 
 def _hash_token(token: str) -> str:
@@ -95,31 +159,8 @@ def _auth_client_key(request: Request) -> str:
     return "unknown"
 
 
-async def _check_auth_rate_limit(request: Request, db: AsyncSession) -> None:
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(seconds=_AUTH_RATE_WINDOW)
-    client_ip = _auth_client_key(request)
-    await db.execute(
-        delete(AuthRateLimitEvent).where(
-            AuthRateLimitEvent.client_key == client_ip,
-            AuthRateLimitEvent.created_at < cutoff,
-        )
-    )
-    count_result = await db.execute(
-        select(func.count())
-        .select_from(AuthRateLimitEvent)
-        .where(AuthRateLimitEvent.client_key == client_ip)
-    )
-    attempt_count = int(count_result.scalar_one() or 0)
-    if attempt_count >= _AUTH_RATE_LIMIT:
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many attempts. Please try again later.",
-            headers={"Retry-After": str(_AUTH_RATE_WINDOW)},
-        )
-    db.add(AuthRateLimitEvent(client_key=client_ip))
-    await db.commit()
+async def _check_auth_rate_limit(request: Request, *, now: float | None = None) -> None:
+    await _auth_rate_limiter.check(_auth_client_key(request), now=now)
 
 
 @router.post("/signup", response_model=TokenResponse, status_code=201)
@@ -127,8 +168,8 @@ async def signup(
     payload: UserCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-):
-    await _check_auth_rate_limit(request, db)
+) -> TokenResponse:
+    await _check_auth_rate_limit(request)
     existing = await db.execute(
         select(User).where(
             (func.lower(User.email) == payload.email) | (User.username == payload.username)
@@ -166,8 +207,8 @@ async def login(
     payload: UserLogin,
     request: Request,
     db: AsyncSession = Depends(get_db),
-):
-    await _check_auth_rate_limit(request, db)
+) -> TokenResponse:
+    await _check_auth_rate_limit(request)
     result = await db.execute(select(User).where(func.lower(User.email) == payload.email))
     user = result.scalar_one_or_none()
     if not user or not verify_password(payload.password, user.password_hash):
@@ -191,8 +232,8 @@ async def refresh_token_endpoint(
     payload: RefreshRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-):
-    await _check_auth_rate_limit(request, db)
+) -> TokenResponse:
+    await _check_auth_rate_limit(request)
     settings = get_settings()
     user_id = decode_refresh_token(payload.refresh_token, settings.jwt_secret)
     if user_id is None:
@@ -230,7 +271,7 @@ async def logout(
     payload: LogoutRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> None:
     """Revoke a refresh token. Requires a valid access token."""
     user_id = decode_refresh_token(payload.refresh_token, get_settings().jwt_secret)
     if user_id != user.id:
@@ -248,7 +289,7 @@ async def logout(
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(user: User = Depends(get_current_user)):
+async def get_me(user: User = Depends(get_current_user)) -> User:
     return user
 
 
@@ -257,7 +298,7 @@ async def update_me(
     payload: UserUpdate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> User:
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(user, field, value)
     await db.commit()

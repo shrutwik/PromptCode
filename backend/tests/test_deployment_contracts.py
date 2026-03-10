@@ -8,15 +8,12 @@ import uuid
 from pathlib import Path
 
 import pytest
-from sqlalchemy import Column, Index, MetaData, String, Table, UniqueConstraint, types
-from sqlalchemy.dialects.postgresql import dialect as postgresql_dialect
-
 from app.db.alembic_compare import compare_type, should_include_object
-from app.db.types import GUID
-from app.db.types import JSONType
+from app.db.types import GUID, JSONType
 from app.models.challenge import Challenge
 from app.models.evaluation_job import EvaluationJob
-
+from sqlalchemy import Column, Index, MetaData, String, Table, UniqueConstraint, types
+from sqlalchemy.dialects.postgresql import dialect as postgresql_dialect
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VALIDATE_ENV_SCRIPT = REPO_ROOT / "scripts" / "validate-env.sh"
@@ -744,6 +741,21 @@ def test_prod_compose_defaults_database_ssl_to_true() -> None:
     compose_text = DOCKER_COMPOSE_PROD.read_text(encoding="utf-8")
 
     assert 'PROMPTCODE_DATABASE_SSL_REQUIRE: ${PROMPTCODE_DATABASE_SSL_REQUIRE:-true}' in compose_text
+
+
+def test_backend_ci_runs_lint_and_type_checks() -> None:
+    workflow_text = BACKEND_CI_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "      - name: Run backend lint" in workflow_text
+    assert (
+        "python -m ruff check app/api/routes/auth.py app/core/config.py app/core/security.py app/schemas/user.py tests/test_auth_security.py tests/test_backend_validation.py tests/test_deployment_contracts.py --select F,E9,I"
+        in workflow_text
+    )
+    assert "      - name: Run backend type checks" in workflow_text
+    assert (
+        "python -m mypy --strict --follow-imports=silent --ignore-missing-imports app/api/routes/auth.py app/core/config.py app/core/security.py app/schemas/user.py"
+        in workflow_text
+    )
 
 
 def test_backend_ci_runs_dependency_vulnerability_audit() -> None:

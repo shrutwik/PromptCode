@@ -1,21 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
 import pytest
-from fastapi import HTTPException
-from pydantic import ValidationError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from starlette.requests import Request
-
 from app.api.routes import auth as auth_routes
 from app.api.routes.chat import ChatMessage, _validate_messages
-from app.core.config import get_settings
 from app.api.routes.submissions import _is_safe_python_entrypoint
-from app.db.base import Base
+from app.core.config import get_settings
 from app.schemas.user import UserCreate
 from app.services.sandbox.runner import _is_safe_entrypoint
+from fastapi import HTTPException
+from pydantic import ValidationError
+from starlette.requests import Request
 
 
 def test_entrypoint_validation_accepts_simple_python_file():
@@ -51,7 +47,7 @@ def test_validate_messages_rejects_invalid_payloads():
     assert getattr(excinfo.value, "status_code", None) == 400
 
 
-def test_auth_rate_limit_is_shared_across_sessions(tmp_path: Path):
+def test_auth_rate_limit_is_shared_across_sessions(monkeypatch):
     get_settings.cache_clear()
     request = Request(
         {
@@ -60,32 +56,63 @@ def test_auth_rate_limit_is_shared_across_sessions(tmp_path: Path):
             "client": ("127.0.0.1", 1234),
         }
     )
-    db_path = tmp_path / "auth-rate-limit.db"
-    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
-    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    monkeypatch.setattr(
+        auth_routes,
+        "_auth_rate_limiter",
+        auth_routes._InMemoryRateLimiter(
+            window_seconds=auth_routes._AUTH_RATE_WINDOW,
+            max_attempts=auth_routes._AUTH_RATE_LIMIT,
+        ),
+    )
 
     async def exercise_limit():
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
         for _ in range(auth_routes._AUTH_RATE_LIMIT):
-            async with session_factory() as session:
-                await auth_routes._check_auth_rate_limit(request, session)
+            await auth_routes._check_auth_rate_limit(request)
 
-        async with session_factory() as session:
-            with pytest.raises(HTTPException) as excinfo:
-                await auth_routes._check_auth_rate_limit(request, session)
+        with pytest.raises(HTTPException) as excinfo:
+            await auth_routes._check_auth_rate_limit(request)
 
-            assert getattr(excinfo.value, "status_code", None) == 429
-            assert excinfo.value.headers == {
-                "Retry-After": str(auth_routes._AUTH_RATE_WINDOW)
-            }
-
-        await engine.dispose()
+        assert getattr(excinfo.value, "status_code", None) == 429
+        assert excinfo.value.headers == {"Retry-After": str(auth_routes._AUTH_RATE_WINDOW)}
 
     asyncio.run(exercise_limit())
     assert auth_routes._auth_client_key(request) == "203.0.113.10"
     get_settings.cache_clear()
+
+
+def test_auth_rate_limit_allows_requests_after_window(monkeypatch):
+    request = Request(
+        {
+            "type": "http",
+            "headers": [],
+            "client": ("198.51.100.25", 1234),
+        }
+    )
+    monkeypatch.setattr(
+        auth_routes,
+        "_auth_rate_limiter",
+        auth_routes._InMemoryRateLimiter(
+            window_seconds=auth_routes._AUTH_RATE_WINDOW,
+            max_attempts=auth_routes._AUTH_RATE_LIMIT,
+        ),
+    )
+
+    async def exercise_window() -> None:
+        for attempt in range(auth_routes._AUTH_RATE_LIMIT):
+            await auth_routes._check_auth_rate_limit(request, now=float(attempt))
+
+        with pytest.raises(HTTPException):
+            await auth_routes._check_auth_rate_limit(
+                request,
+                now=float(auth_routes._AUTH_RATE_LIMIT),
+            )
+
+        await auth_routes._check_auth_rate_limit(
+            request,
+            now=float(auth_routes._AUTH_RATE_WINDOW + auth_routes._AUTH_RATE_LIMIT),
+        )
+
+    asyncio.run(exercise_window())
 
 
 def test_auth_client_key_ignores_forwarded_headers_from_untrusted_peer(monkeypatch):

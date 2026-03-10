@@ -6,11 +6,6 @@ from datetime import datetime, timedelta, timezone
 
 import app.models  # noqa: F401 — registers all models with Base.metadata
 import pytest
-from authlib.jose import jwt
-from fastapi.testclient import TestClient
-from pydantic import ValidationError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
 from app.core.security import (
     BCRYPT_PASSWORD_MAX_BYTES,
     create_access_token,
@@ -24,6 +19,10 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app
 from app.schemas.user import UserCreate, UserUpdate
+from authlib.jose import jwt
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 _SECRET = "test-only-secret-not-used-in-prod"
 _VALID_PASSWORD = "Str0ng!P@ssw0rd"
@@ -153,6 +152,7 @@ def test_hash_and_verify_reject_bcrypt_truncation_edge_case():
 
 def _build_test_app(tmp_path, monkeypatch):
     from app import main as main_module
+    from app.api.routes import auth as auth_routes
     from app.core.config import get_settings
     from app.db import session as session_module
 
@@ -173,6 +173,14 @@ def _build_test_app(tmp_path, monkeypatch):
     monkeypatch.setattr(session_module, "engine", test_engine)
     monkeypatch.setattr(session_module, "async_session_factory", session_factory)
     monkeypatch.setattr(main_module, "engine", test_engine)
+    monkeypatch.setattr(
+        auth_routes,
+        "_auth_rate_limiter",
+        auth_routes._InMemoryRateLimiter(
+            window_seconds=auth_routes._AUTH_RATE_WINDOW,
+            max_attempts=auth_routes._AUTH_RATE_LIMIT,
+        ),
+    )
     get_settings.cache_clear()
 
     app = create_app()
@@ -287,8 +295,8 @@ def test_refresh_endpoint_returns_new_tokens(tmp_path, monkeypatch):
         assert data2["refresh_token"] is not None
         assert data2["user"]["email"] == "refresh@example.com"
         # Confirm the returned access token is itself valid (decodable).
-        from app.core.security import decode_access_token
         from app.core.config import get_settings
+        from app.core.security import decode_access_token
         uid = decode_access_token(data2["access_token"], get_settings().jwt_secret)
         assert uid is not None
 

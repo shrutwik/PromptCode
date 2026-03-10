@@ -219,7 +219,7 @@ def create_app() -> FastAPI:
             file_path = FRONTEND_DIR / f"{page}.html"
             if file_path.exists():
                 return FileResponse(file_path)
-            return FileResponse(FRONTEND_DIR / "index.html")
+            return JSONResponse(status_code=404, content={"detail": "Page not found"})
 
         app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 

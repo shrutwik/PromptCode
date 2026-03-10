@@ -4,7 +4,7 @@ import re
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, ValidationInfo, field_validator
 
 from app.core.security import BCRYPT_PASSWORD_MAX_BYTES
 
@@ -72,8 +72,9 @@ class UserCreate(BaseModel):
 
     @field_validator("first_name", "last_name")
     @classmethod
-    def normalize_name_fields(cls, value: str, info) -> str:
-        return _normalize_name(value, field_name=info.field_name.replace("_", " "))
+    def normalize_name_fields(cls, value: str, info: ValidationInfo) -> str:
+        field_name = (info.field_name or "name").replace("_", " ")
+        return _normalize_name(value, field_name=field_name)
 
 
 class UserLogin(BaseModel):
@@ -96,10 +97,15 @@ class UserUpdate(BaseModel):
 
     @field_validator("first_name", "last_name")
     @classmethod
-    def normalize_updated_name_fields(cls, value: str | None, info) -> str | None:
+    def normalize_updated_name_fields(
+        cls,
+        value: str | None,
+        info: ValidationInfo,
+    ) -> str | None:
         if value is None:
             return None
-        return _normalize_name(value, field_name=info.field_name.replace("_", " "))
+        field_name = (info.field_name or "name").replace("_", " ")
+        return _normalize_name(value, field_name=field_name)
 
     @field_validator("bio")
     @classmethod
