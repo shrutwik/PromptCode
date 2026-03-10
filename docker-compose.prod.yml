@@ -51,7 +51,7 @@ services:
     ports: !reset []  # do not expose port 8000 externally; Caddy routes internally via backend:8000
     environment:
       PROMPTCODE_DEBUG: "false"
-      PROMPTCODE_DATABASE_SSL_REQUIRE: ${PROMPTCODE_DATABASE_SSL_REQUIRE:-false}
+      PROMPTCODE_DATABASE_SSL_REQUIRE: ${PROMPTCODE_DATABASE_SSL_REQUIRE:-true}
       PROMPTCODE_METRICS_TOKEN: ${PROMPTCODE_METRICS_TOKEN:-}
       # Caddy reaches the backend over Docker's private bridge network.
       # Override this if your deployment uses a custom proxy subnet.

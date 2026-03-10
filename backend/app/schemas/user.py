@@ -6,7 +6,24 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, field_validator
 
+from app.core.security import BCRYPT_PASSWORD_MAX_BYTES
+
 _USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{1,62}[A-Za-z0-9]$")
+_MAX_NAME_CHARS = 128
+_MAX_EMAIL_CHARS = 256
+
+
+def _normalize_name(value: str, *, field_name: str) -> str:
+    normalized = value.strip()
+    if len(normalized) > _MAX_NAME_CHARS:
+        raise ValueError(f"{field_name} must be at most {_MAX_NAME_CHARS} characters long.")
+    return normalized
+
+
+def _normalize_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return value.strip()
 
 
 class UserCreate(BaseModel):
@@ -19,13 +36,20 @@ class UserCreate(BaseModel):
     @field_validator("email")
     @classmethod
     def normalize_email(cls, value: EmailStr) -> str:
-        return str(value).strip().lower()
+        normalized = str(value).strip().lower()
+        if len(normalized) > _MAX_EMAIL_CHARS:
+            raise ValueError(f"Email must be at most {_MAX_EMAIL_CHARS} characters long.")
+        return normalized
 
     @field_validator("password")
     @classmethod
     def validate_password_strength(cls, value: str) -> str:
         if len(value) < 12:
             raise ValueError("Password must be at least 12 characters long.")
+        if len(value.encode("utf-8")) > BCRYPT_PASSWORD_MAX_BYTES:
+            raise ValueError(
+                f"Password must be at most {BCRYPT_PASSWORD_MAX_BYTES} bytes long."
+            )
         if not any(char.islower() for char in value):
             raise ValueError("Password must include a lowercase letter.")
         if not any(char.isupper() for char in value):
@@ -39,11 +63,17 @@ class UserCreate(BaseModel):
     @field_validator("username")
     @classmethod
     def validate_username(cls, value: str) -> str:
-        if not _USERNAME_PATTERN.fullmatch(value):
+        normalized = value.strip()
+        if not _USERNAME_PATTERN.fullmatch(normalized):
             raise ValueError(
                 "Username must be 3-64 characters and use only letters, numbers, underscores, or hyphens."
             )
-        return value
+        return normalized
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def normalize_name_fields(cls, value: str, info) -> str:
+        return _normalize_name(value, field_name=info.field_name.replace("_", " "))
 
 
 class UserLogin(BaseModel):
@@ -53,13 +83,28 @@ class UserLogin(BaseModel):
     @field_validator("email")
     @classmethod
     def normalize_email(cls, value: EmailStr) -> str:
-        return str(value).strip().lower()
+        normalized = str(value).strip().lower()
+        if len(normalized) > _MAX_EMAIL_CHARS:
+            raise ValueError(f"Email must be at most {_MAX_EMAIL_CHARS} characters long.")
+        return normalized
 
 
 class UserUpdate(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     bio: str | None = None
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def normalize_updated_name_fields(cls, value: str | None, info) -> str | None:
+        if value is None:
+            return None
+        return _normalize_name(value, field_name=info.field_name.replace("_", " "))
+
+    @field_validator("bio")
+    @classmethod
+    def normalize_bio(cls, value: str | None) -> str | None:
+        return _normalize_optional_text(value)
 
 
 class UserResponse(BaseModel):

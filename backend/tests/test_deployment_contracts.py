@@ -28,6 +28,7 @@ VALIDATE_HOST_ENV_SCRIPT = REPO_ROOT / "scripts" / "validate-host-env.sh"
 VALIDATE_PROD_HOST_SCRIPT = REPO_ROOT / "scripts" / "validate-prod-host.sh"
 BACKEND_CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "backend-ci.yml"
 OPS_REHEARSALS_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ops-rehearsals.yml"
+DOCKER_COMPOSE_PROD = REPO_ROOT / "docker-compose.prod.yml"
 
 
 def _write(path: Path, content: str) -> Path:
@@ -737,6 +738,20 @@ def test_deploy_workflow_validates_host_env_and_refreshes_ghcr_before_pull() -> 
     assert workflow_text.index(validate_step) < workflow_text.index(pull_step)
     assert workflow_text.index(ghcr_step) < workflow_text.index(pull_step)
     assert "scripts/validate-prod-host.sh" in workflow_text
+
+
+def test_prod_compose_defaults_database_ssl_to_true() -> None:
+    compose_text = DOCKER_COMPOSE_PROD.read_text(encoding="utf-8")
+
+    assert 'PROMPTCODE_DATABASE_SSL_REQUIRE: ${PROMPTCODE_DATABASE_SSL_REQUIRE:-true}' in compose_text
+
+
+def test_backend_ci_runs_dependency_vulnerability_audit() -> None:
+    workflow_text = BACKEND_CI_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "      - name: Audit locked dependencies for known vulnerabilities" in workflow_text
+    assert "pip install pip-audit" in workflow_text
+    assert "pip-audit -r requirements.lock" in workflow_text
 
 
 def test_deploy_workflow_does_not_print_full_merged_compose_on_validation_failure() -> None:

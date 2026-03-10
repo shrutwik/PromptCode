@@ -2,28 +2,37 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import app.models  # noqa: F401 — registers all models with Base.metadata
 import pytest
+from authlib.jose import jwt
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.security import (
+    BCRYPT_PASSWORD_MAX_BYTES,
     create_access_token,
     create_refresh_token,
     decode_access_token,
     decode_refresh_token,
     hash_password,
+    verify_password,
 )
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app
-from app.schemas.user import UserCreate
+from app.schemas.user import UserCreate, UserUpdate
 
 _SECRET = "test-only-secret-not-used-in-prod"
 _VALID_PASSWORD = "Str0ng!P@ssw0rd"
 _VALID_USERNAME = "testuser01"
+
+
+def _encode_token(claims: dict[str, object]) -> str:
+    token = jwt.encode({"alg": "HS256"}, claims, _SECRET)
+    return token.decode("utf-8") if isinstance(token, bytes) else token
 
 
 # ── JWT (authlib) ─────────────────────────────────────────────────────────────
@@ -82,6 +91,14 @@ def test_password_no_symbol_rejected():
         UserCreate(email="a@b.com", username=_VALID_USERNAME, password="NoSymbolsHere1")
 
 
+def test_password_over_bcrypt_byte_limit_rejected():
+    oversized = ("A" * (BCRYPT_PASSWORD_MAX_BYTES - 2)) + "a1!"
+    assert len(oversized.encode("utf-8")) == BCRYPT_PASSWORD_MAX_BYTES + 1
+
+    with pytest.raises(ValidationError, match="72 bytes"):
+        UserCreate(email="a@b.com", username=_VALID_USERNAME, password=oversized)
+
+
 def test_valid_password_accepted():
     u = UserCreate(email="a@b.com", username=_VALID_USERNAME, password=_VALID_PASSWORD)
     assert u.password == _VALID_PASSWORD
@@ -113,6 +130,22 @@ def test_username_starts_with_underscore_rejected():
 def test_valid_username_with_hyphen_and_underscore():
     u = UserCreate(email="a@b.com", username="valid-user_99", password=_VALID_PASSWORD)
     assert u.username == "valid-user_99"
+
+
+def test_user_update_rejects_overlong_name_fields():
+    with pytest.raises(ValidationError, match="at most 128 characters"):
+        UserUpdate(first_name="x" * 129)
+
+
+def test_hash_and_verify_reject_bcrypt_truncation_edge_case():
+    password = ("A" * (BCRYPT_PASSWORD_MAX_BYTES - 2)) + "a1!"
+    assert len(password.encode("utf-8")) == BCRYPT_PASSWORD_MAX_BYTES + 1
+
+    with pytest.raises(ValueError, match="72 bytes"):
+        hash_password(password)
+
+    hashed = hash_password(_VALID_PASSWORD)
+    assert verify_password(password, hashed) is False
 
 
 # ── Auth rate limiting ────────────────────────────────────────────────────────
@@ -201,6 +234,19 @@ def test_refresh_token_rejected_as_access_token():
     uid = uuid.uuid4()
     refresh = create_refresh_token(uid, _SECRET)
     assert decode_access_token(refresh, _SECRET) is None
+
+
+def test_access_token_requires_explicit_access_type():
+    uid = uuid.uuid4()
+    exp = int((datetime.now(timezone.utc) + timedelta(minutes=5)).timestamp())
+
+    missing_type = _encode_token({"sub": str(uid), "exp": exp, "jti": uuid.uuid4().hex})
+    blank_type = _encode_token(
+        {"sub": str(uid), "exp": exp, "jti": uuid.uuid4().hex, "type": ""}
+    )
+
+    assert decode_access_token(missing_type, _SECRET) is None
+    assert decode_access_token(blank_type, _SECRET) is None
 
 
 def test_tokens_are_unique_even_when_issued_back_to_back():

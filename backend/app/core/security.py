@@ -10,13 +10,24 @@ from authlib.jose.errors import JoseError
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15  # 15 minutes — refresh tokens handle session continuity
 REFRESH_TOKEN_EXPIRE_DAYS = 30
+BCRYPT_PASSWORD_MAX_BYTES = 72
+
+
+def _password_within_bcrypt_limit(password: str) -> bool:
+    return len(password.encode("utf-8")) <= BCRYPT_PASSWORD_MAX_BYTES
 
 
 def hash_password(password: str) -> str:
+    if not _password_within_bcrypt_limit(password):
+        raise ValueError(
+            f"Password must be at most {BCRYPT_PASSWORD_MAX_BYTES} bytes to avoid bcrypt truncation."
+        )
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
+    if not _password_within_bcrypt_limit(plain):
+        return False
     return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
@@ -36,8 +47,7 @@ def decode_access_token(token: str, secret_key: str) -> uuid.UUID | None:
     try:
         claims = jwt.decode(token, secret_key)
         claims.validate()
-        token_type = claims.get("type")
-        if token_type not in (None, "", "access"):
+        if claims.get("type") != "access":
             return None
         user_id = claims.get("sub")
         if user_id is None:

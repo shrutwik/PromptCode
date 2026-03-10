@@ -1637,7 +1637,7 @@ func main() {
         else drawer.appendChild(section);
       });
     } catch (e) {
-      console.log('Drawer: using static data');
+      PromptCodeAPI.debugLog('Drawer: using static data');
     }
   }
 
@@ -1855,7 +1855,7 @@ func main() {
         });
       }
     } catch (e) {
-      console.log('Leaderboard load failed:', e.message);
+      PromptCodeAPI.debugLog('Leaderboard load failed:', e.message);
       document.getElementById('leaderboardCount').textContent = '—';
       const container = document.getElementById('trackingLeaderboard');
       const header = container.querySelector('.lb-row');
@@ -1993,11 +1993,11 @@ func main() {
         }
         setTrackingTips(_buildTrackingTips(m));
       } catch (re) {
-        console.log('Report load failed:', re.message);
+        PromptCodeAPI.debugLog('Report load failed:', re.message);
         setTrackingTips(['Unable to load the latest report. Open the submission page for detailed diagnostics and retry after evaluation completes.']);
       }
     } catch (e) {
-      console.log('Submissions load failed:', e.message);
+      PromptCodeAPI.debugLog('Submissions load failed:', e.message);
       latestChallengeSubmission = null;
       updateRunButton(null);
       resetTrackingMetrics();
@@ -2021,7 +2021,7 @@ func main() {
         const c = await PromptCodeAPI.getChallenge(challengeId);
         populateChallenge(c);
       } catch (e) {
-        console.log('Challenge load failed:', e.message);
+        PromptCodeAPI.debugLog('Challenge load failed:', e.message);
       }
       populateDrawer(challengeId);
       loadTrackingData(challengeId);

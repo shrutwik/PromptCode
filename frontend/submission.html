@@ -761,7 +761,7 @@ nav {
         heroRank.textContent = `#${match.rank}`;
       }
     } catch (e) {
-      console.log('Rank load failed:', e.message);
+      PromptCodeAPI.debugLog('Rank load failed:', e.message);
     }
   }
 
@@ -831,7 +831,7 @@ nav {
       await updateHeroRank(sub.challenge_id, submissionId);
 
     } catch (e) {
-      console.log('Report not yet available:', e.message);
+      PromptCodeAPI.debugLog('Report not yet available:', e.message);
       document.getElementById('heroScore').textContent = '—';
       document.getElementById('heroScoreSub').textContent = 'finalizing';
     }
@@ -858,7 +858,7 @@ nav {
         }
         if (heroSub) heroSub.textContent = status.status;
       } catch (e) {
-        console.log('Polling error:', e.message);
+        PromptCodeAPI.debugLog('Polling error:', e.message);
       }
     }
     if (heroSub) heroSub.textContent = 'timeout';

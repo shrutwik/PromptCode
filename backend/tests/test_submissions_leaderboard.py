@@ -344,3 +344,79 @@ def test_public_profile_omits_unused_submission_metrics(tmp_path, monkeypatch):
         assert recent["total_cost_usd"] == 0.42
 
     _teardown(app, engine)
+
+
+def test_public_profile_hides_non_completed_submissions_from_other_viewers(tmp_path, monkeypatch):
+    app, engine, sf = _build_test_app(tmp_path, monkeypatch)
+    challenge_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
+    completed_id = uuid.uuid4()
+    pending_id = uuid.uuid4()
+
+    async def _seed_profile() -> None:
+        async with sf() as db:
+            db.add(
+                User(
+                    id=owner_id,
+                    email="profile-owner@example.com",
+                    username="profileowner1",
+                    password_hash=hash_password("Ownerpass1!!"),
+                )
+            )
+            db.add(
+                Challenge(
+                    id=challenge_id,
+                    slug="profile-privacy-challenge",
+                    title="Profile Privacy Challenge",
+                    description="test",
+                )
+            )
+            db.add(
+                Submission(
+                    id=completed_id,
+                    challenge_id=challenge_id,
+                    user_id=owner_id,
+                    code="print('done')",
+                    status="completed",
+                    score_overall=0.88,
+                )
+            )
+            db.add(
+                Submission(
+                    id=pending_id,
+                    challenge_id=challenge_id,
+                    user_id=owner_id,
+                    code="print('pending')",
+                    status="pending",
+                )
+            )
+            await db.commit()
+
+    asyncio.run(_seed_profile())
+
+    with TestClient(app) as client:
+        viewer_token = _signup(client, email="viewer@example.com", username="profileviewer1")
+
+        owner_response = client.get(
+            "/api/users/profileowner1",
+            headers={"Authorization": f"Bearer {viewer_token}"},
+        )
+        assert owner_response.status_code == 200
+        payload = owner_response.json()
+        assert [item["status"] for item in payload["recent_submissions"]] == ["completed"]
+
+        owner_direct = client.post(
+            "/api/auth/login",
+            json={"email": "profile-owner@example.com", "password": "Ownerpass1!!"},
+        )
+        assert owner_direct.status_code == 200
+        owner_access_token = owner_direct.json()["access_token"]
+        self_response = client.get(
+            "/api/users/profileowner1",
+            headers={"Authorization": f"Bearer {owner_access_token}"},
+        )
+        assert self_response.status_code == 200
+        self_payload = self_response.json()
+        assert {item["status"] for item in self_payload["recent_submissions"][:2]} == {"pending", "completed"}
+
+    _teardown(app, engine)

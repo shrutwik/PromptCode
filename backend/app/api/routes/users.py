@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.deps import get_optional_user
 from app.db.session import get_db
 from app.models.challenge import Challenge
 from app.models.submission import Submission
@@ -16,6 +17,7 @@ router = APIRouter()
 @router.get("/{username}", response_model=UserProfileResponse)
 async def get_user_profile(
     username: str,
+    viewer: User | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(User).where(User.username == username))
@@ -23,11 +25,16 @@ async def get_user_profile(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    submissions_result = await db.execute(
+    viewer_is_owner = viewer is not None and viewer.id == user.id
+    submissions_query = (
         select(Submission)
         .where(Submission.user_id == user.id)
         .order_by(Submission.created_at.desc())
     )
+    if not viewer_is_owner:
+        submissions_query = submissions_query.where(Submission.status == "completed")
+
+    submissions_result = await db.execute(submissions_query)
     submissions = submissions_result.scalars().all()
 
     total_challenges_result = await db.execute(select(func.count(Challenge.id)))

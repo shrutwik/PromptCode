@@ -30,6 +30,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
+      - name: Audit locked dependencies for known vulnerabilities
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.lock
+
       - name: Enforce deployment hardening test floor
         run: |
           COLLECTED="$(pytest \

@@ -3,22 +3,48 @@ const API_BASE = window.location.origin + '/api';
 const PromptCodeAPI = {
     _refreshPromise: null,
 
+    _getAuthValue(key) {
+        const sessionValue = sessionStorage.getItem(key);
+        if (sessionValue !== null) return sessionValue;
+
+        const legacyValue = localStorage.getItem(key);
+        if (legacyValue === null) return null;
+
+        sessionStorage.setItem(key, legacyValue);
+        localStorage.removeItem(key);
+        return legacyValue;
+    },
+
+    _setAuthValue(key, value) {
+        sessionStorage.setItem(key, value);
+        localStorage.removeItem(key);
+    },
+
+    _removeAuthValue(key) {
+        sessionStorage.removeItem(key);
+        localStorage.removeItem(key);
+    },
+
     getToken() {
-        return localStorage.getItem('pc_token');
+        return this._getAuthValue('pc_token');
     },
 
     setAuth(token, user, refreshToken) {
-        localStorage.setItem('pc_token', token);
-        localStorage.setItem('pc_user', JSON.stringify(user));
-        if (refreshToken) localStorage.setItem('pc_refresh_token', refreshToken);
+        this._setAuthValue('pc_token', token);
+        this._setAuthValue('pc_user', JSON.stringify(user));
+        if (refreshToken) {
+            this._setAuthValue('pc_refresh_token', refreshToken);
+        } else {
+            this._removeAuthValue('pc_refresh_token');
+        }
     },
 
     getRefreshToken() {
-        return localStorage.getItem('pc_refresh_token');
+        return this._getAuthValue('pc_refresh_token');
     },
 
     getUser() {
-        const raw = localStorage.getItem('pc_user');
+        const raw = this._getAuthValue('pc_user');
         if (!raw) return null;
         try {
             return JSON.parse(raw);
@@ -29,13 +55,20 @@ const PromptCodeAPI = {
     },
 
     clearAuth() {
-        localStorage.removeItem('pc_token');
-        localStorage.removeItem('pc_refresh_token');
-        localStorage.removeItem('pc_user');
+        this._removeAuthValue('pc_token');
+        this._removeAuthValue('pc_refresh_token');
+        this._removeAuthValue('pc_user');
     },
 
     isLoggedIn() {
         return !!this.getToken();
+    },
+
+    debugLog(...args) {
+        const host = window.location.hostname;
+        if (host === 'localhost' || host === '127.0.0.1') {
+            console.debug(...args);
+        }
     },
 
     getInitials() {
@@ -146,7 +179,7 @@ const PromptCodeAPI = {
         });
         if (!resp.ok) throw new Error('Failed to update profile');
         const user = await resp.json();
-        localStorage.setItem('pc_user', JSON.stringify(user));
+        this._setAuthValue('pc_user', JSON.stringify(user));
         return user;
     },
 

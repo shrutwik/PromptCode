@@ -100,12 +100,11 @@ function editProfile() {
     btn.textContent = 'saving...';
     btn.disabled = true;
     try {
-      const updated = await PromptCodeAPI.updateMe({
+      await PromptCodeAPI.updateMe({
         first_name: document.getElementById('editFirst').value,
         last_name: document.getElementById('editLast').value,
         bio: document.getElementById('editBio').value,
       });
-      localStorage.setItem('pc_user', JSON.stringify(updated));
       overlay.remove();
       location.reload();
     } catch (e) {
