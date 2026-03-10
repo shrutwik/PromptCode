@@ -6,7 +6,7 @@ from alembic import context
 from sqlalchemy import pool
 
 from app.core.config import get_settings
-from app.db.alembic_compare import compare_type
+from app.db.alembic_compare import compare_type, should_include_object
 from app.db.base import Base
 import app.models  # noqa: F401 — ensure all models are imported
 
@@ -53,6 +53,9 @@ def do_run_migrations(connection):
         connection=connection,
         target_metadata=target_metadata,
         compare_type=compare_type,
+        include_object=lambda object_, name, type_, reflected, compare_to: should_include_object(
+            connection.dialect.name, object_, name, type_, reflected, compare_to
+        ),
     )
     with context.begin_transaction():
         context.run_migrations()

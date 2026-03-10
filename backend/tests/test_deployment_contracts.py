@@ -4,12 +4,14 @@ import gzip
 import os
 import subprocess
 import time
+import uuid
 from pathlib import Path
 
 import pytest
-from sqlalchemy import String, UniqueConstraint, types
+from sqlalchemy import Column, Index, MetaData, String, Table, UniqueConstraint, types
+from sqlalchemy.dialects.postgresql import dialect as postgresql_dialect
 
-from app.db.alembic_compare import compare_type
+from app.db.alembic_compare import compare_type, should_include_object
 from app.db.types import GUID
 from app.db.types import JSONType
 from app.models.challenge import Challenge
@@ -101,12 +103,16 @@ def _run_validate_prod_host(
     tmp_path: Path,
     *,
     include_rclone: bool = True,
+    include_caddyfile: bool = True,
+    include_seed_script: bool = True,
     cron_entries: str = "",
 ):
     deploy_dir = tmp_path / "deploy"
     fake_bin = tmp_path / "bin"
     deploy_scripts = deploy_dir / "scripts"
+    deploy_docker = deploy_dir / "docker"
     deploy_scripts.mkdir(parents=True)
+    deploy_docker.mkdir(parents=True)
     fake_bin.mkdir(parents=True)
     _write(
         deploy_dir / ".env",
@@ -127,13 +133,21 @@ def _run_validate_prod_host(
     )
     _write(deploy_dir / "docker-compose.yml", "services: {}\n")
     _write(deploy_dir / "docker-compose.prod.yml", "services: {}\n")
+    if include_caddyfile:
+        _write(
+            deploy_docker / "Caddyfile.prod",
+            (REPO_ROOT / "docker" / "Caddyfile.prod").read_text(encoding="utf-8"),
+        )
     for script_path in (
         "backup-db.sh",
         "restore-db.sh",
+        "seed-prod-data.sh",
         "check-prod-health.sh",
         "validate-host-env.sh",
         "setup-ghcr-login.sh",
     ):
+        if script_path == "seed-prod-data.sh" and not include_seed_script:
+            continue
         target = deploy_scripts / script_path
         target.write_text((REPO_ROOT / "scripts" / script_path).read_text(encoding="utf-8"), encoding="utf-8")
         target.chmod(0o755)
@@ -296,6 +310,7 @@ def _run_check_prod_health(
     queue_depth: str = "0",
     backup_age_seconds: int = 300,
     last_deploy_status: str = "success 123 abcdef",
+    capture_mktemp: bool = False,
 ):
     deploy_dir = tmp_path / "deploy"
     backups_dir = deploy_dir / "backups"
@@ -309,6 +324,10 @@ def _run_check_prod_health(
     _write(deploy_dir / ".last-deploy-status", f"{last_deploy_status}\n")
     _write(
         backups_dir / "last-successful-backup.txt",
+        f"{int(time.time()) - backup_age_seconds}\n",
+    )
+    _write(
+        backups_dir / ".last-success-timestamp",
         f"{int(time.time()) - backup_age_seconds}\n",
     )
     _write(
@@ -329,6 +348,18 @@ fi
 """,
     )
     docker_path.chmod(0o755)
+    metrics_status_file = tmp_path / "metrics-status.txt"
+    if capture_mktemp:
+        mktemp_path = fake_bin / "mktemp"
+        _write(
+            mktemp_path,
+            f"""#!/usr/bin/env bash
+set -euo pipefail
+: > {str(metrics_status_file)!r}
+printf '%s\\n' {str(metrics_status_file)!r}
+""",
+        )
+        mktemp_path.chmod(0o755)
 
     env = os.environ.copy()
     env["PATH"] = f"{fake_bin}:{env['PATH']}"
@@ -337,13 +368,14 @@ fi
     env["FAKE_HEARTBEAT_AGE"] = heartbeat_age
     env["FAKE_QUEUE_DEPTH"] = queue_depth
 
-    return subprocess.run(
+    result = subprocess.run(
         ["bash", str(CHECK_PROD_HEALTH_SCRIPT)],
         capture_output=True,
         text=True,
         check=False,
         env=env,
     )
+    return result, metrics_status_file
 
 
 def _prepare_operational_script_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
@@ -580,8 +612,73 @@ def test_alembic_compare_treats_guid_wrapper_as_equivalent_to_baseline_varchar()
     assert compare_type(None, None, None, String(12), GUID()) is None
 
 
+def test_guid_wrapper_stays_string_backed_on_postgresql_for_legacy_schema() -> None:
+    guid = GUID()
+    pg = postgresql_dialect()
+
+    assert isinstance(guid.load_dialect_impl(pg), String)
+    assert guid.process_bind_param(uuid.UUID("11111111-1111-1111-1111-111111111111"), pg) == (
+        "11111111-1111-1111-1111-111111111111"
+    )
+
+
 def test_alembic_compare_treats_json_wrapper_as_equivalent_to_baseline_json() -> None:
     assert compare_type(None, None, None, types.JSON(), JSONType()) is False
+    assert compare_type(None, None, None, types.Text(), JSONType()) is False
+
+
+def test_alembic_compare_ignores_sqlite_leaderboard_unique_index_shape() -> None:
+    table = Table(
+        "leaderboard",
+        MetaData(),
+        Column("challenge_id", String(36)),
+        Column("user_id", String(36)),
+    )
+    reflected_index = Index(
+        "uq_leaderboard_challenge_user",
+        table.c.challenge_id,
+        table.c.user_id,
+        unique=True,
+    )
+    metadata_constraint = UniqueConstraint(
+        table.c.challenge_id,
+        table.c.user_id,
+        name="uq_leaderboard_challenge_user",
+    )
+
+    assert (
+        should_include_object(
+            "sqlite",
+            reflected_index,
+            reflected_index.name,
+            "index",
+            True,
+            None,
+        )
+        is False
+    )
+    assert (
+        should_include_object(
+            "sqlite",
+            metadata_constraint,
+            metadata_constraint.name,
+            "unique_constraint",
+            False,
+            None,
+        )
+        is False
+    )
+    assert (
+        should_include_object(
+            "postgresql",
+            metadata_constraint,
+            metadata_constraint.name,
+            "unique_constraint",
+            False,
+            None,
+        )
+        is True
+    )
 
 
 def test_evaluation_job_submission_constraint_matches_baseline_schema() -> None:
@@ -724,11 +821,12 @@ def test_validate_host_env_script_rejects_missing_ghcr_setup_for_private_images(
 
 
 def test_validate_prod_host_script_passes_with_required_dependencies(tmp_path: Path):
+    deploy_dir = tmp_path / "deploy"
     result = _run_validate_prod_host(
         tmp_path,
         cron_entries=(
-            "0 3 * * * bash /opt/promptcode/scripts/backup-db.sh\n"
-            "*/5 * * * * bash /opt/promptcode/scripts/check-prod-health.sh\n"
+            f"0 3 * * * bash {deploy_dir}/scripts/backup-db.sh\n"
+            f"*/5 * * * * bash {deploy_dir}/scripts/check-prod-health.sh\n"
         ),
     )
 
@@ -736,13 +834,40 @@ def test_validate_prod_host_script_passes_with_required_dependencies(tmp_path: P
     assert "Production host preflight OK" in result.stdout
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "expected_message"),
+    [
+        ({"include_caddyfile": False}, "docker/Caddyfile.prod"),
+        ({"include_seed_script": False}, "scripts/seed-prod-data.sh"),
+    ],
+)
+def test_validate_prod_host_script_requires_deploy_assets(
+    tmp_path: Path,
+    kwargs: dict[str, bool],
+    expected_message: str,
+):
+    deploy_dir = tmp_path / "deploy"
+    result = _run_validate_prod_host(
+        tmp_path,
+        cron_entries=(
+            f"0 3 * * * bash {deploy_dir}/scripts/backup-db.sh\n"
+            f"*/5 * * * * bash {deploy_dir}/scripts/check-prod-health.sh\n"
+        ),
+        **kwargs,
+    )
+
+    assert result.returncode == 1
+    assert expected_message in result.stderr
+
+
 def test_validate_prod_host_script_requires_rclone(tmp_path: Path):
+    deploy_dir = tmp_path / "deploy"
     result = _run_validate_prod_host(
         tmp_path,
         include_rclone=False,
         cron_entries=(
-            "0 3 * * * bash /opt/promptcode/scripts/backup-db.sh\n"
-            "*/5 * * * * bash /opt/promptcode/scripts/check-prod-health.sh\n"
+            f"0 3 * * * bash {deploy_dir}/scripts/backup-db.sh\n"
+            f"*/5 * * * * bash {deploy_dir}/scripts/check-prod-health.sh\n"
         ),
     )
 
@@ -751,13 +876,27 @@ def test_validate_prod_host_script_requires_rclone(tmp_path: Path):
 
 
 def test_validate_prod_host_script_requires_backup_and_health_crons(tmp_path: Path):
+    deploy_dir = tmp_path / "deploy"
     result = _run_validate_prod_host(
         tmp_path,
-        cron_entries="0 3 * * * bash /opt/promptcode/scripts/backup-db.sh\n",
+        cron_entries=f"0 3 * * * bash {deploy_dir}/scripts/backup-db.sh\n",
     )
 
     assert result.returncode == 1
     assert "Health-check cron is missing" in result.stderr
+
+
+def test_validate_prod_host_script_rejects_crons_for_another_deploy_path(tmp_path: Path):
+    result = _run_validate_prod_host(
+        tmp_path,
+        cron_entries=(
+            "0 3 * * * bash /srv/promptcode/scripts/backup-db.sh\n"
+            "*/5 * * * * bash /srv/promptcode/scripts/check-prod-health.sh\n"
+        ),
+    )
+
+    assert result.returncode == 1
+    assert "Backup cron is missing" in result.stderr
 
 
 def test_setup_ghcr_login_script_logs_in_with_host_credentials(tmp_path: Path):
@@ -826,6 +965,7 @@ def test_backup_db_script_creates_local_backup_and_uploads_off_host(tmp_path: Pa
     uploaded_files = list(remote_dir.glob("promptcode-*.sql.gz"))
     assert [path.name for path in uploaded_files] == [backup_files[0].name]
     assert (backups_dir / "last-successful-backup.txt").exists()
+    assert (backups_dir / ".last-success-timestamp").exists()
 
 
 def test_restore_db_script_requires_remote_for_missing_local_backup(tmp_path: Path):
@@ -867,10 +1007,17 @@ def test_ops_rehearsal_workflow_proves_schema_boundary_after_rollback() -> None:
 
 
 def test_check_prod_health_script_passes_with_healthy_signals(tmp_path: Path):
-    result = _run_check_prod_health(tmp_path)
+    result, _ = _run_check_prod_health(tmp_path)
 
     assert result.returncode == 0
     assert "Production health check passed" in result.stdout
+
+
+def test_check_prod_health_script_uses_run_scoped_metrics_tempfile(tmp_path: Path):
+    result, metrics_status_file = _run_check_prod_health(tmp_path, capture_mktemp=True)
+
+    assert result.returncode == 0
+    assert not metrics_status_file.exists()
 
 
 @pytest.mark.parametrize(
@@ -888,7 +1035,7 @@ def test_check_prod_health_script_fails_for_unhealthy_signals(
     kwargs: dict[str, str | int],
     expected_message: str,
 ):
-    result = _run_check_prod_health(tmp_path, **kwargs)
+    result, _ = _run_check_prod_health(tmp_path, **kwargs)
 
     assert result.returncode == 1
     assert expected_message in result.stderr

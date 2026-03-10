@@ -64,8 +64,8 @@ The executor now exposes `/health`, `/ready`, and `/status` so you can separate 
 The compose stack now includes two worker services for conservative multi-user throughput.
 It disables in-process submission evaluation in the web container, so queued jobs are handled only by the worker services.
 Both the backend and worker containers now run `alembic upgrade head` before starting their main process.
-The backend readiness check requires a fresh worker heartbeat when inline queue processing is disabled, and it also fails closed if the configured sandbox executor is unreachable.
-The worker publishes a matching heartbeat healthcheck.
+The backend readiness check verifies database connectivity and fails closed if the configured sandbox executor is unreachable.
+Worker freshness is enforced separately by the worker container healthcheck and `scripts/check-prod-health.sh`.
 The default compose scaling guards are conservative: one submission can fan out at most `PROMPTCODE_EVALUATION_MAX_PARALLEL_SPECS` sandbox runs, the executor accepts at most `PROMPTCODE_SANDBOX_EXECUTOR_MAX_CONCURRENT_RUNS` active runs, and each user can hold at most `PROMPTCODE_SUBMISSION_MAX_OUTSTANDING_JOBS_PER_USER` queued/running evaluations. That user cap does not limit lifetime retries on a challenge; it only limits active jobs at once.
 If you run the backend outside compose, start the queue worker in a second shell:
 
@@ -88,7 +88,8 @@ curl http://localhost:8000/ready
 curl http://localhost:8000/api/challenges/
 ```
 
-`/health` is a liveness check. `/ready` verifies database connectivity, requires a fresh worker heartbeat when inline queue processing is disabled, and checks the sandbox executor when one is configured.
+`/health` is a liveness check. `/ready` verifies database connectivity and checks the sandbox executor when one is configured.
+Worker freshness is monitored separately by the worker healthcheck and `scripts/check-prod-health.sh`.
 For a live end-to-end deployment smoke, run:
 
 ```bash

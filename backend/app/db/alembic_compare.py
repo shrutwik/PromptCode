@@ -9,6 +9,12 @@ try:
 except ImportError:  # pragma: no cover
     PG_UUID = None
 
+_SQLITE_LEADERBOARD_UNIQUE_COLUMNS = ("challenge_id", "user_id")
+
+
+def _column_names(object_) -> tuple[str, ...]:
+    return tuple(column.name for column in getattr(object_, "columns", ()))
+
 
 def compare_type(_context, _inspected_column, _metadata_column, inspected_type, metadata_type):
     """Suppress drift for platform-portable custom types.
@@ -25,7 +31,40 @@ def compare_type(_context, _inspected_column, _metadata_column, inspected_type, 
         if PG_UUID is not None and isinstance(inspected_type, PG_UUID):
             return False
 
-    if isinstance(metadata_type, JSONType) and isinstance(inspected_type, types.JSON):
+    if isinstance(metadata_type, JSONType) and isinstance(
+        inspected_type, (types.JSON, types.Text)
+    ):
         return False
 
     return None
+
+
+def should_include_object(
+    dialect_name: str,
+    object_,
+    name: str | None,
+    type_: str,
+    reflected: bool,
+    compare_to,
+) -> bool:
+    """Hide SQLite's index/constraint representation mismatch for leaderboard."""
+
+    if dialect_name != "sqlite" or name != "uq_leaderboard_challenge_user":
+        return True
+
+    if (
+        type_ == "index"
+        and reflected
+        and getattr(object_, "unique", False)
+        and _column_names(object_) == _SQLITE_LEADERBOARD_UNIQUE_COLUMNS
+    ):
+        return False
+
+    if (
+        type_ == "unique_constraint"
+        and not reflected
+        and _column_names(object_) == _SQLITE_LEADERBOARD_UNIQUE_COLUMNS
+    ):
+        return False
+
+    return True

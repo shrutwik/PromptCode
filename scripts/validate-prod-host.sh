@@ -13,8 +13,10 @@ fi
 required_paths=(
     "docker-compose.yml"
     "docker-compose.prod.yml"
+    "docker/Caddyfile.prod"
     "scripts/backup-db.sh"
     "scripts/restore-db.sh"
+    "scripts/seed-prod-data.sh"
     "scripts/check-prod-health.sh"
     "scripts/validate-host-env.sh"
     "scripts/setup-ghcr-login.sh"
@@ -48,11 +50,13 @@ fi
 bash "${DEPLOY_DIR}/scripts/validate-host-env.sh"
 
 cron_entries="$(crontab -l 2>/dev/null || true)"
-if ! grep -qF 'backup-db.sh' <<<"${cron_entries}"; then
+backup_script_path="${DEPLOY_DIR}/scripts/backup-db.sh"
+health_script_path="${DEPLOY_DIR}/scripts/check-prod-health.sh"
+if ! grep -qF "${backup_script_path}" <<<"${cron_entries}"; then
     echo "[host] Backup cron is missing for the current deploy user." >&2
     exit 1
 fi
-if ! grep -qF 'check-prod-health.sh' <<<"${cron_entries}"; then
+if ! grep -qF "${health_script_path}" <<<"${cron_entries}"; then
     echo "[host] Health-check cron is missing for the current deploy user." >&2
     exit 1
 fi

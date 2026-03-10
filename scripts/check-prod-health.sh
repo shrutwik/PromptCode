@@ -5,7 +5,8 @@ set -euo pipefail
 
 DEPLOY_DIR="${DEPLOY_DIR:-/opt/promptcode}"
 BACKUP_DIR="${BACKUP_DIR:-${DEPLOY_DIR}/backups}"
-LAST_BACKUP_FILE="${BACKUP_DIR}/last-successful-backup.txt"
+LAST_BACKUP_FILE="${BACKUP_DIR}/.last-success-timestamp"
+LEGACY_LAST_BACKUP_FILE="${BACKUP_DIR}/last-successful-backup.txt"
 LAST_DEPLOY_STATUS_FILE="${DEPLOY_DIR}/.last-deploy-status"
 # Workers publish heartbeats every 5s by default and the backend times them out at 30s,
 # so 60s gives one full timeout window plus recovery slack before alerting.
@@ -29,11 +30,14 @@ sql() {
         exec -T db psql -Atqc "$1" -U "${PROMPTCODE_DB_USER}" -d "${PROMPTCODE_DB_NAME}"
 }
 
+METRICS_STATUS_FILE="$(mktemp "${TMPDIR:-/tmp}/promptcode_metrics_status.XXXXXX")"
+trap 'rm -f "${METRICS_STATUS_FILE}"' EXIT
+
 echo "[check] Verifying metrics endpoint..."
 docker compose -f "${DEPLOY_DIR}/docker-compose.yml" \
                -f "${DEPLOY_DIR}/docker-compose.prod.yml" \
-    exec -T backend python -c "import os, urllib.request; token=os.environ.get('PROMPTCODE_METRICS_TOKEN', '').strip(); headers={'Authorization': f'Bearer {token}'} if token else {}; req=urllib.request.Request('http://127.0.0.1:8000/metrics', headers=headers); print(urllib.request.urlopen(req, timeout=5).status)" >/tmp/promptcode_metrics_status.txt
-METRICS_STATUS="$(tr -d '\n' </tmp/promptcode_metrics_status.txt)"
+    exec -T backend python -c "import os, urllib.request; token=os.environ.get('PROMPTCODE_METRICS_TOKEN', '').strip(); headers={'Authorization': f'Bearer {token}'} if token else {}; req=urllib.request.Request('http://127.0.0.1:8000/metrics', headers=headers); print(urllib.request.urlopen(req, timeout=5).status)" >"${METRICS_STATUS_FILE}"
+METRICS_STATUS="$(tr -d '\n' <"${METRICS_STATUS_FILE}")"
 if [[ "${METRICS_STATUS}" != "200" ]]; then
     echo "[check] Metrics scrape failed with status ${METRICS_STATUS}." >&2
     exit 1
@@ -45,6 +49,8 @@ LAST_DEPLOY_STATUS="$(cat "${LAST_DEPLOY_STATUS_FILE}" 2>/dev/null || echo 'unkn
 
 if [[ -f "${LAST_BACKUP_FILE}" ]]; then
     LAST_BACKUP_EPOCH="$(tr -d '\n' <"${LAST_BACKUP_FILE}")"
+elif [[ -f "${LEGACY_LAST_BACKUP_FILE}" ]]; then
+    LAST_BACKUP_EPOCH="$(tr -d '\n' <"${LEGACY_LAST_BACKUP_FILE}")"
 else
     LAST_BACKUP_EPOCH="0"
 fi

@@ -23,6 +23,7 @@ BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 BACKUP_FILE="${BACKUP_DIR}/promptcode-${TIMESTAMP}.sql.gz"
 LAST_SUCCESS_FILE="${BACKUP_DIR}/last-successful-backup.txt"
+LAST_SUCCESS_COMPAT_FILE="${BACKUP_DIR}/.last-success-timestamp"
 
 # Load .env if password not already in environment
 if [[ -z "${PROMPTCODE_DB_PASSWORD:-}" && -f "${DEPLOY_DIR}/.env" ]]; then
@@ -60,7 +61,9 @@ find "${BACKUP_DIR}" -name "promptcode-*.sql.gz" -mtime "+${BACKUP_RETENTION_DAY
 # ── Mandatory off-host upload via rclone ─────────────────────────────────────
 echo "[backup] Uploading to ${RCLONE_REMOTE}..."
 rclone copy "${BACKUP_FILE}" "${RCLONE_REMOTE}"
-date -u +%s > "${LAST_SUCCESS_FILE}"
+LAST_SUCCESS_EPOCH="$(date -u +%s)"
+printf '%s\n' "${LAST_SUCCESS_EPOCH}" > "${LAST_SUCCESS_FILE}"
+printf '%s\n' "${LAST_SUCCESS_EPOCH}" > "${LAST_SUCCESS_COMPAT_FILE}"
 echo "[backup] Upload complete."
 
 echo "[backup] Backup complete."
