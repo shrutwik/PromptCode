@@ -270,7 +270,7 @@ jobs:
       - name: Deploy to production host
         id: deploy_host
         if: env.DEPLOY_HOST != '' && steps.check_ssh.outputs.reachable == 'true'
-        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
@@ -320,7 +320,7 @@ jobs:
       - name: Seed production challenge data
         id: seed_challenges
         if: env.DEPLOY_HOST != '' && steps.check_ssh.outputs.reachable == 'true'
-        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
@@ -333,7 +333,7 @@ jobs:
       - name: Post-deploy smoke test
         id: smoke_test
         if: env.DEPLOY_HOST != '' && steps.check_ssh.outputs.reachable == 'true'
-        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
@@ -353,7 +353,7 @@ jobs:
       - name: Verify backend and db ports are not exposed on host
         id: verify_host_ports
         if: env.DEPLOY_HOST != '' && steps.check_ssh.outputs.reachable == 'true'
-        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
@@ -394,7 +394,7 @@ jobs:
             steps.smoke_test.outcome == 'failure' ||
             steps.verify_host_ports.outcome == 'failure'
           )
-        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
