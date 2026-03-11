@@ -10,9 +10,9 @@ from functools import partial
 from typing import Any
 
 from app.core.config import get_settings
+from app.services.evaluation import counterfactual as _counterfactual
 from app.services.evaluation.code_analysis import analyze_code, score_code_quality
 from app.services.evaluation.constants import PERTURBATION_CONFIG_VERSION, SCORE_WEIGHTS
-from app.services.evaluation import counterfactual as _counterfactual
 from app.services.evaluation.helpers import (
     _build_diagnostics,
     _build_hidden_cases,
