@@ -57,6 +57,7 @@ settings = get_settings()
 _build_counterfactual_baseline_code = _counterfactual._build_counterfactual_baseline_code
 _counterfactual_strategy_variants = _counterfactual._counterfactual_strategy_variants
 _counterfactual_template_for_challenge = _counterfactual._counterfactual_template_for_challenge
+_evaluate_counterfactual_baseline_sync = _counterfactual._evaluate_counterfactual_baseline_sync
 
 
 def _evaluation_max_parallel_specs() -> int:
@@ -108,7 +109,7 @@ async def _evaluate_counterfactual_baseline_async(
 ) -> dict[str, Any]:
     """Run the blocking counterfactual baseline off the event loop."""
     return await asyncio.to_thread(
-        _counterfactual._evaluate_counterfactual_baseline_sync,
+        _evaluate_counterfactual_baseline_sync,
         run_plan=run_plan,
         challenge_config=challenge_config,
     )
