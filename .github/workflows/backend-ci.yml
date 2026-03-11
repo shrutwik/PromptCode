@@ -195,6 +195,7 @@ jobs:
       packages: write
     env:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_SSH_TIMEOUT: 2m
     steps:
       - name: Check out repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -233,22 +234,26 @@ jobs:
             ${{ env.SANDBOX_IMAGE_NAME }}:${{ github.sha }}
 
       - name: Sync compose and config files to host
+        id: sync_host
         if: env.DEPLOY_HOST != ''
         uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          timeout: ${{ env.DEPLOY_SSH_TIMEOUT }}
           source: "docker-compose.yml,docker-compose.prod.yml,docker/Caddyfile.prod,scripts/backup-db.sh,scripts/restore-db.sh,scripts/seed-prod-data.sh,scripts/check-prod-health.sh,scripts/validate-host-env.sh,scripts/setup-ghcr-login.sh,scripts/validate-prod-host.sh"
           target: "/opt/promptcode"
 
       - name: Deploy to production host
+        id: deploy_host
         if: env.DEPLOY_HOST != ''
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          timeout: ${{ env.DEPLOY_SSH_TIMEOUT }}
           script: |
             cd /opt/promptcode
             bash /opt/promptcode/scripts/validate-prod-host.sh
@@ -291,23 +296,27 @@ jobs:
             echo "Deploy complete."
 
       - name: Seed production challenge data
+        id: seed_challenges
         if: env.DEPLOY_HOST != ''
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          timeout: ${{ env.DEPLOY_SSH_TIMEOUT }}
           command_timeout: 3m
           script: |
             bash /opt/promptcode/scripts/seed-prod-data.sh
 
       - name: Post-deploy smoke test
+        id: smoke_test
         if: env.DEPLOY_HOST != ''
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          timeout: ${{ env.DEPLOY_SSH_TIMEOUT }}
           command_timeout: 3m
           script: |
             docker compose -f /opt/promptcode/docker-compose.yml -f /opt/promptcode/docker-compose.prod.yml \
@@ -320,12 +329,14 @@ jobs:
             echo "Smoke test passed."
 
       - name: Verify backend and db ports are not exposed on host
+        id: verify_host_ports
         if: env.DEPLOY_HOST != ''
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          timeout: ${{ env.DEPLOY_SSH_TIMEOUT }}
           command_timeout: 3m
           script: |
             set -euo pipefail
@@ -351,12 +362,22 @@ jobs:
             echo "Direct host access to database port 5433 is refused."
 
       - name: Roll back failed deploy
-        if: failure() && env.DEPLOY_HOST != ''
+        if: >
+          failure() &&
+          env.DEPLOY_HOST != '' &&
+          steps.sync_host.outcome == 'success' &&
+          (
+            steps.deploy_host.outcome == 'failure' ||
+            steps.seed_challenges.outcome == 'failure' ||
+            steps.smoke_test.outcome == 'failure' ||
+            steps.verify_host_ports.outcome == 'failure'
+          )
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          timeout: ${{ env.DEPLOY_SSH_TIMEOUT }}
           command_timeout: 3m
           script: |
             set -euo pipefail

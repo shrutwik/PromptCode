@@ -711,6 +711,8 @@ def test_deploy_workflow_rollback_uses_previous_tag_without_build() -> None:
     workflow_text = BACKEND_CI_WORKFLOW.read_text(encoding="utf-8")
 
     assert "      - name: Roll back failed deploy" in workflow_text
+    assert "steps.sync_host.outcome == 'success'" in workflow_text
+    assert "steps.deploy_host.outcome == 'failure'" in workflow_text
     assert 'ROLLBACK_TAG="$(cat /opt/promptcode/.previous-image-tag)"' in workflow_text
     assert "bash /opt/promptcode/scripts/validate-host-env.sh" in workflow_text
     assert "bash /opt/promptcode/scripts/setup-ghcr-login.sh" in workflow_text
@@ -738,6 +740,13 @@ def test_deploy_workflow_validates_host_env_and_refreshes_ghcr_before_pull() -> 
     assert workflow_text.index(validate_step) < workflow_text.index(pull_step)
     assert workflow_text.index(ghcr_step) < workflow_text.index(pull_step)
     assert "scripts/validate-prod-host.sh" in workflow_text
+
+
+def test_deploy_workflow_uses_extended_ssh_connection_timeout() -> None:
+    workflow_text = BACKEND_CI_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "      DEPLOY_SSH_TIMEOUT: 2m" in workflow_text
+    assert workflow_text.count("timeout: ${{ env.DEPLOY_SSH_TIMEOUT }}") >= 6
 
 
 def test_prod_compose_defaults_database_ssl_to_true() -> None:
