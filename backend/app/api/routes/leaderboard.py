@@ -20,7 +20,7 @@ async def get_leaderboard(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-):
+) -> list[LeaderboardEntryResponse]:
     result = await db.execute(
         select(LeaderboardEntry)
         .where(LeaderboardEntry.challenge_id == challenge_id)
@@ -37,7 +37,7 @@ async def get_leaderboard(
     users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
     user_map = {u.id: u.username for u in users_result.scalars().all()}
 
-    response = []
+    response: list[LeaderboardEntryResponse] = []
     for i, entry in enumerate(entries, start=1):
         data = LeaderboardEntryResponse.model_validate(entry)
         data.rank = offset + i

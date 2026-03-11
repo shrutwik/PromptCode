@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +21,7 @@ async def get_user_profile(
     username: str,
     viewer: User | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> dict[str, object]:
     result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()
     if not user:
@@ -63,7 +65,7 @@ async def get_user_profile(
         avg_latency = sum(s.total_latency_ms or 0 for s in completed) / len(completed)
 
     challenge_ids = {s.challenge_id for s in submissions[:10]}
-    challenge_map = {}
+    challenge_map: dict[uuid.UUID, str] = {}
     if challenge_ids:
         challenges_result = await db.execute(
             select(Challenge).where(Challenge.id.in_(challenge_ids))

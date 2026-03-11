@@ -11,11 +11,11 @@ _STANDARD_LOG_RECORD_KEYS = set(logging.makeLogRecord({}).__dict__.keys())
 _request_id_ctx: ContextVar[str] = ContextVar("request_id", default="-")
 
 
-def set_request_id(request_id: str) -> contextvars.Token:
+def set_request_id(request_id: str) -> contextvars.Token[str]:
     return _request_id_ctx.set(request_id)
 
 
-def reset_request_id(token: contextvars.Token) -> None:
+def reset_request_id(token: contextvars.Token[str]) -> None:
     _request_id_ctx.reset(token)
 
 

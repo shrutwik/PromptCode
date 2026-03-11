@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -18,7 +19,7 @@ async def list_challenges(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-):
+) -> Sequence[Challenge]:
     result = await db.execute(
         select(Challenge)
         .order_by(Challenge.category, Challenge.created_at)
@@ -32,7 +33,7 @@ async def list_challenges(
 async def get_challenge(
     challenge_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> Challenge:
     challenge = await db.get(Challenge, challenge_id)
     if not challenge:
         raise HTTPException(status_code=404, detail="Challenge not found")

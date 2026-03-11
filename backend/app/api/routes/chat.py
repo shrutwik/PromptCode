@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.deps import get_current_user
 from app.core.model_policy import OPENAI_CHAT_MODELS, resolve_allowed_model
 from app.db.session import get_db
@@ -357,7 +357,7 @@ def _build_system_prompt(challenge: Challenge) -> str:
     return "\n".join(parts)
 
 
-def _get_api_url(settings) -> str:
+def _get_api_url(settings: Settings) -> str:
     base = settings.openai_base_url.rstrip("/") if settings.openai_base_url else "https://api.openai.com/v1"
     return f"{base}/chat/completions"
 
@@ -367,7 +367,7 @@ async def chat(
     payload: ChatRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> ChatResponse:
     await _enforce_rate_limit(key=f"coach:{user.id}", max_requests=_COACH_RATE_LIMIT, db=db)
     _validate_messages(payload.messages)
     if len(payload.code) > _MAX_CODE_CHARS:
@@ -457,7 +457,7 @@ async def playground_run(
     payload: PlaygroundRunRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> PlaygroundRunResponse:
     await _enforce_rate_limit(key=f"playground:{user.id}", max_requests=_PLAYGROUND_RATE_LIMIT, db=db)
     _validate_messages(payload.messages)
     if len(payload.system) > _MAX_SYSTEM_CHARS:

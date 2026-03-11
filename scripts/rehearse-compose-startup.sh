@@ -36,6 +36,13 @@ compose() {
   docker compose -f "${REPO_DIR}/docker-compose.yml" -f "${REPO_DIR}/docker-compose.prod.yml" "$@"
 }
 
+dump_startup_context() {
+  echo "[startup] Current compose service status:" >&2
+  compose ps >&2 || true
+  echo "[startup] Recent backend-related logs:" >&2
+  compose logs --tail=100 backend sandbox-executor db >&2 || true
+}
+
 wait_for_http_ready() {
   local service_url="$1"
   local label="$2"
@@ -51,6 +58,7 @@ wait_for_http_ready() {
     sleep "${sleep_seconds}"
   done
   echo "[startup] ${label} did not become ready." >&2
+  dump_startup_context
   return 1
 }
 

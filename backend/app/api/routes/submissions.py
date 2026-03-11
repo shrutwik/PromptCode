@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from pathlib import PurePosixPath
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -96,7 +97,7 @@ async def list_submissions(
     offset: int = Query(0, ge=0),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> Sequence[Submission]:
     query = (
         select(Submission)
         .where(Submission.user_id == user.id)
@@ -116,7 +117,7 @@ async def create_submission(
     background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> Submission:
     challenge = await db.get(Challenge, payload.challenge_id)
     if not challenge:
         raise HTTPException(status_code=404, detail="Challenge not found")
@@ -153,7 +154,7 @@ async def get_submission(
     submission_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> Submission:
     submission = await db.get(Submission, submission_id)
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
@@ -167,7 +168,7 @@ async def get_submission_status(
     submission_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> dict[str, str | float | None]:
     submission = await db.get(Submission, submission_id)
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
@@ -186,7 +187,7 @@ async def get_report(
     submission_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> SubmissionReport:
     submission = await db.get(Submission, submission_id)
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
