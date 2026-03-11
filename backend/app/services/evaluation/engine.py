@@ -12,9 +12,7 @@ from typing import Any
 from app.core.config import get_settings
 from app.services.evaluation.code_analysis import analyze_code, score_code_quality
 from app.services.evaluation.constants import PERTURBATION_CONFIG_VERSION, SCORE_WEIGHTS
-from app.services.evaluation.counterfactual import (
-    _evaluate_counterfactual_baseline_sync,
-)
+from app.services.evaluation import counterfactual as _counterfactual
 from app.services.evaluation.helpers import (
     _build_diagnostics,
     _build_hidden_cases,
@@ -54,6 +52,11 @@ from app.services.sandbox.runner import SandboxResult, run_in_sandbox
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# Preserve the helper import surface that adjacent tests import from engine.py.
+_build_counterfactual_baseline_code = _counterfactual._build_counterfactual_baseline_code
+_counterfactual_strategy_variants = _counterfactual._counterfactual_strategy_variants
+_counterfactual_template_for_challenge = _counterfactual._counterfactual_template_for_challenge
 
 
 def _evaluation_max_parallel_specs() -> int:
@@ -105,7 +108,7 @@ async def _evaluate_counterfactual_baseline_async(
 ) -> dict[str, Any]:
     """Run the blocking counterfactual baseline off the event loop."""
     return await asyncio.to_thread(
-        _evaluate_counterfactual_baseline_sync,
+        _counterfactual._evaluate_counterfactual_baseline_sync,
         run_plan=run_plan,
         challenge_config=challenge_config,
     )
