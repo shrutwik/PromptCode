@@ -22,7 +22,11 @@ import httpx
 
 from app.core.config import get_settings
 from app.services.evaluation.code_analysis import analyze_code, score_code_quality
-from app.services.evaluation.engine import EvaluationResult, SCORE_WEIGHTS, _apply_overall_caps
+from app.services.evaluation.engine import (
+    SCORE_WEIGHTS,
+    EvaluationResult,
+    _apply_overall_caps,
+)
 from app.services.evaluation.prompt_quality import _heuristic_score
 
 logger = logging.getLogger(__name__)
@@ -254,6 +258,7 @@ class JudgeResponse:
 
 def _call_judge(system_prompt: str, user_prompt: str) -> JudgeResponse:
     import time
+
     import httpx
 
     settings = get_settings()

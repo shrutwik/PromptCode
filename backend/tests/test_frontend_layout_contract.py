@@ -3,7 +3,6 @@ from __future__ import annotations
 from html.parser import HTMLParser
 from pathlib import Path
 
-
 FRONTEND_ROOT = Path(__file__).resolve().parents[2] / "frontend"
 
 

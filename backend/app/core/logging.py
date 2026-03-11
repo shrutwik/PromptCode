@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import contextvars
-from contextvars import ContextVar
-from datetime import datetime, timezone
 import json
 import logging
+from contextvars import ContextVar
+from datetime import datetime, timezone
 
 _STANDARD_LOG_RECORD_KEYS = set(logging.makeLogRecord({}).__dict__.keys())
 

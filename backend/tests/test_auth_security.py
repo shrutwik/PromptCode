@@ -4,8 +4,13 @@ import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
 
-import app.models  # noqa: F401 — registers all models with Base.metadata
 import pytest
+from authlib.jose import jwt
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+import app.models  # noqa: F401 — registers all models with Base.metadata
 from app.core.security import (
     BCRYPT_PASSWORD_MAX_BYTES,
     create_access_token,
@@ -19,10 +24,6 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app
 from app.schemas.user import UserCreate, UserUpdate
-from authlib.jose import jwt
-from fastapi.testclient import TestClient
-from pydantic import ValidationError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 _SECRET = "test-only-secret-not-used-in-prod"
 _VALID_PASSWORD = "Str0ng!P@ssw0rd"

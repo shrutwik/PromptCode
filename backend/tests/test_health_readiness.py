@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import asyncio
 
-import app.models  # noqa: F401
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import create_async_engine
 
+import app.models  # noqa: F401
 from app import main as main_module
 from app.core.config import get_settings
 

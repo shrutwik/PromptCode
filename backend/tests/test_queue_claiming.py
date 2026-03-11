@@ -7,8 +7,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.base import Base
 import app.models  # noqa: F401
+from app.db.base import Base
 from app.models.evaluation_job import EvaluationJob
 from app.models.submission import Submission
 from app.models.worker_heartbeat import WorkerHeartbeat

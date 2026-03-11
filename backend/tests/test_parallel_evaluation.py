@@ -2,8 +2,8 @@
 
 import asyncio
 import inspect
-from threading import Lock
 import time
+from threading import Lock
 
 from app.services.evaluation import engine
 from app.services.evaluation.engine import evaluate_submission

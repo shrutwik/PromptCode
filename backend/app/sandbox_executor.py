@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import tempfile
 from datetime import datetime, timezone
 from threading import Lock
 from typing import Any
-import tempfile
 
 import docker
 from docker.errors import DockerException, ImageNotFound

@@ -4,11 +4,11 @@ import asyncio
 import uuid
 from pathlib import Path
 
-import app.models  # noqa: F401
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+import app.models  # noqa: F401
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app

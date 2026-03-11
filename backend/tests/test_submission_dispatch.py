@@ -3,11 +3,11 @@ from __future__ import annotations
 import asyncio
 import uuid
 
-import app.models  # noqa: F401
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+import app.models  # noqa: F401
 from app.api.routes import submissions as submissions_route
 from app.core.config import get_settings
 from app.db.base import Base

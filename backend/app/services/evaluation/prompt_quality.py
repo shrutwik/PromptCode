@@ -20,6 +20,7 @@ import logging
 from typing import Any
 
 import openai
+
 from app.core.model_policy import OPENAI_CHAT_MODELS, resolve_allowed_model
 
 logger = logging.getLogger(__name__)

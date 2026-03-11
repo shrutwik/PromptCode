@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
-from dataclasses import dataclass
 import logging
 import socket
 import uuid
+from contextlib import suppress
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import Select, delete, select, update
@@ -14,8 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.db.session import async_session_factory
 from app.models.auth_rate_limit import AuthRateLimitEvent
-from app.models.revoked_token import RevokedToken
 from app.models.evaluation_job import EvaluationJob
+from app.models.revoked_token import RevokedToken
 from app.models.submission import Submission
 from app.models.worker_heartbeat import WorkerHeartbeat
 from app.workers.evaluate import run_evaluation_pipeline

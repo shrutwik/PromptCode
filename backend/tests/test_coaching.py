@@ -6,10 +6,10 @@ from app.workers.evaluate import (
     _build_coaching,
     _build_coaching_actions,
     _build_future_feedback,
+    _build_iteration_diff,
     _compute_learning_effectiveness,
     _compute_learning_velocity_score,
     _enrich_ai_leverage,
-    _build_iteration_diff,
 )
 
 

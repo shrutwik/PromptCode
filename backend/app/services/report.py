@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.services.evaluation.engine import EvaluationResult, SCORE_WEIGHTS
+from app.services.evaluation.engine import SCORE_WEIGHTS, EvaluationResult
 
 
 def generate_report(

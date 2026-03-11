@@ -13,9 +13,6 @@ from app.core.config import get_settings
 from app.services.evaluation.code_analysis import analyze_code, score_code_quality
 from app.services.evaluation.constants import PERTURBATION_CONFIG_VERSION, SCORE_WEIGHTS
 from app.services.evaluation.counterfactual import (
-    _build_counterfactual_baseline_code,
-    _counterfactual_strategy_variants,
-    _counterfactual_template_for_challenge,
     _evaluate_counterfactual_baseline_sync,
 )
 from app.services.evaluation.helpers import (
@@ -49,8 +46,8 @@ from app.services.evaluation.scorer import (
     score_efficiency_tradeoff,
     score_frontier_navigation,
     score_orchestration,
-    score_reliance_calibration,
     score_reliability,
+    score_reliance_calibration,
 )
 from app.services.evaluation.weight_profile import get_weight_profile
 from app.services.sandbox.runner import SandboxResult, run_in_sandbox

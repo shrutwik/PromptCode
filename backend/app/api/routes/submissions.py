@@ -15,7 +15,11 @@ from app.models.challenge import Challenge
 from app.models.evaluation_job import EvaluationJob
 from app.models.submission import Submission
 from app.models.user import User
-from app.schemas.submission import SubmissionCreate, SubmissionReport, SubmissionResponse
+from app.schemas.submission import (
+    SubmissionCreate,
+    SubmissionReport,
+    SubmissionResponse,
+)
 from app.workers.queue import enqueue_evaluation_job, process_job
 
 router = APIRouter()

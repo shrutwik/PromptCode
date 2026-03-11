@@ -29,7 +29,9 @@ def get_metrics_registry() -> CollectorRegistry:
     """
     multiproc_dir = os.environ.get("PROMETHEUS_MULTIPROC_DIR", "").strip()
     if multiproc_dir:
-        from prometheus_client import MultiProcessCollector  # only available in multiproc
+        from prometheus_client import (
+            MultiProcessCollector,  # only available in multiproc
+        )
 
         registry = CollectorRegistry()
         MultiProcessCollector(registry)

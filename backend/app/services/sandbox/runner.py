@@ -12,17 +12,16 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 import tempfile
 import uuid
-from pathlib import Path
-from pathlib import PurePosixPath
-import re
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import docker
-from docker.errors import APIError, ContainerError, ImageNotFound
 import httpx
+from docker.errors import APIError, ContainerError, ImageNotFound
 
 from app.core.config import get_settings
 from app.services.sandbox.relay import SandboxLLMBudget, SandboxLLMRelay

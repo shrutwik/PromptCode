@@ -1,24 +1,28 @@
 import base64
-from contextlib import asynccontextmanager
-from functools import lru_cache
 import hashlib
-from pathlib import Path
 import logging
 import re
 import time
 import uuid
+from contextlib import asynccontextmanager
+from functools import lru_cache
+from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+)
 from fastapi.staticfiles import StaticFiles
-from starlette.middleware.base import BaseHTTPMiddleware
-import httpx
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy import text
+from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api.routes import challenges, chat, leaderboard, submissions
-from app.api.routes import auth, users
+from app.api.routes import auth, challenges, chat, leaderboard, submissions, users
 from app.core.config import get_settings
 from app.core.logging import configure_logging, reset_request_id, set_request_id
 from app.core.metrics import (

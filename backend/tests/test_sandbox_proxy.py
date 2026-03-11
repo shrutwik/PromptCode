@@ -10,8 +10,8 @@ import pytest
 
 from app.services.sandbox.relay import RelayError, SandboxLLMBudget, SandboxLLMRelay
 from app.services.sandbox.runner import (
-    _build_container_run_kwargs,
     _build_container_environment,
+    _build_container_run_kwargs,
     _build_sandbox_llm_budget,
     _run_in_sandbox_remote,
     _sandbox_executor_enabled,

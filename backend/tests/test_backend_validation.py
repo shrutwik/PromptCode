@@ -3,15 +3,16 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from fastapi import HTTPException
+from pydantic import ValidationError
+from starlette.requests import Request
+
 from app.api.routes import auth as auth_routes
 from app.api.routes.chat import ChatMessage, _validate_messages
 from app.api.routes.submissions import _is_safe_python_entrypoint
 from app.core.config import get_settings
 from app.schemas.user import UserCreate
 from app.services.sandbox.runner import _is_safe_entrypoint
-from fastapi import HTTPException
-from pydantic import ValidationError
-from starlette.requests import Request
 
 
 def test_entrypoint_validation_accepts_simple_python_file():

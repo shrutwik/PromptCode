@@ -4,11 +4,10 @@ from __future__ import annotations
 import asyncio
 import uuid
 
-import app.models  # noqa: F401 — registers all models with Base.metadata
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+import app.models  # noqa: F401 — registers all models with Base.metadata
 from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import get_db

@@ -5,8 +5,8 @@ import asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.base import Base
 import app.models  # noqa: F401
+from app.db.base import Base
 from app.models.challenge import Challenge
 from app.models.leaderboard import LeaderboardEntry
 from app.models.submission import Submission

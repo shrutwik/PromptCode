@@ -6,8 +6,8 @@ import uuid
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.base import Base
 import app.models  # noqa: F401
+from app.db.base import Base
 from app.models.submission import Submission
 from app.workers import evaluate as evaluate_worker
 
