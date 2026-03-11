@@ -233,6 +233,21 @@ jobs:
             ${{ env.SANDBOX_IMAGE_NAME }}:latest
             ${{ env.SANDBOX_IMAGE_NAME }}:${{ github.sha }}
 
+      - name: Wait for SSH on deploy host
+        if: env.DEPLOY_HOST != ''
+        run: |
+          echo "Polling ${{ secrets.DEPLOY_HOST }}:22 ..."
+          for i in $(seq 1 24); do
+            if nc -z -w5 "${{ secrets.DEPLOY_HOST }}" 22 2>/dev/null; then
+              echo "SSH is reachable."
+              exit 0
+            fi
+            echo "Attempt $i/24: port 22 not ready, retrying in 5s..."
+            sleep 5
+          done
+          echo "ERROR: SSH not reachable after 2 minutes."
+          exit 1
+
       - name: Sync compose and config files to host
         id: sync_host
         if: env.DEPLOY_HOST != ''
