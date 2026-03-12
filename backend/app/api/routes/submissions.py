@@ -169,7 +169,16 @@ async def get_submission_status(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str | float | None]:
-    submission = await db.get(Submission, submission_id)
+    result = await db.execute(
+        select(
+            Submission.id,
+            Submission.user_id,
+            Submission.status,
+            Submission.score_overall,
+            Submission.completed_at,
+        ).where(Submission.id == submission_id)
+    )
+    submission = result.one_or_none()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
     if submission.user_id != user.id:

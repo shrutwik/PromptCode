@@ -120,10 +120,10 @@ async def _process_one_available_job(
         return True
 
 
-def _queue_query() -> Select[tuple[EvaluationJob]]:
+def _queue_query() -> Select[tuple[uuid.UUID]]:
     now = datetime.now(timezone.utc)
     return (
-        select(EvaluationJob)
+        select(EvaluationJob.id)
         .where(
             EvaluationJob.status.in_(("queued", "retry")),
             EvaluationJob.available_at <= now,
@@ -136,10 +136,10 @@ def _queue_query() -> Select[tuple[EvaluationJob]]:
 
 async def _claim_next_job(db: AsyncSession) -> EvaluationJob | None:
     result = await db.execute(_queue_query())
-    job = result.scalar_one_or_none()
-    if not job:
+    job_id = result.scalar_one_or_none()
+    if not job_id:
         return None
-    return await _claim_job_by_id(db, job.id)
+    return await _claim_job_by_id(db, job_id)
 
 
 async def _claim_job_by_id(db: AsyncSession, job_id: uuid.UUID) -> EvaluationJob | None:

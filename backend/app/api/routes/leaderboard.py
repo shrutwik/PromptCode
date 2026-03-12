@@ -22,26 +22,24 @@ async def get_leaderboard(
     db: AsyncSession = Depends(get_db),
 ) -> list[LeaderboardEntryResponse]:
     result = await db.execute(
-        select(LeaderboardEntry)
+        select(LeaderboardEntry, User.username.label("username"))
+        .join(User, User.id == LeaderboardEntry.user_id, isouter=True)
         .where(LeaderboardEntry.challenge_id == challenge_id)
         .order_by(LeaderboardEntry.score_overall.desc())
         .offset(offset)
         .limit(limit)
     )
-    entries = result.scalars().all()
+    rows = result.all()
 
-    if not entries:
+    if not rows:
         return []
 
-    user_ids = {e.user_id for e in entries}
-    users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
-    user_map = {u.id: u.username for u in users_result.scalars().all()}
-
     response: list[LeaderboardEntryResponse] = []
-    for i, entry in enumerate(entries, start=1):
+    for i, row in enumerate(rows, start=1):
+        entry = row[0]
         data = LeaderboardEntryResponse.model_validate(entry)
         data.rank = offset + i
-        data.username = user_map.get(entry.user_id, "unknown")
+        data.username = row.username or "unknown"
         response.append(data)
 
     return response
