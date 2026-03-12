@@ -5,8 +5,8 @@
 #   bash bootstrap-prod-host.sh
 #
 # What it does:
-#   1. Installs Docker Engine + Docker Compose plugin (if absent)
-#   2. Installs rclone (if absent)
+#   1. Verifies Docker Engine + Docker Compose plugin are already installed
+#   2. Verifies rclone is already installed
 #   3. Creates /opt/promptcode and copies the repo files in
 #   4. Creates /opt/promptcode/.env from .env.example if no .env exists yet
 #   5. Opens ports 80 and 443 via ufw (if ufw is active)
@@ -30,13 +30,12 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "=== PromptCode production host bootstrap ==="
 
-# ── 1. Docker ────────────────────────────────────────────────────────────────
+# ── 1. Runtime prerequisites ─────────────────────────────────────────────────
 if ! command -v docker &>/dev/null; then
-  echo "Installing Docker..."
-  curl -fsSL https://get.docker.com | sh
-else
-  echo "Docker already installed: $(docker --version)"
+  echo "ERROR: Docker must be installed from a trusted package source before running bootstrap." >&2
+  exit 1
 fi
+echo "Docker already installed: $(docker --version)"
 
 if ! docker compose version &>/dev/null; then
   echo "ERROR: Docker Compose plugin not found. Install Docker Desktop or the compose plugin." >&2
@@ -44,17 +43,10 @@ if ! docker compose version &>/dev/null; then
 fi
 
 if ! command -v rclone &>/dev/null; then
-  if command -v apt-get &>/dev/null; then
-    echo "Installing rclone..."
-    apt-get update
-    apt-get install -y rclone
-  else
-    echo "ERROR: rclone not found and apt-get is unavailable. Install rclone manually." >&2
-    exit 1
-  fi
-else
-  echo "rclone already installed."
+  echo "ERROR: rclone must be installed from a trusted package source before running bootstrap." >&2
+  exit 1
 fi
+echo "rclone already installed."
 
 # ── 2. Deploy directory ───────────────────────────────────────────────────────
 echo "Setting up ${DEPLOY_DIR}..."

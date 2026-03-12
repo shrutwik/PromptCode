@@ -37,7 +37,7 @@ x-backend-env: &backend-env
 
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:16.11-alpine3.23
     environment:
       POSTGRES_USER: ${PROMPTCODE_DB_USER:-promptcode}
       POSTGRES_PASSWORD: ${PROMPTCODE_DB_PASSWORD:?set PROMPTCODE_DB_PASSWORD}

@@ -27,6 +27,9 @@ VALIDATE_HOST_ENV_SCRIPT = REPO_ROOT / "scripts" / "validate-host-env.sh"
 VALIDATE_PROD_HOST_SCRIPT = REPO_ROOT / "scripts" / "validate-prod-host.sh"
 BACKEND_CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "backend-ci.yml"
 OPS_REHEARSALS_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ops-rehearsals.yml"
+DOCKERFILE_BACKEND = REPO_ROOT / "docker" / "Dockerfile.backend"
+DOCKERFILE_SANDBOX = REPO_ROOT / "docker" / "Dockerfile.sandbox"
+DOCKER_COMPOSE_BASE = REPO_ROOT / "docker-compose.yml"
 DOCKER_COMPOSE_PROD = REPO_ROOT / "docker-compose.prod.yml"
 DEPENDABOT_CONFIG = REPO_ROOT / ".github" / "dependabot.yml"
 
@@ -205,6 +208,7 @@ def _run_bootstrap_prod_host(
     *,
     ufw_active: bool,
     allow_external_firewall: bool = False,
+    include_rclone: bool = True,
 ):
     deploy_dir = tmp_path / "deploy"
     fake_bin = tmp_path / "bin"
@@ -248,6 +252,11 @@ set -euo pipefail
 echo "tester : tester docker"
 """,
     )
+    if include_rclone:
+        _write(
+            fake_bin / "rclone",
+            "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n",
+        )
     _write(
         fake_bin / "crontab",
         """#!/usr/bin/env bash
@@ -260,26 +269,6 @@ if [[ "$1" == "-l" ]]; then
   exit 1
 fi
 cat > "${FAKE_CRON_FILE}"
-""",
-    )
-    _write(
-        fake_bin / "apt-get",
-        """#!/usr/bin/env bash
-set -euo pipefail
-if [[ "$1" == "update" ]]; then
-  exit 0
-elif [[ "$1" == "install" && "$2" == "-y" && "$3" == "rclone" ]]; then
-  cat > "${FAKE_BIN_DIR}/rclone" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-exit 0
-EOF
-  chmod +x "${FAKE_BIN_DIR}/rclone"
-  exit 0
-else
-  echo "unexpected apt-get invocation: $*" >&2
-  exit 1
-fi
 """,
     )
     for path in fake_bin.iterdir():
@@ -755,6 +744,18 @@ def test_prod_compose_defaults_database_ssl_to_true() -> None:
     assert 'PROMPTCODE_DATABASE_SSL_REQUIRE: ${PROMPTCODE_DATABASE_SSL_REQUIRE:-true}' in compose_text
 
 
+def test_runtime_images_use_version_pinned_tags() -> None:
+    backend_dockerfile = DOCKERFILE_BACKEND.read_text(encoding="utf-8")
+    sandbox_dockerfile = DOCKERFILE_SANDBOX.read_text(encoding="utf-8")
+    base_compose = DOCKER_COMPOSE_BASE.read_text(encoding="utf-8")
+    prod_compose = DOCKER_COMPOSE_PROD.read_text(encoding="utf-8")
+
+    assert "FROM python:3.12.12-slim-bookworm" in backend_dockerfile
+    assert "FROM python:3.12.12-slim-bookworm" in sandbox_dockerfile
+    assert "image: postgres:16.11-alpine3.23" in base_compose
+    assert "image: caddy:2.10.2-alpine" in prod_compose
+
+
 def test_backend_ci_runs_lint_and_type_checks() -> None:
     workflow_text = BACKEND_CI_WORKFLOW.read_text(encoding="utf-8")
 
@@ -765,6 +766,15 @@ def test_backend_ci_runs_lint_and_type_checks() -> None:
         "python -m mypy --strict --follow-imports=silent --ignore-missing-imports app/core/ app/api/ app/schemas/"
         in workflow_text
     )
+
+
+def test_backend_ci_verifies_lockfile_without_mutating_branch() -> None:
+    workflow_text = BACKEND_CI_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "    permissions:\n      contents: read" in workflow_text
+    assert "      - name: Verify requirements.lock is up to date" in workflow_text
+    assert "git push" not in workflow_text
+    assert "git commit -m" not in workflow_text
 
 
 def test_workflows_pin_third_party_actions_to_commit_shas() -> None:
@@ -785,6 +795,19 @@ def test_backend_ci_runs_dependency_vulnerability_audit() -> None:
     assert "      - name: Audit locked dependencies for known vulnerabilities" in workflow_text
     assert "pip install pip-audit" in workflow_text
     assert "pip-audit -r requirements.lock" in workflow_text
+
+
+def test_backend_ci_runs_strict_release_quality_gates() -> None:
+    workflow_text = BACKEND_CI_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "python -m scripts.run_release_quality_gates --strict" in workflow_text
+
+
+def test_bootstrap_prod_host_avoids_network_installers() -> None:
+    script_text = (REPO_ROOT / "scripts" / "bootstrap-prod-host.sh").read_text(encoding="utf-8")
+
+    assert "https://get.docker.com" not in script_text
+    assert "apt-get install -y rclone" not in script_text
 
 
 def test_dependabot_covers_backend_dependencies_and_workflows() -> None:
@@ -1011,6 +1034,17 @@ def test_bootstrap_prod_host_allows_explicit_external_firewall_management(tmp_pa
     assert (deploy_dir / "scripts" / "validate-host-env.sh").exists()
     assert (deploy_dir / "scripts" / "setup-ghcr-login.sh").exists()
     assert (deploy_dir / "scripts" / "validate-prod-host.sh").exists()
+
+
+def test_bootstrap_prod_host_requires_preinstalled_rclone(tmp_path: Path):
+    result, _ = _run_bootstrap_prod_host(
+        tmp_path,
+        ufw_active=True,
+        include_rclone=False,
+    )
+
+    assert result.returncode == 1
+    assert "rclone must be installed from a trusted package source" in result.stderr
 
 
 def test_backup_db_script_creates_local_backup_and_uploads_off_host(tmp_path: Path):

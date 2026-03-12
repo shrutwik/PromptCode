@@ -8,7 +8,7 @@ jobs:
   backend-tests:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     env:
       PROMPTCODE_JWT_SECRET: ci-test-secret
       PROMPTCODE_DEBUG: "true"
@@ -29,16 +29,14 @@ jobs:
             backend/requirements-dev.txt
             backend/requirements.lock
 
-      - name: Regenerate requirements.lock from requirements.txt
+      - name: Verify requirements.lock is up to date
         run: |
           pip install pip-tools
           pip-compile requirements.txt --output-file=requirements.lock --strip-extras --quiet --no-header --allow-unsafe
           if ! git diff --quiet requirements.lock; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add requirements.lock
-            git commit -m "chore: regenerate requirements.lock"
-            git push
+            echo "requirements.lock is out of date. Regenerate it locally and commit the result." >&2
+            git diff -- requirements.lock >&2 || true
+            exit 1
           fi
 
       - name: Install dependencies
@@ -92,7 +90,7 @@ jobs:
         run: pytest tests -q --tb=short -x --cov=app --cov-report=term-missing --cov-fail-under=60
 
       - name: Run release quality gates
-        run: python -m scripts.run_release_quality_gates
+        run: python -m scripts.run_release_quality_gates --strict
 
   schema-drift:
     runs-on: ubuntu-latest
@@ -106,7 +104,7 @@ jobs:
         working-directory: backend
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16.11-alpine3.23
         env:
           POSTGRES_USER: promptcode
           POSTGRES_PASSWORD: promptcode

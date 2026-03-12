@@ -153,7 +153,6 @@ def test_hash_and_verify_reject_bcrypt_truncation_edge_case():
 
 def _build_test_app(tmp_path, monkeypatch):
     from app import main as main_module
-    from app.api.routes import auth as auth_routes
     from app.core.config import get_settings
     from app.db import session as session_module
 
@@ -174,14 +173,6 @@ def _build_test_app(tmp_path, monkeypatch):
     monkeypatch.setattr(session_module, "engine", test_engine)
     monkeypatch.setattr(session_module, "async_session_factory", session_factory)
     monkeypatch.setattr(main_module, "engine", test_engine)
-    monkeypatch.setattr(
-        auth_routes,
-        "_auth_rate_limiter",
-        auth_routes._InMemoryRateLimiter(
-            window_seconds=auth_routes._AUTH_RATE_WINDOW,
-            max_attempts=auth_routes._AUTH_RATE_LIMIT,
-        ),
-    )
     get_settings.cache_clear()
 
     app = create_app()

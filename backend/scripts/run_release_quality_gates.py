@@ -65,7 +65,7 @@ def run_all_gates(
     )
     prompt_judge_calibration = run_prompt_judge_calibration_gate(
         samples_path=prompt_samples,
-        mode="judge" if strict else "heuristic",
+        mode="locked" if strict else "heuristic",
         min_samples=20,
         min_pearson=0.75,
         max_mae=0.25,
@@ -98,7 +98,7 @@ def main() -> int:
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="Enable release-strict checks (judge-mode calibration + reviewed_at metadata required).",
+        help="Enable release-strict checks (approved calibration lock + reviewed_at metadata required).",
     )
     parser.add_argument(
         "--challenges-dir",

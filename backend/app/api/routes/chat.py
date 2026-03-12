@@ -3,20 +3,19 @@ from __future__ import annotations
 import time
 import uuid
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.deps import get_current_user
 from app.core.model_policy import OPENAI_CHAT_MODELS, resolve_allowed_model
+from app.core.ratelimit import enforce_rate_limit
 from app.db.session import get_db
-from app.models.auth_rate_limit import AuthRateLimitEvent
 from app.models.challenge import Challenge
 from app.models.user import User
 
@@ -284,29 +283,12 @@ async def _enforce_rate_limit(
     window_seconds: int = _RATE_WINDOW_SECONDS,
     db: AsyncSession,
 ) -> None:
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(seconds=window_seconds)
-    await db.execute(
-        delete(AuthRateLimitEvent).where(
-            AuthRateLimitEvent.client_key == key,
-            AuthRateLimitEvent.created_at < cutoff,
-        )
+    await enforce_rate_limit(
+        db=db,
+        key=key,
+        limit=max_requests,
+        window_seconds=window_seconds,
     )
-    count_result = await db.execute(
-        select(func.count())
-        .select_from(AuthRateLimitEvent)
-        .where(AuthRateLimitEvent.client_key == key)
-    )
-    count = int(count_result.scalar_one() or 0)
-    if count >= max_requests:
-        await db.commit()
-        raise HTTPException(
-            status_code=429,
-            detail=f"Rate limit exceeded. Retry in {window_seconds}s.",
-            headers={"Retry-After": str(window_seconds)},
-        )
-    db.add(AuthRateLimitEvent(client_key=key))
-    await db.commit()
 
 
 def _validate_messages(messages: list[ChatMessage] | list[PlaygroundMessage]) -> None:

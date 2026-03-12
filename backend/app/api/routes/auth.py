@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import ipaddress
-import time
-from collections import deque
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -13,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.deps import get_current_user
+from app.core.ratelimit import enforce_rate_limit
 from app.core.security import (
     REFRESH_TOKEN_EXPIRE_DAYS,
     create_access_token,
@@ -38,68 +36,6 @@ router = APIRouter()
 
 _AUTH_RATE_WINDOW = 60  # seconds
 _AUTH_RATE_LIMIT = 10  # max attempts per IP per window
-
-
-class _InMemoryRateLimiter:
-    def __init__(
-        self,
-        *,
-        window_seconds: int,
-        max_attempts: int,
-        sweep_interval: int = 256,
-    ) -> None:
-        self.window_seconds = float(window_seconds)
-        self.max_attempts = max_attempts
-        self.sweep_interval = max(1, sweep_interval)
-        self._events: dict[str, deque[float]] = {}
-        self._checks_since_sweep = 0
-        self._lock = asyncio.Lock()
-
-    @staticmethod
-    def _prune_expired(events: deque[float], cutoff: float) -> None:
-        while events and events[0] <= cutoff:
-            events.popleft()
-
-    def _sweep_expired_keys(self, cutoff: float) -> None:
-        stale_keys: list[str] = []
-        for key, events in self._events.items():
-            self._prune_expired(events, cutoff)
-            if not events:
-                stale_keys.append(key)
-        for key in stale_keys:
-            self._events.pop(key, None)
-
-    async def check(self, key: str, *, now: float | None = None) -> None:
-        current_time = time.monotonic() if now is None else now
-        cutoff = current_time - self.window_seconds
-
-        async with self._lock:
-            self._checks_since_sweep += 1
-            if self._checks_since_sweep >= self.sweep_interval:
-                self._sweep_expired_keys(cutoff)
-                self._checks_since_sweep = 0
-
-            events = self._events.get(key)
-            if events is None:
-                events = deque()
-                self._events[key] = events
-            else:
-                self._prune_expired(events, cutoff)
-
-            if len(events) >= self.max_attempts:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Too many attempts. Please try again later.",
-                    headers={"Retry-After": str(int(self.window_seconds))},
-                )
-
-            events.append(current_time)
-
-
-_auth_rate_limiter = _InMemoryRateLimiter(
-    window_seconds=_AUTH_RATE_WINDOW,
-    max_attempts=_AUTH_RATE_LIMIT,
-)
 
 
 def _hash_token(token: str) -> str:
@@ -159,8 +95,19 @@ def _auth_client_key(request: Request) -> str:
     return "unknown"
 
 
-async def _check_auth_rate_limit(request: Request, *, now: float | None = None) -> None:
-    await _auth_rate_limiter.check(_auth_client_key(request), now=now)
+async def _check_auth_rate_limit(
+    request: Request,
+    *,
+    db: AsyncSession,
+    now: datetime | None = None,
+) -> None:
+    await enforce_rate_limit(
+        db=db,
+        key=f"auth:{_auth_client_key(request)}",
+        limit=_AUTH_RATE_LIMIT,
+        window_seconds=_AUTH_RATE_WINDOW,
+        now=now,
+    )
 
 
 @router.post("/signup", response_model=TokenResponse, status_code=201)
@@ -169,7 +116,7 @@ async def signup(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
-    await _check_auth_rate_limit(request)
+    await _check_auth_rate_limit(request, db=db)
     existing = await db.execute(
         select(User).where(
             (func.lower(User.email) == payload.email) | (User.username == payload.username)
@@ -208,7 +155,7 @@ async def login(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
-    await _check_auth_rate_limit(request)
+    await _check_auth_rate_limit(request, db=db)
     result = await db.execute(select(User).where(func.lower(User.email) == payload.email))
     user = result.scalar_one_or_none()
     if not user or not verify_password(payload.password, user.password_hash):
@@ -233,7 +180,7 @@ async def refresh_token_endpoint(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
-    await _check_auth_rate_limit(request)
+    await _check_auth_rate_limit(request, db=db)
     settings = get_settings()
     user_id = decode_refresh_token(payload.refresh_token, settings.jwt_secret)
     if user_id is None:

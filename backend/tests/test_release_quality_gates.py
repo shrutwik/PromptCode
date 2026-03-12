@@ -15,3 +15,15 @@ def test_release_quality_gates_pass_in_non_strict_mode() -> None:
     )
     assert result["pass"] is True
     assert result["summary"]["total_gates"] == 6
+
+
+def test_release_quality_gates_pass_in_strict_mode() -> None:
+    root = Path(__file__).resolve().parents[2]
+    result = run_all_gates(
+        strict=True,
+        challenges_dir=root / "challenges",
+        benchmark_cases=root / "backend" / "benchmarks" / "benchmark_cases.json",
+        prompt_samples=root / "docs" / "prompt_judge_samples.jsonl",
+    )
+    assert result["pass"] is True
+    assert result["gates"]["prompt_judge_calibration"]["mode"] == "locked"

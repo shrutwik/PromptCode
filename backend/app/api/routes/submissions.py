@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 from pathlib import PurePosixPath
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -10,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.deps import get_current_user
-from app.core.ratelimit import check_rate_limit
+from app.core.ratelimit import enforce_rate_limit
 from app.db.session import get_db
 from app.models.challenge import Challenge
 from app.models.evaluation_job import EvaluationJob
@@ -29,13 +30,19 @@ _SUBMISSION_RATE_LIMIT = 5
 _SUBMISSION_RATE_WINDOW = 60
 
 
-def _enforce_submission_rate_limit(*, key: str) -> None:
-    if not check_rate_limit(key, limit=_SUBMISSION_RATE_LIMIT, window_seconds=_SUBMISSION_RATE_WINDOW):
-        raise HTTPException(
-            status_code=429,
-            detail=f"Rate limit exceeded. Retry in {_SUBMISSION_RATE_WINDOW}s.",
-            headers={"Retry-After": str(_SUBMISSION_RATE_WINDOW)},
-        )
+async def _enforce_submission_rate_limit(
+    *,
+    db: AsyncSession,
+    key: str,
+    now: datetime | None = None,
+) -> None:
+    await enforce_rate_limit(
+        db=db,
+        key=key,
+        limit=_SUBMISSION_RATE_LIMIT,
+        window_seconds=_SUBMISSION_RATE_WINDOW,
+        now=now,
+    )
 
 
 def _is_safe_python_entrypoint(entrypoint: str) -> bool:
@@ -126,7 +133,7 @@ async def create_submission(
             status_code=400,
             detail="Entrypoint must be a safe Python filename like 'main.py'.",
         )
-    _enforce_submission_rate_limit(key=f"submission:{user.id}")
+    await _enforce_submission_rate_limit(db=db, key=f"submission:{user.id}")
     await _guard_submission_capacity(db, user_id=user.id)
 
     submission = Submission(
