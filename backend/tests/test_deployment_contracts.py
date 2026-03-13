@@ -760,7 +760,8 @@ def test_backend_ci_runs_lint_and_type_checks() -> None:
     workflow_text = BACKEND_CI_WORKFLOW.read_text(encoding="utf-8")
 
     assert "      - name: Run backend lint" in workflow_text
-    assert "python -m ruff check app/ tests/ --select F,E9,I" in workflow_text
+    assert "python -m scripts.run_backend_lint" in workflow_text
+    assert "python -m ruff check app/ tests/ --select F,E9,I" not in workflow_text
     assert "      - name: Run backend type checks" in workflow_text
     assert (
         "python -m mypy --strict --follow-imports=silent --ignore-missing-imports app/core/ app/api/ app/schemas/"

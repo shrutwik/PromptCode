@@ -43,7 +43,7 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Run backend lint
-        run: python -m ruff check app/ tests/ --select F,E9,I
+        run: python -m scripts.run_backend_lint
 
       - name: Run backend type checks
         run: python -m mypy --strict --follow-imports=silent --ignore-missing-imports app/core/ app/api/ app/schemas/
