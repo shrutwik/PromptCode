@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -23,6 +24,7 @@ from app.core.security import (
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app
+from app.models.revoked_token import RevokedToken
 from app.schemas.user import UserCreate, UserUpdate
 
 _SECRET = "test-only-secret-not-used-in-prod"
@@ -408,6 +410,68 @@ def test_refresh_endpoint_rejects_bad_token(tmp_path, monkeypatch):
     with TestClient(app) as client:
         r = client.post("/api/auth/refresh", json={"refresh_token": "not.a.valid.token"})
         assert r.status_code == 401
+
+    from app.core.config import get_settings
+    get_settings.cache_clear()
+    app.dependency_overrides.clear()
+    asyncio.run(test_engine.dispose())
+
+
+def test_me_endpoint_accepts_non_revoked_access_token(tmp_path, monkeypatch):
+    app, test_engine = _build_test_app(tmp_path, monkeypatch)
+
+    with TestClient(app) as client:
+        signup = client.post(
+            "/api/auth/signup",
+            json={"email": "me-ok@example.com", "username": "meokayuser1", "password": _VALID_PASSWORD},
+        )
+        assert signup.status_code == 201
+        access_token = signup.json()["access_token"]
+
+        me = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert me.status_code == 200
+        assert me.json()["email"] == "me-ok@example.com"
+
+    from app.core.config import get_settings
+    get_settings.cache_clear()
+    app.dependency_overrides.clear()
+    asyncio.run(test_engine.dispose())
+
+
+def test_me_endpoint_rejects_revoked_access_token(tmp_path, monkeypatch):
+    app, test_engine = _build_test_app(tmp_path, monkeypatch)
+
+    async def _revoke_access_token(token: str) -> None:
+        from app.db import session as session_module
+
+        async with session_module.async_session_factory() as session:
+            session.add(
+                RevokedToken(
+                    token_hash=hashlib.sha256(token.encode()).hexdigest(),
+                    expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
+                )
+            )
+            await session.commit()
+
+    with TestClient(app) as client:
+        signup = client.post(
+            "/api/auth/signup",
+            json={"email": "me-revoked@example.com", "username": "merevoked1", "password": _VALID_PASSWORD},
+        )
+        assert signup.status_code == 201
+        access_token = signup.json()["access_token"]
+
+        asyncio.run(_revoke_access_token(access_token))
+
+        me = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert me.status_code == 401
+        assert "revoked" in me.json()["detail"].lower()
 
     from app.core.config import get_settings
     get_settings.cache_clear()

@@ -65,7 +65,12 @@ services:
       context: .
       dockerfile: docker/Dockerfile.backend
     command: ["uvicorn", "app.sandbox_executor:app", "--host", "0.0.0.0", "--port", "8090"]
-    user: "0:0"  # needs Docker socket access to launch sandbox containers
+    user: "promptcode"
+    # Grant Docker socket access without running as root.
+    # Set DOCKER_GID to the host docker group GID: $(stat -c '%g' /var/run/docker.sock)
+    # Default 999 matches most Linux distros; override in .env if different.
+    group_add:
+      - "${DOCKER_GID:-999}"
     <<: *backend-env
     restart: unless-stopped
     depends_on:

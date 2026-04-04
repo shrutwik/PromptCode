@@ -149,6 +149,46 @@ def test_parallel_helper_respects_max_parallel_specs(monkeypatch):
     assert state["max_active"] <= 2
 
 
+def test_parallel_helper_times_out_hung_sandbox_runs(monkeypatch):
+    run_plan = [
+        {
+            "run_type": "clean",
+            "run_index": 0,
+            "inputs": {"index": 0},
+        }
+    ]
+
+    class FakeResult:
+        success = True
+        output = "ok"
+        exit_code = 0
+        telemetry = []
+        error = None
+
+    def fake_run_in_sandbox(*args, **kwargs):
+        time.sleep(0.05)
+        return FakeResult()
+
+    monkeypatch.setattr(engine, "run_in_sandbox", fake_run_in_sandbox)
+    monkeypatch.setattr(engine, "_sandbox_run_timeout_seconds", lambda: 0.01)
+
+    results = asyncio.run(
+        engine._run_all_specs_in_parallel(
+            run_plan=run_plan,
+            code="print('ok')",
+            entrypoint="main.py",
+            challenge_config={"inputs": {}},
+        )
+    )
+
+    spec, result = results[0]
+    assert spec["run_type"] == "clean"
+    assert result.success is False
+    assert result.exit_code == -1
+    assert result.output == ""
+    assert result.error == "Sandbox execution timed out after 0.01 seconds."
+
+
 def test_prompt_quality_helper_uses_to_thread(monkeypatch):
     """Verify prompt-quality judging is offloaded from the event loop."""
     to_thread_calls = []

@@ -65,6 +65,54 @@ def _evaluation_max_parallel_specs() -> int:
     return max(1, configured)
 
 
+def _sandbox_run_timeout_seconds() -> float:
+    configured = float(settings.sandbox_timeout_seconds or 0)
+    return max(1.0, configured)
+
+
+def _sandbox_timeout_message(timeout_seconds: float) -> str:
+    return f"Sandbox execution timed out after {timeout_seconds:g} seconds."
+
+
+async def _run_sandbox_spec(
+    *,
+    spec: dict[str, Any],
+    code: str,
+    entrypoint: str,
+    challenge_config: dict[str, Any],
+) -> tuple[dict[str, Any], SandboxResult]:
+    loop = asyncio.get_running_loop()
+    runner = partial(
+        run_in_sandbox,
+        code,
+        entrypoint,
+        challenge_config,
+        input_overrides=spec["inputs"],
+    )
+    future = loop.run_in_executor(None, runner)
+    timeout_seconds = _sandbox_run_timeout_seconds()
+    try:
+        result = await asyncio.wait_for(future, timeout=timeout_seconds)
+    except TimeoutError:
+        future.cancel()
+        logger.warning(
+            "Sandbox run timed out",
+            extra={
+                "run_type": spec.get("run_type"),
+                "run_index": spec.get("run_index"),
+                "timeout_seconds": timeout_seconds,
+            },
+        )
+        result = SandboxResult(
+            success=False,
+            output="",
+            exit_code=-1,
+            telemetry=[],
+            error=_sandbox_timeout_message(timeout_seconds),
+        )
+    return spec, result
+
+
 async def _run_all_specs_in_parallel(
     run_plan: list[dict[str, Any]],
     code: str,
@@ -72,20 +120,16 @@ async def _run_all_specs_in_parallel(
     challenge_config: dict[str, Any],
 ) -> list[tuple[dict[str, Any], SandboxResult]]:
     """Execute all specs in parallel using the thread pool."""
-    loop = asyncio.get_running_loop()
     semaphore = asyncio.Semaphore(max(1, min(len(run_plan) or 1, _evaluation_max_parallel_specs())))
 
     async def run_spec(spec: dict[str, Any]) -> tuple[dict[str, Any], SandboxResult]:
         async with semaphore:
-            runner = partial(
-                run_in_sandbox,
-                code,
-                entrypoint,
-                challenge_config,
-                input_overrides=spec["inputs"],
+            return await _run_sandbox_spec(
+                spec=spec,
+                code=code,
+                entrypoint=entrypoint,
+                challenge_config=challenge_config,
             )
-            result = await loop.run_in_executor(None, runner)
-        return spec, result
 
     return await asyncio.gather(*(run_spec(spec) for spec in run_plan))
 
