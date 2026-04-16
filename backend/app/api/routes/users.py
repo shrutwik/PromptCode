@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.client_ip import client_ip_from_request
 from app.core.deps import get_optional_user
+from app.core.ratelimit import enforce_rate_limit
 from app.db.session import get_db
 from app.models.challenge import Challenge
 from app.models.submission import Submission
@@ -13,13 +15,23 @@ from app.schemas.user import UserProfileResponse, UserPublicResponse
 
 router = APIRouter()
 
+_PROFILE_RATE_LIMIT = 30
+_PROFILE_RATE_WINDOW = 60
+
 
 @router.get("/{username}", response_model=UserProfileResponse)
 async def get_user_profile(
     username: str,
+    request: Request,
     viewer: User | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
+    await enforce_rate_limit(
+        db=db,
+        key=f"profile:{client_ip_from_request(request)}",
+        limit=_PROFILE_RATE_LIMIT,
+        window_seconds=_PROFILE_RATE_WINDOW,
+    )
     result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()
     if not user:

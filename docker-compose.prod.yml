@@ -44,11 +44,21 @@ services:
   sandbox-executor:
     <<: *backend-image
     build: !reset null
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
 
   backend:
     <<: *backend-image
     build: !reset null
     ports: !reset []  # do not expose port 8000 externally; Caddy routes internally via backend:8000
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
     environment:
       PROMPTCODE_DEBUG: "false"
       PROMPTCODE_DATABASE_SSL_REQUIRE: ${PROMPTCODE_DATABASE_SSL_REQUIRE:-true}
@@ -68,6 +78,11 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+          cpus: "2.0"
     environment:
       PROMPTCODE_DEBUG: "false"
 
@@ -78,12 +93,28 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+          cpus: "2.0"
     environment:
       PROMPTCODE_DEBUG: "false"
 
   caddy:
     image: caddy:2.10.2-alpine
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+          cpus: "0.5"
+    healthcheck:
+      test: ["CMD", "caddy", "version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     ports:
       - "80:80"
       - "443:443"

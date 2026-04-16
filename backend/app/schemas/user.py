@@ -11,6 +11,7 @@ from app.core.security import BCRYPT_PASSWORD_MAX_BYTES
 _USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{1,62}[A-Za-z0-9]$")
 _MAX_NAME_CHARS = 128
 _MAX_EMAIL_CHARS = 256
+_MAX_BIO_CHARS = 500
 
 
 def _normalize_name(value: str, *, field_name: str) -> str:
@@ -110,7 +111,10 @@ class UserUpdate(BaseModel):
     @field_validator("bio")
     @classmethod
     def normalize_bio(cls, value: str | None) -> str | None:
-        return _normalize_optional_text(value)
+        normalized = _normalize_optional_text(value)
+        if normalized is not None and len(normalized) > _MAX_BIO_CHARS:
+            raise ValueError(f"Bio must be at most {_MAX_BIO_CHARS} characters long.")
+        return normalized
 
 
 class UserResponse(BaseModel):

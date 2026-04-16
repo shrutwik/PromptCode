@@ -157,12 +157,13 @@ def _run_in_sandbox_local(
         try:
             _write_support_files(code_dir, challenge_config.get("files", {}) or {})
         except ValueError as exc:
+            logger.warning("Invalid sandbox support file: %s", exc)
             return SandboxResult(
                 success=False,
                 output="",
                 exit_code=-1,
                 telemetry=[],
-                error=str(exc),
+                error="Invalid challenge file configuration.",
             )
 
         client = docker.from_env()
@@ -208,7 +209,7 @@ def _run_in_sandbox_local(
                 output="",
                 exit_code=exc.exit_status,
                 telemetry=[],
-                error=str(exc),
+                error="Container exited with a non-zero status.",
             )
         except APIError as exc:
             logger.warning("Container API error: %s", exc)
@@ -217,7 +218,7 @@ def _run_in_sandbox_local(
                 output="",
                 exit_code=-1,
                 telemetry=[],
-                error=str(exc),
+                error="Sandbox container failed to start.",
             )
         except ImageNotFound:
             logger.error("Sandbox image '%s' not found", settings.sandbox_image)
@@ -226,7 +227,7 @@ def _run_in_sandbox_local(
                 output="",
                 exit_code=-1,
                 telemetry=[],
-                error=f"Sandbox image '{settings.sandbox_image}' not found. Build it first.",
+                error="Sandbox image not found. Contact an administrator.",
             )
         except Exception as exc:
             logger.exception("Unexpected sandbox error")
@@ -235,7 +236,7 @@ def _run_in_sandbox_local(
                 output="",
                 exit_code=-1,
                 telemetry=[],
-                error=str(exc),
+                error="An unexpected sandbox error occurred.",
             )
         finally:
             if container is not None:

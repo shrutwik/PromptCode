@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import tempfile
 from datetime import datetime, timezone
 from threading import Lock
@@ -202,12 +203,14 @@ async def run_sandbox(
 ) -> dict:
     expected_token = str(settings.sandbox_executor_token or "").strip()
     if not expected_token:
-        if not settings.debug:
-            raise HTTPException(
-                status_code=503,
-                detail="Sandbox executor token is not configured.",
-            )
-    elif authorization != f"Bearer {expected_token}":
+        raise HTTPException(
+            status_code=503,
+            detail="Sandbox executor token is not configured.",
+        )
+    elif not hmac.compare_digest(
+        authorization or "",
+        f"Bearer {expected_token}",
+    ):
         raise HTTPException(status_code=401, detail="Invalid sandbox executor token.")
 
     limiter = _executor_run_limiter()

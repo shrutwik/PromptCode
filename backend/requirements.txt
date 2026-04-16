@@ -7,7 +7,8 @@ pydantic-settings==2.13.1
 docker==7.1.0
 openai==2.24.0
 python-multipart==0.0.22
-passlib[bcrypt]==1.7.4
+bcrypt==5.0.0
+aiosqlite>=0.20.0
 authlib==1.6.9
 email-validator==2.3.0
 alembic==1.18.4

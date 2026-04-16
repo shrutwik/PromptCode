@@ -141,13 +141,15 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.backend
-    command: ["python", "-m", "scripts.run_with_migrations", "python", "-m", "scripts.run_queue_worker"]
+    command: ["python", "-m", "scripts.run_queue_worker"]
     <<: *backend-env
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
       sandbox-executor:
+        condition: service_healthy
+      worker:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-m", "scripts.check_worker_health"]

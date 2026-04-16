@@ -32,6 +32,7 @@ else:
         pool_size=20,
         max_overflow=10,
         pool_pre_ping=True,
+        pool_recycle=1800,  # recycle connections every 30 min; prevents silent drops by pgbouncer
         connect_args=_connect_args,
     )
 

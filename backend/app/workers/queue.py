@@ -73,19 +73,28 @@ async def worker_loop(*, poll_interval_seconds: float = 1.0) -> None:
     heartbeat_task = asyncio.create_task(_heartbeat_loop(worker_state))
     cleanup_task = asyncio.create_task(_rate_limit_cleanup_loop())
     logger.info("Evaluation queue worker started", extra={"worker_id": worker_state.worker_id})
+    _consecutive_errors = 0
+    _MAX_BACKOFF = 60.0
     try:
         while True:
             try:
                 worker_state.last_error = None
                 processed = await _process_one_available_job(worker_state=worker_state)
+                _consecutive_errors = 0
                 if not processed:
                     await asyncio.sleep(poll_interval_seconds)
             except Exception as exc:  # pragma: no cover
+                _consecutive_errors += 1
                 worker_state.status = "error"
                 worker_state.current_job_id = None
                 worker_state.last_error = str(exc)[:1500]
-                logger.exception("Queue worker iteration failed")
-                await asyncio.sleep(poll_interval_seconds)
+                backoff = min(_MAX_BACKOFF, poll_interval_seconds * (2 ** min(_consecutive_errors - 1, 6)))
+                logger.exception(
+                    "Queue worker iteration failed (consecutive=%d, backoff=%.1fs)",
+                    _consecutive_errors,
+                    backoff,
+                )
+                await asyncio.sleep(backoff)
     finally:
         heartbeat_task.cancel()
         cleanup_task.cancel()
