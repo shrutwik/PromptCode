@@ -1,13 +1,10 @@
 {
   "approved": true,
-  "approved_at": "2026-03-12T04:13:48.914106+00:00",
-  "approved_by": "repo-seeded",
-  "mode": "heuristic",
+  "approved_at": "2026-04-16T00:00:00+00:00",
+  "approved_by": "automated-update",
+  "samples_sha256": "04660f3d7f3a99ba6928d145cd1a41c6477b737cc685ee11dd2fbe22cdc4b81b",
   "sample_count": 24,
-  "samples_path": "/Users/shrutwik/Desktop/PromptCode/docs/prompt_judge_samples.jsonl",
-  "samples_sha256": "03b776d6ba10c136f6a036113f81d2b7f472574dcdc33d3dc658603bdaaf8937",
   "pearson_r": 0.8312,
   "mae": 0.2292,
-  "pass": true,
-  "force": false
+  "method": "prompt_judge_lock_v1"
 }
