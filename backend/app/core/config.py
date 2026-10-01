@@ -55,6 +55,24 @@ class Settings(BaseSettings):
 
     database_url: str = _DEFAULT_DATABASE_URL
     database_echo: bool = False
+
+    interview_workspace_root: str = ""  # optional override for session workspaces
+    session_ttl_hours: int = 24
+    max_runners: int = 4
+    max_runners_acquire_timeout_seconds: int = 15
+    interview_max_ai_requests_per_session: int = 40
+    auth_cookie_enabled: bool = False  # prefer HttpOnly cookies in prod when true
+    auth_cookie_secure: bool = True
+    auth_cookie_samesite: str = "lax"
+    frontend_url: str = ""
+    app_version: str = "0.1.0-beta"
+    git_sha: str = ""
+    # Private beta gate: when true, signup requires invite code or allowlisted email.
+    beta_invite_required: bool = False
+    beta_email_allowlist: str = ""  # comma-separated emails
+    beta_default_cohort: str = "beta"
+    beta_starter_challenge: str = "invoice-status-transition"
+    log_level: str = "INFO"
     # Set True when using Supabase or any hosted Postgres that requires SSL
     database_ssl_require: bool = False
     # Optional CA bundle path for verified TLS connections.
@@ -186,6 +204,27 @@ class Settings(BaseSettings):
             errors.append("PROMPTCODE_SANDBOX_EXECUTOR_MAX_CONCURRENT_RUNS must be at least 1.")
         if self.sandbox_executor_acquire_timeout_seconds < 1:
             errors.append("PROMPTCODE_SANDBOX_EXECUTOR_ACQUIRE_TIMEOUT_SECONDS must be at least 1.")
+        if self.session_ttl_hours < 1:
+            errors.append("PROMPTCODE_SESSION_TTL_HOURS must be at least 1.")
+        if self.max_runners < 1:
+            errors.append("PROMPTCODE_MAX_RUNNERS must be at least 1.")
+        if self.max_runners_acquire_timeout_seconds < 1:
+            errors.append("PROMPTCODE_MAX_RUNNERS_ACQUIRE_TIMEOUT_SECONDS must be at least 1.")
+        if self.interview_max_ai_requests_per_session < 1:
+            errors.append("PROMPTCODE_INTERVIEW_MAX_AI_REQUESTS_PER_SESSION must be at least 1.")
+        samesite = str(self.auth_cookie_samesite or "lax").strip().lower()
+        if samesite not in {"lax", "strict", "none"}:
+            errors.append("PROMPTCODE_AUTH_COOKIE_SAMESITE must be lax, strict, or none.")
+        self.auth_cookie_samesite = samesite
+        if not self.debug and "*" in {o.strip() for o in self.cors_origins}:
+            errors.append("PROMPTCODE_CORS_ORIGINS must not include * when PROMPTCODE_DEBUG is false.")
+        # Cookie Secure defaults true; allow insecure cookies only in debug.
+        if self.debug and not self.auth_cookie_secure:
+            pass
+        elif not self.debug:
+            self.auth_cookie_secure = True
+        self.frontend_url = str(self.frontend_url or "").strip()
+        self.log_level = str(self.log_level or "INFO").strip().upper() or "INFO"
         if self.evaluation_max_parallel_specs < 1:
             errors.append("PROMPTCODE_EVALUATION_MAX_PARALLEL_SPECS must be at least 1.")
         if self.submission_max_outstanding_jobs_per_user < 1:

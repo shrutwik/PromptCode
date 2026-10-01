@@ -1,0 +1,15 @@
+# Interview Python runner — pytest preinstalled; no pip install during candidate runs.
+# Build: docker build -f docker/Dockerfile.interview-python -t promptcode-runner-python:latest .
+FROM python:3.12.12-slim-bookworm
+
+RUN pip install --no-cache-dir pytest==8.3.5 \
+  && useradd -m -u 10001 runner
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    HOME=/tmp
+
+WORKDIR /workspace
+USER runner
+
+CMD ["python", "-c", "raise SystemExit(1)"]

@@ -3,15 +3,16 @@ from __future__ import annotations
 import hashlib
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.client_ip import client_ip_from_request
 from app.core.config import get_settings
-from app.core.deps import get_current_user
+from app.core.deps import ACCESS_COOKIE, get_current_user
 from app.core.ratelimit import enforce_rate_limit
 from app.core.security import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
     REFRESH_TOKEN_EXPIRE_DAYS,
     create_access_token,
     create_refresh_token,
@@ -31,11 +32,43 @@ from app.schemas.user import (
     UserResponse,
     UserUpdate,
 )
+from app.services.interview.analytics import track_event
+from app.services.interview.beta_access import consume_invite_or_allowlist
 
 router = APIRouter()
 
 _AUTH_RATE_WINDOW = 60  # seconds
 _AUTH_RATE_LIMIT = 10  # max attempts per IP per window
+REFRESH_COOKIE = "pc_refresh_token"
+
+
+def _set_auth_cookies(response: Response, *, access: str, refresh: str) -> None:
+    settings = get_settings()
+    if not settings.auth_cookie_enabled:
+        return
+    common = {
+        "httponly": True,
+        "secure": bool(settings.auth_cookie_secure),
+        "samesite": settings.auth_cookie_samesite,
+        "path": "/",
+    }
+    response.set_cookie(
+        ACCESS_COOKIE,
+        access,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        **common,
+    )
+    response.set_cookie(
+        REFRESH_COOKIE,
+        refresh,
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
+        **common,
+    )
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    response.delete_cookie(ACCESS_COOKIE, path="/")
+    response.delete_cookie(REFRESH_COOKIE, path="/")
 
 
 def _hash_token(token: str) -> str:
@@ -83,6 +116,7 @@ async def _check_auth_rate_limit(
 async def signup(
     payload: UserCreate,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
     await _check_auth_rate_limit(request, db=db)
@@ -97,20 +131,41 @@ async def signup(
             detail="Email or username already taken",
         )
 
+    invite, cohort, signup_source = await consume_invite_or_allowlist(
+        db,
+        email=payload.email,
+        invite_code=payload.invite_code,
+    )
+
+    display = (payload.first_name or payload.username or "").strip()
     user = User(
         email=payload.email,
         username=payload.username,
         first_name=payload.first_name,
         last_name=payload.last_name,
+        display_name=display,
         password_hash=hash_password(payload.password),
+        beta_status="active",
+        beta_cohort=cohort,
+        signup_source=signup_source,
+        invite_code_id=invite.id if invite else None,
+        last_login_at=datetime.now(timezone.utc),
     )
     db.add(user)
     await db.commit()
     await db.refresh(user)
+    await track_event(
+        db,
+        event_name="user_signed_up",
+        user_id=user.id,
+        properties={"signup_source": signup_source, "cohort": cohort},
+        commit=True,
+    )
 
     settings = get_settings()
     access_token = create_access_token(user.id, settings.jwt_secret)
     refresh_token = create_refresh_token(user.id, settings.jwt_secret)
+    _set_auth_cookies(response, access=access_token, refresh=refresh_token)
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -122,6 +177,7 @@ async def signup(
 async def login(
     payload: UserLogin,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
     await _check_auth_rate_limit(request, db=db)
@@ -132,10 +188,20 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
+    if (user.beta_status or "active") == "disabled":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account disabled",
+        )
 
+    user.last_login_at = datetime.now(timezone.utc)
+    await track_event(db, event_name="logged_in", user_id=user.id, commit=False)
     settings = get_settings()
     access_token = create_access_token(user.id, settings.jwt_secret)
     refresh_token = create_refresh_token(user.id, settings.jwt_secret)
+    await db.commit()
+    await db.refresh(user)
+    _set_auth_cookies(response, access=access_token, refresh=refresh_token)
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -182,12 +248,13 @@ async def refresh_token_endpoint(
     )
 
 
-@router.post("/logout", status_code=204)
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def logout(
     payload: LogoutRequest,
+    response: Response,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> None:
+) -> Response:
     """Revoke a refresh token. Requires a valid access token."""
     user_id = decode_refresh_token(payload.refresh_token, get_settings().jwt_secret)
     if user_id != user.id:
@@ -202,6 +269,8 @@ async def logout(
         now=now,
     )
     await db.commit()
+    _clear_auth_cookies(response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/me", response_model=UserResponse)

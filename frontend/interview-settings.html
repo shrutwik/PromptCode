@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Settings — PromptCode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&display=swap">
+<link rel="stylesheet" href="/static/css/pc-tokens.css?v=20260930">
+<link rel="stylesheet" href="/static/css/pc-components.css?v=20260930">
+<link rel="stylesheet" href="/static/interview.css?v=20260930">
+</head>
+<body>
+<a class="pc-skip" href="#main">Skip to content</a>
+<nav class="nav" aria-label="App"><a class="nav-brand" href="/dashboard">PromptCode</a></nav>
+<main class="page settings-page" id="main">
+  <header class="page-head">
+    <div>
+      <h1 class="page-title">Settings</h1>
+      <p class="page-lead">Account preferences for private beta practice.</p>
+    </div>
+  </header>
+
+  <div class="settings-stack">
+    <section class="pc-panel" id="profile" aria-labelledby="profileTitle">
+      <div class="pc-panel-head"><h2 id="profileTitle">Profile</h2></div>
+      <div class="pc-panel-body">
+        <div id="status" aria-live="polite"><span class="pc-skeleton pc-skeleton-text" style="--w:40%"></span><span class="pc-skeleton" style="height:38px;margin:10px 0 18px"></span><span class="pc-skeleton" style="height:38px"></span></div>
+        <form id="form" hidden>
+          <div class="pc-field">
+            <label for="display_name">Display name</label>
+            <input id="display_name" name="display_name" autocomplete="nickname" />
+          </div>
+          <div class="pc-field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" disabled />
+            <span class="pc-hint">Email can’t be changed during the beta.</span>
+          </div>
+          <div class="settings-actions">
+            <button type="submit" class="btn btn-primary">Save changes</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="pc-panel" id="feedback" tabindex="-1" aria-labelledby="feedbackTitle">
+      <div class="pc-panel-head"><h2 id="feedbackTitle">Feedback</h2></div>
+      <div class="pc-panel-body">
+        <p class="muted" style="font-size:var(--pc-text-sm);margin-bottom:var(--pc-space-4)">Product feedback for the beta. Session-specific feedback lives on each report.</p>
+        <div class="pc-field">
+          <label for="productFb">Notes</label>
+          <textarea id="productFb" rows="4" placeholder="What should we improve?"></textarea>
+        </div>
+        <div class="settings-actions">
+          <button type="button" class="btn btn-secondary" id="copyFb">Copy feedback draft</button>
+          <span class="pc-hint" id="fbHint" aria-live="polite"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="pc-panel" id="account" aria-labelledby="accountTitle">
+      <div class="pc-panel-head"><h2 id="accountTitle">Account</h2></div>
+      <div class="pc-panel-body settings-row">
+        <p>Password reset via email is not available in this beta. See <a href="/privacy.html">Privacy</a> for how session data is handled.</p>
+        <button type="button" id="logout" class="btn btn-danger">Log out</button>
+      </div>
+    </section>
+  </div>
+</main>
+<script src="/static/interview-api.js"></script>
+<script src="/static/js/pc-ui.js?v=20260930"></script>
+<script src="/static/js/pages/interview-settings.js"></script>
+</body>
+</html>

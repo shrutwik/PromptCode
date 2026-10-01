@@ -33,6 +33,7 @@ class UserCreate(BaseModel):
     first_name: str = ""
     last_name: str = ""
     password: str
+    invite_code: str | None = None
 
     @field_validator("email")
     @classmethod
@@ -94,9 +95,10 @@ class UserLogin(BaseModel):
 class UserUpdate(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
+    display_name: str | None = None
     bio: str | None = None
 
-    @field_validator("first_name", "last_name")
+    @field_validator("first_name", "last_name", "display_name")
     @classmethod
     def normalize_updated_name_fields(
         cls,
@@ -123,7 +125,12 @@ class UserResponse(BaseModel):
     username: str
     first_name: str
     last_name: str
+    display_name: str = ""
     bio: str
+    beta_status: str = "active"
+    beta_cohort: str = "open"
+    signup_source: str = "direct"
+    last_login_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
