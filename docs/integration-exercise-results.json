@@ -1,0 +1,192 @@
+{
+  "results": [
+    {
+      "check": "edit_src",
+      "status": "PASS",
+      "detail": "src/api.ts 200"
+    },
+    {
+      "check": "ai",
+      "status": "PASS",
+      "detail": "{'reply': \"I'm the PromptCode mock interview assistant.\\n\\nI only see the files/snippets you attach \u2014 not the whole repo by default.\\n\\nYou asked (1269 chars). Suggested next steps"
+    },
+    {
+      "check": "ai_apply_manual",
+      "status": "PASS",
+      "detail": "200 {\"path\":\"src/api.ts\",\"content\":\"import { transitionInvoice, describeInvoice } from './invoiceService.js';\\nimport type { InvoiceStatus } from './types"
+    },
+    {
+      "check": "tests",
+      "status": "PASS",
+      "detail": "200"
+    },
+    {
+      "check": "submit",
+      "status": "PASS",
+      "detail": "{'total_score': 42.0, 'rubric': {'A_correctness': {'score': 8.0, 'max': 25, 'evidence': 'Visible tests did not pass at submit (hidden evaluator cases not leaked).'}, 'B_investigation': {'score': 3.0, "
+    },
+    {
+      "check": "idempotent",
+      "status": "PASS",
+      "detail": "evals=1 st=200"
+    },
+    {
+      "check": "report",
+      "status": "PASS",
+      "detail": "['total_score', 'rubric', 'metrics', 'insights', 'test_summary', 'defend_questions', 'timeline', 'went_well', 'improve', 'recovery_moments', 'signals', 'diff_summary', 'scoring_version', 'challenge_version']"
+    },
+    {
+      "check": "report_no_solution_leak",
+      "status": "PASS",
+      "detail": "ok"
+    },
+    {
+      "check": "defend_get",
+      "status": "PASS",
+      "detail": "{'questions': [{'question': '1. Q: Why not timezone? A: Not on mutation path.', 'index': 0}, {'question': 'Which test or reproduction proved the fix?', 'index': 1}, {'question': 'What incorrect fix di"
+    },
+    {
+      "check": "defend_post",
+      "status": "PASS",
+      "detail": "200 {\"questions\":[{\"question\":\"1. Q: Why not timezone? A: Not on mutation path.\",\"index\":0},{\"question\":\"Which test or reproduction proved the fix?\",\"inde"
+    },
+    {
+      "check": "feedback",
+      "status": "PASS",
+      "detail": "200 {\"ok\":true}"
+    },
+    {
+      "check": "analytics_rows",
+      "status": "PASS",
+      "detail": "8"
+    },
+    {
+      "check": "dashboard",
+      "status": "PASS",
+      "detail": "{'sessions': [{'id': '7b842fcb-c751-4d08-9405-14411ebe8001', 'challenge_slug': 'invoice-status-transition', 'status': 'submitted', 'attempt_number': 1, 'started_at': '2026-09-19T14:36:37.957179', 'submitted_at': '2026-09-19T14:36:38.300161', 'total_s"
+    },
+    {
+      "check": "iso/session",
+      "status": "PASS",
+      "detail": "404"
+    },
+    {
+      "check": "iso/files",
+      "status": "PASS",
+      "detail": "404"
+    },
+    {
+      "check": "iso/report",
+      "status": "PASS",
+      "detail": "404"
+    },
+    {
+      "check": "iso/events",
+      "status": "PASS",
+      "detail": "404"
+    },
+    {
+      "check": "iso/defend",
+      "status": "PASS",
+      "detail": "404"
+    },
+    {
+      "check": "session2",
+      "status": "PASS",
+      "detail": "200"
+    },
+    {
+      "check": "ws_distinct",
+      "status": "PASS",
+      "detail": "['/var/folders/dh/s8lsf49n1vs7shqz86z7_lg00000gn/T/ctx-mode-aQW6qn/pc_integ2_612pw_yh/workspaces/7b842fcb-c751-4d08-9405-14411ebe8001', '/var/folders/dh/s8lsf49n1vs7shqz86z7_lg00000gn/T/ctx-mode-aQW6qn/pc_integ2_612pw_yh/workspaces/10200d75-3eef-42c6-9e7b-b9a763fb0ca5']"
+    },
+    {
+      "check": "event_timeline",
+      "status": "PASS",
+      "detail": "['ai_edit_accepted', 'test_run', 'session_started', 'ai_response', 'file_changed', 'ai_prompt', 'file_changed', 'file_viewed', 'submission', 'test_result', 'defend_answer', 'test_result']"
+    },
+    {
+      "check": "unauth",
+      "status": "PASS",
+      "detail": "ok"
+    },
+    {
+      "check": "openapi_covers_fe",
+      "status": "PASS",
+      "detail": "[]"
+    }
+  ],
+  "event_types": [
+    "ai_edit_accepted",
+    "test_run",
+    "session_started",
+    "ai_response",
+    "file_changed",
+    "ai_prompt",
+    "file_changed",
+    "file_viewed",
+    "submission",
+    "test_result",
+    "defend_answer",
+    "test_result"
+  ],
+  "eval_cols": [
+    "id",
+    "session_id",
+    "total_score",
+    "rubric",
+    "metrics",
+    "insights",
+    "test_summary",
+    "defend_questions",
+    "created_at",
+    "scoring_version"
+  ],
+  "analytics_sample": [
+    {
+      "id": "2af8ae6a-dc05-4c2b-a67d-8a046b812d69",
+      "event_name": "user_signed_up",
+      "user_id": "c8284ae8-fa68-437b-b4d9-066cec8c9000",
+      "session_id": null,
+      "challenge_slug": null,
+      "properties": "{\"signup_source\": \"direct\", \"cohort\": \"open\"}",
+      "created_at": "2026-09-19 14:36:37"
+    },
+    {
+      "id": "fce0fc0f-f345-493b-82d0-bd58a8e166bc",
+      "event_name": "user_signed_up",
+      "user_id": "de5b218d-4720-43dd-845e-463848c9f37e",
+      "session_id": null,
+      "challenge_slug": null,
+      "properties": "{\"signup_source\": \"direct\", \"cohort\": \"open\"}",
+      "created_at": "2026-09-19 14:36:37"
+    },
+    {
+      "id": "7f5bb525-7ba3-44c5-82bc-c2a642f26592",
+      "event_name": "challenge_library_viewed",
+      "user_id": null,
+      "session_id": null,
+      "challenge_slug": null,
+      "properties": "{}",
+      "created_at": "2026-09-19 14:36:37"
+    },
+    {
+      "id": "6cb701e6-0105-404d-8755-5282b37c7d78",
+      "event_name": "session_started",
+      "user_id": "c8284ae8-fa68-437b-b4d9-066cec8c9000",
+      "session_id": "7b842fcb-c751-4d08-9405-14411ebe8001",
+      "challenge_slug": "invoice-status-transition",
+      "properties": "{\"attempt\": 1}",
+      "created_at": "2026-09-19 14:36:37"
+    },
+    {
+      "id": "94dc65b3-7548-475d-978b-182f9a4456c4",
+      "event_name": "session_submitted",
+      "user_id": "c8284ae8-fa68-437b-b4d9-066cec8c9000",
+      "session_id": "7b842fcb-c751-4d08-9405-14411ebe8001",
+      "challenge_slug": "invoice-status-transition",
+      "properties": "{\"total_score\": 42.0, \"scoring_version\": \"v1\"}",
+      "created_at": "2026-09-19 14:36:38"
+    }
+  ]
+}
