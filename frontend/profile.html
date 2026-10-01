@@ -3,408 +3,211 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>profile — PromptCode</title>
+<title>Prompt profile — PromptCode</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&display=swap">
+<link rel="stylesheet" href="/static/css/pc-tokens.css?v=20260930">
+<link rel="stylesheet" href="/static/css/pc-components.css?v=20260930">
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --bg: #0a0a09; --surface: #111110; --surface2: #141412;
-  --border: #1f1f1d; --border-light: #2a2a27;
-  --text: #e8e6e0; --muted: #6b6b65;
-  --accent: #c8f060; --accent-dim: rgba(200,240,96,0.10);
-  --warn: #f0a060; --danger: #f06060; --success: #60d4a8;
-  --radius: 6px; --nav-h: 52px;
-}
-html { scroll-behavior: smooth; }
-body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; line-height: 1.6; min-height: 100vh; }
-::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
-@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.7)} }
-@keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-@keyframes barGrow { from{width:0} to{width:var(--w)} }
-.fade-in { animation: fadeUp 0.45s ease both; }
-.d1{animation-delay:.07s;opacity:0} .d2{animation-delay:.14s;opacity:0}
-.d3{animation-delay:.21s;opacity:0} .d4{animation-delay:.28s;opacity:0}
-.d5{animation-delay:.35s;opacity:0}
-
-/* NAV */
-nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-  height: var(--nav-h); display: flex; align-items: center; justify-content: space-between;
-  padding: 0 28px; border-bottom: 1px solid var(--border);
-  background: rgba(10,10,9,0.94); backdrop-filter: blur(16px);
-}
-.nav-logo { display: flex; align-items: center; gap: 8px; font-family: 'Instrument Serif', serif; font-size: 18px; letter-spacing: -0.02em; color: var(--text); text-decoration: none; }
-.nav-logo .dot { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; animation: pulse 2.4s ease-in-out infinite; }
-.nav-links { display: flex; gap: 26px; }
-.nav-links a { color: var(--muted); text-decoration: none; font-size: 12px; letter-spacing: 0.04em; transition: color 0.2s; }
-.nav-links a:hover, .nav-links a.active { color: var(--text); }
-.nav-right { display: flex; align-items: center; gap: 10px; }
-.btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 12px; cursor: pointer; transition: all 0.15s; text-decoration: none; border: 1px solid transparent; }
-.btn-ghost { background: transparent; border-color: var(--border-light); color: var(--muted); }
-.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
-.btn-primary { background: var(--accent); color: var(--bg); font-weight: 500; }
-.btn-primary:hover { background: #d4f870; }
-
-/* LAYOUT */
-.page { max-width: 1060px; margin: 0 auto; padding: calc(var(--nav-h) + 36px) 28px 60px; }
-
-/* PROFILE HEADER */
-.profile-header {
-  display: grid; grid-template-columns: auto 1fr auto;
-  gap: 24px; align-items: start;
-  padding-bottom: 32px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 32px;
-}
-
+.profile-header { display: grid; grid-template-columns: auto 1fr auto; gap: 20px; align-items: start; padding-bottom: var(--pc-space-6); margin-bottom: var(--pc-space-6); border-bottom: 1px solid var(--pc-border); }
 .avatar-wrap { position: relative; }
-.avatar-lg {
-  width: 72px; height: 72px; border-radius: 12px;
-  background: var(--accent-dim); border: 1px solid rgba(200,240,96,0.3);
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Instrument Serif', serif; font-size: 26px; color: var(--accent);
-}
-.online-dot {
-  position: absolute; bottom: -2px; right: -2px;
-  width: 12px; height: 12px; border-radius: 50%;
-  background: var(--success); border: 2px solid var(--bg);
-}
-
-.profile-info { display: flex; flex-direction: column; gap: 4px; }
-.profile-handle { font-family: 'Instrument Serif', serif; font-size: 28px; letter-spacing: -0.02em; line-height: 1; }
-.profile-name { font-size: 13px; color: var(--muted); }
-.profile-bio { font-size: 12px; color: var(--muted); margin-top: 6px; max-width: 440px; line-height: 1.6; }
-.profile-tags { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-.ptag { padding: 2px 9px; border: 1px solid var(--border-light); border-radius: 20px; font-size: 10px; color: var(--muted); }
-
-.profile-stats { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+.avatar-lg { width: 64px; height: 64px; border-radius: var(--pc-radius-lg); display: grid; place-items: center; background: var(--pc-accent-dim); border: 1px solid var(--pc-border-strong); color: var(--pc-accent); font-family: var(--pc-font-mono); font-size: 1.25rem; font-weight: 500; }
+.online-dot { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 50%; background: var(--pc-success); border: 2px solid var(--pc-bg); }
+.profile-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.profile-handle { font-size: var(--pc-text-h1); letter-spacing: var(--pc-tracking-tight); }
+.profile-name { font-size: var(--pc-text-sm); color: var(--pc-muted); }
+.profile-bio { max-width: 60ch; margin-top: 4px; font-size: var(--pc-text-sm); color: var(--pc-text-secondary); }
+.profile-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.profile-stats { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .rank-display { text-align: right; }
-.rank-num { font-family: 'Instrument Serif', serif; font-size: 42px; letter-spacing: -0.04em; color: var(--accent); line-height: 1; }
-.rank-label { font-size: 10px; color: var(--muted); letter-spacing: 0.06em; }
-.rank-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
-.streak-pill { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border-light); border-radius: 20px; font-size: 11px; color: var(--muted); }
+.rank-num { font-family: var(--pc-font-mono); font-size: 1.75rem; font-weight: 500; line-height: 1.1; color: var(--pc-text); }
+.rank-label { font-size: var(--pc-text-xs); color: var(--pc-muted); }
+.rank-sub { font-size: var(--pc-text-xs); color: var(--pc-faint); }
+.profile-actions { display: flex; gap: 8px; }
 
-/* STATS ROW */
-.stats-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 28px; }
-.stat-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; background: var(--surface2); }
-.stat-val { font-family: 'Instrument Serif', serif; font-size: 26px; letter-spacing: -0.02em; color: var(--text); line-height: 1; }
-.stat-lbl { font-size: 10px; color: var(--muted); margin-top: 4px; letter-spacing: 0.04em; }
-.stat-delta { font-size: 10px; color: var(--success); margin-top: 3px; }
-.stat-delta.neg { color: var(--warn); }
+.stat-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); margin-bottom: var(--pc-space-5); }
+.main-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.left-col, .right-col { display: flex; flex-direction: column; gap: 16px; }
+.pc-panel { overflow: hidden; }
+.pc-panel-head h2 { font-size: var(--pc-text-sm); }
+.panel-meta { font-family: var(--pc-font-mono); font-size: var(--pc-text-xs); color: var(--pc-muted); }
+.pc-panel .pc-table-wrap { border: 0; border-radius: 0; overflow-x: auto; }
+.history-table .sh-status { margin-top: 4px; }
+.history-table td.cell-empty { text-align: center; color: var(--pc-muted); padding: 24px; }
+.sh-score.good { color: var(--pc-success); }
+.sh-score.warn { color: var(--pc-warn); }
+.sh-score.bad { color: var(--pc-danger); }
 
-/* MAIN GRID */
-.main-grid { display: grid; grid-template-columns: 1fr 300px; gap: 24px; align-items: start; }
+.breakdown-list { display: flex; flex-direction: column; gap: 14px; }
+.breakdown-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: var(--pc-text-sm); }
+.breakdown-label { color: var(--pc-text-secondary); }
+.breakdown-val { font-family: var(--pc-font-mono); color: var(--pc-text); font-variant-numeric: tabular-nums; }
 
-/* LEFT COLUMN */
-.left-col { display: flex; flex-direction: column; gap: 20px; }
+.solved-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--pc-border); font-size: var(--pc-text-sm); color: var(--pc-text); transition: background-color var(--pc-dur-fast) ease; }
+.solved-item:hover { background: rgba(255, 255, 255, 0.025); text-decoration: none; }
+.solved-item:last-child { border-bottom: 0; }
+.solved-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: currentColor; }
+.solved-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.solved-score { font-family: var(--pc-font-mono); font-size: var(--pc-text-xs); }
+.tone-success { color: var(--pc-success); }
+.tone-warn { color: var(--pc-warn); }
+.tone-info { color: var(--pc-ai); }
+.solved-list .solved-name { color: var(--pc-text); }
+.panel-foot { padding: 10px 16px; border-top: 1px solid var(--pc-border); font-size: var(--pc-text-xs); }
+.compare-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--pc-border); font-size: var(--pc-text-xs); }
+.compare-row:last-child { border-bottom: 0; }
+.cr-label { color: var(--pc-muted); }
+.cr-you { font-family: var(--pc-font-mono); color: var(--pc-text); font-variant-numeric: tabular-nums; }
 
-/* ACTIVITY CHART */
-.card { border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); overflow: hidden; }
-.card-header { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between; }
-.card-title { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.card-body { padding: 16px; }
+/* CANDIDATE FOR pc-components: compact empty state inside panels */
+.pc-panel .pc-empty.is-compact { margin: 12px; padding: var(--pc-space-5) var(--pc-space-4); font-size: var(--pc-text-sm); }
+.pc-empty.is-compact h3 { font-size: var(--pc-text-sm); margin-bottom: 0; }
 
-/* Activity grid (github style) */
-.activity-grid { display: flex; flex-direction: column; gap: 6px; }
-.activity-months { display: flex; gap: 0; font-size: 10px; color: var(--muted); margin-bottom: 4px; padding-left: 24px; }
-.activity-months span { flex: 1; text-align: center; }
-.activity-row { display: flex; align-items: center; gap: 3px; }
-.activity-day-label { width: 20px; font-size: 9px; color: var(--muted); text-align: right; flex-shrink: 0; }
-.activity-cells { display: flex; gap: 3px; flex: 1; }
-.cell {
-  width: 12px; height: 12px; border-radius: 2px;
-  background: var(--border); flex-shrink: 0; cursor: pointer;
-  transition: transform 0.1s;
-}
-.cell:hover { transform: scale(1.3); }
-.cell.l1 { background: rgba(200,240,96,0.2); }
-.cell.l2 { background: rgba(200,240,96,0.45); }
-.cell.l3 { background: rgba(200,240,96,0.7); }
-.cell.l4 { background: var(--accent); }
-.activity-legend { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 10px; color: var(--muted); justify-content: flex-end; }
-.legend-cell { width: 10px; height: 10px; border-radius: 2px; }
-
-/* SCORE HISTORY */
-.score-history { display: flex; flex-direction: column; gap: 1px; }
-.sh-row {
-  display: grid; grid-template-columns: 1fr 80px 80px 80px;
-  gap: 10px; align-items: center; padding: 11px 14px;
-  border-bottom: 1px solid var(--border); font-size: 12px;
-  cursor: pointer; transition: background 0.12s; text-decoration: none; color: var(--text);
-}
-.sh-row:hover { background: rgba(255,255,255,0.02); }
-.sh-row:last-child { border-bottom: none; }
-.sh-name { color: var(--text); font-size: 12px; }
-.sh-desc { font-size: 10px; color: var(--muted); margin-top: 1px; }
-.sh-score { color: var(--accent); font-size: 13px; text-align: right; }
-.sh-val { color: var(--muted); font-size: 12px; text-align: right; }
-.sh-time { font-size: 10px; color: var(--muted); text-align: right; }
-.diff-badge { font-size: 9px; padding: 2px 6px; border-radius: 3px; letter-spacing: 0.04em; }
-.diff-easy { background: rgba(96,212,168,0.15); color: var(--success); }
-.diff-med { background: rgba(240,160,96,0.15); color: var(--warn); }
-.diff-hard { background: rgba(240,96,96,0.15); color: var(--danger); }
-
-/* SCORE BREAKDOWN BARS */
-.breakdown-list { display: flex; flex-direction: column; gap: 12px; }
-.breakdown-item { }
-.breakdown-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
-.breakdown-label { font-size: 12px; color: var(--text); }
-.breakdown-val { font-size: 12px; color: var(--accent); }
-.bar-track { height: 4px; background: var(--border); border-radius: 4px; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 4px; --w: 0%; animation: barGrow 1s ease forwards; width: var(--w); }
-.fill-a { background: var(--accent); }
-.fill-b { background: #60b8f0; }
-.fill-c { background: var(--warn); }
-.fill-d { background: var(--success); }
-
-/* BADGES */
-.badges-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.badge-item {
-  border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 12px 10px; text-align: center; background: #0c0c0b;
-  transition: border-color 0.15s;
-}
-.badge-item:hover { border-color: var(--border-light); }
-.badge-item.earned { border-color: rgba(200,240,96,0.25); background: rgba(200,240,96,0.03); }
-.badge-icon { font-size: 20px; margin-bottom: 5px; }
-.badge-name { font-size: 10px; color: var(--text); margin-bottom: 2px; }
-.badge-desc { font-size: 9px; color: var(--muted); line-height: 1.4; }
-.badge-item:not(.earned) { opacity: 0.35; }
-
-/* RIGHT COLUMN */
-.right-col { display: flex; flex-direction: column; gap: 16px; }
-
-/* SOLVED LIST */
-.solved-list { display: flex; flex-direction: column; gap: 1px; }
-.solved-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 14px; border-bottom: 1px solid var(--border);
-  font-size: 12px; transition: background 0.12s; cursor: pointer;
-  text-decoration: none; color: var(--text);
-}
-.solved-item:hover { background: rgba(255,255,255,0.02); }
-.solved-item:last-child { border-bottom: none; }
-.solved-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
-.solved-name { flex: 1; }
-.solved-score { font-size: 12px; color: var(--accent); }
-
-/* RANK HISTORY sparkline */
-.sparkline-wrap { padding: 8px 0; }
-.sparkline { display: flex; align-items: flex-end; gap: 3px; height: 48px; }
-.spark-bar { flex: 1; border-radius: 2px 2px 0 0; background: var(--border-light); transition: background 0.2s; position: relative; }
-.spark-bar:hover { background: var(--accent); }
-.spark-bar.current { background: var(--accent); }
-.spark-label { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 5px; }
-
-/* COMPARE */
-.compare-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 11.5px; }
-.compare-row:last-child { border-bottom: none; }
-.cr-label { color: var(--muted); }
-.cr-you { color: var(--accent); }
-.cr-avg { color: var(--muted); }
-
+@media (max-width: 1080px) { .stat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 960px) {
-  nav { padding: 0 16px; }
-  .nav-links { display: none; }
-  .page { padding: calc(var(--nav-h) + 24px) 16px 40px; }
-  .profile-header,
-  .main-grid { grid-template-columns: 1fr; }
+  .profile-header, .main-grid { grid-template-columns: 1fr; }
   .profile-stats { align-items: flex-start; }
-  .stats-row { grid-template-columns: repeat(2, 1fr); }
-  .card-body { overflow-x: auto; }
-  .score-history,
-  .activity-grid { min-width: 560px; }
+  .rank-display { text-align: left; }
 }
-
-@media (max-width: 640px) {
-  .stats-row,
-  .badges-grid { grid-template-columns: 1fr; }
-}
-
-/* Mobile hamburger */
-.hamburger { display: none; background: none; border: 1px solid var(--border); cursor: pointer; padding: 5px 8px; border-radius: var(--radius); color: var(--text); font-size: 16px; line-height: 1; }
-@media (max-width: 960px) {
-  .hamburger { display: flex; align-items: center; }
-  .nav-links.mobile-open { display: flex !important; flex-direction: column; position: absolute; top: var(--nav-h); left: 0; right: 0; background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 16px; gap: 4px; z-index: 200; }
-  .nav-links.mobile-open a { padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 13px; }
-  .nav-links.mobile-open a:last-child { border-bottom: none; }
-}
+@media (max-width: 640px) { .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>
 </head>
-<body>
+<body class="pc-public">
+<a class="pc-skip" href="#main">Skip to content</a>
+<header data-pc-header></header>
 
-<nav>
-  <a class="nav-logo" href="/index.html"><div class="dot"></div>PromptCode</a>
-  <div class="nav-links">
-    <a href="/challenges.html">challenges</a>
-    <a href="/leaderboard.html">leaderboard</a>
-  </div>
-  <div class="nav-right">
-    <a class="btn btn-ghost" href="/challenges.html">← challenges</a>
-    <button type="button" id="navLogoutLink" style="width:28px;height:28px;padding:0;border-radius:5px;background:var(--accent-dim);border:1px solid rgba(200,240,96,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:none" title="sign out" data-user-initials></button>
-  </div>
-  <button class="hamburger" aria-label="Toggle navigation">&#9776;</button>
-</nav>
-
-<div class="page">
-
-  <!-- PROFILE HEADER -->
-  <div class="profile-header fade-in">
+<main class="page" id="main">
+  <section class="profile-header" aria-label="Profile">
     <div class="avatar-wrap">
-      <div class="avatar-lg" id="profileAvatar">—</div>
-      <div class="online-dot"></div>
+      <div class="avatar-lg" id="profileAvatar" aria-hidden="true">—</div>
+      <div class="online-dot" aria-hidden="true"></div>
     </div>
     <div class="profile-info">
-      <div class="profile-handle" id="profileHandle">—</div>
-      <div class="profile-name" id="profileName">loading...</div>
-      <div class="profile-bio" id="profileBio"></div>
+      <h1 class="profile-handle" id="profileHandle">—</h1>
+      <div class="profile-name" id="profileName">Loading…</div>
+      <p class="profile-bio" id="profileBio"></p>
       <div class="profile-tags" id="profileTags"></div>
     </div>
     <div class="profile-stats">
       <div class="rank-display">
         <div class="rank-num" id="profileRank">—</div>
-        <div class="rank-label">global rank</div>
-        <div class="rank-sub" id="profileRankSub">not yet ranked</div>
+        <div class="rank-label">Global rank</div>
+        <div class="rank-sub" id="profileRankSub">Not yet ranked</div>
       </div>
-      <button type="button" class="btn btn-ghost" id="editProfileBtn" style="display:none">edit profile</button>
-      <button type="button" class="btn btn-ghost" id="signOutBtn" style="display:none;border-color:rgba(240,96,96,0.3);color:var(--danger)">sign out</button>
+      <div class="profile-actions">
+        <button type="button" class="btn btn-secondary btn-sm" id="editProfileBtn" style="display:none">Edit profile</button>
+        <button type="button" class="btn btn-danger btn-sm" id="signOutBtn" style="display:none">Sign out</button>
+      </div>
     </div>
-  </div>
+  </section>
 
-  <!-- STATS ROW -->
-  <div class="stats-row fade-in d1">
-    <div class="stat-card">
-      <div class="stat-val" id="statAvgScore">—</div>
-      <div class="stat-lbl">avg score</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val" id="statSolved">—</div>
-      <div class="stat-lbl" id="statSolvedLbl">solved</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val" id="statSubmissions">—</div>
-      <div class="stat-lbl">submissions</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val" id="statGrowth">—</div>
-      <div class="stat-lbl">avg growth score</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val" id="statCost">—</div>
-      <div class="stat-lbl">total sdk cost</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val" id="statLatency">—</div>
-      <div class="stat-lbl">avg latency ms</div>
-    </div>
+  <div class="stat-grid" data-stagger>
+    <div class="stat"><div class="n" id="statAvgScore">—</div><div class="l">Avg score</div></div>
+    <div class="stat"><div class="n" id="statSolved">—</div><div class="l" id="statSolvedLbl">Solved</div></div>
+    <div class="stat"><div class="n" id="statSubmissions">—</div><div class="l">Submissions</div></div>
+    <div class="stat"><div class="n" id="statGrowth">—</div><div class="l">Avg growth score</div></div>
+    <div class="stat"><div class="n" id="statCost">—</div><div class="l">Total SDK cost</div></div>
+    <div class="stat"><div class="n" id="statLatency">—</div><div class="l">Avg latency (ms)</div></div>
   </div>
 
   <div class="main-grid">
     <div class="left-col">
-
-      <!-- ACTIVITY -->
-      <div class="card fade-in d2">
-        <div class="card-header">
-          <span class="card-title">submission activity</span>
-        </div>
-        <div class="card-body" style="padding:28px 16px;text-align:center">
-          <span style="font-size:12px;color:var(--muted)">activity tracking coming soon</span>
-        </div>
-      </div>
-
-      <!-- SCORE HISTORY -->
-      <div class="card fade-in d3">
-        <div class="card-header">
-          <span class="card-title">submission history</span>
-          <div style="display:flex;gap:6px">
-            <button class="btn btn-ghost" style="padding:3px 10px;font-size:10px" id="filterAll">all</button>
-            <button class="btn btn-ghost" style="padding:3px 10px;font-size:10px" id="filterSolved">solved</button>
+      <section class="pc-panel">
+        <div class="pc-panel-head">
+          <h2>Submission history</h2>
+          <div class="pc-segmented" role="group" aria-label="Filter submissions">
+            <button type="button" id="filterAll" class="is-active" aria-pressed="true">All</button>
+            <button type="button" id="filterSolved" aria-pressed="false">Solved</button>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 70px 70px 80px 70px;gap:10px;padding:7px 14px;font-size:10px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;border-bottom:1px solid var(--border)">
-          <span>challenge</span><span style="text-align:right">score</span><span style="text-align:right">growth</span><span style="text-align:right">cost</span><span style="text-align:right">when</span>
+        <div class="pc-table-wrap">
+          <table class="pc-table history-table">
+            <thead>
+              <tr>
+                <th scope="col">Challenge</th>
+                <th scope="col" class="num">Score</th>
+                <th scope="col" class="num">Growth</th>
+                <th scope="col" class="num">Cost</th>
+                <th scope="col" class="num">When</th>
+              </tr>
+            </thead>
+            <tbody id="historyList" data-stagger>
+              <tr><td colspan="5" id="historyLoading"></td></tr>
+            </tbody>
+          </table>
         </div>
-        <div class="score-history" id="historyList">
-          <div style="padding:24px 14px;text-align:center;font-size:12px;color:var(--muted)">loading submissions...</div>
-        </div>
-      </div>
+      </section>
 
-      <!-- SCORE BREAKDOWN -->
-      <div class="card fade-in d4">
-        <div class="card-header"><span class="card-title">avg score breakdown</span></div>
-        <div class="card-body">
+      <section class="pc-panel">
+        <div class="pc-panel-head"><h2>Avg score breakdown</h2></div>
+        <div class="pc-panel-body">
           <div class="breakdown-list" id="breakdownList">
             <div class="breakdown-item">
-              <div class="breakdown-top"><span class="breakdown-label">accuracy</span><span class="breakdown-val" id="bdAccuracy">—</span></div>
-              <div class="bar-track"><div class="bar-fill fill-a" id="bdAccuracyBar" style="--w:0%"></div></div>
+              <div class="breakdown-top"><span class="breakdown-label">Accuracy</span><span class="breakdown-val" id="bdAccuracy">—</span></div>
+              <div class="pc-bar" role="progressbar" aria-label="Accuracy" aria-valuemin="0" aria-valuemax="100"><div class="pc-bar-fill" id="bdAccuracyBar"></div></div>
             </div>
             <div class="breakdown-item">
-              <div class="breakdown-top"><span class="breakdown-label">reliability</span><span class="breakdown-val" id="bdReliability">—</span></div>
-              <div class="bar-track"><div class="bar-fill fill-d" id="bdReliabilityBar" style="--w:0%"></div></div>
+              <div class="breakdown-top"><span class="breakdown-label">Reliability</span><span class="breakdown-val" id="bdReliability">—</span></div>
+              <div class="pc-bar" role="progressbar" aria-label="Reliability" aria-valuemin="0" aria-valuemax="100"><div class="pc-bar-fill" id="bdReliabilityBar"></div></div>
             </div>
             <div class="breakdown-item">
-              <div class="breakdown-top"><span class="breakdown-label">efficiency</span><span class="breakdown-val" id="bdEfficiency">—</span></div>
-              <div class="bar-track"><div class="bar-fill fill-c" id="bdEfficiencyBar" style="--w:0%"></div></div>
+              <div class="breakdown-top"><span class="breakdown-label">Efficiency</span><span class="breakdown-val" id="bdEfficiency">—</span></div>
+              <div class="pc-bar" role="progressbar" aria-label="Efficiency" aria-valuemin="0" aria-valuemax="100"><div class="pc-bar-fill" id="bdEfficiencyBar"></div></div>
             </div>
             <div class="breakdown-item">
-              <div class="breakdown-top"><span class="breakdown-label">orchestration</span><span class="breakdown-val" id="bdOrchestration">—</span></div>
-              <div class="bar-track"><div class="bar-fill" id="bdOrchestrationBar" style="--w:0%;background:var(--danger)"></div></div>
+              <div class="breakdown-top"><span class="breakdown-label">Orchestration</span><span class="breakdown-val" id="bdOrchestration">—</span></div>
+              <div class="pc-bar" role="progressbar" aria-label="Orchestration" aria-valuemin="0" aria-valuemax="100"><div class="pc-bar-fill" id="bdOrchestrationBar"></div></div>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
+      <section class="pc-panel">
+        <div class="pc-panel-head"><h2>Submission activity</h2></div>
+        <div class="pc-empty is-compact"><h3>Activity tracking coming soon</h3></div>
+      </section>
     </div>
 
-    <!-- RIGHT COLUMN -->
-    <div class="right-col">
-
-      <!-- BADGES -->
-      <div class="card fade-in d2">
-        <div class="card-header"><span class="card-title">badges</span></div>
-        <div class="card-body" style="padding:28px 16px;text-align:center">
-          <span style="font-size:12px;color:var(--muted)">badges coming soon</span>
-        </div>
-      </div>
-
-      <!-- SOLVED CHALLENGES -->
-      <div class="card fade-in d3">
-        <div class="card-header"><span class="card-title">solved challenges</span><span style="font-size:11px;color:var(--muted)" id="solvedCount"></span></div>
+    <aside class="right-col" aria-label="Profile details">
+      <section class="pc-panel">
+        <div class="pc-panel-head"><h2>Solved challenges</h2><span class="panel-meta" id="solvedCount"></span></div>
         <div class="solved-list" id="solvedList">
-          <div style="padding:18px 14px;text-align:center;font-size:12px;color:var(--muted)">loading...</div>
+          <div class="pc-panel-body"><span class="pc-skeleton pc-skeleton-text"></span><span class="pc-skeleton pc-skeleton-text" style="--w:70%"></span></div>
         </div>
-        <div style="padding:10px 14px;border-top:1px solid var(--border)">
-          <a href="/challenges.html" style="font-size:11px;color:var(--accent);text-decoration:none">browse all challenges →</a>
-        </div>
-      </div>
+        <div class="panel-foot"><a href="/challenges.html">Browse all challenges</a></div>
+      </section>
 
-      <!-- YOUR SCORES -->
-      <div class="card fade-in d4">
-        <div class="card-header"><span class="card-title">your scores</span></div>
-        <div class="card-body" style="padding:10px 14px" id="yourScoresBody">
-          <div class="compare-row"><span class="cr-label">overall</span><span class="cr-you" id="ysOverall">—</span></div>
-          <div class="compare-row"><span class="cr-label">accuracy</span><span class="cr-you" id="ysAccuracy">—</span></div>
-          <div class="compare-row"><span class="cr-label">efficiency</span><span class="cr-you" id="ysEfficiency">—</span></div>
-          <div class="compare-row"><span class="cr-label">reliability</span><span class="cr-you" id="ysReliability">—</span></div>
-          <div class="compare-row"><span class="cr-label">orchestration</span><span class="cr-you" id="ysOrchestration">—</span></div>
-          <div class="compare-row"><span class="cr-label">growth score</span><span class="cr-you" id="ysGrowth">—</span></div>
+      <section class="pc-panel">
+        <div class="pc-panel-head"><h2>Your scores</h2></div>
+        <div class="pc-panel-body" id="yourScoresBody">
+          <div class="compare-row"><span class="cr-label">Overall</span><span class="cr-you" id="ysOverall">—</span></div>
+          <div class="compare-row"><span class="cr-label">Accuracy</span><span class="cr-you" id="ysAccuracy">—</span></div>
+          <div class="compare-row"><span class="cr-label">Efficiency</span><span class="cr-you" id="ysEfficiency">—</span></div>
+          <div class="compare-row"><span class="cr-label">Reliability</span><span class="cr-you" id="ysReliability">—</span></div>
+          <div class="compare-row"><span class="cr-label">Orchestration</span><span class="cr-you" id="ysOrchestration">—</span></div>
+          <div class="compare-row"><span class="cr-label">Growth score</span><span class="cr-you" id="ysGrowth">—</span></div>
         </div>
-      </div>
+      </section>
 
-      <!-- RANK TREND -->
-      <div class="card fade-in d5">
-        <div class="card-header"><span class="card-title">rank trend</span></div>
-        <div class="card-body" style="padding:28px 16px;text-align:center">
-          <span style="font-size:12px;color:var(--muted)">rank history coming soon</span>
-        </div>
-      </div>
+      <section class="pc-panel">
+        <div class="pc-panel-head"><h2>Badges</h2></div>
+        <div class="pc-empty is-compact"><h3>Badges coming soon</h3></div>
+      </section>
 
-    </div>
+      <section class="pc-panel">
+        <div class="pc-panel-head"><h2>Rank trend</h2></div>
+        <div class="pc-empty is-compact"><h3>Rank history coming soon</h3></div>
+      </section>
+    </aside>
   </div>
-</div>
+</main>
 
+<footer data-pc-footer></footer>
+
+<script src="/static/site.js"></script>
 <script src="/static/api.js"></script>
+<script src="/static/js/pc-ui.js?v=20260930"></script>
 <script src="/static/profile.js"></script>
 </body>
 </html>

@@ -31,11 +31,14 @@ const PromptCodeAPI = {
 
     setAuth(token, user, refreshToken) {
         this._setAuthValue('pc_token', token);
+        this._setAuthValue('access_token', token);
         this._setAuthValue('pc_user', JSON.stringify(user));
         if (refreshToken) {
             this._setAuthValue('pc_refresh_token', refreshToken);
+            this._setAuthValue('refresh_token', refreshToken);
         } else {
             this._removeAuthValue('pc_refresh_token');
+            this._removeAuthValue('refresh_token');
         }
     },
 
@@ -56,7 +59,9 @@ const PromptCodeAPI = {
 
     clearAuth() {
         this._removeAuthValue('pc_token');
+        this._removeAuthValue('access_token');
         this._removeAuthValue('pc_refresh_token');
+        this._removeAuthValue('refresh_token');
         this._removeAuthValue('pc_user');
     },
 
@@ -356,7 +361,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const path = window.location.pathname;
     if (PromptCodeAPI.isLoggedIn()) {
         if (path === '/' || path === '/index.html' || path === '/login.html' || path === '/signup.html') {
-            window.location.href = '/challenges.html';
+            window.location.href = '/dashboard';
             return;
         }
     }
