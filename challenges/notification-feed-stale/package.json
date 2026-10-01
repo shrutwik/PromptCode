@@ -1,0 +1,21 @@
+{
+  "name": "notification-feed-stale",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "vitest": "1.6.0",
+    "@testing-library/react": "15.0.7",
+    "jsdom": "24.0.0",
+    "@vitejs/plugin-react": "4.2.1",
+    "typescript": "5.4.5",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0"
+  }
+}
