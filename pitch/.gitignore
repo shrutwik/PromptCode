@@ -1,0 +1,7 @@
+dist/
+.DS_Store
+
+.build/
+
+vercel-public/
+.vercel/

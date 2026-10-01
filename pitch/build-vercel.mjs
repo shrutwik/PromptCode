@@ -1,0 +1,11 @@
+import {mkdir,copyFile,writeFile,readFile} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+const root=path.dirname(fileURLToPath(import.meta.url));
+const output=path.join(root,'vercel-public');
+await mkdir(output,{recursive:true});
+for(const file of ['index.html','deck.css','deck.js','hero.css','hero.js','landing.html'])await copyFile(path.join(root,file),path.join(output,file));
+const html=await readFile(path.join(output,'index.html'),'utf8');
+await writeFile(path.join(output,'index.html'),html.replace(/, or <a href="presenter-notes.md">read the complete pitch and sources<\/a>/,''));
+await writeFile(path.join(output,'vercel.json'),JSON.stringify({version:2,framework:null,cleanUrls:false},null,2));
+console.log('Vercel site prepared: '+output);
