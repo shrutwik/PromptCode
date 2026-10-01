@@ -1,0 +1,192 @@
+/* PromptCode design tokens — Shiftora-like paper + ink editorial palette */
+:root {
+  /* Color — warm paper #EEECE5 / ink #11110F (sampled from shiftora.ai) */
+  --pc-ink: 17, 17, 15;
+  --pc-paper: 238, 236, 229;
+  --pc-bg: #eeece5;
+  --pc-bg-elevated: #e8e6de;
+  --pc-surface: #f4f2eb;
+  --pc-surface-2: #e4e1d8;
+  --pc-surface-3: #d8d4c9;
+  --pc-border: rgba(var(--pc-ink), 0.10);
+  --pc-border-strong: rgba(var(--pc-ink), 0.26);
+  --pc-border-focus: rgba(var(--pc-ink), 0.45);
+
+  --pc-text: #11110f;
+  --pc-text-secondary: #3a3a36;
+  --pc-muted: #6b6b65;
+  --pc-faint: #8a8a82;
+
+  /* Brand accent — ink, used like Shiftora's black CTAs */
+  --pc-accent: #11110f;
+  --pc-accent-hover: #2a2a26;
+  --pc-accent-dim: rgba(var(--pc-ink), 0.08);
+  --pc-accent-glow: rgba(var(--pc-ink), 0.12);
+  --pc-accent-ink: #eeece5;
+
+  --pc-hover: rgba(var(--pc-ink), 0.05);
+  --pc-hover-strong: rgba(var(--pc-ink), 0.08);
+  --pc-header-bg: rgba(var(--pc-paper), 0.88);
+  --pc-nav-bg: rgba(var(--pc-paper), 0.92);
+  --pc-overlay: rgba(var(--pc-ink), 0.45);
+
+  /* AI / info (cool blue) — distinct from brand accent */
+  --pc-ai: #2f5fbf;
+  --pc-ai-hover: #3d73d6;
+  --pc-ai-dim: rgba(47, 95, 191, 0.12);
+  --pc-info: var(--pc-ai);
+
+  /* Semantic — never reuse brand accent for test success */
+  --pc-success: #1b7f56;
+  --pc-success-dim: rgba(27, 127, 86, 0.12);
+  --pc-warn: #b56a12;
+  --pc-warn-dim: rgba(181, 106, 18, 0.12);
+  --pc-danger: #c2474f;
+  --pc-danger-dim: rgba(194, 71, 79, 0.12);
+
+  /* Timeline category tints */
+  --pc-phase-exploration: #8b919c;
+  --pc-phase-ai: var(--pc-ai);
+  --pc-phase-coding: var(--pc-accent);
+  --pc-phase-testing: var(--pc-success);
+  --pc-phase-recovery: var(--pc-warn);
+  --pc-phase-submission: #b4b9c4;
+
+  /* Provenance (diff) */
+  --pc-diff-add: rgba(62, 207, 142, 0.14);
+  --pc-diff-del: rgba(240, 113, 120, 0.14);
+  --pc-diff-ai: rgba(110, 168, 255, 0.16);
+  --pc-diff-human: rgba(232, 165, 75, 0.10);
+
+  /* Compat aliases used by interview pages */
+  --bg: var(--pc-bg);
+  --surface: var(--pc-surface);
+  --surface2: var(--pc-surface-2);
+  --border: rgba(var(--pc-ink), 0.12);
+  --border-light: rgba(var(--pc-ink), 0.20);
+  --text: var(--pc-text);
+  --muted: var(--pc-muted);
+  --accent: var(--pc-accent);
+  --accent-dim: var(--pc-accent-dim);
+  --warn: var(--pc-warn);
+  --danger: var(--pc-danger);
+  --success: var(--pc-success);
+
+  /* Spacing scale (4px base) */
+  --pc-space-1: 4px;
+  --pc-space-2: 8px;
+  --pc-space-3: 12px;
+  --pc-space-4: 16px;
+  --pc-space-5: 20px;
+  --pc-space-6: 24px;
+  --pc-space-8: 32px;
+  --pc-space-10: 40px;
+  --pc-space-12: 48px;
+  --pc-space-16: 64px;
+
+  /* Radii — product 6–10px; IDE tighter */
+  --pc-radius-xs: 4px;
+  --pc-radius-sm: 6px;
+  --pc-radius-md: 8px;
+  --pc-radius-lg: 10px;
+  --pc-radius-pill: 999px;
+  --pc-radius-ide: 4px;
+  --radius: var(--pc-radius-sm);
+
+  /* Shadows + craft glows (product: restrained; landing may amplify) */
+  --pc-shadow-sm: 0 1px 2px rgba(var(--pc-ink), 0.06);
+  --pc-shadow-md: 0 8px 24px rgba(var(--pc-ink), 0.08);
+  --pc-shadow-lg: 0 24px 48px rgba(var(--pc-ink), 0.10);
+  --pc-shadow-panel: 0 0 0 1px var(--pc-border), var(--pc-shadow-md);
+  --pc-glow-accent: 0 0 0 1px rgba(var(--pc-ink), 0.18);
+  --pc-glow-accent-strong: 0 0 0 1px rgba(var(--pc-ink), 0.28), 0 8px 28px rgba(var(--pc-ink), 0.08);
+  --pc-glow-focus: 0 0 0 3px rgba(var(--pc-ink), 0.16);
+  --pc-surface-highlight: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, transparent 48%);
+  --pc-ring: 2px;
+  --pc-ring-offset: 2px;
+
+  /* Typography */
+  --pc-font-sans: "IBM Plex Sans", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --pc-font-mono: "IBM Plex Mono", "DM Mono", ui-monospace, monospace;
+  --pc-font-display: "IBM Plex Sans", var(--pc-font-sans);
+
+  /* Product type: page 24–30 · section 16–20 · body 14–15 · meta 12–13 · code 13–14 */
+  --pc-text-hero: clamp(2.4rem, 5vw, 3.75rem);
+  --pc-text-h1: 1.625rem;   /* ~26px page title */
+  --pc-text-h2: 1.125rem;   /* ~18px section */
+  --pc-text-h3: 1rem;       /* ~16px */
+  --pc-text-body: 0.9375rem; /* 15px */
+  --pc-text-sm: 0.8125rem;   /* 13px meta */
+  --pc-text-xs: 0.75rem;     /* 12px */
+  --pc-text-code: 0.8125rem; /* 13px */
+
+  --pc-leading-tight: 1.2;
+  --pc-leading-snug: 1.4;
+  --pc-leading-normal: 1.55;
+  --pc-tracking-tight: -0.03em;
+  --pc-tracking-wide: 0.04em;
+
+  /* Motion — product 120–280ms, workspace ≤180ms, landing may use --pc-dur-express / --pc-dur-cinematic */
+  --pc-ease-out: cubic-bezier(0.16, 1, 0.3, 1);      /* enter, reveal, indicator */
+  --pc-ease-in: cubic-bezier(0.4, 0, 1, 1);          /* exit */
+  --pc-ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);  /* state change */
+  --pc-ease-soft: cubic-bezier(0.22, 1, 0.36, 1);    /* bar fills */
+  --pc-ease-press: cubic-bezier(0.3, 0, 0.5, 1);     /* hover/press */
+  --pc-dur-instant: 80ms;
+  --pc-dur-fast: 120ms;     /* hover, press, row highlight */
+  --pc-dur-normal: 180ms;   /* menus, toasts, tab indicator */
+  --pc-dur-slow: 240ms;     /* modal/drawer, row reveal */
+  --pc-dur-page: 280ms;     /* page enter */
+  --pc-dur-fill: 720ms;     /* score / progress bar fill */
+  --pc-dur-express: 520ms;  /* landing */
+  --pc-dur-cinematic: 900ms;
+  --pc-enter-y: 6px;
+  --pc-stagger: 35ms;
+  --pc-stagger-small: 40ms;
+  --pc-spring-soft: 1 180 28;
+  --pc-spring-snappy: 1 280 32;
+  --pc-spring-panel: 1 220 36;
+
+  /* Z-index */
+  --pc-z-base: 1;
+  --pc-z-sticky: 20;
+  --pc-z-dropdown: 40;
+  --pc-z-modal: 50;
+  --pc-z-toast: 60;
+  --pc-z-palette: 70;
+
+  /* Panels — density targets: explorer 220–260, AI 300–380, terminal 180–240 */
+  --pc-nav-h: 44px;
+  --pc-explorer-w: 240px;
+  --pc-ai-w: 340px;
+  --pc-term-h: 200px;
+  --pc-panel-min-explorer: 200px;
+  --pc-panel-max-explorer: 280px;
+  --pc-panel-min-ai: 280px;
+  --pc-panel-max-ai: 400px;
+  --pc-panel-min-term: 160px;
+  --pc-panel-max-term: 280px;
+  --nav-h: var(--pc-nav-h);
+  --pc-header-h: 56px;
+
+  /* Legacy aliases (landing, auth, prompt-challenge pages) — map onto the single palette */
+  --ai: var(--pc-ai);
+  --font-sans: var(--pc-font-sans);
+  --font-mono: var(--pc-font-mono);
+  --font-display: var(--pc-font-display);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --pc-dur-instant: 1ms;
+    --pc-dur-fast: 1ms;
+    --pc-dur-normal: 1ms;
+    --pc-dur-slow: 1ms;
+    --pc-dur-page: 1ms;
+    --pc-dur-fill: 1ms;
+    --pc-dur-express: 1ms;
+    --pc-dur-cinematic: 1ms;
+    --pc-enter-y: 0px;
+    --pc-stagger: 0ms;
+  }
+}

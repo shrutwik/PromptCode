@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Challenges — PromptCode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&display=swap">
+<link rel="stylesheet" href="/static/css/pc-tokens.css?v=20260930">
+<link rel="stylesheet" href="/static/css/pc-components.css?v=20260930">
+<link rel="stylesheet" href="/static/interview.css?v=20260930">
+</head>
+<body>
+<a class="pc-skip" href="#main">Skip to content</a>
+<nav class="nav" aria-label="App"><a class="nav-brand" href="/dashboard">PromptCode</a></nav>
+<main class="page" id="main">
+  <header class="page-head">
+    <div>
+      <h1 class="page-title">Challenges</h1>
+      <p class="page-lead">Production-style bugs and features, 25–35 minutes each. AI is allowed — your judgment is scored.</p>
+    </div>
+  </header>
+  <p class="lib-hint" id="authHint"></p>
+  <div class="filters" role="search" aria-label="Filter challenges">
+    <input class="filter-search" id="searchFilter" type="search" placeholder="Search challenges…" aria-label="Search challenges" />
+    <select id="diffFilter" aria-label="Difficulty"><option value="">All difficulties</option></select>
+    <select id="typeFilter" aria-label="Domain"><option value="">All domains</option></select>
+    <select id="stackFilter" aria-label="Stack"><option value="">All stacks</option></select>
+    <select id="statusFilter" aria-label="Status">
+      <option value="">Any status</option>
+      <option value="not_started">Not started</option>
+      <option value="in_progress">In progress</option>
+      <option value="completed">Completed</option>
+    </select>
+    <span class="lib-count" id="libCount" aria-live="polite"></span>
+  </div>
+  <div class="pc-table-wrap" id="tableWrap"><div class="pc-skel" id="tableSkel"></div></div>
+</main>
+<script src="/static/interview-api.js"></script>
+<script src="/static/js/pc-ui.js?v=20261001j"></script>
+<script src="/static/js/pages/interview-challenges.js?v=20261001j"></script>
+</body>
+</html>

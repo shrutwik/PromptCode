@@ -1,0 +1,13 @@
+{
+  "name": "catalog-suggest-latency",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "1.6.0",
+    "typescript": "5.4.5",
+    "@types/node": "20.12.7"
+  }
+}

@@ -16,13 +16,14 @@ from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
     PlainTextResponse,
+    RedirectResponse,
 )
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api.routes import auth, challenges, chat, leaderboard, submissions, users
+from app.api.routes import auth, challenges, chat, interview, leaderboard, submissions, users
 from app.core.config import get_settings
 from app.core.logging import configure_logging, reset_request_id, set_request_id
 from app.core.metrics import (
@@ -35,6 +36,15 @@ from app.db.session import engine
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 logger = logging.getLogger(__name__)
 access_logger = logging.getLogger("app.access")
+
+
+def runner_mode_safe() -> str:
+    try:
+        from app.services.interview.runner import runner_mode
+
+        return runner_mode()
+    except Exception:
+        return "unknown"
 _INLINE_SCRIPT_RE = re.compile(
     r"<script(?P<attrs>[^>]*)>(?P<body>.*?)</script>",
     re.IGNORECASE | re.DOTALL,
@@ -66,16 +76,22 @@ def _frontend_inline_script_hashes() -> tuple[str, ...]:
 
 
 def _content_security_policy() -> str:
-    script_sources = ["'self'", "https://esm.sh", *_frontend_inline_script_hashes()]
+    script_sources = [
+        "'self'",
+        "https://esm.sh",
+        "https://cdn.jsdelivr.net",
+        *_frontend_inline_script_hashes(),
+    ]
     return "; ".join(
         [
             "default-src 'self'",
             f"script-src {' '.join(script_sources)}",
             "script-src-attr 'none'",
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
             "font-src 'self' https://fonts.gstatic.com",
             "img-src 'self' data:",
-            "connect-src 'self'",
+            "connect-src 'self' https://esm.sh https://cdn.jsdelivr.net",
+            "worker-src 'self' blob: https://cdn.jsdelivr.net",
             "object-src 'none'",
             "base-uri 'self'",
             "frame-ancestors 'none'",
@@ -204,7 +220,7 @@ def create_app() -> FastAPI:
         allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-Session-Token", "X-Request-ID"],
     )
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(AccessLogMiddleware)
@@ -215,10 +231,35 @@ def create_app() -> FastAPI:
     app.include_router(submissions.router, prefix="/api/submissions", tags=["submissions"])
     app.include_router(leaderboard.router, prefix="/api/leaderboard", tags=["leaderboard"])
     app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+    app.include_router(interview.router, prefix="/api/interview", tags=["interview"])
 
     @app.get("/health")
     async def health():
         return {"status": "ok"}
+
+    @app.get("/health/ready")
+    async def health_ready():
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+        except Exception:
+            return JSONResponse(
+                status_code=503,
+                content={"status": "error", "detail": "database unavailable"},
+            )
+        try:
+            mode = runner_mode_safe()
+        except Exception:
+            return JSONResponse(
+                status_code=503,
+                content={"status": "error", "detail": "runner config unavailable"},
+            )
+        if not await _sandbox_executor_ready(settings):
+            return JSONResponse(
+                status_code=503,
+                content={"status": "error", "detail": "sandbox executor unavailable"},
+            )
+        return {"status": "ok", "runner": mode}
 
     @app.get("/ready")
     async def ready():
@@ -251,6 +292,55 @@ def create_app() -> FastAPI:
         @app.get("/", response_class=HTMLResponse)
         async def serve_index():
             return FileResponse(FRONTEND_DIR / "index.html")
+
+        @app.get("/challenges", response_class=HTMLResponse)
+        async def serve_interview_challenges():
+            return FileResponse(FRONTEND_DIR / "interview-challenges.html")
+
+        @app.get("/challenges/{slug}", response_class=HTMLResponse)
+        async def serve_interview_challenge_detail(slug: str):
+            return FileResponse(FRONTEND_DIR / "interview-challenge.html")
+
+        @app.get("/session/{session_id}", response_class=HTMLResponse)
+        async def serve_interview_session(session_id: str):
+            return FileResponse(FRONTEND_DIR / "interview-session.html")
+
+        @app.get("/session/{session_id}/report", response_class=HTMLResponse)
+        async def serve_interview_report(session_id: str):
+            return FileResponse(FRONTEND_DIR / "interview-report.html")
+
+        @app.get("/dashboard", response_class=HTMLResponse)
+        async def serve_interview_dashboard():
+            return FileResponse(FRONTEND_DIR / "interview-dashboard.html")
+
+        @app.get("/onboarding.html", response_class=HTMLResponse)
+        @app.get("/onboarding", response_class=HTMLResponse)
+        async def serve_onboarding():
+            return FileResponse(FRONTEND_DIR / "interview-onboarding.html")
+
+        @app.get("/privacy.html", response_class=HTMLResponse)
+        @app.get("/privacy", response_class=HTMLResponse)
+        async def serve_privacy():
+            return FileResponse(FRONTEND_DIR / "interview-privacy.html")
+
+        @app.get("/settings.html", response_class=HTMLResponse)
+        @app.get("/settings", response_class=HTMLResponse)
+        async def serve_settings():
+            return FileResponse(FRONTEND_DIR / "interview-settings.html")
+
+        @app.get("/login", include_in_schema=False)
+        async def redirect_login(request: Request):
+            query = f"?{request.url.query}" if request.url.query else ""
+            return RedirectResponse(url=f"/login.html{query}", status_code=307)
+
+        @app.get("/signup", include_in_schema=False)
+        async def redirect_signup(request: Request):
+            query = f"?{request.url.query}" if request.url.query else ""
+            return RedirectResponse(url=f"/signup.html{query}", status_code=307)
+
+        @app.get("/practice", include_in_schema=False)
+        async def redirect_practice():
+            return RedirectResponse(url="/dashboard", status_code=307)
 
         @app.get("/{page}.html", response_class=HTMLResponse)
         async def serve_page(page: str):

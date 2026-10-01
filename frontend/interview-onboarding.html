@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Welcome — PromptCode Beta</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&display=swap">
+  <link rel="stylesheet" href="/static/css/pc-tokens.css?v=20260930">
+  <link rel="stylesheet" href="/static/css/pc-components.css?v=20260930">
+  <style>
+    .ob { padding-top: 56px; }
+    .ob-card { padding: 32px; }
+    .ob-card .pc-eyebrow { margin-bottom: 14px; }
+    .ob-card h1 { font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: var(--pc-tracking-tight); margin-bottom: 14px; }
+    .ob-card > p:not(.pc-eyebrow) { color: var(--pc-text-secondary); line-height: 1.7; }
+    .ob-track { list-style: none; padding: 0; margin: 24px 0; display: grid; gap: 8px; }
+    .ob-track li { display: flex; gap: 12px; align-items: center; padding: 10px 14px; background: var(--pc-bg-elevated); border: 1px solid var(--pc-border); border-radius: var(--pc-radius-md); font-size: var(--pc-text-sm); color: var(--pc-text); }
+    .ob-track li span { font-family: var(--pc-font-mono); font-size: var(--pc-text-xs); color: var(--pc-faint); }
+    .ob-note { font-size: var(--pc-text-sm); color: var(--pc-muted) !important; }
+    .ob-cta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--pc-border); }
+    .ob-cta .btn[hidden] { display: none; }
+    @media (max-width: 640px) {
+      .ob { padding-top: 24px; }
+      .ob-card { padding: 22px 18px; }
+      .ob-cta .btn { width: 100%; }
+    }
+  </style>
+</head>
+<body class="pc-public">
+  <a class="pc-skip" href="#main">Skip to content</a>
+  <header data-pc-header></header>
+
+  <main class="pc-main" id="main">
+    <div class="pc-container pc-container-narrow ob">
+      <section class="pc-panel ob-card">
+        <p class="pc-eyebrow">Private beta · Practice interview</p>
+        <h1>Practice engineering interviews with AI in the loop</h1>
+        <p>
+          You get a realistic codebase bug or feature task, an editor, tests, and an AI assistant.
+          We score how you investigate, verify, and use AI — not just whether the tests pass.
+          This is practice — not a hiring decision, ranking, or Meta/FAANG outcome claim.
+        </p>
+        <ul class="ob-track" data-stagger>
+          <li><span>01</span>Exploration and hypothesis quality</li>
+          <li><span>02</span>Verification before and after changes</li>
+          <li><span>03</span>AI leverage with judgment (not blind paste)</li>
+          <li><span>04</span>Final correctness against visible tests</li>
+        </ul>
+        <p class="ob-note">
+          We do not reveal hidden tests, scoring exploits, or solution files. See
+          <a href="/privacy.html">what we store</a>.
+        </p>
+        <div class="ob-cta">
+          <a class="btn btn-primary btn-lg" id="start" href="/challenges">Start recommended challenge</a>
+          <a class="btn btn-secondary btn-lg" id="obSignIn" href="/login.html">Sign in</a>
+          <a class="btn btn-ghost btn-lg" id="obJoin" href="/signup.html">Join with invite</a>
+          <a class="btn btn-secondary btn-lg" id="obBrowse" href="/challenges" hidden>Browse all challenges</a>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer data-pc-footer></footer>
+
+  <script src="/static/interview-api.js"></script>
+  <script src="/static/js/pc-ui.js?v=20261001j"></script>
+  <script src="/static/js/pages/interview-onboarding.js?v=20260930"></script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy — PromptCode Beta</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&display=swap">
+  <link rel="stylesheet" href="/static/css/pc-tokens.css?v=20260930">
+  <link rel="stylesheet" href="/static/css/pc-components.css?v=20260930">
+  <style>
+    .prose { padding-top: 56px; }
+    .prose h1 { font-size: var(--pc-text-h1); letter-spacing: var(--pc-tracking-tight); margin: 12px 0 10px; }
+    .prose .page-lead { margin-bottom: var(--pc-space-8); }
+    .prose h2 { font-size: var(--pc-text-h2); margin: var(--pc-space-8) 0 var(--pc-space-3); }
+    .prose ul { padding-left: 1.2em; display: grid; gap: 8px; color: var(--pc-text-secondary); line-height: 1.7; }
+    .prose li::marker { color: var(--pc-faint); }
+    .prose-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: var(--pc-space-10); padding-top: var(--pc-space-6); border-top: 1px solid var(--pc-border); }
+    @media (max-width: 640px) { .prose { padding-top: 24px; } }
+  </style>
+</head>
+<body class="pc-public">
+  <a class="pc-skip" href="#main">Skip to content</a>
+  <header data-pc-header></header>
+
+  <main class="pc-main" id="main">
+    <article class="pc-container pc-container-narrow prose">
+      <p class="pc-eyebrow">Private beta</p>
+      <h1>Privacy notice (beta)</h1>
+      <p class="page-lead">This is an operational notice for the private beta — not a legal compliance certification.</p>
+      <h2>What we store</h2>
+      <ul>
+        <li>Account email, username, display name, password hash</li>
+        <li>Interview session metadata, code snapshots, events, AI prompts/replies used in-session</li>
+        <li>Test output summaries, scores, defend answers, optional post-challenge feedback</li>
+      </ul>
+      <h2>What we do not do</h2>
+      <ul>
+        <li>We do not sell your data</li>
+        <li>We do not claim SOC2/GDPR certification in this beta</li>
+        <li>Temporary Docker containers and workspace copies are short-lived; history in the DB is retained for product improvement unless you request deletion</li>
+      </ul>
+      <div class="prose-links">
+        <a class="btn btn-secondary" href="/settings.html">Settings</a>
+        <a class="btn btn-ghost" href="/onboarding.html">Onboarding</a>
+      </div>
+    </article>
+  </main>
+
+  <footer data-pc-footer></footer>
+
+  <script src="/static/js/pc-ui.js?v=20260930"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+# Interview Node/TS runner — deps tooling preinstalled; no network during candidate runs.
+# Build: docker build -f docker/Dockerfile.interview-node -t promptcode-runner-node:latest .
+FROM node:20.19-bookworm-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/* \
+  && npm install -g npm@10 \
+  && useradd -m -u 10001 runner
+
+ENV npm_config_update_notifier=false \
+    npm_config_fund=false \
+    npm_config_audit=false \
+    HOME=/tmp \
+    npm_config_cache=/tmp/npm-cache
+
+WORKDIR /workspace
+USER runner
+
+# Default entry is overridden by IsolatedRunner (allowlisted argv only).
+CMD ["node", "-e", "process.exit(1)"]

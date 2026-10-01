@@ -1,6 +1,14 @@
 from app.models.auth_rate_limit import AuthRateLimitEvent
+from app.models.beta_ops import HumanReview, InviteCode, ProductAnalyticsEvent
 from app.models.challenge import Challenge
 from app.models.evaluation_job import EvaluationJob
+from app.models.interview_session import (
+    InterviewAIMessage,
+    InterviewEvaluation,
+    InterviewSession,
+    InterviewSessionEvent,
+    InterviewSessionFile,
+)
 from app.models.leaderboard import LeaderboardEntry
 from app.models.revoked_token import RevokedToken
 from app.models.run import Run
@@ -12,7 +20,15 @@ __all__ = [
     "AuthRateLimitEvent",
     "Challenge",
     "EvaluationJob",
+    "HumanReview",
+    "InterviewAIMessage",
+    "InterviewEvaluation",
+    "InterviewSession",
+    "InterviewSessionEvent",
+    "InterviewSessionFile",
+    "InviteCode",
     "LeaderboardEntry",
+    "ProductAnalyticsEvent",
     "RevokedToken",
     "Run",
     "Submission",

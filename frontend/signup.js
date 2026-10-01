@@ -1,43 +1,66 @@
 // signup.js — externalized from signup.html inline script
 'use strict';
 
-if (PromptCodeAPI.isLoggedIn()) window.location.href = '/challenges.html';
+if (PromptCodeAPI.isLoggedIn()) window.location.href = '/dashboard';
+
+const USERNAME_RULE = 'Username must be 3-64 chars: letters, numbers, _ or -';
 
 function usernameValid(value) {
   return /^[A-Za-z0-9](?:[A-Za-z0-9_-]{1,62}[A-Za-z0-9])$/.test(value);
 }
 
+function emailValid(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 function passwordValidationError(value) {
-  if (!value) return 'password is required';
-  if (value.length < 12) return 'password must be at least 12 characters';
-  if (!/[a-z]/.test(value)) return 'password must include a lowercase letter';
-  if (!/[A-Z]/.test(value)) return 'password must include an uppercase letter';
-  if (!/[0-9]/.test(value)) return 'password must include a number';
-  if (!/[^A-Za-z0-9]/.test(value)) return 'password must include a symbol';
-  if ((new TextEncoder().encode(value)).length > 72) return 'password is too long';
+  if (!value) return 'Password is required';
+  if (value.length < 12) return 'Password must be at least 12 characters';
+  if (!/[a-z]/.test(value)) return 'Password must include a lowercase letter';
+  if (!/[A-Z]/.test(value)) return 'Password must include an uppercase letter';
+  if (!/[0-9]/.test(value)) return 'Password must include a number';
+  if (!/[^A-Za-z0-9]/.test(value)) return 'Password must include a symbol';
+  if ((new TextEncoder().encode(value)).length > 72) return 'Password is too long';
   return '';
 }
 
+function setFieldError(id, message) {
+  const input = document.getElementById(id);
+  const err = document.getElementById(id + 'Error');
+  input.setAttribute('aria-invalid', message ? 'true' : 'false');
+  if (message) input.removeAttribute('data-valid');
+  if (err) err.textContent = message || '';
+}
+
+function showFormError(message) {
+  const alert = document.getElementById('signupError');
+  alert.textContent = message;
+  alert.hidden = !message;
+}
+
+function markLive(input, valid) {
+  if (!input.value) {
+    input.removeAttribute('data-valid');
+    input.removeAttribute('aria-invalid');
+    return;
+  }
+  input.setAttribute('data-valid', valid ? 'true' : 'false');
+  if (valid) setFieldError(input.id, '');
+}
+
 function validateEmail(input) {
-  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value);
-  input.className = 'form-input ' + (input.value ? (valid ? 'valid' : 'invalid') : '');
+  markLive(input, emailValid(input.value));
 }
 
 function validateUsername(input) {
-  const valid = usernameValid(input.value.trim());
-  input.className = 'form-input ' + (input.value ? (valid ? 'valid' : 'invalid') : '');
+  markLive(input, usernameValid(input.value.trim()));
 }
 
 function checkStrength(val) {
-  const bars = [
-    document.getElementById('b1'),
-    document.getElementById('b2'),
-    document.getElementById('b3'),
-    document.getElementById('b4'),
-  ];
+  const bars = ['b1', 'b2', 'b3', 'b4'].map(id => document.getElementById(id));
   const label = document.getElementById('pwLabel');
   bars.forEach(b => { b.className = 'pw-bar'; });
-  if (!val) { label.textContent = ''; return; }
+  if (!val) { label.textContent = ''; label.removeAttribute('data-tone'); return; }
   const error = passwordValidationError(val);
   let score = 0;
   if (val.length >= 12) score++;
@@ -46,10 +69,12 @@ function checkStrength(val) {
   if (/[0-9]/.test(val)) score++;
   if (/[^A-Za-z0-9]/.test(val)) score++;
   const cls = score <= 2 ? 'weak' : score <= 3 ? 'ok' : 'strong';
-  const labels = ['', 'weak', 'weak', 'ok', 'strong', 'strong'];
-  for (let i = 0; i < score; i++) bars[i].classList.add(cls);
+  const labels = ['', 'Weak', 'Weak', 'OK', 'Strong', 'Strong'];
+  // 5 criteria, 4 bars: never index past the last bar.
+  for (let i = 0; i < Math.min(score, bars.length); i++) bars[i].classList.add(cls);
   label.textContent = error || labels[score];
-  label.style.color = error ? 'var(--danger)' : (score <= 2 ? 'var(--warn)' : 'var(--success)');
+  label.dataset.tone = error ? 'danger' : (score <= 2 ? 'warn' : 'success');
+  if (!error) setFieldError('password', '');
 }
 
 async function handleSignup(e) {
@@ -60,24 +85,27 @@ async function handleSignup(e) {
   const email = document.getElementById('email').value.trim();
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value;
+  const invite = (document.getElementById('invite')?.value || '').trim();
   const passwordError = passwordValidationError(password);
 
-  if (!email || !username || !password) {
-    btn.textContent = 'please fill all required fields';
-    setTimeout(() => { btn.textContent = 'create account \u2192'; }, 2000);
+  const errors = {
+    email: email ? '' : 'Email is required',
+    username: !username ? 'Username is required' : (usernameValid(username) ? '' : USERNAME_RULE),
+    password: passwordError,
+  };
+  Object.entries(errors).forEach(([id, msg]) => setFieldError(id, msg));
+  const firstBad = Object.keys(errors).find(id => errors[id]);
+  if (firstBad) {
+    showFormError(!email || !username || !password
+      ? 'Please fill all required fields.'
+      : 'Please fix the highlighted fields.');
+    document.getElementById(firstBad).focus();
     return;
   }
-  if (!usernameValid(username)) {
-    btn.textContent = 'username must be 3-64 chars: letters, numbers, _ or -';
-    setTimeout(() => { btn.textContent = 'create account \u2192'; }, 2500);
-    return;
-  }
-  if (passwordError) {
-    btn.textContent = passwordError;
-    setTimeout(() => { btn.textContent = 'create account \u2192'; }, 2500);
-    return;
-  }
-  btn.textContent = 'creating account...';
+
+  showFormError('');
+  const label = btn.textContent;
+  btn.textContent = 'Creating account…';
   btn.disabled = true;
   try {
     await PromptCodeAPI.signup({
@@ -86,12 +114,13 @@ async function handleSignup(e) {
       first_name: fname,
       last_name: lname,
       password,
+      invite_code: invite || null,
     });
-    window.location.href = '/challenges.html';
+    window.location.href = '/onboarding.html';
   } catch (err) {
-    btn.textContent = err.message || 'signup failed \u2014 try again';
+    showFormError(err.message || 'Signup failed — try again.');
+    btn.textContent = label;
     btn.disabled = false;
-    setTimeout(() => { btn.textContent = 'create account \u2192'; }, 3000);
   }
 }
 

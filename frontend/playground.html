@@ -5,24 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Playground — PromptCode</title>
 <meta http-equiv="refresh" content="0; url=/challenges.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&display=swap">
+<link rel="stylesheet" href="/static/css/pc-tokens.css?v=20260930">
+<link rel="stylesheet" href="/static/css/pc-components.css?v=20260930">
 <script src="/static/playground-redirect.js"></script>
 <style>
-  body {
-    margin: 0;
-    min-height: 100vh;
-    display: grid;
-    place-items: center;
-    background: #0a0a09;
-    color: #e8e6e0;
-    font: 14px/1.6 "DM Mono", monospace;
-  }
-
-  a {
-    color: #c8f060;
-  }
+  .redirect { min-height: 100vh; display: grid; place-items: center; }
+  .redirect p { display: inline-flex; align-items: center; gap: 10px; color: var(--pc-muted); font-size: var(--pc-text-sm); }
 </style>
 </head>
 <body>
-  <p>Redirecting to <a href="/challenges.html">challenges</a>…</p>
+  <main class="pc-main redirect" id="main">
+    <p><span class="pc-spinner" aria-hidden="true"></span>Redirecting to <a href="/challenges.html">challenges</a>…</p>
+  </main>
+  <script src="/static/js/pc-ui.js?v=20260930"></script>
 </body>
 </html>

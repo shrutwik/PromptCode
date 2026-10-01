@@ -3,934 +3,228 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Submission Report — PromptCode</title>
+<title>Submission report — PromptCode</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&display=swap">
+<link rel="stylesheet" href="/static/css/pc-tokens.css?v=20260930">
+<link rel="stylesheet" href="/static/css/pc-components.css?v=20260930">
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --bg: #0a0a09; --surface: #111110; --surface2: #141412;
-  --border: #1f1f1d; --border-light: #2a2a27;
-  --text: #e8e6e0; --muted: #6b6b65;
-  --accent: #c8f060; --accent-dim: rgba(200,240,96,0.10);
-  --warn: #f0a060; --danger: #f06060; --success: #60d4a8;
-  --radius: 6px; --nav-h: 52px;
-}
-html { scroll-behavior: smooth; }
-body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; line-height: 1.6; min-height: 100vh; }
-::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
-@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.7)} }
-@keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-@keyframes scoreReveal { from{opacity:0;transform:scale(0.85)} to{opacity:1;transform:scale(1)} }
-@keyframes barGrow { from{width:0} to{width:var(--w)} }
-@keyframes ringFill { from{stroke-dashoffset:283} to{stroke-dashoffset:var(--offset)} }
-.fade-in { animation: fadeUp 0.45s ease both; }
-.d1{animation-delay:.07s;opacity:0} .d2{animation-delay:.14s;opacity:0}
-.d3{animation-delay:.21s;opacity:0} .d4{animation-delay:.28s;opacity:0}
-.d5{animation-delay:.35s;opacity:0} .d6{animation-delay:.42s;opacity:0}
+[hidden] { display: none !important; }
+.breadcrumb { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: var(--pc-space-4); font-size: var(--pc-text-xs); color: var(--pc-muted); }
+.breadcrumb a { color: var(--pc-muted); }
+.breadcrumb a:hover { color: var(--pc-text); text-decoration: none; }
+.breadcrumb .sep { color: var(--pc-faint); }
+.breadcrumb .current { color: var(--pc-text-secondary); font-family: var(--pc-font-mono); }
 
-/* NAV */
-nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-  height: var(--nav-h); display: flex; align-items: center; justify-content: space-between;
-  padding: 0 28px; border-bottom: 1px solid var(--border);
-  background: rgba(10,10,9,0.94); backdrop-filter: blur(16px);
-}
-.nav-logo { display: flex; align-items: center; gap: 8px; font-family: 'Instrument Serif', serif; font-size: 18px; letter-spacing: -0.02em; color: var(--text); text-decoration: none; }
-.nav-logo .dot { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; animation: pulse 2.4s ease-in-out infinite; }
-.nav-links { display: flex; gap: 26px; }
-.nav-links a { color: var(--muted); text-decoration: none; font-size: 12px; letter-spacing: 0.04em; transition: color 0.2s; }
-.nav-links a:hover { color: var(--text); }
-.btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 12px; cursor: pointer; transition: all 0.15s; text-decoration: none; border: 1px solid transparent; }
-.btn-ghost { background: transparent; border-color: var(--border-light); color: var(--muted); }
-.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
-.btn-primary { background: var(--accent); color: var(--bg); font-weight: 500; }
-.btn-primary:hover { background: #d4f870; }
-.btn-sm { padding: 4px 10px; font-size: 11px; }
-
-/* LAYOUT */
-.page { max-width: 1000px; margin: 0 auto; padding: calc(var(--nav-h) + 32px) 28px 60px; }
-
-/* BREADCRUMB */
-.breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); margin-bottom: 24px; }
-.breadcrumb a { color: var(--muted); text-decoration: none; transition: color 0.2s; }
-.breadcrumb a:hover { color: var(--text); }
-.breadcrumb .sep { opacity: 0.4; }
-.breadcrumb .current { color: var(--text); }
-
-/* HERO SCORE */
-.result-hero {
-  display: grid; grid-template-columns: auto 1fr auto;
-  gap: 28px; align-items: center;
-  padding: 28px 32px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface2);
-  margin-bottom: 28px;
-  position: relative; overflow: hidden;
-}
-.result-hero::before {
-  content: '';
-  position: absolute; top: 0; left: 0; right: 0; height: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-}
-
-/* Score ring */
-.score-ring-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.score-ring { width: 90px; height: 90px; position: relative; animation: scoreReveal 0.6s 0.2s ease both; opacity: 0; }
-.score-ring svg { transform: rotate(-90deg); }
-.ring-bg { fill: none; stroke: var(--border); stroke-width: 6; }
-.ring-fill { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; stroke-dasharray: 283; stroke-dashoffset: var(--offset); animation: ringFill 1.2s 0.4s ease forwards; }
-.ring-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.ring-score { font-family: 'Instrument Serif', serif; font-size: 22px; color: var(--accent); line-height: 1; }
-.ring-sub { font-size: 9px; color: var(--muted); letter-spacing: 0.04em; }
-
-.result-info { }
-.result-challenge { font-size: 11px; color: var(--muted); margin-bottom: 4px; letter-spacing: 0.04em; }
-.result-title { font-family: 'Instrument Serif', serif; font-size: 26px; letter-spacing: -0.02em; margin-bottom: 6px; }
-.result-meta { display: flex; align-items: center; gap: 12px; font-size: 11px; color: var(--muted); }
-.result-meta .sep { opacity: 0.3; }
-.status-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 10px; }
-.status-pass { background: rgba(96,212,168,0.12); color: var(--success); border: 1px solid rgba(96,212,168,0.25); }
-.status-fail { background: rgba(240,96,96,0.12); color: var(--danger); border: 1px solid rgba(240,96,96,0.25); }
-.status-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-
+.result-hero { display: grid; grid-template-columns: auto 1fr auto; gap: 24px; align-items: center; padding: 20px 24px; margin-bottom: var(--pc-space-4); }
+.ring-label { display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
+.ring-score { font-family: var(--pc-font-mono); font-size: 1.25rem; font-weight: 500; color: var(--pc-text); }
+.ring-sub { font-family: var(--pc-font-sans); font-size: 10px; color: var(--pc-muted); }
+.result-challenge { font-family: var(--pc-font-mono); font-size: var(--pc-text-xs); color: var(--pc-faint); margin-bottom: 4px; }
+.result-title { font-size: var(--pc-text-h1); letter-spacing: var(--pc-tracking-tight); margin-bottom: 8px; }
+.result-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-family: var(--pc-font-mono); font-size: var(--pc-text-xs); color: var(--pc-muted); }
+.result-meta .sep { color: var(--pc-faint); }
 .result-actions { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
 .rank-badge { text-align: right; }
-.rank-badge .num { font-family: 'Instrument Serif', serif; font-size: 32px; color: var(--accent); line-height: 1; }
-.rank-badge .lbl { font-size: 10px; color: var(--muted); }
+.rank-badge .num { font-family: var(--pc-font-mono); font-size: 1.5rem; font-weight: 500; line-height: 1.1; color: var(--pc-text); }
+.rank-badge .lbl { font-size: var(--pc-text-xs); color: var(--pc-muted); }
 
-/* SCORE GRID */
-.score-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
-.score-cell {
-  border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 16px; background: var(--surface2);
-  position: relative; overflow: hidden;
-  transition: border-color 0.2s;
-}
-.score-cell:hover { border-color: var(--border-light); }
-.score-cell::after {
-  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
-}
-.score-cell.good::after { background: var(--accent); }
-.score-cell.warn::after { background: var(--warn); }
-.score-cell.bad::after { background: var(--danger); }
-.sc-icon { font-size: 14px; margin-bottom: 8px; }
-.sc-label { font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px; }
-.sc-val { font-family: 'Instrument Serif', serif; font-size: 28px; letter-spacing: -0.02em; line-height: 1; }
-.sc-val.good { color: var(--accent); }
-.sc-val.warn { color: var(--warn); }
-.sc-val.bad { color: var(--danger); }
-.sc-bar { height: 2px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
-.sc-fill { height: 100%; border-radius: 2px; --w: 0; animation: barGrow 1s ease forwards; width: var(--w); }
+.score-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: var(--pc-space-5); }
+.score-grid .stat { display: flex; flex-direction: column; gap: 6px; }
+.sc-val { font-family: var(--pc-font-mono); font-size: 1.5rem; font-weight: 500; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.sc-val.good { color: var(--pc-success); }
+.sc-val.warn { color: var(--pc-warn); }
+.sc-val.bad { color: var(--pc-danger); }
 
-/* MAIN CONTENT GRID */
-.content-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
-.left-col { display: flex; flex-direction: column; gap: 20px; }
-.right-col { display: flex; flex-direction: column; gap: 16px; position: sticky; top: calc(var(--nav-h) + 20px); }
+.content-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+.left-col, .right-col { display: flex; flex-direction: column; gap: 16px; }
+.right-col { position: sticky; top: calc(var(--pc-header-h) + 16px); }
+.pc-panel { overflow: hidden; }
+.pc-panel-head h2 { font-size: var(--pc-text-sm); }
+.panel-meta { font-family: var(--pc-font-mono); font-size: var(--pc-text-xs); color: var(--pc-muted); }
+.panel-meta[data-tone="success"] { color: var(--pc-success); }
+.panel-meta[data-tone="warn"] { color: var(--pc-warn); }
+.panel-meta[data-tone="danger"] { color: var(--pc-danger); }
+.pc-panel .pc-table-wrap { border: 0; border-radius: 0; overflow-x: auto; }
+.passes-table .num { text-align: right; }
+.passes-table td.cell-empty { text-align: center; color: var(--pc-muted); padding: 24px; }
+.passes-table td.cell-empty[data-tone="danger"] { color: var(--pc-danger); }
+.pass-score.good { color: var(--pc-success); }
+.pass-score.warn { color: var(--pc-warn); }
+.pass-score.bad { color: var(--pc-danger); }
+.feedback-body { font-size: var(--pc-text-sm); line-height: var(--pc-leading-normal); color: var(--pc-text-secondary); white-space: pre-wrap; }
 
-/* CARD */
-.card { border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); overflow: hidden; }
-.card-hdr { padding: 11px 16px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between; }
-.card-title { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.card-body { padding: 16px; }
+.json-report { padding: 14px; border: 1px solid var(--pc-border); border-radius: var(--pc-radius-sm); background: var(--pc-bg); font-family: var(--pc-font-mono); font-size: var(--pc-text-xs); line-height: 1.9; color: var(--pc-muted); overflow-x: auto; }
+.jk { color: var(--pc-text-secondary); }
+.jv-g { color: var(--pc-success); }
+.jv-w { color: var(--pc-warn); }
+.jv-b { color: var(--pc-ai); }
+.jv-r { color: var(--pc-danger); }
 
-/* RUN PASSES TABLE */
-.passes-table { width: 100%; border-collapse: collapse; }
-.passes-table th { padding: 7px 12px; font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; border-bottom: 1px solid var(--border); text-align: left; font-weight: normal; }
-.passes-table td { padding: 11px 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
-.passes-table tr:last-child td { border-bottom: none; }
-.passes-table tr:hover td { background: rgba(255,255,255,0.015); }
-.pass-type { display: flex; align-items: center; gap: 7px; }
-.pass-badge { font-size: 9px; padding: 2px 6px; border-radius: 3px; }
-.pass-clean { background: rgba(96,212,168,0.12); color: var(--success); }
-.pass-perturbed { background: rgba(240,160,96,0.12); color: var(--warn); }
-.pass-adversarial { background: rgba(240,96,96,0.12); color: var(--danger); }
-.pass-score { color: var(--accent); font-size: 13px; }
-.pass-score.warn { color: var(--warn); }
-.pass-score.bad { color: var(--danger); }
-.pass-tokens { color: var(--muted); font-size: 11px; }
-.pass-cost { color: var(--muted); font-size: 11px; }
-.pass-lat { color: var(--muted); font-size: 11px; }
-.pass-status { }
-
-/* DIFF VIEW */
-.diff-view { font-size: 11.5px; line-height: 1.8; }
-.diff-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; }
-.diff-col { }
-.diff-col-hdr { padding: 7px 12px; font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; border-bottom: 1px solid var(--border); background: var(--surface); }
-.diff-line { padding: 4px 12px; font-size: 11px; line-height: 1.7; font-family: 'DM Mono', monospace; }
-.diff-line.match { color: var(--muted); }
-.diff-line.miss { background: rgba(240,96,96,0.08); color: var(--danger); }
-.diff-line.add { background: rgba(96,212,168,0.08); color: var(--success); }
-.diff-line.warn { background: rgba(240,160,96,0.08); color: var(--warn); }
-
-/* JSON report */
-.json-report { background: #060605; border-radius: var(--radius); padding: 18px; font-size: 12px; line-height: 2; }
-.jk { color: #a8b8d0; }
-.jv-g { color: var(--accent); }
-.jv-w { color: var(--warn); }
-.jv-b { color: #60c8f0; }
-.jv-r { color: var(--danger); }
-
-/* IMPROVEMENT TIPS */
-.tip-list { display: flex; flex-direction: column; gap: 1px; }
-.tip-item { padding: 12px 14px; border-bottom: 1px solid var(--border); }
-.tip-item:last-child { border-bottom: none; }
-.tip-header { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
-.tip-priority { font-size: 9px; padding: 2px 7px; border-radius: 3px; letter-spacing: 0.04em; }
-.tip-p-high { background: rgba(240,96,96,0.12); color: var(--danger); }
-.tip-p-med { background: rgba(240,160,96,0.12); color: var(--warn); }
-.tip-p-low { background: rgba(200,240,96,0.12); color: var(--accent); }
-.tip-title { font-size: 12px; color: var(--text); }
-.tip-desc { font-size: 11.5px; color: var(--muted); line-height: 1.6; }
-.tip-impact { font-size: 10px; color: var(--accent); margin-top: 4px; }
-
-/* METRIC ROWS */
-.metric-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
-.metric-row:last-child { border-bottom: none; }
-.mk { color: var(--muted); }
-.mv { color: var(--text); }
-.mv.ac { color: var(--accent); }
-.mv.wn { color: var(--warn); }
-.mv.dn { color: var(--danger); }
-
-/* NEXT STEPS */
-.next-card { border: 1px solid rgba(200,240,96,0.25); border-radius: 8px; background: rgba(200,240,96,0.03); padding: 16px; }
-.next-title { font-size: 11px; color: var(--accent); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 10px; }
+.metric-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--pc-border); font-size: var(--pc-text-xs); }
+.metric-row:last-child { border-bottom: 0; }
+.cmp .metric-row, .cmp-head { grid-template-columns: 1fr 64px 64px; }
+.cmp-head { display: grid; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--pc-border); font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pc-faint); }
+.cmp-head span, .cmp .mv { text-align: right; }
+.mk { color: var(--pc-muted); }
+.mv { font-family: var(--pc-font-mono); color: var(--pc-text); font-variant-numeric: tabular-nums; text-align: right; }
+.mv.ac { color: var(--pc-success); }
+.mv.wn { color: var(--pc-warn); }
+.mv.dn { color: var(--pc-danger); }
+.panel-loading { padding: 4px 0; }
 .next-actions { display: flex; flex-direction: column; gap: 8px; }
 
-/* Diff badge */
-.diff-badge { font-size: 9px; padding: 2px 6px; border-radius: 3px; letter-spacing: 0.04em; }
-.diff-easy { background: rgba(96,212,168,0.15); color: var(--success); }
-.diff-med { background: rgba(240,160,96,0.15); color: var(--warn); }
-.diff-hard { background: rgba(240,96,96,0.15); color: var(--danger); }
-
 @media (max-width: 960px) {
-  nav { padding: 0 16px; }
-  .nav-links { display: none; }
-  .page { padding: calc(var(--nav-h) + 24px) 16px 40px; }
-  .result-hero,
-  .content-grid { grid-template-columns: 1fr; }
+  .result-hero, .content-grid { grid-template-columns: 1fr; }
   .result-actions { align-items: flex-start; }
-  .right-col {
-    position: static;
-    top: auto;
-  }
-  .card-body { overflow-x: auto; }
-  .passes-table { min-width: 640px; }
-}
-
-@media (max-width: 640px) {
-  .score-grid,
-  .diff-row { grid-template-columns: 1fr; }
-}
-
-/* Mobile hamburger */
-.hamburger { display: none; background: none; border: 1px solid var(--border); cursor: pointer; padding: 5px 8px; border-radius: var(--radius); color: var(--text); font-size: 16px; line-height: 1; }
-@media (max-width: 960px) {
-  .hamburger { display: flex; align-items: center; }
-  .nav-links.mobile-open { display: flex !important; flex-direction: column; position: absolute; top: var(--nav-h); left: 0; right: 0; background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 16px; gap: 4px; z-index: 200; }
-  .nav-links.mobile-open a { padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 13px; }
-  .nav-links.mobile-open a:last-child { border-bottom: none; }
+  .rank-badge { text-align: left; }
+  .right-col { position: static; }
+  .score-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
 </head>
-<body>
+<body class="pc-public">
+<a class="pc-skip" href="#main">Skip to content</a>
+<header data-pc-header></header>
 
-<nav>
-  <a class="nav-logo" href="/index.html"><div class="dot"></div>PromptCode</a>
-  <div class="nav-links">
-    <a href="/challenges.html">challenges</a>
-    <a href="/leaderboard.html">leaderboard</a>
-  </div>
-  <div class="btn-right" style="display:flex;align-items:center;gap:10px">
-    <a class="btn btn-ghost" id="backToChallenge" href="/challenges.html">← back to challenge</a>
-    <a href="/profile.html" style="width:28px;height:28px;border-radius:5px;background:var(--accent-dim);border:1px solid rgba(200,240,96,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:none" data-user-initials>jl</a>
-  </div>
-  <button class="hamburger" aria-label="Toggle navigation">&#9776;</button>
-</nav>
-
-<div class="page">
-
-  <!-- BREADCRUMB -->
-  <div class="breadcrumb fade-in">
-    <a href="/challenges.html">challenges</a>
-    <span class="sep">/</span>
-    <a id="breadcrumbChallenge" href="/challenges.html">Loading...</a>
-    <span class="sep">/</span>
-    <span class="current" id="breadcrumbSubmission">submission</span>
+<main class="page" id="main">
+  <div class="page-head">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/challenges.html">Prompt challenges</a>
+      <span class="sep">/</span>
+      <a id="breadcrumbChallenge" href="/challenges.html">Loading…</a>
+      <span class="sep">/</span>
+      <span class="current" id="breadcrumbSubmission" aria-current="page">submission</span>
+    </nav>
+    <a class="btn btn-ghost btn-sm" id="backToChallenge" href="/challenges.html">Back to challenge</a>
   </div>
 
-  <!-- HERO -->
-  <div class="result-hero fade-in d1">
-    <div class="score-ring-wrap">
-      <div class="score-ring">
-        <svg width="90" height="90" viewBox="0 0 90 90">
-          <circle class="ring-bg" cx="45" cy="45" r="38"/>
-          <circle class="ring-fill" id="ringFillCircle" cx="45" cy="45" r="38" style="--offset:283"/>
-        </svg>
+  <div id="reportEmpty" hidden></div>
+
+  <div id="reportContent">
+    <section class="card result-hero" aria-label="Result summary">
+      <div class="pc-score-ring" id="heroRing">
         <div class="ring-label">
-          <div class="ring-score" id="heroScore">...</div>
+          <div class="ring-score" id="heroScore">…</div>
           <div class="ring-sub" id="heroScoreSub">loading</div>
         </div>
       </div>
-    </div>
-    <div class="result-info">
-      <div class="result-challenge" id="heroChallengeLine">Loading...</div>
-      <div class="result-title">Submission Report</div>
-      <div class="result-meta" id="heroMeta">
-        <span id="heroPassPill" class="status-pill status-pass"><span class="status-dot"></span> <span id="heroPassCount">—</span></span>
-        <span class="sep">·</span>
-        <span id="heroDiffBadge"></span>
-        <span class="sep">·</span>
-        <span id="heroSubmittedTime">—</span>
-        <span class="sep">·</span>
-        <span id="heroLatency">—</span>
-      </div>
-    </div>
-    <div class="result-actions">
-      <div class="rank-badge">
-        <div class="num" id="heroRank">—</div>
-        <div class="lbl">your rank</div>
-      </div>
-      <a class="btn btn-primary" id="improveBtn" href="/challenges.html">improve →</a>
-      <a class="btn btn-ghost btn-sm" href="#" data-click-action="shareReport" data-pass-element="true">share report</a>
-    </div>
-  </div>
-
-  <!-- SCORE GRID -->
-  <div class="score-grid fade-in d2" id="scoreGrid">
-    <div class="score-cell" id="cell-accuracy">
-      <div class="sc-icon">◎</div>
-      <div class="sc-label">accuracy</div>
-      <div class="sc-val">—</div>
-      <div class="sc-bar"><div class="sc-fill" style="--w:0%"></div></div>
-    </div>
-    <div class="score-cell" id="cell-efficiency">
-      <div class="sc-icon">⟡</div>
-      <div class="sc-label">efficiency</div>
-      <div class="sc-val">—</div>
-      <div class="sc-bar"><div class="sc-fill" style="--w:0%"></div></div>
-    </div>
-    <div class="score-cell" id="cell-reliability">
-      <div class="sc-icon">◈</div>
-      <div class="sc-label">reliability</div>
-      <div class="sc-val">—</div>
-      <div class="sc-bar"><div class="sc-fill" style="--w:0%"></div></div>
-    </div>
-    <div class="score-cell" id="cell-orchestration">
-      <div class="sc-icon">⬡</div>
-      <div class="sc-label">orchestration</div>
-      <div class="sc-val">—</div>
-      <div class="sc-bar"><div class="sc-fill" style="--w:0%"></div></div>
-    </div>
-  </div>
-
-  <!-- MAIN GRID -->
-  <div class="content-grid">
-    <div class="left-col">
-
-      <!-- RUN PASSES -->
-      <div class="card fade-in d3" id="passesCard">
-        <div class="card-hdr">
-          <span class="card-title">evaluation passes</span>
-          <span id="passesCount" style="font-size:11px;color:var(--muted)">loading...</span>
-        </div>
-        <div style="overflow-x:auto">
-          <table class="passes-table">
-            <thead>
-              <tr>
-                <th>pass</th>
-                <th>type</th>
-                <th>score</th>
-                <th>tokens</th>
-                <th>cost</th>
-                <th>latency</th>
-                <th>status</th>
-              </tr>
-            </thead>
-            <tbody id="passesBody">
-              <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">Loading evaluation data...</td></tr>
-            </tbody>
-          </table>
+      <div class="result-info">
+        <div class="result-challenge" id="heroChallengeLine">Loading…</div>
+        <h1 class="result-title">Submission report</h1>
+        <div class="result-meta" id="heroMeta">
+          <span id="heroPassPill" class="tag" data-tone="idle"><span class="pc-dot"></span><span id="heroPassCount">—</span></span>
+          <span id="heroDiffBadge"></span>
+          <span class="sep">·</span>
+          <span id="heroSubmittedTime">—</span>
+          <span class="sep">·</span>
+          <span id="heroLatency">—</span>
         </div>
       </div>
-
-      <!-- OUTPUT DIFF / FEEDBACK -->
-      <div class="card fade-in d4" id="feedbackCard" style="display:none">
-        <div class="card-hdr">
-          <span class="card-title" id="feedbackTitle">feedback</span>
+      <div class="result-actions">
+        <div class="rank-badge">
+          <div class="num" id="heroRank">—</div>
+          <div class="lbl">Your rank</div>
         </div>
-        <div class="card-body" id="feedbackBody" style="font-size:12px;line-height:1.7;color:var(--muted)"></div>
+        <a class="btn btn-primary" id="improveBtn" href="/challenges.html">Improve solution</a>
+        <button type="button" class="btn btn-ghost btn-sm" data-click-action="shareReport" data-pass-element="true">Share report</button>
       </div>
+    </section>
 
+    <div class="score-grid" id="scoreGrid" data-stagger>
+      <div class="stat score-cell" id="cell-accuracy"><div class="l">Accuracy</div><div class="sc-val">—</div><div class="pc-bar" role="progressbar" aria-label="Accuracy" aria-valuemin="0" aria-valuemax="100"><div class="pc-bar-fill"></div></div></div>
+      <div class="stat score-cell" id="cell-efficiency"><div class="l">Efficiency</div><div class="sc-val">—</div><div class="pc-bar" role="progressbar" aria-label="Efficiency" aria-valuemin="0" aria-valuemax="100"><div class="pc-bar-fill"></div></div></div>
+      <div class="stat score-cell" id="cell-reliability"><div class="l">Reliability</div><div class="sc-val">—</div><div class="pc-bar" role="progressbar" aria-label="Reliability" aria-valuemin="0" aria-valuemax="100"><div class="pc-bar-fill"></div></div></div>
+      <div class="stat score-cell" id="cell-orchestration"><div class="l">Orchestration</div><div class="sc-val">—</div><div class="pc-bar" role="progressbar" aria-label="Orchestration" aria-valuemin="0" aria-valuemax="100"><div class="pc-bar-fill"></div></div></div>
     </div>
 
-    <!-- RIGHT COLUMN -->
-    <div class="right-col">
-
-      <!-- JSON REPORT -->
-      <div class="card fade-in d2">
-        <div class="card-hdr">
-          <span class="card-title">prompt efficiency report</span>
-          <button class="btn btn-ghost btn-sm" data-click-action="copyJSON">copy</button>
-        </div>
-        <div class="card-body" style="padding:14px">
-          <div class="json-report" id="jsonReport" style="color:var(--muted)">Loading report...</div>
-        </div>
-      </div>
-
-      <!-- SDK BREAKDOWN -->
-      <div class="card fade-in d3">
-        <div class="card-hdr"><span class="card-title">sdk usage</span></div>
-        <div class="card-body" style="padding:10px 14px" id="sdkUsageBody">
-          <div style="color:var(--muted);font-size:11px;padding:8px 0">Loading...</div>
-        </div>
-      </div>
-
-      <!-- CORE INTEGRITY -->
-      <div class="card fade-in d4" id="integrityCard" style="display:none">
-        <div class="card-hdr"><span class="card-title">core evaluation integrity</span></div>
-        <div class="card-body" style="padding:10px 14px" id="integrityBody">
-          <div style="color:var(--muted);font-size:11px;padding:8px 0">Loading...</div>
-        </div>
-      </div>
-
-      <!-- VS BEST -->
-      <div class="card fade-in d5">
-        <div class="card-hdr"><span class="card-title">vs. leaderboard #1</span></div>
-        <div class="card-body" style="padding:10px 14px">
-          <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;font-size:10px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;padding-bottom:5px;border-bottom:1px solid var(--border);margin-bottom:2px">
-            <span></span><span>you</span><span>#1</span>
+    <div class="content-grid">
+      <div class="left-col">
+        <section class="pc-panel" id="passesCard">
+          <div class="pc-panel-head">
+            <h2>Evaluation passes</h2>
+            <span class="panel-meta" id="passesCount">loading…</span>
           </div>
-          <div class="metric-row"><span class="mk">overall</span><span id="cmpYouOverall" class="mv">—</span><span id="cmpTopOverall" class="mv">—</span></div>
-          <div class="metric-row"><span class="mk">accuracy</span><span id="cmpYouAccuracy" class="mv">—</span><span id="cmpTopAccuracy" class="mv">—</span></div>
-          <div class="metric-row"><span class="mk">llm calls</span><span id="cmpYouCalls" class="mv">—</span><span id="cmpTopCalls" class="mv">—</span></div>
-          <div class="metric-row"><span class="mk">cost</span><span id="cmpYouCost" class="mv">—</span><span id="cmpTopCost" class="mv">—</span></div>
-          <div class="metric-row"><span class="mk">reliability</span><span id="cmpYouRel" class="mv">—</span><span id="cmpTopRel" class="mv">—</span></div>
-        </div>
+          <div class="pc-table-wrap">
+            <table class="pc-table passes-table">
+              <thead>
+                <tr>
+                  <th scope="col">Pass</th>
+                  <th scope="col">Type</th>
+                  <th scope="col" class="num">Score</th>
+                  <th scope="col" class="num">Tokens</th>
+                  <th scope="col" class="num">Cost</th>
+                  <th scope="col" class="num">Latency</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody id="passesBody" data-stagger>
+                <tr><td colspan="7" id="passesLoading"></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="pc-panel" id="feedbackCard" style="display:none">
+          <div class="pc-panel-head"><h2 id="feedbackTitle">Feedback</h2></div>
+          <div class="pc-panel-body feedback-body" id="feedbackBody"></div>
+        </section>
       </div>
 
-      <!-- NEXT STEPS -->
-      <div class="next-card fade-in d6">
-        <div class="next-title">next steps</div>
-        <div class="next-actions">
-          <a class="btn btn-primary" id="improveBtn2" href="/challenges.html" style="justify-content:center">→ improve this solution</a>
-          <a class="btn btn-ghost" href="/challenges.html" style="justify-content:center">browse challenges</a>
-          <a class="btn btn-ghost" href="/leaderboard.html" style="justify-content:center">view leaderboard</a>
-        </div>
-      </div>
+      <aside class="right-col" aria-label="Report details">
+        <section class="pc-panel">
+          <div class="pc-panel-head">
+            <h2>Prompt efficiency report</h2>
+            <button type="button" class="btn btn-ghost btn-sm" data-click-action="copyJSON">Copy</button>
+          </div>
+          <div class="pc-panel-body">
+            <div class="json-report" id="jsonReport"><span class="pc-skeleton pc-skeleton-text"></span><span class="pc-skeleton pc-skeleton-text" style="--w:70%"></span></div>
+          </div>
+        </section>
 
+        <section class="pc-panel">
+          <div class="pc-panel-head"><h2>SDK usage</h2></div>
+          <div class="pc-panel-body" id="sdkUsageBody">
+            <span class="pc-skeleton pc-skeleton-text"></span><span class="pc-skeleton pc-skeleton-text" style="--w:60%"></span>
+          </div>
+        </section>
+
+        <section class="pc-panel" id="integrityCard" style="display:none">
+          <div class="pc-panel-head"><h2>Core evaluation integrity</h2></div>
+          <div class="pc-panel-body" id="integrityBody"></div>
+        </section>
+
+        <section class="pc-panel">
+          <div class="pc-panel-head"><h2>Vs. leaderboard #1</h2></div>
+          <div class="pc-panel-body cmp">
+            <div class="cmp-head"><span></span><span>You</span><span>#1</span></div>
+            <div class="metric-row"><span class="mk">Overall</span><span id="cmpYouOverall" class="mv">—</span><span id="cmpTopOverall" class="mv">—</span></div>
+            <div class="metric-row"><span class="mk">Accuracy</span><span id="cmpYouAccuracy" class="mv">—</span><span id="cmpTopAccuracy" class="mv">—</span></div>
+            <div class="metric-row"><span class="mk">LLM calls</span><span id="cmpYouCalls" class="mv">—</span><span id="cmpTopCalls" class="mv">—</span></div>
+            <div class="metric-row"><span class="mk">Cost</span><span id="cmpYouCost" class="mv">—</span><span id="cmpTopCost" class="mv">—</span></div>
+            <div class="metric-row"><span class="mk">Reliability</span><span id="cmpYouRel" class="mv">—</span><span id="cmpTopRel" class="mv">—</span></div>
+          </div>
+        </section>
+
+        <section class="pc-panel">
+          <div class="pc-panel-head"><h2>Next steps</h2></div>
+          <div class="pc-panel-body next-actions">
+            <a class="btn btn-primary btn-block" id="improveBtn2" href="/challenges.html">Improve this solution</a>
+            <a class="btn btn-secondary btn-block" href="/challenges.html">Browse challenges</a>
+            <a class="btn btn-ghost btn-block" href="/leaderboard.html">View leaderboard</a>
+          </div>
+        </section>
+      </aside>
     </div>
   </div>
-</div>
+</main>
+
+<footer data-pc-footer></footer>
 
 <script src="/static/site.js"></script>
 <script src="/static/api.js"></script>
-<script>
-  let _reportCache = null;
-  let _currentChallengeId = null;
-
-  function fmtNum(n) { return n == null ? '—' : n.toLocaleString(); }
-  function fmtScore(n) { return n == null ? '—' : n.toFixed(2); }
-  function fmtCost(n) { return n == null ? '—' : '$' + n.toFixed(4); }
-  function fmtMs(n) { return n == null ? '—' : fmtNum(Math.round(n)) + 'ms'; }
-  function asNumber(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
-  function labelize(v) { return String(v == null ? 'unknown' : v).replace(/_/g, ' '); }
-
-  function scoreClass(v) {
-    if (v == null) return '';
-    if (v >= 0.8) return 'good';
-    if (v >= 0.65) return 'warn';
-    return 'bad';
-  }
-
-  function scoreCSSColor(cls) {
-    if (cls === 'good') return 'var(--accent)';
-    if (cls === 'warn') return 'var(--warn)';
-    return 'var(--danger)';
-  }
-
-  function timeAgo(dateStr) {
-    if (!dateStr) return '—';
-    const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return Math.floor(diff / 60) + ' minutes ago';
-    if (diff < 86400) return Math.floor(diff / 3600) + ' hours ago';
-    return Math.floor(diff / 86400) + ' days ago';
-  }
-
-  function updateScoreCell(id, value) {
-    const cell = document.getElementById(id);
-    if (!cell) return;
-    const cls = scoreClass(value);
-    cell.className = 'score-cell' + (cls ? ' ' + cls : '');
-    const valEl = cell.querySelector('.sc-val');
-    valEl.textContent = fmtScore(value);
-    valEl.className = 'sc-val' + (cls ? ' ' + cls : '');
-    const fill = cell.querySelector('.sc-fill');
-    const pct = value != null ? (value * 100) + '%' : '0%';
-    fill.style.setProperty('--w', pct);
-    fill.style.background = scoreCSSColor(cls);
-  }
-
-  function updateHeroRing(overall) {
-    const el = document.getElementById('heroScore');
-    const sub = document.getElementById('heroScoreSub');
-    const circle = document.getElementById('ringFillCircle');
-    if (el) el.textContent = fmtScore(overall);
-    if (sub) sub.textContent = 'overall';
-    if (circle && overall != null) {
-      const offset = 283 - (283 * overall);
-      circle.style.setProperty('--offset', Math.round(offset));
-    }
-  }
-
-  function buildPassRow(run, idx) {
-    const type = (run.run_type || 'clean').toLowerCase();
-    let badgeClass = 'pass-clean';
-    if (type.includes('perturb')) badgeClass = 'pass-perturbed';
-    else if (type.includes('advers')) badgeClass = 'pass-adversarial';
-
-    const sc = run.accuracy;
-    const scCls = scoreClass(sc);
-    const passed = run.status === 'passed' || run.status === 'pass';
-
-    return `<tr>
-      <td style="color:var(--muted);font-size:11px">${idx + 1}</td>
-      <td><div class="pass-type"><span class="pass-badge ${badgeClass}">${type}</span></div></td>
-      <td class="pass-score${scCls !== 'good' ? ' ' + scCls : ''}">${fmtScore(sc)}</td>
-      <td class="pass-tokens">${fmtNum(run.tokens_total)}</td>
-      <td class="pass-cost">${fmtCost(run.cost_usd)}</td>
-      <td class="pass-lat">${fmtMs(run.latency_ms)}</td>
-      <td>${passed
-        ? '<span style="color:var(--success);font-size:11px">✓ pass</span>'
-        : '<span style="color:var(--warn);font-size:11px">⚠ ' + (run.status || 'partial') + '</span>'
-      }</td>
-    </tr>`;
-  }
-
-  function renderJsonReport(report) {
-    const el = document.getElementById('jsonReport');
-    if (!el) return;
-    const fields = {
-      accuracy: report.accuracy,
-      efficiency: report.efficiency,
-      reliability: report.reliability,
-      orchestration: report.orchestration,
-      overall: report.overall,
-      cost_usd: report.cost_usd,
-      latency_ms: report.latency_ms,
-      llm_calls: report.llm_calls,
-    };
-    function valColor(k, v) {
-      if (typeof v === 'number' && v <= 1) {
-        const cls = scoreClass(v);
-        if (cls === 'good') return 'jv-g';
-        if (cls === 'warn') return 'jv-w';
-        return 'jv-r';
-      }
-      return 'jv-b';
-    }
-    let html = '{\n';
-    const keys = Object.keys(fields);
-    keys.forEach((k, i) => {
-      const v = fields[k];
-      const disp = v != null ? (typeof v === 'number' && v <= 1 ? v.toFixed(2) : v) : 'null';
-      html += `&nbsp;&nbsp;<span class="jk">"${k}"</span>: <span class="${valColor(k, v)}">${disp}</span>${i < keys.length - 1 ? ',' : ''}\n`;
-    });
-    html += '}';
-    el.innerHTML = html.replace(/\n/g, '<br>');
-  }
-
-  function renderSDKUsage(report, sub) {
-    const el = document.getElementById('sdkUsageBody');
-    if (!el) return;
-    const calls = report.llm_calls || 0;
-    const latMs = report.latency_ms || 0;
-    const runs = report.runs || [];
-    let totalTokens = 0;
-    runs.forEach(r => { totalTokens += (r.tokens_total || 0); });
-    if (totalTokens === 0 && report.llm_calls) totalTokens = report.llm_calls * 400;
-    const usage = report.usage_breakdown || {};
-    const usageTotals = usage.totals || {};
-    const models = Array.isArray(usage.models) ? usage.models : [];
-    const topModel = models.length ? models[0] : null;
-    const credibility = report.credibility || {};
-
-    const rows = [
-      ['total calls', fmtNum(calls), calls > 3 ? 'wn' : ''],
-      ['total tokens', fmtNum(totalTokens), totalTokens > 2000 ? 'wn' : ''],
-      ['avg call latency', fmtMs(calls > 0 ? latMs / calls : 0), ''],
-      ['total latency', fmtMs(latMs), ''],
-      ['total cost', fmtCost(report.cost_usd), ''],
-    ];
-    const leverage = report.ai_leverage || {};
-    if (leverage.reliance_calibration_score != null) {
-      rows.push(['reliance calibration', fmtScore(Number(leverage.reliance_calibration_score)), Number(leverage.reliance_calibration_score) >= 0.65 ? 'ac' : 'wn']);
-    }
-    if (leverage.leverage_gain != null) {
-      const gain = Number(leverage.leverage_gain);
-      const sign = gain > 0 ? '+' : '';
-      rows.push(['leverage gain', `${sign}${gain.toFixed(2)}`, gain > 0 ? 'ac' : (gain < 0 ? 'dn' : 'wn')]);
-    }
-    if (credibility.score != null) {
-      rows.push(['score credibility', fmtScore(Number(credibility.score)), Number(credibility.score) >= 0.75 ? 'ac' : 'wn']);
-    }
-    if (credibility.band) {
-      rows.push(['credibility band', String(credibility.band), String(credibility.band) === 'high' ? 'ac' : 'wn']);
-    }
-    if (topModel && topModel.model) {
-      rows.push(['top model', `${String(topModel.model)} (${fmtNum(topModel.calls || 0)} calls)`, '']);
-    }
-    if (usageTotals.avg_tokens_per_call != null) {
-      rows.push(['avg tokens/call', fmtNum(usageTotals.avg_tokens_per_call), Number(usageTotals.avg_tokens_per_call) > 1200 ? 'wn' : '']);
-    }
-    el.innerHTML = rows.map(([k, v, cls]) =>
-      `<div class="metric-row"><span class="mk">${k}</span><span class="mv${cls ? ' ' + cls : ''}">${v}</span></div>`
-    ).join('');
-  }
-
-  function extractScoreCapEvents(report) {
-    const trail = Array.isArray(report.audit_trail) ? report.audit_trail : [];
-    return trail
-      .filter(e => e && e.event === 'score_cap_applied' && e.details && typeof e.details === 'object')
-      .map(e => e.details);
-  }
-
-  function getCoreIntegritySignals(report) {
-    const pqDetails = report.prompt_quality_details || {};
-    const evalCfg = report.evaluation_config || {};
-    const credibility = report.credibility || {};
-    const credSignals = credibility.signals || {};
-    const ci = report.confidence_intervals || {};
-    const runAccuracyCI = ci.run_accuracy || {};
-    const calibration = report.calibration_details || {};
-    const leverageSignals = (report.ai_leverage || {}).signals || {};
-    const counterfactual = leverageSignals.counterfactual || {};
-    const aggregate = counterfactual.aggregate || {};
-    const capEvents = extractScoreCapEvents(report);
-    const capReasons = [];
-    capEvents.forEach((event) => {
-      const reason = String(event.reason || '').trim();
-      if (reason && !capReasons.includes(reason)) capReasons.push(reason);
-    });
-
-    return {
-      evaluationMode: String(evalCfg.mode || 'sandbox'),
-      promptJudgeMethod: String(credSignals.prompt_judge_method || pqDetails.method || 'unknown'),
-      judgeModel: String(pqDetails.judge_model || evalCfg.judge_model || 'n/a'),
-      calibrationSamples: asNumber(credSignals.calibration_samples ?? calibration.samples),
-      runAccuracyCiHalfWidth: asNumber(runAccuracyCI.half_width ?? credSignals.run_accuracy_ci_half_width),
-      runTypeCoverage: asNumber(credSignals.run_type_coverage),
-      runCount: asNumber(credSignals.run_count ?? evalCfg.run_count),
-      hiddenSetCount: asNumber(credSignals.hidden_set_count ?? evalCfg.hidden_set_count),
-      counterfactualStatus: String(credSignals.counterfactual_status || counterfactual.status || 'unknown'),
-      aggregateMethod: aggregate.method ? String(aggregate.method) : '',
-      selectedStrategyId: aggregate.selected_strategy_id ? String(aggregate.selected_strategy_id) : '',
-      variantsOk: asNumber(aggregate.variants_ok),
-      variantsTotal: asNumber(aggregate.variants_total),
-      capReasons,
-    };
-  }
-
-  function renderCoreIntegrity(report) {
-    const card = document.getElementById('integrityCard');
-    const body = document.getElementById('integrityBody');
-    if (!card || !body) return;
-
-    const integrity = getCoreIntegritySignals(report);
-    const rows = [
-      ['evaluation mode', labelize(integrity.evaluationMode), integrity.evaluationMode === 'sandbox' ? 'ac' : 'wn'],
-      ['judge mode', labelize(integrity.promptJudgeMethod), integrity.promptJudgeMethod === 'llm_judge' ? 'ac' : 'wn'],
-      ['judge model', integrity.judgeModel || 'n/a', ''],
-    ];
-
-    if (integrity.calibrationSamples != null) {
-      rows.push([
-        'calibration samples',
-        fmtNum(integrity.calibrationSamples),
-        integrity.calibrationSamples >= 6 ? 'ac' : 'wn',
-      ]);
-    }
-    if (integrity.runAccuracyCiHalfWidth != null) {
-      rows.push([
-        'run accuracy ci',
-        `±${integrity.runAccuracyCiHalfWidth.toFixed(2)}`,
-        integrity.runAccuracyCiHalfWidth < 0.15 ? 'ac' : 'wn',
-      ]);
-    }
-    if (integrity.runTypeCoverage != null) {
-      rows.push([
-        'run-type coverage',
-        `${Math.round(integrity.runTypeCoverage * 100)}%`,
-        integrity.runTypeCoverage >= 0.99 ? 'ac' : (integrity.runTypeCoverage >= 0.67 ? 'wn' : 'dn'),
-      ]);
-    }
-    if (integrity.runCount != null) {
-      rows.push(['run count', fmtNum(integrity.runCount), integrity.runCount >= 8 ? 'ac' : 'wn']);
-    }
-    if (integrity.hiddenSetCount != null) {
-      rows.push(['hidden-set runs', fmtNum(integrity.hiddenSetCount), integrity.hiddenSetCount > 0 ? 'ac' : 'wn']);
-    }
-    rows.push([
-      'counterfactual status',
-      labelize(integrity.counterfactualStatus),
-      integrity.counterfactualStatus === 'ok' ? 'ac' : 'wn',
-    ]);
-    if (integrity.aggregateMethod) {
-      const ok = integrity.variantsOk != null ? integrity.variantsOk : 0;
-      const total = integrity.variantsTotal != null ? integrity.variantsTotal : 0;
-      const summary = total > 0
-        ? `${labelize(integrity.aggregateMethod)} (${fmtNum(ok)}/${fmtNum(total)} ok)`
-        : labelize(integrity.aggregateMethod);
-      rows.push(['baseline aggregate', summary, ok > 0 ? 'ac' : 'wn']);
-    }
-    if (integrity.selectedStrategyId) {
-      rows.push(['selected baseline', integrity.selectedStrategyId, '']);
-    }
-    if (integrity.capReasons.length) {
-      rows.push(['confidence caps', integrity.capReasons.map(labelize).join(', '), 'dn']);
-    } else {
-      rows.push(['confidence caps', 'none', 'ac']);
-    }
-
-    body.innerHTML = rows.map(([k, v, cls]) =>
-      `<div class="metric-row"><span class="mk">${k}</span><span class="mv${cls ? ' ' + cls : ''}">${v}</span></div>`
-    ).join('');
-    card.style.display = '';
-  }
-
-  function _cmpClass(you, top, higherBetter = true) {
-    if (you == null || top == null) return '';
-    if (higherBetter) return you >= top ? 'ac' : 'wn';
-    return you <= top ? 'ac' : 'wn';
-  }
-
-  function _setCmpCell(id, value, cls) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.className = 'mv' + (cls ? ' ' + cls : '');
-    el.textContent = value;
-  }
-
-  async function renderTopComparison(challengeId, report) {
-    try {
-      const entries = await PromptCodeAPI.getLeaderboard(challengeId, 1);
-      const top = Array.isArray(entries) ? entries[0] : null;
-      if (!top) return;
-
-      const youOverall = report.overall;
-      const topOverall = top.score_overall;
-      _setCmpCell('cmpYouOverall', fmtScore(youOverall), _cmpClass(youOverall, topOverall, true));
-      _setCmpCell('cmpTopOverall', fmtScore(topOverall), 'ac');
-
-      const youAccuracy = report.accuracy;
-      const topAccuracy = top.score_accuracy;
-      _setCmpCell('cmpYouAccuracy', fmtScore(youAccuracy), _cmpClass(youAccuracy, topAccuracy, true));
-      _setCmpCell('cmpTopAccuracy', fmtScore(topAccuracy), 'ac');
-
-      const youCalls = Number(report.llm_calls || 0);
-      const topCalls = Number(top.total_llm_calls || 0);
-      _setCmpCell('cmpYouCalls', fmtNum(youCalls), _cmpClass(youCalls, topCalls, false));
-      _setCmpCell('cmpTopCalls', fmtNum(topCalls), 'ac');
-
-      const youCost = Number(report.cost_usd || 0);
-      const topCost = Number(top.total_cost_usd || 0);
-      _setCmpCell('cmpYouCost', fmtCost(youCost), _cmpClass(youCost, topCost, false));
-      _setCmpCell('cmpTopCost', fmtCost(topCost), 'ac');
-
-      const youRel = Number(report.reliability || 0);
-      const topRel = Number(top.score_reliability || 0);
-      _setCmpCell('cmpYouRel', fmtScore(youRel), _cmpClass(youRel, topRel, true));
-      _setCmpCell('cmpTopRel', fmtScore(topRel), 'ac');
-    } catch (_) {
-      // Keep default placeholders if leaderboard is unavailable.
-    }
-  }
-
-  async function updateHeroRank(challengeId, submissionId) {
-    const heroRank = document.getElementById('heroRank');
-    if (!heroRank || !challengeId || !submissionId) return;
-    heroRank.textContent = '—';
-    try {
-      const entries = await PromptCodeAPI.getLeaderboard(challengeId, 100);
-      const list = Array.isArray(entries) ? entries : (entries.entries || entries.leaderboard || []);
-      const match = list.find(entry => String(entry.submission_id) === String(submissionId));
-      if (match && match.rank != null) {
-        heroRank.textContent = `#${match.rank}`;
-      }
-    } catch (e) {
-      PromptCodeAPI.debugLog('Rank load failed:', e.message);
-    }
-  }
-
-  async function loadReport(submissionId, sub) {
-    try {
-      const report = await PromptCodeAPI.getSubmissionReport(submissionId);
-      _reportCache = report;
-
-      updateHeroRing(report.overall);
-      updateScoreCell('cell-accuracy', report.accuracy);
-      updateScoreCell('cell-efficiency', report.efficiency);
-      updateScoreCell('cell-reliability', report.reliability);
-      updateScoreCell('cell-orchestration', report.orchestration);
-
-      // Hero meta
-      const runs = report.runs || [];
-      const passedCount = runs.filter(r => r.status === 'passed' || r.status === 'pass').length;
-      const pill = document.getElementById('heroPassPill');
-      const countEl = document.getElementById('heroPassCount');
-      if (countEl) countEl.textContent = `${passedCount} / ${runs.length} passes`;
-      if (pill) {
-        pill.className = 'status-pill ' + (passedCount === runs.length ? 'status-pass' : 'status-fail');
-      }
-      const latEl = document.getElementById('heroLatency');
-      if (latEl) latEl.textContent = fmtMs(report.latency_ms) + ' total';
-      const timeEl = document.getElementById('heroSubmittedTime');
-      if (timeEl && sub) timeEl.textContent = 'submitted ' + timeAgo(sub.created_at);
-      const heroSub = document.getElementById('heroScoreSub');
-      if (heroSub) {
-        heroSub.textContent = 'overall';
-      }
-
-      // Passes table
-      const tbody = document.getElementById('passesBody');
-      const countLabel = document.getElementById('passesCount');
-      if (tbody) {
-        if (runs.length) {
-          tbody.innerHTML = runs.map((r, i) => buildPassRow(r, i)).join('');
-        } else {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">No evaluation runs found</td></tr>';
-        }
-      }
-      if (countLabel) {
-        countLabel.textContent = `${passedCount} / ${runs.length} completed`;
-        countLabel.style.color = passedCount === runs.length ? 'var(--success)' : 'var(--warn)';
-      }
-
-      // Feedback card
-      const feedbackCard = document.getElementById('feedbackCard');
-      const feedbackTitle = document.getElementById('feedbackTitle');
-      const feedbackBody = document.getElementById('feedbackBody');
-      if (report.feedback) {
-        feedbackCard.style.display = '';
-        if (feedbackTitle) feedbackTitle.textContent = 'feedback';
-        feedbackBody.textContent = String(report.feedback);
-      } else {
-        feedbackCard.style.display = 'none';
-      }
-
-      // JSON report
-      renderJsonReport(report);
-
-      // SDK usage
-      renderSDKUsage(report, sub);
-      renderCoreIntegrity(report);
-      await renderTopComparison(sub.challenge_id, report);
-      await updateHeroRank(sub.challenge_id, submissionId);
-
-    } catch (e) {
-      PromptCodeAPI.debugLog('Report not yet available:', e.message);
-      document.getElementById('heroScore').textContent = '—';
-      document.getElementById('heroScoreSub').textContent = 'finalizing';
-    }
-  }
-
-  async function pollStatus(submissionId, sub) {
-    const heroScore = document.getElementById('heroScore');
-    const heroSub = document.getElementById('heroScoreSub');
-    if (heroScore) heroScore.textContent = '...';
-    if (heroSub) heroSub.textContent = 'evaluating';
-
-    for (let i = 0; i < 60; i++) {
-      await new Promise(r => setTimeout(r, 3000));
-      try {
-        const status = await PromptCodeAPI.getSubmissionStatus(submissionId);
-        if (status.status === 'completed') {
-          if (heroSub) heroSub.textContent = 'overall';
-          await loadReport(submissionId, sub);
-          return;
-        } else if (status.status === 'failed') {
-          if (heroScore) heroScore.textContent = '✗';
-          if (heroSub) heroSub.textContent = 'failed';
-          return;
-        }
-        if (heroSub) heroSub.textContent = status.status;
-      } catch (e) {
-        PromptCodeAPI.debugLog('Polling error:', e.message);
-      }
-    }
-    if (heroSub) heroSub.textContent = 'timeout';
-  }
-
-  document.addEventListener('DOMContentLoaded', async () => {
-    PromptCodeAPI.updateNavAuth();
-    const params = new URLSearchParams(window.location.search);
-    const submissionId = params.get('id');
-    if (!submissionId) return;
-
-    try {
-      const sub = await PromptCodeAPI.getSubmission(submissionId);
-      _currentChallengeId = sub.challenge_id;
-      const challengeUrl = `/challenge.html?id=${sub.challenge_id}`;
-      document.getElementById('backToChallenge').href = challengeUrl;
-      document.getElementById('breadcrumbChallenge').href = challengeUrl;
-      document.getElementById('improveBtn').href = challengeUrl;
-      document.getElementById('improveBtn2').href = challengeUrl;
-      document.getElementById('breadcrumbSubmission').textContent = `submission #${sub.id}`;
-      document.getElementById('heroChallengeLine').textContent = `RUN #${sub.id}`;
-
-      // Fetch challenge title for breadcrumb
-      try {
-        const challenge = await PromptCodeAPI.getChallenge(sub.challenge_id);
-        const title = challenge.title || 'Challenge';
-        document.getElementById('breadcrumbChallenge').textContent = title;
-        document.getElementById('heroChallengeLine').textContent = `${title.toUpperCase()} · RUN #${sub.id}`;
-        if (challenge.difficulty) {
-          const diffEl = document.getElementById('heroDiffBadge');
-          const d = challenge.difficulty.toLowerCase();
-          const cls = d === 'easy' ? 'diff-easy' : d === 'hard' ? 'diff-hard' : 'diff-med';
-          if (diffEl) diffEl.innerHTML = `<span class="diff-badge ${cls}">${d}</span>`;
-        }
-      } catch (_) {}
-
-      if (sub.status === 'completed') {
-        await loadReport(submissionId, sub);
-      } else if (sub.status === 'pending' || sub.status === 'running') {
-        pollStatus(submissionId, sub);
-      } else if (sub.status === 'failed') {
-        document.getElementById('heroScore').textContent = '✗';
-        document.getElementById('heroScoreSub').textContent = 'failed';
-        document.getElementById('passesBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:24px">Submission failed</td></tr>';
-        document.getElementById('passesCount').textContent = 'failed';
-        document.getElementById('passesCount').style.color = 'var(--danger)';
-      }
-    } catch (e) {
-      document.getElementById('heroScore').textContent = '✗';
-      document.getElementById('heroScoreSub').textContent = 'error';
-      console.error('Failed to load submission:', e.message);
-    }
-  });
-
-  function copyJSON() {
-    if (!_reportCache) return;
-    const { accuracy, efficiency, reliability, orchestration, overall, cost_usd, latency_ms, llm_calls } = _reportCache;
-    const json = JSON.stringify({ accuracy, efficiency, reliability, orchestration, overall, cost_usd, latency_ms, llm_calls }, null, 2);
-    navigator.clipboard.writeText(json).catch(() => {});
-    const btn = document.querySelector('.card-hdr .btn-sm');
-    if (btn) { btn.textContent = 'copied!'; setTimeout(() => btn.textContent = 'copy', 2000); }
-  }
-
-  function shareReport(button) {
-    navigator.clipboard.writeText(window.location.href).then(() => {
-      button.textContent = 'link copied!';
-      setTimeout(() => {
-        button.textContent = 'share report';
-      }, 2000);
-    }).catch(() => {});
-  }
-</script>
+<script src="/static/js/pc-ui.js?v=20260930"></script>
+<script src="/static/js/pages/submission.js"></script>
 </body>
 </html>

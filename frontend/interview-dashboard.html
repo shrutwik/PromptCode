@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Practice — PromptCode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&display=swap">
+<link rel="stylesheet" href="/static/css/pc-tokens.css?v=20260930">
+<link rel="stylesheet" href="/static/css/pc-components.css?v=20260930">
+<link rel="stylesheet" href="/static/interview.css?v=20260930">
+</head>
+<body>
+<a class="pc-skip" href="#main">Skip to content</a>
+<nav class="nav" aria-label="App"><a class="nav-brand" href="/dashboard">PromptCode</a></nav>
+<main class="page" id="main">
+  <header class="page-head">
+    <div>
+      <h1 class="page-title">Practice</h1>
+      <p class="page-lead">Continue where you left off, or pick a path. Your sessions stay private to your account.</p>
+    </div>
+    <a class="btn btn-secondary" href="/challenges">Browse challenges</a>
+  </header>
+
+  <div class="dash-top">
+    <div id="continue"><div class="pc-panel dash-continue"><span class="pc-skeleton pc-skeleton-text" style="--w:30%"></span><span class="pc-skeleton pc-skeleton-text" style="--w:60%;height:18px"></span><span class="pc-skeleton pc-skeleton-text" style="--w:45%"></span></div></div>
+    <section aria-labelledby="pathsTitle">
+      <div class="section-head"><h2 class="section-title" id="pathsTitle">Practice paths</h2></div>
+      <div class="practice-paths" id="paths" data-stagger>
+        <a class="card practice-path" href="/challenges?stack=TypeScript"><span class="pp-kicker">Stack</span><strong>TypeScript</strong><span>Backend &amp; services</span></a>
+        <a class="card practice-path" href="/challenges?stack=Python"><span class="pp-kicker">Stack</span><strong>Python</strong><span>APIs &amp; data</span></a>
+        <a class="card practice-path" href="/challenges?type=bugfix"><span class="pp-kicker">Type</span><strong>Bugfix</strong><span>Diagnosis drills</span></a>
+        <a class="card practice-path" href="/challenges?type=feature"><span class="pp-kicker">Type</span><strong>Feature</strong><span>Ship under time</span></a>
+      </div>
+    </section>
+  </div>
+
+  <section class="dash-section" aria-labelledby="recentTitle">
+    <div class="section-head">
+      <h2 class="section-title" id="recentTitle">Recent sessions</h2>
+      <span class="section-meta" id="recentMeta"></span>
+    </div>
+    <div id="list"><div class="pc-table-wrap"><div class="pc-skel" id="listSkel"></div></div></div>
+  </section>
+
+  <section class="dash-section" id="progress" tabindex="-1" aria-labelledby="progressTitle">
+    <div class="section-head">
+      <h2 class="section-title" id="progressTitle">Progress</h2>
+      <span class="section-meta">Skill mix and trends from completed sessions</span>
+    </div>
+    <div class="stat-grid" id="stats" data-stagger></div>
+    <div class="dash-progress">
+      <div class="pc-panel">
+        <div class="pc-panel-head"><h3>Skill mix</h3><span class="section-meta">average points per category</span></div>
+        <div class="pc-panel-body" id="skills"></div>
+      </div>
+      <div class="pc-panel">
+        <div class="pc-panel-head"><h3>Trends</h3></div>
+        <div class="pc-panel-body">
+          <p class="muted" id="trendsNote" style="font-size:var(--pc-text-sm)"></p>
+          <ul class="pc-list" id="trends"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="/static/interview-api.js"></script>
+<script src="/static/js/pc-ui.js?v=20261001j"></script>
+<script src="/static/js/pages/interview-dashboard.js"></script>
+</body>
+</html>

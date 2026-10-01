@@ -20,12 +20,44 @@ function fmt(v, decimals = 2) {
   return Number(v).toFixed(decimals);
 }
 
-function statusClass(status) {
-  if (!status) return '';
+function statusTone(status) {
+  if (!status) return 'idle';
   const s = status.toLowerCase();
-  if (s === 'completed' || s === 'passed') return 'diff-easy';
-  if (s === 'failed') return 'diff-hard';
-  return 'diff-med';
+  if (s === 'completed' || s === 'passed') return 'success';
+  if (s === 'failed') return 'danger';
+  return 'warn';
+}
+
+function scoreClass(v) {
+  if (v == null) return '';
+  if (v >= 0.8) return 'good';
+  if (v >= 0.65) return 'warn';
+  return 'bad';
+}
+
+function renderHistory(list, emptyText) {
+  const histList = document.getElementById('historyList');
+  if (!histList) return;
+  if (list.length === 0) {
+    histList.innerHTML = `<tr><td colspan="5" class="cell-empty">${escHtml(emptyText)}</td></tr>`;
+    return;
+  }
+  histList.innerHTML = '';
+  list.forEach(s => {
+    const href = `/submission.html?id=${encodeURIComponent(s.id)}`;
+    const tr = document.createElement('tr');
+    tr.className = 'sh-row';
+    tr.dataset.href = href;
+    const growth = s.growth_score != null ? fmt(s.growth_score) : '\u2014';
+    tr.innerHTML = `
+      <td class="title-cell"><a class="sh-name" href="${href}">${escHtml(s.challenge_title || 'Challenge #' + s.challenge_id)}</a><div class="sh-status"><span class="tag" data-tone="${statusTone(s.status)}">${escHtml(s.status)}</span></div></td>
+      <td class="num sh-score ${scoreClass(s.score_overall)}">${s.score_overall != null ? fmt(s.score_overall) : '\u2014'}</td>
+      <td class="num">${growth}</td>
+      <td class="num">${s.total_cost_usd != null ? '$' + fmt(s.total_cost_usd) : '\u2014'}</td>
+      <td class="num">${s.created_at ? timeAgo(s.created_at) : '\u2014'}</td>
+    `;
+    histList.appendChild(tr);
+  });
 }
 
 function escHtml(str) {
@@ -35,69 +67,57 @@ function escHtml(str) {
 }
 
 function filterHistory(mode, btn) {
-  document.querySelectorAll('.card-header .btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  document.querySelectorAll('#filterAll, #filterSolved').forEach(b => {
+    b.classList.remove('is-active');
+    b.setAttribute('aria-pressed', 'false');
+  });
+  btn.classList.add('is-active');
+  btn.setAttribute('aria-pressed', 'true');
   const subs = window._allHistorySubs || [];
-  const histList = document.getElementById('historyList');
-  if (!histList) return;
-
   const filtered = mode === 'solved'
     ? subs.filter(s => { const st = (s.status || '').toLowerCase(); return st === 'completed' || st === 'passed'; })
     : subs;
-
-  if (filtered.length === 0) {
-    histList.innerHTML = '<div style="padding:24px 14px;text-align:center;font-size:12px;color:var(--muted)">no matching submissions</div>';
-    return;
-  }
-  histList.innerHTML = '';
-  filtered.forEach(s => {
-    const a = document.createElement('a');
-    a.className = 'sh-row';
-    a.href = `/submission.html?id=${s.id}`;
-    a.style.gridTemplateColumns = '1fr 70px 70px 80px 70px';
-    const growth = s.growth_score != null ? fmt(s.growth_score) : '\u2014';
-    a.innerHTML = `
-      <div><div class="sh-name">${escHtml(s.challenge_title || 'Challenge #' + s.challenge_id)}</div><div class="sh-desc"><span class="diff-badge ${statusClass(s.status)}">${escHtml(s.status)}</span></div></div>
-      <span class="sh-score">${s.score_overall != null ? fmt(s.score_overall) : '\u2014'}</span>
-      <span class="sh-val">${growth}</span>
-      <span class="sh-val">${s.total_cost_usd != null ? '$' + fmt(s.total_cost_usd) : '\u2014'}</span>
-      <span class="sh-time">${s.created_at ? timeAgo(s.created_at) : '\u2014'}</span>
-    `;
-    histList.appendChild(a);
-  });
+  renderHistory(filtered, 'No matching submissions');
 }
 
 function editProfile() {
   const user = PromptCodeAPI.getUser();
   if (!user) return;
   const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
+  overlay.className = 'modal';
   overlay.innerHTML = `
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:24px;width:380px;max-width:90vw">
-      <div style="font-family:'Instrument Serif',serif;font-size:20px;margin-bottom:16px">edit profile</div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <label style="font-size:11px;color:var(--muted)">first name
-          <input id="editFirst" type="text" value="${escHtml(user.first_name || '')}" style="width:100%;margin-top:4px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'DM Mono',monospace;font-size:12px">
-        </label>
-        <label style="font-size:11px;color:var(--muted)">last name
-          <input id="editLast" type="text" value="${escHtml(user.last_name || '')}" style="width:100%;margin-top:4px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'DM Mono',monospace;font-size:12px">
-        </label>
-        <label style="font-size:11px;color:var(--muted)">bio
-          <textarea id="editBio" rows="3" style="width:100%;margin-top:4px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'DM Mono',monospace;font-size:12px;resize:vertical">${escHtml(user.bio || '')}</textarea>
-        </label>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="editProfileTitle">
+      <div class="modal-head">
+        <h2 id="editProfileTitle">Edit profile</h2>
+        <button type="button" class="btn btn-quiet btn-sm btn-icon" id="editClose" aria-label="Close">
+          <svg class="pc-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
       </div>
-      <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
-        <button id="editCancel" class="btn btn-ghost">cancel</button>
-        <button id="editSave" class="btn btn-primary">save</button>
+      <div class="pc-field"><label for="editFirst">First name</label><input id="editFirst" type="text" autocomplete="given-name" value="${escHtml(user.first_name || '')}"></div>
+      <div class="pc-field"><label for="editLast">Last name</label><input id="editLast" type="text" autocomplete="family-name" value="${escHtml(user.last_name || '')}"></div>
+      <div class="pc-field"><label for="editBio">Bio</label><textarea id="editBio" rows="3">${escHtml(user.bio || '')}</textarea></div>
+      <div class="pc-row" style="justify-content:flex-end">
+        <button type="button" id="editCancel" class="btn btn-ghost">Cancel</button>
+        <button type="button" id="editSave" class="btn btn-primary">Save</button>
       </div>
     </div>
   `;
+  const opener = document.activeElement;
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+    if (opener && opener.focus) opener.focus();
+  };
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
   document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-  document.getElementById('editCancel').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  document.getElementById('editCancel').addEventListener('click', close);
+  document.getElementById('editClose').addEventListener('click', close);
+  document.getElementById('editFirst').focus();
   document.getElementById('editSave').addEventListener('click', async () => {
     const btn = document.getElementById('editSave');
-    btn.textContent = 'saving...';
+    btn.textContent = 'Saving…';
     btn.disabled = true;
     try {
       await PromptCodeAPI.updateMe({
@@ -105,10 +125,10 @@ function editProfile() {
         last_name: document.getElementById('editLast').value,
         bio: document.getElementById('editBio').value,
       });
-      overlay.remove();
+      close();
       location.reload();
     } catch (e) {
-      btn.textContent = 'error \u2014 retry';
+      btn.textContent = 'Error \u2014 retry';
       btn.disabled = false;
     }
   });
@@ -135,6 +155,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   const $ = id => document.getElementById(id);
+  if (window.PCUI && $('historyLoading')) $('historyLoading').innerHTML = PCUI.skeletonRows(3);
 
   // Header placeholders from local user while API loads
   $('profileHandle').textContent = targetUsername;
@@ -144,7 +165,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     profile = await PromptCodeAPI.getUserProfile(targetUsername);
   } catch (e) {
-    $('profileName').textContent = 'could not load profile';
+    $('profileName').textContent = 'Could not load profile';
+    renderHistory([], 'Profile unavailable');
+    $('solvedList').innerHTML = '';
     console.error('Profile load failed:', e.message);
     return;
   }
@@ -176,8 +199,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('statAvgScore').textContent = fmt(stats.avg_score);
   $('statSolved').textContent = stats.challenges_solved ?? '\u2014';
   $('statSolvedLbl').textContent = stats.total_challenges
-    ? `solved / ${stats.total_challenges}`
-    : 'solved';
+    ? `Solved / ${stats.total_challenges}`
+    : 'Solved';
   $('statSubmissions').textContent = stats.total_submissions ?? '\u2014';
   $('statGrowth').textContent = fmt(stats.avg_growth_score);
   $('statCost').textContent = stats.total_cost_usd != null ? '$' + fmt(stats.total_cost_usd) : '\u2014';
@@ -194,7 +217,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const v = cfg.val;
     $(cfg.el).textContent = fmt(v);
     if (v != null) {
-      $(cfg.bar).style.setProperty('--w', Math.round(v * 100) + '%');
+      const pct = Math.max(0, Math.min(100, Math.round(v * 100)));
+      const bar = $(cfg.bar);
+      bar.style.setProperty('--v', pct + '%');
+      bar.parentElement.dataset.tone = v >= 0.8 ? 'success' : v >= 0.65 ? 'warn' : 'danger';
+      bar.parentElement.setAttribute('aria-valuenow', String(pct));
+      bar.style.animation = 'none';
+      void bar.offsetWidth;
+      bar.style.animation = '';
     }
   }
 
@@ -207,27 +237,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('ysGrowth').textContent = fmt(stats.avg_growth_score);
 
   // --- Submission history ---
-  const histList = $('historyList');
-  if (subs.length === 0) {
-    histList.innerHTML = '<div style="padding:24px 14px;text-align:center;font-size:12px;color:var(--muted)">no submissions yet</div>';
-  } else {
-    histList.innerHTML = '';
-    subs.forEach(s => {
-      const a = document.createElement('a');
-      a.className = 'sh-row';
-      a.href = `/submission.html?id=${s.id}`;
-      a.style.gridTemplateColumns = '1fr 70px 70px 80px 70px';
-      const growth = s.growth_score != null ? fmt(s.growth_score) : '\u2014';
-      a.innerHTML = `
-        <div><div class="sh-name">${escHtml(s.challenge_title || 'Challenge #' + s.challenge_id)}</div><div class="sh-desc"><span class="diff-badge ${statusClass(s.status)}">${escHtml(s.status)}</span></div></div>
-        <span class="sh-score">${s.score_overall != null ? fmt(s.score_overall) : '\u2014'}</span>
-        <span class="sh-val">${growth}</span>
-        <span class="sh-val">${s.total_cost_usd != null ? '$' + fmt(s.total_cost_usd) : '\u2014'}</span>
-        <span class="sh-time">${s.created_at ? timeAgo(s.created_at) : '\u2014'}</span>
-      `;
-      histList.appendChild(a);
-    });
-  }
+  renderHistory(subs, 'No submissions yet');
+  $('historyList').addEventListener('click', e => {
+    const row = e.target.closest('tr[data-href]');
+    if (!row || e.target.closest('a')) return;
+    window.location.href = row.dataset.href;
+  });
 
   // --- Solved challenges sidebar ---
   const solvedMap = new Map();
@@ -248,7 +263,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const solvedList = $('solvedList');
   if (solved.length === 0) {
-    solvedList.innerHTML = '<div style="padding:18px 14px;text-align:center;font-size:12px;color:var(--muted)">no solved challenges yet</div>';
+    solvedList.innerHTML = '<div class="pc-empty is-compact"><h3>No solved challenges yet</h3></div>';
   } else {
     solvedList.innerHTML = '';
     solved.forEach(s => {
@@ -256,11 +271,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       a.className = 'solved-item';
       a.href = `/submission.html?id=${s.id}`;
       const score = s.score_overall || 0;
-      const color = score >= 0.9 ? 'var(--success)' : score >= 0.75 ? 'var(--accent)' : 'var(--warn)';
+      const tone = score >= 0.9 ? 'success' : score >= 0.75 ? 'info' : 'warn';
+      a.className += ' tone-' + tone;
       a.innerHTML = `
-        <div class="solved-dot" style="background:${color}"></div>
+        <span class="solved-dot" aria-hidden="true"></span>
         <span class="solved-name">${escHtml(s.challenge_title || 'Challenge #' + s.challenge_id)}</span>
-        <span class="solved-score" style="color:${color}">${fmt(score)}</span>
+        <span class="solved-score">${fmt(score)}</span>
       `;
       solvedList.appendChild(a);
     });

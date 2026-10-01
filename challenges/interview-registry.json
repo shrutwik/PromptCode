@@ -1,0 +1,274 @@
+{
+  "version": 1,
+  "challenges": [
+    {
+      "slug": "invoice-status-transition",
+      "title": "Invoice Status Transition",
+      "type": "Backend bug fix",
+      "stack": "TypeScript / Node",
+      "difficulty": "medium",
+      "estimated_minutes": 30,
+      "summary": "Finance reports odd invoice status transitions under an informal billing ticket. Stabilize the status machine without inventing product rules.",
+      "test_command": "npm test",
+      "install_command": "npm install",
+      "entry_files": [
+        "src/statusMachine.ts",
+        "src/invoiceService.ts",
+        "README.md"
+      ],
+      "runner": {
+        "image": "promptcode-runner-node:latest",
+        "commands": {
+          "run_tests": "npm test",
+          "run_targeted_tests": "npm test",
+          "run_benchmark": "npm test"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      }
+    },
+    {
+      "slug": "order-hold-reason",
+      "title": "Order Hold Reason",
+      "type": "Backend feature",
+      "stack": "Python / FastAPI",
+      "difficulty": "medium",
+      "estimated_minutes": 30,
+      "summary": "Support needs hold_reason through persistence and API without breaking legacy null semantics.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "app/models.py",
+        "app/schemas.py",
+        "app/service.py",
+        "README.md"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      }
+    },
+    {
+      "slug": "catalog-suggest-latency",
+      "title": "Catalog Suggest Latency",
+      "type": "Performance / scale",
+      "stack": "TypeScript / Node",
+      "difficulty": "medium",
+      "estimated_minutes": 30,
+      "summary": "Product suggest is too slow at catalog scale. Meet latency and scan budgets without changing ranking semantics.",
+      "test_command": "npm test",
+      "install_command": "npm install",
+      "entry_files": [
+        "src/suggest.ts",
+        "src/suggestService.ts",
+        "README.md"
+      ],
+      "runner": {
+        "image": "promptcode-runner-node:latest",
+        "commands": {
+          "run_tests": "npm test",
+          "run_targeted_tests": "npm test",
+          "run_benchmark": "npm test"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      }
+    },
+    {
+      "slug": "notification-feed-stale",
+      "title": "Notification Feed Stale State",
+      "type": "Frontend state bug",
+      "stack": "React / TypeScript",
+      "difficulty": "medium",
+      "estimated_minutes": 28,
+      "summary": "Unread badges stay stale after mark-as-read. Fix client state without rewriting the feed.",
+      "test_command": "npm test",
+      "install_command": "npm install",
+      "entry_files": [
+        "src/hooks/useNotificationFeed.ts",
+        "src/store/notificationStore.ts",
+        "README.md"
+      ],
+      "runner": {
+        "image": "promptcode-runner-node:latest",
+        "commands": {
+          "run_tests": "npm test",
+          "run_targeted_tests": "npm test",
+          "run_benchmark": "npm test"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      }
+    },
+    {
+      "slug": "workspace-label-propagation",
+      "title": "Workspace Label Propagation",
+      "type": "Full-stack feature",
+      "stack": "React + Express",
+      "difficulty": "medium",
+      "estimated_minutes": 35,
+      "summary": "Workspace labels must persist, round-trip through the API, and render in the UI.",
+      "test_command": "npm test",
+      "install_command": "npm install",
+      "entry_files": [
+        "README.md"
+      ],
+      "runner": {
+        "image": "promptcode-runner-node:latest",
+        "commands": {
+          "run_tests": "npm test",
+          "run_targeted_tests": "npm test",
+          "run_benchmark": "npm test"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      }
+    },
+    {
+      "slug": "shipment-csv-merge",
+      "title": "Shipment CSV Merge",
+      "type": "Data-processing bug",
+      "stack": "Python",
+      "difficulty": "medium",
+      "estimated_minutes": 30,
+      "summary": "Multi-day shipment event CSVs merge incorrectly. Preserve chronology and identity rules.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "shipment_merge/merge.py",
+        "shipment_merge/parse.py",
+        "README.md"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      }
+    },
+    {
+      "slug": "tenant-document-acl",
+      "title": "Tenant Document ACL",
+      "type": "Authz / multi-tenant",
+      "stack": "Python / FastAPI",
+      "difficulty": "medium",
+      "estimated_minutes": 32,
+      "summary": "Documents leak across tenants. Enforce ACL without breaking legitimate same-tenant access.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "app/service.py",
+        "app/auth.py",
+        "README.md"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      }
+    },
+    {
+      "slug": "webhook-delivery-retry",
+      "title": "Webhook Delivery Retry",
+      "type": "Async / retry",
+      "stack": "TypeScript / Node",
+      "difficulty": "medium",
+      "estimated_minutes": 32,
+      "summary": "Webhook retries, side effects, and batch delivery behave inconsistently under failure.",
+      "test_command": "npm test",
+      "install_command": "npm install",
+      "entry_files": [
+        "src/deliveryWorker.ts",
+        "src/retryPolicy.ts",
+        "README.md"
+      ],
+      "runner": {
+        "image": "promptcode-runner-node:latest",
+        "commands": {
+          "run_tests": "npm test",
+          "run_targeted_tests": "npm test",
+          "run_benchmark": "npm test"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      }
+    },
+    {
+      "slug": "pricing-rule-extract",
+      "title": "Pricing Rule Extract",
+      "type": "Behavior-preserving refactor",
+      "stack": "TypeScript",
+      "difficulty": "medium",
+      "estimated_minutes": 30,
+      "summary": "Extract a pricing helper without changing quote outputs for existing fixtures.",
+      "test_command": "npm test",
+      "install_command": "npm install",
+      "entry_files": [
+        "src/pricingEngine.ts",
+        "src/quoteService.ts",
+        "README.md"
+      ],
+      "runner": {
+        "image": "promptcode-runner-node:latest",
+        "commands": {
+          "run_tests": "npm test",
+          "run_targeted_tests": "npm test",
+          "run_benchmark": "npm test"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      }
+    },
+    {
+      "slug": "subscription-proration-boundary",
+      "title": "Subscription Proration Boundary",
+      "type": "Looks-correct prod bug",
+      "stack": "Python",
+      "difficulty": "medium",
+      "estimated_minutes": 30,
+      "summary": "Public tests pass but cancel/proration timing at period boundaries is wrong in production-like cases.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "proration/billing.py",
+        "proration/period.py",
+        "README.md"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      }
+    }
+  ]
+}

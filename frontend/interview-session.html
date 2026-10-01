@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Interview Workspace — PromptCode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&display=swap">
+<link rel="stylesheet" href="/static/css/pc-tokens.css?v=20260930">
+<link rel="stylesheet" href="/static/css/pc-components.css?v=20260930">
+<link rel="stylesheet" href="/static/interview.css?v=20260930">
+<link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/editor/editor.main.css" />
+</head>
+<body class="ide-body">
+<a class="pc-skip" href="#monacoHost">Skip to editor</a>
+<div class="pc-desktop-hint">Desktop recommended for the interview workspace — panels stack on small screens.</div>
+<header class="ide-topbar" aria-label="Interview session">
+  <div class="ide-topbar-left">
+    <a class="nav-brand" href="/dashboard" aria-label="PromptCode — back to Practice">PromptCode</a>
+    <span class="ide-crumb"><span id="slugLabel">Loading…</span></span>
+  </div>
+  <div class="pc-segmented phase-bar" role="group" aria-label="Interview phase">
+    <button type="button" data-phase="plan" class="is-active" aria-pressed="true">Plan</button>
+    <button type="button" data-phase="build" aria-pressed="false">Build</button>
+    <button type="button" data-phase="review" aria-pressed="false">Review</button>
+  </div>
+  <div class="ide-topbar-right">
+    <div class="ide-meta">
+      <span class="dirty-pill hidden" id="dirtyPill">unsaved</span>
+      <span class="ide-status" id="sessionStatus" data-state="ok" role="status">Ready</span>
+      <span class="ide-timer" id="sessionTimer" title="Elapsed time" aria-label="Elapsed time">00:00</span>
+    </div>
+    <span class="ide-divider" aria-hidden="true"></span>
+    <button class="btn btn-secondary" id="testBtn" type="button" title="Run tests">Run tests</button>
+    <button class="btn btn-ghost" id="diffBtn" type="button" title="Review changes">Review</button>
+    <button class="btn btn-ghost" id="moreBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu">More
+      <svg class="pc-icon pc-icon-sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+    </button>
+    <button class="btn btn-primary" id="submitBtn" type="button">Submit</button>
+  </div>
+</header>
+<div id="moreMenu" class="pc-menu ide-menu hidden" role="menu" aria-label="More actions">
+  <button type="button" role="menuitem" data-action="save" id="saveBtn">Save file <span class="pc-kbd">⌘S</span></button>
+  <button type="button" role="menuitem" data-action="relevant" id="relevantBtn">Run relevant tests</button>
+  <button type="button" role="menuitem" data-action="bench" id="benchBtn">Run benchmark</button>
+  <div class="pc-menu-sep" role="separator"></div>
+  <button type="button" role="menuitem" data-action="palette">Command palette <span class="pc-kbd">⌘K</span></button>
+  <button type="button" role="menuitem" data-action="toggle-explorer">Toggle explorer</button>
+  <button type="button" role="menuitem" data-action="toggle-ai">Toggle AI panel</button>
+  <button type="button" role="menuitem" data-action="toggle-term">Toggle terminal</button>
+</div>
+
+<div class="workspace" id="workspace">
+  <aside class="ide-panel explorer" id="explorerPanel" aria-label="Files">
+    <div class="ide-panel-head"><h2>Explorer</h2></div>
+    <details class="ticket-panel" id="ticketPanel" open>
+      <summary>Ticket</summary>
+      <div class="ticket-body" id="ticketBody">Loading scenario…</div>
+    </details>
+    <input class="file-search" id="fileSearch" type="search" placeholder="Search files…" aria-label="Search files" />
+    <div id="tree" class="tree"></div>
+  </aside>
+  <div class="pc-resize pc-resize-col" id="resizeExplorer" role="separator" aria-orientation="vertical" aria-label="Resize explorer"></div>
+  <section class="ide-panel editor-wrap" aria-label="Editor">
+    <div class="tabs" id="tabs" role="tablist" aria-label="Open files"></div>
+    <div class="editor-toolbar">
+      <span id="pathLabel">Select a file</span>
+      <span id="langLabel"></span>
+    </div>
+    <div id="monacoHost"></div>
+  </section>
+  <div class="pc-resize pc-resize-col" id="resizeAi" role="separator" aria-orientation="vertical" aria-label="Resize AI panel"></div>
+  <aside class="ide-panel chat" id="aiPanel" aria-label="AI assistant">
+    <div class="ide-panel-head"><h2 class="ai-dot">AI Assistant</h2><span>logged</span></div>
+    <div class="ctx-controls" id="ctxChips" role="group" aria-label="Context sent with your message">
+      <span class="ctx-label">Context</span>
+      <label class="ctx-chip" data-on="true"><input type="checkbox" id="attachCurrent" checked /> Current file</label>
+      <label class="ctx-chip" data-on="false"><input type="checkbox" id="attachTests" /> Tests</label>
+      <label class="ctx-chip" data-on="false"><input type="checkbox" id="attachSelection" /> Selection</label>
+    </div>
+    <div class="chat-log" id="chatLog" aria-live="polite"></div>
+    <div id="applyBar" class="apply-bar hidden"></div>
+    <form class="chat-form" id="chatForm">
+      <textarea id="chatInput" placeholder="Ask with selected context only…" aria-label="Assistant message"></textarea>
+      <div class="chat-form-foot">
+        <span>Enter to send · Shift+Enter for newline</span>
+        <button class="btn btn-primary btn-sm" type="submit">Send</button>
+      </div>
+    </form>
+  </aside>
+  <div class="pc-resize pc-resize-row" id="resizeTerm" role="separator" aria-orientation="horizontal" aria-label="Resize terminal"></div>
+  <section class="ide-panel term-panel" id="termPanel" aria-label="Terminal">
+    <div class="term-head">
+      <span class="term-tab">Terminal</span>
+      <div class="term-meta" id="termMeta">No runs yet</div>
+    </div>
+    <pre class="term-log" id="termLog">Ready.</pre>
+  </section>
+</div>
+
+<div class="modal hidden" id="diffModal" role="dialog" aria-modal="true" aria-labelledby="diffModalTitle">
+  <div class="modal-card diff-card">
+    <div class="modal-head">
+      <h2 id="diffModalTitle">Review changes</h2>
+      <button class="btn btn-ghost btn-sm" id="closeDiff" type="button">Close</button>
+    </div>
+    <div class="diff-layout">
+      <div id="diffFiles" class="diff-files"></div>
+      <pre id="diffView" class="diff-view"></pre>
+    </div>
+  </div>
+</div>
+
+<div class="modal hidden" id="submitModal" role="dialog" aria-modal="true" aria-labelledby="submitModalTitle">
+  <div class="modal-card submit-card">
+    <div class="modal-head">
+      <h2 id="submitModalTitle">Submit for scoring</h2>
+      <button class="btn btn-ghost btn-sm" id="closeSubmit" type="button">Close</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted" id="submitSummary"></p>
+      <ul class="pc-list">
+        <li id="submitDirtyLine"></li>
+        <li>Diff review recommended before submit</li>
+        <li>Visible tests should be green when possible</li>
+      </ul>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" type="button" id="cancelSubmit">Cancel</button>
+        <button class="btn btn-primary" type="button" id="confirmSubmit">Submit</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/pages/interview-session-1.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/editor/editor.main.nls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/editor/editor.main.js"></script>
+<script src="/static/interview-api.js"></script>
+<script src="/static/js/pc-ui.js?v=20260930"></script>
+<script src="/static/js/pages/interview-session.js"></script>
+</body>
+</html>
