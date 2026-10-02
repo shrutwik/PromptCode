@@ -90,7 +90,9 @@ def test_injection_context_contains_only_owned_explicit_data():
     assert 'OWNED_MARKER' in source
     assert 'CANDIDATE_B_PRIVATE_MARKER' not in source
     assert 'test-only-provider-key' not in source
-    assert 'untrusted' in source.lower()
+    assert source.count('OWNED_MARKER') == 1
+    assert 'src/owned.py' in source
+    assert 'public instructions' not in source
 
 
 @pytest.mark.parametrize('limit', ['GLOBAL_TOKENS','GLOBAL_COST_MICROS','SESSION_TOKENS'])

@@ -308,6 +308,10 @@ Local completed verification: **16 passed in 13.89s** across AI controls/reliabi
 
 Prompt-injection result: context assembly keeps explicit owned attachments as untrusted data and does not include provider keys or other-candidate markers. This is a data-boundary test, not a successful real-model jailbreak audit. System instructions are not confidential credentials. Actual paid-provider injection resistance, real billing reconciliation and complete browser/log exposure through a deployed provider are NOT TESTED (no test provider account configured). Session ownership is enforced before attachment loading; broad cross-candidate HTTP review continues in D/F. Older submission-scoring worker AI calls are outside these assistant budgets and must stay disabled for deployment until separately metered. NO-GO for authoritative scoring.
 
+### C clean-verification correction
+
+14fddf2 clean HEAD: **22 passed, 1 FAILED in 14.52s**. The failure was an assertion expecting an untrusted-content marker supplied only by excluded prompt-formatting edits. Those unrelated prompt edits remain excluded. Corrected the test to verify the actual owned-context boundary: exactly one owned marker and its path, no provider key, no other-candidate data, and no system instructions inside user attachment content. This test does not prove model resistance to injected instructions. No broader product/prompt change is required; fresh clean verification pending. The earlier local 16-pass result was insufficient to establish that marker assertion in committed code.
+
 ## Appendix — superseded historical audit narrative (UNVERIFIED)
 
 The following material predates clean-HEAD verification. Its pass, load, restart and scan claims are superseded; retain only as investigation history.
