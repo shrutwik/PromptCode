@@ -193,3 +193,11 @@ Changes: client_ip.py chooses the rightmost untrusted hop; test_backend_validati
 Local verification: 10 validation tests passed. Clean HEAD verification follows this commit.
 A1 clean HEAD verification: all 6 password-reset tests passed; no unrelated changes required.
 Runner baseline in clean HEAD: 4 passed, 1 failed because the committed runner references the pending audit-only workspace_has_escape_link helper. Actual Docker isolation remains NOT TESTED.
+
+## Verified continuation — B5 candidate workspace boundaries
+
+Finding: committed runner imported an unstaged isolation helper; API containment used an unsafe string-prefix check.
+Changes: registry/workspace audit hunks enforce contained paths, reject symlinks, freeze runner controls, and cap UTF-8 file writes. A new regression caught and fixed leading-dot stripping that allowed .env writes.
+Local verification: 14 workspace-boundary and runner-isolation tests passed. Clean HEAD verification follows this commit.
+Excluded: automatic question context and default workspace-path convenience change. Actual non-root/container/network isolation is NOT TESTED by these unit tests; B5 remains partly open.
+E1 clean HEAD verification: 10 validation tests passed without unrelated changes.

@@ -21,6 +21,26 @@ BLOCKED_NAME_FRAGMENTS = (
     ".reference",
 )
 
+# Candidate and assistant writes cannot replace the files that decide how tests run.
+FROZEN_BASENAMES = frozenset(
+    {
+        "package.json",
+        "package-lock.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        "npm-shrinkwrap.json",
+        "pyproject.toml",
+        "pytest.ini",
+        "setup.cfg",
+        "setup.py",
+        "conftest.py",
+        "tox.ini",
+        "requirements.txt",
+        "dockerfile",
+        "makefile",
+    }
+)
+
 
 @lru_cache
 def load_registry() -> dict[str, Any]:
@@ -75,6 +95,17 @@ def is_blocked_path(rel_path: str) -> bool:
     if "solution.md" in parts:
         return True
     return False
+
+
+def is_frozen_path(rel_path: str) -> bool:
+    """Runner control files stay as copied from the challenge. Reads are still allowed."""
+    normalized = rel_path.replace("\\", "/").strip()
+    if not normalized or "\x00" in normalized:
+        return True
+    name = normalized.rsplit("/", 1)[-1].lower()
+    if name in FROZEN_BASENAMES or name.startswith(".env"):
+        return True
+    return name.endswith(".sh")
 
 
 def candidate_readme(slug: str) -> str:

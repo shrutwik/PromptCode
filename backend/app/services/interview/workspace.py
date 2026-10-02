@@ -9,6 +9,7 @@ Never mutates source challenges/ or other session directories.
 
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 
@@ -17,7 +18,10 @@ from app.services.interview.registry import (
     BLOCKED_NAME_FRAGMENTS,
     challenge_dir,
     is_blocked_path,
+    is_frozen_path,
 )
+
+MAX_FILE_BYTES = 1_500_000
 
 SKIP_DIR_NAMES = {
     "node_modules",
@@ -102,12 +106,16 @@ def compute_diff_stats(starter: Path, current: Path) -> dict:
     starter_files = {
         p.relative_to(starter).as_posix(): p
         for p in starter.rglob("*")
-        if p.is_file() and not is_blocked_path(p.relative_to(starter).as_posix())
+        if not p.is_symlink()
+        and p.is_file()
+        and not is_blocked_path(p.relative_to(starter).as_posix())
     }
     current_files = {
         p.relative_to(current).as_posix(): p
         for p in current.rglob("*")
-        if p.is_file() and not is_blocked_path(p.relative_to(current).as_posix())
+        if not p.is_symlink()
+        and p.is_file()
+        and not is_blocked_path(p.relative_to(current).as_posix())
     }
     all_paths = sorted(set(starter_files) | set(current_files))
     total_add = 0
@@ -166,8 +174,8 @@ def unified_diff_for_file(starter: Path, current: Path, rel_path: str) -> str:
 
     if is_blocked_path(rel_path):
         raise PermissionError("File not available")
-    a_path = starter / rel_path
-    b_path = current / rel_path
+    a_path = contained_file(starter, rel_path)
+    b_path = contained_file(current, rel_path)
     a = (
         a_path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
         if a_path.is_file()
@@ -183,12 +191,67 @@ def unified_diff_for_file(starter: Path, current: Path, rel_path: str) -> str:
     )
 
 
+def contained_file(workspace: Path, rel_path: str) -> Path:
+    """Resolve a candidate path that stays inside the workspace and is not a link."""
+    if not rel_path or "\x00" in rel_path:
+        raise PermissionError("Path escape blocked")
+    raw = rel_path.replace("\\", "/")
+    if raw.startswith("/") or raw.startswith("~"):
+        raise PermissionError("Path escape blocked")
+    parts = [part for part in raw.split("/") if part not in ("", ".")]
+    if not parts or any(part == ".." for part in parts):
+        raise PermissionError("Path escape blocked")
+    root = workspace.resolve()
+    current = root
+    for part in parts:
+        if part in {".", ".."}:
+            raise PermissionError("Path escape blocked")
+        current = current / part
+        if current.is_symlink():
+            raise PermissionError("Path escape blocked")
+    try:
+        current.resolve().relative_to(root)
+    except ValueError:
+        raise PermissionError("Path escape blocked") from None
+    return current
+
+
+def workspace_has_escape_link(workspace: Path) -> bool:
+    """True when a candidate-visible symlink could point the runner or API outside the session."""
+    if not workspace.is_dir():
+        return False
+    for dirpath, dirnames, filenames in os.walk(workspace, followlinks=False):
+        base = Path(dirpath)
+        kept: list[str] = []
+        for name in dirnames:
+            candidate = base / name
+            if candidate.is_symlink():
+                return True
+            if name not in SKIP_DIR_NAMES:
+                kept.append(name)
+        dirnames[:] = kept
+        for name in filenames:
+            if (base / name).is_symlink():
+                return True
+    return False
+
+
+def candidate_write_allowed(workspace: Path, rel_path: str) -> bool:
+    if is_blocked_path(rel_path) or is_frozen_path(rel_path):
+        return False
+    try:
+        contained_file(workspace, rel_path)
+    except PermissionError:
+        return False
+    return True
+
+
 def list_files(workspace: Path) -> list[dict]:
     files: list[dict] = []
     if not workspace.exists():
         return files
     for item in sorted(workspace.rglob("*")):
-        if not item.is_file():
+        if item.is_symlink() or not item.is_file():
             continue
         rel = item.relative_to(workspace).as_posix()
         if is_blocked_path(rel):
@@ -206,22 +269,21 @@ def list_files(workspace: Path) -> list[dict]:
 def read_file(workspace: Path, rel_path: str) -> str:
     if is_blocked_path(rel_path):
         raise PermissionError("File not available")
-    path = (workspace / rel_path).resolve()
-    if not str(path).startswith(str(workspace.resolve())):
-        raise PermissionError("Path escape blocked")
+    path = contained_file(workspace, rel_path)
     if not path.is_file():
         raise FileNotFoundError(rel_path)
-    # Cap large binaries / lockfiles for editor
-    if path.stat().st_size > 1_500_000:
+    if path.stat().st_size > MAX_FILE_BYTES:
         raise ValueError("File too large for editor")
     return path.read_text(encoding="utf-8", errors="replace")
 
 
 def write_file(workspace: Path, rel_path: str, content: str) -> None:
-    if is_blocked_path(rel_path):
+    if is_blocked_path(rel_path) or is_frozen_path(rel_path):
         raise PermissionError("File not available")
-    path = (workspace / rel_path).resolve()
-    if not str(path).startswith(str(workspace.resolve())):
-        raise PermissionError("Path escape blocked")
+    if len(content.encode("utf-8")) > MAX_FILE_BYTES:
+        raise ValueError("File too large for editor")
+    path = contained_file(workspace, rel_path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink():
+        raise PermissionError("Path escape blocked")
     path.write_text(content, encoding="utf-8")
