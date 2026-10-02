@@ -288,6 +288,14 @@ Removed runtime host dependency installation and prebuilt-venv copying from cand
 
 Local quota/workspace tests: **14 passed in 0.20s**, including concurrent overcommit, byte/file bounds, replacement accounting, dependency budget and protected paths. Clean committed verification pending. NO-GO for authoritative scoring.
 
+## B7 — live npm attacks and Node image privilege probe
+
+a44845e clean HEAD: **36 passed in 2.70s** across quota/workspace/advisory/grading tests. Log: /private/tmp/audit-upload-clean.log. No unrelated edits needed.
+
+Live offline npm install used only local test-fixture dependencies in a size-limited ephemeral filesystem. Root/dependency lifecycle scripts stayed disabled with hostile project .npmrc; a rewritten manifest was restored from trusted starter and malicious .npmrc removed. CLI/environment force ignore-scripts and separate empty user/global config files. Node image probe confirmed non-root UID, zero effective capabilities, NoNewPrivs=1, no socket/secrets, read-only root and no persisted host node_modules or file changes. Completed local run: **6 passed in 0.85s**. Initial run failed because npm refuses the same /dev/null config file loaded as both user and global; corrected to a distinct empty global file. Unit expectations now reflect advisory host execution (no complete reporter => fail) and offline read-only installer arguments.
+
+Legacy dependency-validation helper now uses source read-only plus 256 MiB tmpfs, network none, fixed UID 10001, CPU/memory/PID bounds and discarded output. Candidate runs do not invoke it or install host dependencies. Reviewed image/cache provisioning remains manual; Node complete-report support is not implemented and Node results cannot pass the advisory reporter contract yet. Online npm-registry installs are NOT TESTED and intentionally disabled during candidate execution. NO-GO for authoritative scoring and unresolved deployment privilege boundary.
+
 ## Appendix — superseded historical audit narrative (UNVERIFIED)
 
 The following material predates clean-HEAD verification. Its pass, load, restart and scan claims are superseded; retain only as investigation history.

@@ -832,7 +832,7 @@ def _interview_network(client: Any) -> str:
     return name
 
 
-_NODE_MANIFESTS = ("package.json", "package-lock.json", "npm-shrinkwrap.json")
+_NODE_MANIFESTS = ("package.json", "package-lock.json", "npm-shrinkwrap.json", ".npmrc")
 
 
 def starter_snapshot_for_workspace(workspace: Path) -> Path:
@@ -871,83 +871,34 @@ def node_install_argv(workspace: Path) -> list[str]:
 
 
 def linux_npm_docker_argv(workspace: Path, image: str, install: list[str]) -> list[str]:
-    """Install args for a trusted manifest. No extra caps, no lifecycle scripts."""
+    """Offline install validation in disposable tmpfs; never mutate host dependencies."""
+    script = ": > /tmp/promptcode-global.npmrc && cp -R /source/. /workspace/ && " + shlex.join(install + [
+        "--offline", "--userconfig=/dev/null", "--globalconfig=/tmp/promptcode-global.npmrc",
+    ])
     return [
-        "docker",
-        "run",
-        "--rm",
-        "--cap-drop",
-        "ALL",
-        "--security-opt",
-        "no-new-privileges",
-        "--pids-limit",
-        "128",
-        "--memory",
-        "512m",
-        "--network",
-        "bridge",
-        "-v",
-        f"{workspace}:/workspace",
-        "-w",
-        "/workspace",
-        "--user",
-        f"{os.getuid()}:{os.getgid()}",
-        "--read-only",
-        "--tmpfs",
-        "/tmp:rw,noexec,nosuid,size=256m",
-        "-e",
-        "HOME=/tmp",
-        "-e",
-        "npm_config_cache=/tmp/npm-cache",
-        "-e",
-        "npm_config_ignore_scripts=true",
-        image,
-        *install,
+        "docker", "run", "--rm", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+        "--pids-limit", "128", "--memory", "512m", "--cpus", "1", "--network", "none",
+        "-v", f"{workspace}:/source:ro", "-w", "/workspace", "--user", "10001:10001",
+        "--read-only", "--tmpfs", "/workspace:rw,nosuid,nodev,size=256m,uid=10001,gid=10001,mode=0700",
+        "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m", "-e", "HOME=/tmp",
+        "-e", "npm_config_cache=/tmp/npm-cache", "-e", "npm_config_ignore_scripts=true",
+        "-e", "npm_config_userconfig=/dev/null", "-e", "npm_config_globalconfig=/tmp/promptcode-global.npmrc",
+        image, "sh", "-c", script,
     ]
 
 
 def _install_linux_node_modules(workspace: Path, image: str) -> None:
-    """Install Node deps inside the Linux runner image.
-
-    A Mac npm install cannot run in that image: native packages such as rollup
-    are built for the host OS. Candidate test runs stay offline; this install
-    uses the starter snapshot's lockfile only.
-    """
-    if not restore_node_manifests(workspace):
-        logger.warning(
-            "Refusing Node install without a trusted starter snapshot for %s",
-            workspace.name,
-        )
+    """Legacy validation helper; installs are discarded, never mounted back into API storage."""
+    if not restore_node_manifests(workspace) or not (workspace / "package.json").is_file():
         return
-    if not (workspace / "package.json").is_file():
-        return
-    modules = workspace / "node_modules"
-    stamp = modules / ".promptcode-platform"
-    if stamp.is_file() and stamp.read_text(encoding="utf-8").strip() == "linux":
-        return
-    if modules.exists():
-        shutil.rmtree(modules)
-    install = node_install_argv(workspace)
     try:
-        completed = subprocess.run(
-            linux_npm_docker_argv(workspace, image, install),
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=180,
-        )
+        completed = subprocess.run(linux_npm_docker_argv(workspace, image, node_install_argv(workspace)),
+                                   check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180)
     except (OSError, subprocess.TimeoutExpired):
-        logger.warning("Linux npm install failed to start for %s", workspace.name)
+        logger.warning("Offline dependency validation unavailable")
         return
     if completed.returncode != 0:
-        logger.warning(
-            "Linux npm install failed for %s: %s",
-            workspace.name,
-            (completed.stderr or completed.stdout or "")[:400],
-        )
-        return
-    if modules.is_dir():
-        stamp.write_text("linux", encoding="utf-8")
+        logger.warning("Offline dependencies unavailable in reviewed runner image/cache")
 
 
 def _clip(text: str, limit: int) -> str:

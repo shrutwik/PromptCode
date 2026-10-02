@@ -29,6 +29,7 @@ FROZEN_BASENAMES = frozenset(
         "yarn.lock",
         "pnpm-lock.yaml",
         "npm-shrinkwrap.json",
+        ".npmrc",
         "pyproject.toml",
         "pytest.ini",
         "setup.cfg",

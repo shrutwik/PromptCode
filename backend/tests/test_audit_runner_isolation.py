@@ -53,7 +53,8 @@ def test_local_runner_does_not_pass_host_secrets(tmp_path, monkeypatch):
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
     result = asyncio.run(LocalDevelopmentRunner().run_tests(ws, "pytest -q"))
-    assert result["ok"] is True
+    assert result["ok"] is False  # Host execution has no complete reporter evidence.
+    assert result["authoritative"] is False
     assert "PROMPTCODE_JWT_SECRET" not in captured["env"]
     assert "OPENAI_API_KEY" not in captured["env"]
     assert captured["env"]["PYTHONPATH"] == str(ws)
@@ -77,8 +78,6 @@ def test_tampered_package_json_is_restored_before_install(tmp_path, monkeypatch)
 
     def fake_run(argv, **_kwargs):
         recorded["argv"] = argv
-        modules = ws / "node_modules"
-        modules.mkdir()
         completed = MagicMock()
         completed.returncode = 0
         completed.stdout = ""
@@ -94,7 +93,10 @@ def test_tampered_package_json_is_restored_before_install(tmp_path, monkeypatch)
     assert (ws / "package.json").read_text(encoding="utf-8") == trusted
     assert (ws / "package-lock.json").is_file()
     argv = recorded["argv"]
-    assert "--ignore-scripts" in argv
+    assert "--ignore-scripts" in argv[-1].split()
+    assert "--offline" in argv[-1].split()
+    assert f"{ws}:/source:ro" in argv
+    assert not (ws / "node_modules").exists()
     assert "--cap-drop" in argv
     assert "ALL" in argv
     assert "no-new-privileges" in argv
