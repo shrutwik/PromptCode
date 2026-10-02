@@ -272,6 +272,12 @@ Completed local verification: **30 passed in 21.43s**, including live valid-repo
 
 5db83b3 contains advisory scoring/API/UI/reporting primitives. Clean HEAD verification: **18 passed, 1 xfailed in 1.07s**; its runtime bypass remained open because reporter integration was not staged in that commit. A staging-helper assertion stopped before runner/test integration; the shell continued and made the partial commit. Corrected this explicitly in a follow-up, including restoring original UI tag order in the index. No unrelated UI hunks were retained. The follow-up supplies runner report enforcement and converts the formerly xfailed bypass into a required passing regression. Clean follow-up verification pending; the completed local targeted run remains 30 passed.
 
+## Trusted evaluator and restricted execution designs — Option B
+
+06482ed clean HEAD targeted verification completed: **30 passed in 21.19s** including all live advisory/integrity/isolation probes. Log: /private/tmp/audit-report-clean.log. No unrelated hunks needed. This verifies the completeness mitigation, not authoritative correctness.
+
+Design only: docs/audit-trusted-execution-design.md describes an evaluator outside the candidate interpreter, bounded challenge adapters, immutable source/inventory versions and signed job-bound results. It also describes a narrow fixed-flag broker on a dedicated disposable execution host. Existing sandbox-executor socket/group privileges imply full Docker-host control; a method-only socket proxy, non-root UID or read-only socket bind does not restrict that authority. Neither proposal is implemented. Owner approval is required before building either design. Estimated evaluator prototype 3–5 days, production infrastructure/verification 2–4 weeks plus challenge migration; broker 5–10 days plus disposable-host operations 3–5 days. These are planning estimates, not measured work. NO-GO for authoritative scoring.
+
 ## Appendix — superseded historical audit narrative (UNVERIFIED)
 
 The following material predates clean-HEAD verification. Its pass, load, restart and scan claims are superseded; retain only as investigation history.
