@@ -336,6 +336,14 @@ Added host-wide file-lock execution slots shared by interview and legacy local r
 
 Local targeted checks: **20 passed in 3.57s** (`/private/tmp/audit-cap-local.log`). Live bounded workload: eight simultaneous requests, cap two, **two complete advisory reports and six busy rejections**, no containers remaining from that fixture. Cross-process slot and cancelled-request tests passed. No host-capacity maximum or production throughput claim is made: restarted-server HTTP load/capacity measurement remains pending. Existing default cap four is provisional until measured. API-crash reaper handles labeled deadline-expired containers; abrupt-restart user-session recovery and submission races remain pending. Clean commit verification pending. **NO-GO**.
 
+## F migration blocker found during D/E load setup
+
+Runner-capacity commit 7c0e1cc clean HEAD: **28 passed in 20.13s** (`/private/tmp/audit-capacity-clean.log`), including live isolation and saturation checks. No unrelated edits needed.
+
+Fresh PostgreSQL `upgrade head` FAILED in the beta-operations migration: native UUID foreign keys could not reference baseline VARCHAR(36) IDs. Aligned its seven UUID columns with the existing string-backed GUID schema contract. This changes fresh table creation only; it does not alter or delete existing table data. Local targeted verification: **6 passed in 6.11s**, including a complete fresh PostgreSQL upgrade and startup migration checks (`/private/tmp/audit-migration-local.log`). Clean commit verification pending. Existing database upgrade compatibility, rollback and production schema inspection are NOT TESTED; production was never contacted.
+
+HTTP load setup attempts did not produce a completed load result: production config required a domain/provider value, then fresh migrations failed as above, then reserved `.invalid` fixture email addresses were rejected with 422. Disposable databases were removed by the harness finally blocks. The pending audit-only `scripts/audit-load.py` uses test accounts, a reserved test domain, fake secrets, mock AI, bounded PostgreSQL and a loopback server; it remains uncommitted pending a successful clean-HEAD run. No latency/error-rate or real breaking-point claim yet. **NO-GO**.
+
 ## Appendix — superseded historical audit narrative (UNVERIFIED)
 
 The following material predates clean-HEAD verification. Its pass, load, restart and scan claims are superseded; retain only as investigation history.

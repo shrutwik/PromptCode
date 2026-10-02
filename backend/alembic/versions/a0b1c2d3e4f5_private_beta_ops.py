@@ -23,7 +23,7 @@ def upgrade() -> None:
     if "invite_codes" not in tables:
         op.create_table(
             "invite_codes",
-            sa.Column("id", sa.Uuid(), primary_key=True),
+            sa.Column("id", sa.String(36), primary_key=True),
             sa.Column("code", sa.String(64), nullable=False),
             sa.Column("cohort", sa.String(64), server_default="beta", nullable=False),
             sa.Column("max_uses", sa.Integer(), server_default="1", nullable=False),
@@ -43,10 +43,10 @@ def upgrade() -> None:
     if "product_analytics_events" not in tables:
         op.create_table(
             "product_analytics_events",
-            sa.Column("id", sa.Uuid(), primary_key=True),
+            sa.Column("id", sa.String(36), primary_key=True),
             sa.Column("event_name", sa.String(64), nullable=False),
-            sa.Column("user_id", sa.Uuid(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-            sa.Column("session_id", sa.Uuid(), nullable=True),
+            sa.Column("user_id", sa.String(36), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+            sa.Column("session_id", sa.String(36), nullable=True),
             sa.Column("challenge_slug", sa.String(128), nullable=True),
             sa.Column("properties", sa.JSON(), nullable=True),
             sa.Column(
@@ -65,10 +65,10 @@ def upgrade() -> None:
     if "human_reviews" not in tables:
         op.create_table(
             "human_reviews",
-            sa.Column("id", sa.Uuid(), primary_key=True),
+            sa.Column("id", sa.String(36), primary_key=True),
             sa.Column(
                 "session_id",
-                sa.Uuid(),
+                sa.String(36),
                 sa.ForeignKey("interview_sessions.id", ondelete="CASCADE"),
                 nullable=False,
             ),
@@ -108,7 +108,7 @@ def upgrade() -> None:
         if "invite_code_id" not in cols:
             op.add_column(
                 "users",
-                sa.Column("invite_code_id", sa.Uuid(), nullable=True),
+                sa.Column("invite_code_id", sa.String(36), nullable=True),
             )
 
     if "interview_sessions" in tables:

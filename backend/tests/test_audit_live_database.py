@@ -3,6 +3,9 @@ import asyncio
 import os
 import time
 import socket
+import subprocess
+import sys
+from pathlib import Path
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -32,6 +35,11 @@ def test_live_database_outage_recovery_and_pool_exhaustion():
         ready();container.reload()
         port=container.attrs['NetworkSettings']['Ports']['5432/tcp'][0]['HostPort']
         url=f'postgresql+asyncpg://postgres:test-only-database-password@127.0.0.1:{port}/audit'
+        backend=Path(__file__).resolve().parents[1]
+        migration=subprocess.run([sys.executable,'-m','alembic','-c',str(backend/'alembic.ini'),'upgrade','head'],
+            cwd=backend,env=dict(os.environ,PROMPTCODE_DATABASE_URL=url,PROMPTCODE_DATABASE_SSL_REQUIRE='false'),
+            timeout=30,capture_output=True)
+        assert migration.returncode==0,migration.stderr.decode()[-2000:]
         async def exercise():
             engine=create_async_engine(url,pool_size=1,max_overflow=0,pool_timeout=.2,pool_pre_ping=True,connect_args={'ssl':False,'timeout':2,'command_timeout':2})
             try:
@@ -56,7 +64,7 @@ def test_live_database_outage_recovery_and_pool_exhaustion():
                 from datetime import datetime, timezone
                 counters=create_async_engine(url,pool_size=10,max_overflow=0,connect_args={'ssl':False,'timeout':2,'command_timeout':2})
                 try:
-                    async with counters.begin() as conn: await conn.run_sync(RateLimitCounter.__table__.create)
+                    async with counters.begin() as conn: await conn.run_sync(lambda sync: RateLimitCounter.__table__.create(sync,checkfirst=True))
                     sessions=async_sessionmaker(counters)
                     now=datetime(2026,10,2,12,0,1,tzinfo=timezone.utc)
                     async def hit(key):
