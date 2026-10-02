@@ -286,3 +286,9 @@ Local verification: 12 startup tests passed, including actual lifespan boot refu
 
 Closed the /metrics debug bypass and pending internal runner-health debug bypass. Metrics and internal checks reject missing/example configuration and compare token bytes in constant time. New tests exercise all registered internal routes with missing/wrong tokens without allowing database access, plus missing/example metrics/internal secrets and a correct metrics token. Updated existing metrics tests for the intentional production boot refusal introduced by A2.
 Local verification: token gates 8 passed; metrics/private-beta checks run before commit below. Clean HEAD verification follows this commit. A2 clean HEAD: 12 startup tests passed.
+
+## Verified continuation — A4 real reset delivery or disabled service
+
+Configured delivery uses STARTTLS with verified TLS, a 10-second SMTP operation timeout, and a 12-second outer response bound. Configure PROMPTCODE_SMTP_HOST/PORT/USERNAME/PASSWORD, PROMPTCODE_PASSWORD_RESET_FROM_EMAIL, and PROMPTCODE_FRONTEND_URL (HTTPS outside debug). Without host/from/valid origin, forgot-password returns the same generic response for every account and issues no reset token. Delivery failures keep that response and log neither recipient, token, nor exception details. Reset emails include the existing reset-page link and single-use token.
+Local verification: 10 password-reset tests passed, including disabled issuance, known/unknown responses, single-use/expiry behavior, mocked TLS/timeout mail delivery, provider configuration, and secret-free failure logging. Real SMTP delivery is NOT TESTED: no staging mail provider is configured or authorized for this run. Clean HEAD verification follows this commit.
+A3 clean HEAD verification: 16 passed after setting the test workspace root to /private/tmp; the prior 14-pass/2-fail run was caused by write restrictions on the verification checkout. No unrelated code changes were required.

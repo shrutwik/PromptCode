@@ -46,6 +46,7 @@ from app.services.password_reset import (
     ResetTokenError,
     issue_password_reset,
     notify_password_reset,
+    password_reset_delivery_available,
     reset_password_with_token,
 )
 from app.services.interview.analytics import track_event
@@ -340,9 +341,11 @@ async def forgot_password(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     await _check_auth_rate_limit(request, db=db)
+    body: dict[str, str] = {"message": FORGOT_PASSWORD_MESSAGE}
+    if not password_reset_delivery_available():
+        return body
     result = await db.execute(select(User).where(func.lower(User.email) == payload.email))
     user = result.scalar_one_or_none()
-    body: dict[str, str] = {"message": FORGOT_PASSWORD_MESSAGE}
     if user is not None:
         raw_token = await issue_password_reset(db, user)
         await notify_password_reset(user.email, raw_token)

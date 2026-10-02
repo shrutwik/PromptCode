@@ -42,6 +42,10 @@ def _build_test_app(tmp_path, monkeypatch):
     monkeypatch.setattr(session_module, "engine", test_engine)
     monkeypatch.setattr(session_module, "async_session_factory", session_factory)
     monkeypatch.setattr(main_module, "engine", test_engine)
+    monkeypatch.setenv("PROMPTCODE_JWT_SECRET", "password-reset-test-only-secret")
+    monkeypatch.setenv("PROMPTCODE_RUNNER", "docker")
+    monkeypatch.setenv("PROMPTCODE_METRICS_TOKEN", "reset-test-metrics-token")
+    monkeypatch.setenv("PROMPTCODE_INTERVIEW_INTERNAL_TOKEN", "reset-test-internal-token")
     get_settings.cache_clear()
 
     app = create_app()
@@ -62,6 +66,7 @@ def _capture_tokens(monkeypatch) -> dict[str, str]:
         captured["email"] = email
         captured["token"] = raw_token
 
+    monkeypatch.setattr("app.api.routes.auth.password_reset_delivery_available", lambda: True)
     monkeypatch.setattr("app.api.routes.auth.notify_password_reset", _capture)
     return captured
 
@@ -247,5 +252,69 @@ def test_notify_password_reset_does_not_log_the_token(caplog, monkeypatch):
     caplog.set_level(logging.INFO, logger="app.services.password_reset")
     asyncio.run(notify_password_reset("person@example.com", "raw-reset-token-value"))
     assert "raw-reset-token-value" not in caplog.text
-    assert "person@example.com" in caplog.text
+    assert "person@example.com" not in caplog.text
     get_settings.cache_clear()
+
+
+def test_unconfigured_reset_does_not_issue_tokens(tmp_path, monkeypatch):
+    app, engine = _build_test_app(tmp_path, monkeypatch)
+    monkeypatch.setattr("app.api.routes.auth.password_reset_delivery_available", lambda: False)
+    try:
+        with TestClient(app) as client:
+            _signup(client, email="disabled-reset@example.com", username="disabledreset")
+            known = client.post("/api/auth/forgot-password", json={"email": "disabled-reset@example.com"})
+            unknown = client.post("/api/auth/forgot-password", json={"email": "unknown@example.com"})
+        assert known.status_code == unknown.status_code == 200
+        assert known.json() == unknown.json() == {"message": FORGOT_PASSWORD_MESSAGE}
+        async def check():
+            from app.db.session import async_session_factory
+            async with async_session_factory() as db:
+                assert not (await db.execute(select(PasswordResetToken))).scalars().all()
+        asyncio.run(check())
+    finally:
+        _cleanup(app, engine)
+
+
+def test_smtp_delivery_uses_tls_and_timeout(monkeypatch):
+    from unittest.mock import MagicMock
+    from app.services import password_reset as service
+    settings = get_settings()
+    for name, value in {"smtp_host": "smtp.test", "smtp_port": 587, "smtp_username": "test", "smtp_password": "test-only", "password_reset_from_email": "reset@example.test", "frontend_url": "https://app.example.test"}.items():
+        monkeypatch.setattr(settings, name, value)
+    smtp = MagicMock()
+    smtp.return_value.__enter__.return_value = smtp
+    monkeypatch.setattr(service.smtplib, "SMTP", smtp)
+    assert service.password_reset_delivery_available()
+    asyncio.run(service.notify_password_reset("recipient@example.test", "test-reset-token"))
+    smtp.assert_called_once_with("smtp.test", 587, timeout=10)
+    smtp.starttls.assert_called_once()
+    message = smtp.send_message.call_args.args[0]
+    assert message["To"] == "recipient@example.test"
+    assert "test-reset-token" in message.get_content()
+
+
+def test_delivery_failure_does_not_log_secrets(monkeypatch, caplog):
+    from app.services import password_reset as service
+    monkeypatch.setattr(service, "password_reset_delivery_available", lambda: True)
+    def fail(*args):
+        raise RuntimeError("recipient@example.test raw-token provider-secret")
+    monkeypatch.setattr(service, "_send_password_reset", fail)
+    asyncio.run(service.notify_password_reset("recipient@example.test", "raw-token"))
+    assert "delivery failed" in caplog.text
+    assert "raw-token" not in caplog.text
+    assert "recipient@example.test" not in caplog.text
+    assert "provider-secret" not in caplog.text
+
+
+def test_missing_provider_and_insecure_origin_disable_delivery(monkeypatch):
+    from app.services import password_reset as service
+    settings = get_settings()
+    monkeypatch.setattr(settings, "smtp_host", "")
+    assert not service.password_reset_delivery_available()
+    monkeypatch.setattr(settings, "smtp_host", "smtp.example.test")
+    monkeypatch.setattr(settings, "password_reset_from_email", "reset@example.test")
+    monkeypatch.setattr(settings, "frontend_url", "http://app.example.test")
+    monkeypatch.setattr(settings, "debug", False)
+    assert not service.password_reset_delivery_available()
+    monkeypatch.setattr(settings, "frontend_url", "https://app.example.test")
+    assert service.password_reset_delivery_available()

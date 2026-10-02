@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     environment: str = "development"
     allow_unsafe_local_runner: bool = False
     interview_internal_token: str = ""
+    smtp_host: str = ""
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_username: str = ""
+    smtp_password: str = ""
+    password_reset_from_email: str = ""
 
     database_url: str = _DEFAULT_DATABASE_URL
     database_echo: bool = False
