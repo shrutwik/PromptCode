@@ -153,7 +153,7 @@ def test_isolated_runner_container_cleanup_and_limits(tmp_path):
     assert kwargs["pids_limit"] == 64
     assert kwargs["cap_drop"] == ["ALL"]
     assert str(ws.resolve()) in kwargs["volumes"]
-    assert kwargs["volumes"][str(ws.resolve())]["bind"] == "/workspace"
+    assert kwargs["volumes"][str(ws.resolve())] == {"bind": "/source", "mode": "ro"}
     container.remove.assert_called()
 
 

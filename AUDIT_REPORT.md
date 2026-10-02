@@ -388,3 +388,11 @@ The earlier exclusion table remains the detailed inventory. Later exceptions are
 ### Continuation item 1 — strict frontend contract corrections
 
 Confirmed against committed HEAD: index links local responsive CSS, challenge links external starter JavaScript, and active chat attributes include accessibility metadata. Updated only the three stale assertions in test_frontend_layout_contract.py and test_frontend_starter_contract.py; retain breakpoint coverage for every page, exact active classes/action, unique chat tab/panel and starter runtime checks. Added accessibility relationship checks. No UI edits required. Local targeted verification: 7 passed. Clean-HEAD full-suite result pending below. Status remains NO-GO.
+
+### Continuation item 1 clean verification / item 2 B3
+
+5fae8e5 clean HEAD full suite: **394 passed, 0 failed, 1 skipped in 52.16s** (including five live Docker audit tests). Log: /private/tmp/audit-frontend-clean.log. Skip: legacy test_docker_integration_smoke has unconditional skipif(True); dedicated live tests ran. No unrelated edits needed.
+
+B3 change: candidate execution copies read-only /source into a per-container /workspace tmpfs capped at 256 MiB, owned by runner UID/GID 10001. Candidate writes cannot consume the host workspace filesystem or persist between runs. Workspace memory also counts against the existing cgroup memory limit; a lower memory cap can terminate execution before the disk cap. No named volume is created. This does not establish a quota for API-uploaded persistent source/dependency installation; those paths remain a separate risk for B7/D review.
+
+Local live verification: **11 passed in 7.65s** across live Docker and runner isolation files. Bounded fill writes at most 270 MiB, observes ENOSPC at the 256 MiB mount, confirms /source is read-only and all host source bytes unchanged. CPU/PID/memory/network/root/output tests re-ran. Initial probe command failed the command allowlist (1 failed, 5 passed); corrected the probe to use the existing allowlisted command, without expanding permissions. Clean committed verification pending. Status NO-GO.

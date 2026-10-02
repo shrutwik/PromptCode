@@ -29,7 +29,7 @@ def test_live_candidate_has_loopback_but_no_peer_network(tmp_path):
         workspace = tmp_path / "candidate"
         workspace.mkdir(mode=0o777)
         workspace.chmod(0o777)
-        source = '''import json,socket
+        source = '''import atexit,json,socket
 from pathlib import Path
 
 def test_network():
@@ -46,7 +46,7 @@ def test_network():
             connection.close()
             observations['loopback']=True
     observations['interfaces']=[name for _,name in socket.if_nameindex() if int(Path('/sys/class/net',name,'flags').read_text(),16)&1]
-    Path('probe.json').write_text(json.dumps(observations))
+    atexit.register(lambda: print('NETWORK_PROBE='+json.dumps(observations)))
     assert observations['loopback']
     assert observations['interfaces']==['lo']
     assert not any(observations[name] for name in ('peer','internet','metadata','host')),observations
@@ -54,7 +54,7 @@ def test_network():
         (workspace / "test_network.py").write_text(source)
         result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"image": "promptcode-runner-python:latest", "timeoutSeconds": 15, "memoryMb": 128, "cpuLimit": .5, "pidsLimit": 32}))
         assert result["ok"], result
-        observations = json.loads((workspace / "probe.json").read_text())
+        observations = json.loads(next(line.split("NETWORK_PROBE=", 1)[1] for line in result["stdout"].splitlines() if "NETWORK_PROBE=" in line))
         assert observations["loopback"]
         assert observations["interfaces"] == ["lo"]
         assert not observations["peer"]
@@ -188,3 +188,37 @@ def test_live_huge_output_is_clipped(tmp_path, monkeypatch):
     assert captured[0]["Config"]["max-size"] == "1m"
     assert captured[0]["Config"]["max-file"] == "1"
     client.close()
+
+
+def test_live_workspace_fill_is_bounded_and_host_source_is_unchanged(tmp_path):
+    workspace = tmp_path / "candidate"
+    workspace.mkdir(mode=0o777)
+    workspace.chmod(0o777)
+    source = """import errno,os
+from pathlib import Path
+
+def test_fill():
+    stats=os.statvfs('/workspace')
+    assert stats.f_blocks*stats.f_frsize==256*1024*1024
+    assert 'ro' in next(line.split()[3].split(',') for line in Path('/proc/mounts').read_text().splitlines() if line.split()[1]=='/source')
+    blocked=False
+    path=Path('/workspace/fill')
+    try:
+        with path.open('wb') as output:
+            for _ in range(270): output.write(b'x'*1024*1024)
+    except OSError as exc:
+        assert exc.errno==errno.ENOSPC
+        blocked=True
+    finally:
+        path.unlink(missing_ok=True)
+    assert blocked
+    try: Path('/source/host-marker').write_text('tampered')
+    except OSError: pass
+    else: raise AssertionError('Host source writable')
+"""
+    (workspace / "test_fill.py").write_text(source)
+    (workspace / "host-marker").write_text("unchanged-test-data")
+    before = {p.name: p.read_bytes() for p in workspace.iterdir()}
+    result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"image": "promptcode-runner-python:latest", "timeoutSeconds": 20, "memoryMb": 512, "cpuLimit": .5, "pidsLimit": 32}))
+    assert result["ok"], result
+    assert {p.name: p.read_bytes() for p in workspace.iterdir()} == before

@@ -530,11 +530,11 @@ class IsolatedRunner(ChallengeRunner):
 
         run_kwargs: dict[str, Any] = {
             "image": image,
-            "command": argv,
+            "command": ["sh", "-c", "cp -R /source/. /workspace/ && exec " + shlex.join(argv)],
             "name": name,
             "working_dir": WORKSPACE_MOUNT,
             "volumes": {
-                str(workspace): {"bind": WORKSPACE_MOUNT, "mode": "rw"},
+                str(workspace): {"bind": "/source", "mode": "ro"},
             },
             "environment": {
                 "HOME": "/tmp",
@@ -551,7 +551,10 @@ class IsolatedRunner(ChallengeRunner):
             # Each candidate has only loopback; no host, database, or peer route.
             "network_disabled": True,
             "read_only": True,
-            "tmpfs": {"/tmp": "rw,noexec,nosuid,size=64m"},
+            "tmpfs": {
+                "/tmp": "rw,noexec,nosuid,size=64m",
+                WORKSPACE_MOUNT: "rw,nosuid,nodev,size=256m,uid=10001,gid=10001,mode=0700",
+            },
             "detach": True,
             "stdout": True,
             "stderr": True,
