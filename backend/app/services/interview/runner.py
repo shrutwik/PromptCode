@@ -556,6 +556,10 @@ class IsolatedRunner(ChallengeRunner):
             "stdout": True,
             "stderr": True,
             "remove": False,
+            "log_config": {
+                "type": "local",
+                "config": {"max-size": "1m", "max-file": "1", "compress": "false"},
+            },
             "cap_drop": ["ALL"],
             "security_opt": ["no-new-privileges"],
             "pids_limit": pids,

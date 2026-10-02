@@ -97,3 +97,94 @@ def test_host_boundary():
     result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"image": "promptcode-runner-python:latest", "timeoutSeconds": 15, "memoryMb": 128, "cpuLimit": .5, "pidsLimit": 32}))
     assert result["ok"], result
     assert sentinel.read_text() == "test-data-never-production"
+
+
+def test_live_pid_cpu_memory_and_tmp_disk_limits(tmp_path):
+    workspace = tmp_path / "candidate"
+    workspace.mkdir(mode=0o777)
+    workspace.chmod(0o777)
+    source = '''import errno,os,signal,time
+from pathlib import Path
+
+def test_limits():
+    cgroup=Path('/sys/fs/cgroup')
+    assert int((cgroup/'memory.max').read_text())==128*1024*1024
+    assert int((cgroup/'pids.max').read_text())==32
+    quota,period=map(int,(cgroup/'cpu.max').read_text().split())
+    assert quota/period==.25
+    before=int(dict(line.split() for line in (cgroup/'cpu.stat').read_text().splitlines())['nr_throttled'])
+    end=time.process_time()+.4
+    while time.process_time()<end: pass
+    after=int(dict(line.split() for line in (cgroup/'cpu.stat').read_text().splitlines())['nr_throttled'])
+    assert after>before
+    children=[]
+    blocked=False
+    try:
+        for _ in range(64):
+            try: pid=os.fork()
+            except OSError as exc:
+                assert exc.errno==errno.EAGAIN
+                blocked=True
+                break
+            if pid==0:
+                os.pause()
+                os._exit(0)
+            children.append(pid)
+    finally:
+        for pid in children: os.kill(pid,signal.SIGKILL)
+        for pid in children: os.waitpid(pid,0)
+    assert blocked
+    exhausted=False
+    path=Path('/tmp/pc-audit-disk')
+    try:
+        with path.open('wb') as output:
+            for _ in range(70): output.write(b'x'*1024*1024)
+    except OSError as exc:
+        assert exc.errno==errno.ENOSPC
+        exhausted=True
+    finally:
+        path.unlink(missing_ok=True)
+    assert exhausted
+'''
+    (workspace / "test_limits.py").write_text(source)
+    result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"image": "promptcode-runner-python:latest", "timeoutSeconds": 15, "memoryMb": 128, "cpuLimit": .25, "pidsLimit": 32}))
+    assert result["ok"], result
+
+
+def test_live_memory_exhaustion_is_contained(tmp_path):
+    workspace = tmp_path / "candidate"
+    workspace.mkdir(mode=0o777)
+    workspace.chmod(0o777)
+    (workspace / "test_memory.py").write_text("def test_memory():\n    payload=bytearray(256*1024*1024)\n    assert payload is not None\n")
+    result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"image": "promptcode-runner-python:latest", "timeoutSeconds": 10, "memoryMb": 64, "cpuLimit": .5, "pidsLimit": 32}))
+    assert not result["ok"]
+    assert result["exit_code"] == 137, result
+    assert not result["timed_out"]
+
+
+def test_live_huge_output_is_clipped(tmp_path, monkeypatch):
+    import docker
+    from app.services.interview import runner
+    client = docker.from_env(timeout=10)
+    collection = client.containers
+    create = collection.run
+    captured = []
+    def capture(*args, **kwargs):
+        container = create(*args, **kwargs)
+        container.reload()
+        captured.append(container.attrs["HostConfig"]["LogConfig"])
+        return container
+    from types import SimpleNamespace
+    monkeypatch.setattr(collection, "run", capture)
+    monkeypatch.setattr(runner, "_docker_client", lambda: SimpleNamespace(containers=collection))
+    workspace = tmp_path / "candidate"
+    workspace.mkdir(mode=0o777)
+    workspace.chmod(0o777)
+    (workspace / "test_output.py").write_text("def test_output():\n    print('x'*2000000)\n    assert False, 'bounded output probe'\n")
+    result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"image": "promptcode-runner-python:latest", "timeoutSeconds": 15, "memoryMb": 128, "cpuLimit": .5, "pidsLimit": 32, "outputLimit": 1000}))
+    assert not result["ok"]
+    assert len(result["stdout"]) <= 1000
+    assert captured[0]["Type"] == "local"
+    assert captured[0]["Config"]["max-size"] == "1m"
+    assert captured[0]["Config"]["max-file"] == "1"
+    client.close()
