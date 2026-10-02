@@ -241,7 +241,7 @@ def test_executor_runtime_report_checks_docker_image_and_workdir(monkeypatch, tm
         def close(self):
             return None
 
-    monkeypatch.setattr(sandbox_executor.docker, "from_env", lambda: FakeClient())
+    monkeypatch.setattr(sandbox_executor.docker, "from_env", lambda *, timeout: FakeClient())
 
     report = sandbox_executor._executor_runtime_report()
 
@@ -258,7 +258,7 @@ def test_executor_runtime_report_fails_when_docker_is_unavailable(monkeypatch):
     monkeypatch.setattr(
         sandbox_executor.docker,
         "from_env",
-        lambda: (_ for _ in ()).throw(DockerException("docker unavailable")),
+        lambda *, timeout: (_ for _ in ()).throw(DockerException("docker unavailable")),
     )
 
     report = sandbox_executor._executor_runtime_report()
@@ -287,7 +287,7 @@ def test_executor_runtime_report_fails_without_token_in_production(monkeypatch):
         def close(self):
             return None
 
-    monkeypatch.setattr(sandbox_executor.docker, "from_env", lambda: FakeClient())
+    monkeypatch.setattr(sandbox_executor.docker, "from_env", lambda *, timeout: FakeClient())
 
     report = sandbox_executor._executor_runtime_report()
 

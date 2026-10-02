@@ -74,6 +74,16 @@ def test_v2_judgment_comes_from_events_not_a_model():
         test_summary={"ok": True},
         challenge_slug="invoice-status-transition",
     )
+    assert scored["total_score"] == 0
+    assert scored["metrics"]["authoritative"] is False
+    assert all(v["score"] == 0 for v in scored["rubric"].values())
+    # Preserve the underlying practice-heuristic checks without granting score authority.
+    from app.services.interview.rubric import _practice_score_session_v2
+    scored = _practice_score_session_v2(
+        events=events,
+        test_summary={"ok": True},
+        challenge_slug="invoice-status-transition",
+    )
     rubric = scored["rubric"]
     assert rubric["A_correctness"] == {
         "score": 25.0,
@@ -140,6 +150,16 @@ def test_irrelevant_diff_lowers_fix_quality_and_a_revert_helps():
         {"event_type": "test_result", "payload": {"ok": True}},
     ]
     scored = score_session_v2(
+        events=events,
+        test_summary={"ok": True},
+        challenge_slug="invoice-status-transition",
+    )
+    assert scored["total_score"] == 0
+    assert scored["metrics"]["authoritative"] is False
+    assert all(v["score"] == 0 for v in scored["rubric"].values())
+    # Preserve the underlying practice-heuristic checks without granting score authority.
+    from app.services.interview.rubric import _practice_score_session_v2
+    scored = _practice_score_session_v2(
         events=events,
         test_summary={"ok": True},
         challenge_slug="invoice-status-transition",

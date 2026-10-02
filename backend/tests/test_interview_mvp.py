@@ -133,6 +133,17 @@ def test_metrics_and_signals_from_artificial_timeline():
         ai_prompts=["failing assert in statusMachine paid→draft"],
         challenge_slug="invoice-status-transition",
     )
+    assert scored["total_score"] == 0
+    assert scored["metrics"]["authoritative"] is False
+    assert all(v["score"] == 0 for v in scored["rubric"].values())
+    # Preserve the underlying practice-heuristic checks without granting score authority.
+    from app.services.interview.rubric import _practice_score_session
+    scored = _practice_score_session(
+        events=events,
+        test_summary={"ok": True},
+        ai_prompts=["failing assert in statusMachine paid→draft"],
+        challenge_slug="invoice-status-transition",
+    )
     assert scored["total_score"] > 40
     assert all("evidence" in v for v in scored["rubric"].values())
 

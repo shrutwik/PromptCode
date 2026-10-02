@@ -115,6 +115,8 @@ def test_isolated_runner_container_cleanup_and_limits(tmp_path):
     (ws / "package.json").write_text("{}", encoding="utf-8")
 
     container = MagicMock()
+    container.attrs = {"State": {"Running": False}}
+    container.exec_run.return_value.exit_code = 1
     container.wait.return_value = {"StatusCode": 0}
     container.logs.return_value = b"Tests  1 passed (1)\n"
 
@@ -144,7 +146,9 @@ def test_isolated_runner_container_cleanup_and_limits(tmp_path):
             )
         )
 
-    assert result["ok"] is True
+    assert result["ok"] is False
+    assert result["error_code"] == "incomplete_report"
+    assert result["authoritative"] is False
     assert result["runner"] == "docker"
     assert result["timed_out"] is False
     kwargs = client.containers.run.call_args.kwargs
