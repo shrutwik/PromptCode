@@ -45,7 +45,7 @@ def test_network():
             connection,_=server.accept()
             connection.close()
             observations['loopback']=True
-    observations['interfaces']=[name for _,name in socket.if_nameindex()]
+    observations['interfaces']=[name for _,name in socket.if_nameindex() if int(Path('/sys/class/net',name,'flags').read_text(),16)&1]
     Path('probe.json').write_text(json.dumps(observations))
     assert observations['loopback']
     assert observations['interfaces']==['lo']
