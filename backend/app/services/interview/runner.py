@@ -48,6 +48,7 @@ DEFAULT_IMAGES = {
 }
 
 _runner_semaphore: asyncio.Semaphore | None = None
+_runner_waiters = 0
 
 
 def _get_runner_semaphore() -> asyncio.Semaphore:
@@ -450,10 +451,26 @@ class IsolatedRunner(ChallengeRunner):
         from app.core.config import get_settings
 
         acquire_timeout = max(1, int(get_settings().max_runners_acquire_timeout_seconds))
+        global _runner_waiters
+        if _runner_waiters >= max(1, int(get_settings().max_runners)) * 2:
+            return self._busy_result(command, command_id)
+        _runner_waiters += 1
         try:
             await asyncio.wait_for(sem.acquire(), timeout=acquire_timeout)
         except TimeoutError:
-            return _result(
+            return self._busy_result(command, command_id)
+        finally:
+            _runner_waiters -= 1
+        task = asyncio.create_task(asyncio.to_thread(
+            self._run_docker_sync, workspace.resolve(), command, timeout, command_id, cfg,
+        ))
+        # Cancellation of the HTTP request must not free an active execution slot.
+        task.add_done_callback(lambda _: sem.release())
+        return await asyncio.shield(task)
+
+    @staticmethod
+    def _busy_result(command: str, command_id: str) -> dict[str, Any]:
+        return _result(
                 ok=False,
                 exit_code=-1,
                 stdout="",
@@ -467,19 +484,19 @@ class IsolatedRunner(ChallengeRunner):
                 runner="docker",
                 error_code="runner_busy",
             )
-        try:
-            return await asyncio.to_thread(
-                self._run_docker_sync,
-                workspace.resolve(),
-                command,
-                timeout,
-                command_id,
-                cfg,
-            )
-        finally:
-            sem.release()
 
     def _run_docker_sync(
+        self, workspace: Path, command: str, timeout_seconds: int,
+        command_id: str, runner_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        from app.services.runner_capacity import execution_slot, RunnerBusy
+        try:
+            with execution_slot():
+                return self._run_docker_with_slot(workspace, command, timeout_seconds, command_id, runner_config)
+        except RunnerBusy:
+            return self._busy_result(command, command_id)
+
+    def _run_docker_with_slot(
         self,
         workspace: Path,
         command: str,

@@ -883,6 +883,8 @@ async def run_session_tests(
             status_code=503,
             detail="Test runner temporarily unavailable. Try again shortly.",
         )
+    if result.get("error_code") == "runner_busy":
+        raise HTTPException(503, "Execution capacity reached. Retry shortly.", headers={"Retry-After": "2"})
     session.test_run_count = int(getattr(session, "test_run_count", 0) or 0) + 1
     session.runner_duration_ms = int(getattr(session, "runner_duration_ms", 0) or 0) + int(
         result.get("duration_ms") or 0
@@ -1234,6 +1236,9 @@ async def submit_session(
         command_id="run_tests",
         runner_config=runner_cfg,
     )
+    if test_result.get("error_code") == "runner_busy":
+        await db.rollback()
+        raise HTTPException(503, "Execution capacity reached. Retry shortly.", headers={"Retry-After": "2"})
     await _add_event(
         db,
         session.id,

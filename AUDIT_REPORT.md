@@ -328,6 +328,14 @@ Replaced advisory locks and event scans with a database atomic upsert per HMAC c
 
 Local targeted tests: **49 passed in 12.29s** (`/private/tmp/audit-atomic-local.log`). Updated the old window test to keep attempted requests inside one 60-second window; the prior 120-second sequence crossed windows and could not prove limiting. Account tests now use the same account and assert exact 401/201/409 responses before 429. Fresh SQLite migration upgrade completed successfully. The new migration merges the pre-existing role and AI-budget branches into one head; PostgreSQL migration execution is NOT TESTED yet. Fresh clean-commit verification pending. Actual HTTP multi-IP load, capacity/backpressure, races and graceful shutdown remain pending. **NO-GO**.
 
+## D/E runner backpressure checkpoint
+
+Atomic limiter commit dd95611 clean HEAD: **49 passed in 13.74s** (`/private/tmp/audit-atomic-clean.log`), including real PostgreSQL concurrent requests. No unrelated edits required.
+
+Added host-wide file-lock execution slots shared by interview and legacy local runner processes. Every execution worker must use the same private workspace-root directory and identical PROMPTCODE_MAX_RUNNERS; separate execution hosts each need their own deliberately sized budget. This is capacity control, not the proposed restricted daemon broker. Fixed the HTTP cancellation path to retain execution capacity until its worker finishes. Interview pending requests are bounded to twice the runner cap, with a bounded acquisition wait; saturation returns 503 and Retry-After rather than grading it as candidate failure.
+
+Local targeted checks: **20 passed in 3.57s** (`/private/tmp/audit-cap-local.log`). Live bounded workload: eight simultaneous requests, cap two, **two complete advisory reports and six busy rejections**, no containers remaining from that fixture. Cross-process slot and cancelled-request tests passed. No host-capacity maximum or production throughput claim is made: restarted-server HTTP load/capacity measurement remains pending. Existing default cap four is provisional until measured. API-crash reaper handles labeled deadline-expired containers; abrupt-restart user-session recovery and submission races remain pending. Clean commit verification pending. **NO-GO**.
+
 ## Appendix — superseded historical audit narrative (UNVERIFIED)
 
 The following material predates clean-HEAD verification. Its pass, load, restart and scan claims are superseded; retain only as investigation history.

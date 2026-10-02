@@ -229,25 +229,17 @@ async def run_sandbox(
         ) from None
 
     executor_state.mark_run_started()
-    result = None
-    try:
-        result = await asyncio.to_thread(
-            _run_in_sandbox_local,
-            payload.code,
-            payload.entrypoint,
-            payload.challenge_config,
-            run_id=payload.run_id,
-            input_overrides=payload.input_overrides,
-        )
-    except Exception as exc:  # pragma: no cover - defensive safety net
-        executor_state.mark_run_finished(success=False, error=str(exc))
-        limiter.release()
-        raise
-    try:
-        executor_state.mark_run_finished(
-            success=bool(result.success),
-            error=result.error,
-        )
-        return result.to_dict()
-    finally:
-        limiter.release()
+    def execute():
+        try:
+            result = _run_in_sandbox_local(
+                payload.code, payload.entrypoint, payload.challenge_config,
+                run_id=payload.run_id, input_overrides=payload.input_overrides,
+            )
+            executor_state.mark_run_finished(success=bool(result.success), error=result.error)
+            return result.to_dict()
+        except Exception:
+            executor_state.mark_run_finished(success=False, error="Execution unavailable")
+            raise
+    task = asyncio.create_task(asyncio.to_thread(execute))
+    task.add_done_callback(lambda _: limiter.release())
+    return await asyncio.shield(task)
