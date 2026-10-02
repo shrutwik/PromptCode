@@ -348,7 +348,7 @@ async function submit() {
   document.getElementById("submitDirtyLine").textContent =
     "Unsaved files: " + dirtyCount + (dirtyCount ? " (will be saved)" : "");
   document.getElementById("submitSummary").textContent =
-    "Score this attempt. You can still open the workspace afterward in read-only mode.";
+    "Get advisory practice feedback. You can still open the workspace afterward in read-only mode.";
   const close = () => submitDialog.close();
   document.getElementById("closeSubmit").onclick = close;
   document.getElementById("cancelSubmit").onclick = close;

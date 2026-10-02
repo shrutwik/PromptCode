@@ -78,6 +78,10 @@ const InterviewAPI = {
       credentials: "include",
       headers: { ...this.authHeaders(), ...(options.headers || {}) },
     });
+    if (resp.status === 401 && !options.skipAuthRedirect && !options.authRetried &&
+        typeof PromptCodeAPI !== "undefined" && await PromptCodeAPI._tryRefresh()) {
+      return this.request(path, { ...options, authRetried: true });
+    }
     if (resp.status === 401 && !options.skipAuthRedirect) {
       this.clearAccessAuth();
       this.requireAuth(window.location.pathname);
