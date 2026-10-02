@@ -35,6 +35,24 @@ from app.db.session import engine
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 logger = logging.getLogger(__name__)
+
+
+def resolve_frontend_html(page: str) -> Path | None:
+    """Return one HTML file inside the frontend directory."""
+    if not page or page in {".", ".."} or "/" in page or "\\" in page or "\x00" in page:
+        return None
+    root = FRONTEND_DIR.resolve()
+    candidate = (root / f"{page}.html").resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return None
+    if not candidate.is_file():
+        return None
+    return candidate
+access_logger = logging.getLogger("app.access")
+
+
 access_logger = logging.getLogger("app.access")
 
 
@@ -344,8 +362,8 @@ def create_app() -> FastAPI:
 
         @app.get("/{page}.html", response_class=HTMLResponse)
         async def serve_page(page: str):
-            file_path = FRONTEND_DIR / f"{page}.html"
-            if file_path.exists():
+            file_path = resolve_frontend_html(page)
+            if file_path is not None:
                 return FileResponse(file_path)
             return JSONResponse(status_code=404, content={"detail": "Page not found"})
 
