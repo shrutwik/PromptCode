@@ -258,8 +258,8 @@ async function load() {
           <span class="tag">${Math.round(target)} / 100</span>
           <span class="tag">${esc(fmtDuration(durationMs))}</span>
           <span class="tag" data-tone="${status === "submitted" ? "success" : "idle"}">${esc(status)}</span>
-          ${steps ? `<span class="tag">Steps ${esc(steps.opened)} of ${esc(steps.total)}</span>` : ""}
           <span class="tag" data-tone="${testsOk ? "success" : "danger"}">advisory tests ${testsOk ? "passed" : "failed"}</span>
+          ${steps ? `<span class="tag">Steps ${esc(steps.opened)} of ${esc(steps.total)}</span>` : ""}
           <span class="tag">hidden tests not leaked</span>
         </div>
         <p class="report-hero-note">Advisory practice feedback only. Execution results do not establish correctness or an authoritative score. ${events.length} logged events across ${phases.filter((p) => (grouped[p] || []).length).length} workflow categories.</p>

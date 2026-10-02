@@ -268,6 +268,10 @@ Python runs use a platform-supplied read-only reporter and exact server-controll
 
 Completed local verification: **30 passed in 21.43s**, including live valid-report, short-report, early-exit and prior CPU/PID/memory/disk/network/cleanup attacks. Earlier verification attempts exposed Docker archive omission of tmpfs, then missing audit fixture inventories; those attempts failed and were corrected. Clean committed verification pending. No unrelated product edits were required for this targeted verification.
 
+### Option A commit/verification split
+
+5db83b3 contains advisory scoring/API/UI/reporting primitives. Clean HEAD verification: **18 passed, 1 xfailed in 1.07s**; its runtime bypass remained open because reporter integration was not staged in that commit. A staging-helper assertion stopped before runner/test integration; the shell continued and made the partial commit. Corrected this explicitly in a follow-up, including restoring original UI tag order in the index. No unrelated UI hunks were retained. The follow-up supplies runner report enforcement and converts the formerly xfailed bypass into a required passing regression. Clean follow-up verification pending; the completed local targeted run remains 30 passed.
+
 ## Appendix — superseded historical audit narrative (UNVERIFIED)
 
 The following material predates clean-HEAD verification. Its pass, load, restart and scan claims are superseded; retain only as investigation history.

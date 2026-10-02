@@ -15,6 +15,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
+from app.services.interview.execution_feedback import complete_report, read_report
+
 logger = logging.getLogger(__name__)
 
 # Exact allowlisted command templates. User input cannot invent shell strings.
@@ -196,6 +198,7 @@ def normalize_runner_config(
         "pidsLimit": int(block.get("pidsLimit") or DEFAULT_PIDS_LIMIT),
         "network": "none",  # documented default: no outbound network
         "outputLimit": int(block.get("outputLimit") or DEFAULT_OUTPUT_LIMIT),
+        "expectedTestIds": block.get("expectedTestIds") or [],
     }
 
 
@@ -338,7 +341,7 @@ class LocalDevelopmentRunner(ChallengeRunner):
             stderr = _clip(stderr_b.decode("utf-8", errors="replace"), output_limit)
             counts = _parse_test_counts(stdout + "\n" + stderr)
             return _result(
-                ok=proc.returncode == 0,
+                ok=False,
                 exit_code=proc.returncode or 0,
                 stdout=stdout,
                 stderr=stderr,
@@ -393,6 +396,23 @@ def reap_expired_runners() -> int:
         return removed
     finally:
         client.close()
+
+
+def wait_for_execution(container, timeout_seconds):
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        try:
+            marker = read_report(container, "/tmp/promptcode-exit.json")
+            status = marker.get("exit_code")
+            if type(status) is int:
+                return {"StatusCode": status}
+        except Exception:
+            pass
+        container.reload()
+        if container.attrs["State"]["Running"] is False:
+            return container.wait(timeout=1)
+        time.sleep(.1)
+    raise TimeoutError("Execution deadline exceeded")
 
 
 def _docker_errors():
@@ -551,13 +571,19 @@ class IsolatedRunner(ChallengeRunner):
                 error_code="docker_unavailable",
             )
 
+        expected_ids = runner_config.get("expectedTestIds") or []
+        reported_argv = argv
+        is_python = argv[0] in {"pytest", "python"}
+        if is_python:
+            reported_argv = argv + ["-p", "promptcode_audit_reporter"]
         run_kwargs: dict[str, Any] = {
             "image": image,
-            "command": ["sh", "-c", "cp -R /source/. /workspace/ && exec " + shlex.join(argv)],
+            "command": ["sh", "/opt/promptcode-reporters/run.sh", *reported_argv],
             "name": name,
             "working_dir": WORKSPACE_MOUNT,
             "volumes": {
                 str(workspace): {"bind": "/source", "mode": "ro"},
+                str(Path(__file__).parent / "reporters"): {"bind": "/opt/promptcode-reporters", "mode": "ro"},
             },
             "environment": {
                 "HOME": "/tmp",
@@ -568,6 +594,7 @@ class IsolatedRunner(ChallengeRunner):
                 "npm_config_offline": "true",
                 "npm_config_ignore_scripts": "true",
                 **candidate_module_env(WORKSPACE_MOUNT),
+                "PYTHONPATH": "/opt/promptcode-reporters:/workspace",
             },
             "mem_limit": f"{memory_mb}m",
             "nano_cpus": int(cpu * 1e9),
@@ -602,10 +629,11 @@ class IsolatedRunner(ChallengeRunner):
         exit_code = -1
         stdout = ""
         stderr = ""
+        report_ok = False
         try:
             container = client.containers.run(**run_kwargs)
             try:
-                wait_result = container.wait(timeout=timeout_seconds)
+                wait_result = wait_for_execution(container, timeout_seconds)
                 exit_code = int(wait_result.get("StatusCode", 1))
             except Exception:
                 timed_out = True
@@ -616,6 +644,11 @@ class IsolatedRunner(ChallengeRunner):
                 exit_code = -1
                 stderr = f"Timed out after {timeout_seconds}s"
 
+            if not timed_out and exit_code == 0 and is_python:
+                try:
+                    report_ok = complete_report(read_report(container), expected_ids)
+                except Exception:
+                    report_ok = False
             try:
                 logs = container.logs(stdout=True, stderr=True)
                 raw = logs.decode("utf-8", errors="replace") if isinstance(logs, (bytes, bytearray)) else str(logs)
@@ -652,7 +685,7 @@ class IsolatedRunner(ChallengeRunner):
 
         counts = _parse_test_counts(stdout + "\n" + stderr)
         return _result(
-            ok=(not timed_out) and exit_code == 0,
+            ok=(not timed_out) and exit_code == 0 and report_ok,
             exit_code=exit_code,
             stdout=stdout,
             stderr=stderr,
@@ -660,6 +693,7 @@ class IsolatedRunner(ChallengeRunner):
             duration_ms=int((time.monotonic() - started) * 1000),
             mode="full",
             counts=counts,
+            error_code="incomplete_test_report" if exit_code == 0 and not report_ok else None,
             isolation="docker",
             timed_out=timed_out,
             command_id=command_id,
@@ -946,6 +980,9 @@ def _result(
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "ok": ok,
+        "advisory": True,
+        "authoritative": False,
+        "feedback_kind": "advisory_practice",
         "exit_code": exit_code,
         "stdout": stdout,
         "stderr": stderr,

@@ -52,7 +52,7 @@ def test_network():
     assert not any(observations[name] for name in ('peer','internet','metadata','host')),observations
 '''.replace("ADDRESS", repr(address))
         (workspace / "test_network.py").write_text(source)
-        result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"image": "promptcode-runner-python:latest", "timeoutSeconds": 15, "memoryMb": 128, "cpuLimit": .5, "pidsLimit": 32}))
+        result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"expectedTestIds": ['test_network.py::test_network'], "image": "promptcode-runner-python:latest", "timeoutSeconds": 15, "memoryMb": 128, "cpuLimit": .5, "pidsLimit": 32}))
         assert result["ok"], result
         observations = json.loads(next(line.split("NETWORK_PROBE=", 1)[1] for line in result["stdout"].splitlines() if "NETWORK_PROBE=" in line))
         assert observations["loopback"]
@@ -94,7 +94,7 @@ def test_host_boundary():
         raise AssertionError('Root filesystem writable')
 '''.replace("HOST_PATH", repr(str(sentinel)))
     (workspace / "test_host.py").write_text(source)
-    result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"image": "promptcode-runner-python:latest", "timeoutSeconds": 15, "memoryMb": 128, "cpuLimit": .5, "pidsLimit": 32}))
+    result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"expectedTestIds": ['test_host.py::test_host_boundary'], "image": "promptcode-runner-python:latest", "timeoutSeconds": 15, "memoryMb": 128, "cpuLimit": .5, "pidsLimit": 32}))
     assert result["ok"], result
     assert sentinel.read_text() == "test-data-never-production"
 
@@ -147,7 +147,7 @@ def test_limits():
     assert exhausted
 '''
     (workspace / "test_limits.py").write_text(source)
-    result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"image": "promptcode-runner-python:latest", "timeoutSeconds": 15, "memoryMb": 128, "cpuLimit": .25, "pidsLimit": 32}))
+    result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"expectedTestIds": ['test_limits.py::test_limits'], "image": "promptcode-runner-python:latest", "timeoutSeconds": 15, "memoryMb": 128, "cpuLimit": .25, "pidsLimit": 32}))
     assert result["ok"], result
 
 
@@ -219,7 +219,7 @@ def test_fill():
     (workspace / "test_fill.py").write_text(source)
     (workspace / "host-marker").write_text("unchanged-test-data")
     before = {p.name: p.read_bytes() for p in workspace.iterdir()}
-    result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"image": "promptcode-runner-python:latest", "timeoutSeconds": 20, "memoryMb": 512, "cpuLimit": .5, "pidsLimit": 32}))
+    result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"expectedTestIds": ['test_fill.py::test_fill'], "image": "promptcode-runner-python:latest", "timeoutSeconds": 20, "memoryMb": 512, "cpuLimit": .5, "pidsLimit": 32}))
     assert result["ok"], result
     assert {p.name: p.read_bytes() for p in workspace.iterdir()} == before
 
