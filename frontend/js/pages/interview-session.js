@@ -222,16 +222,37 @@ async function save() {
   logTerm("Saved " + currentPath + " (file_changed on save)");
 }
 
+function formatTestRun(r) {
+  const cases = Array.isArray(r.tests) ? r.tests : [];
+  const rows = cases.map((item) => {
+    const outcome = String(item.outcome || "unknown").toUpperCase();
+    const duration = item.duration_ms == null ? "" : ` ${item.duration_ms}ms`;
+    const output = item.output ? `\n  ${item.output}` : "";
+    return `${outcome} ${item.id}${duration}${output}`;
+  });
+  return [
+    "Advisory practice feedback. Not an official score.",
+    `$ ${r.command}`,
+    `exit ${r.exit_code} · ${r.duration_ms || 0}ms · isolation=${r.isolation}`,
+    `counts ${JSON.stringify(r.counts || {})}`,
+    rows.join("\n"),
+    r.stdout || "",
+    r.stderr || "",
+    r.notice || "",
+  ].filter((part) => part).join("\n\n");
+}
+
 async function runCmd(commandId) {
   setTermMeta(`Running <code>${commandId}</code>…`);
-  logTerm("…");
+  logTerm("Running tests…");
   const r = await InterviewAPI.runTests(sessionId, commandId);
-  lastTestOutput = `$ ${r.command}\nexit ${r.exit_code} · ${r.duration_ms || 0}ms · isolation=${r.isolation}\n` +
-    `counts ${JSON.stringify(r.counts || {})}\n\n${r.stdout}\n${r.stderr}`;
+  lastTestOutput = formatTestRun(r);
+  const label = r.timed_out ? "ADVISORY TIMEOUT" : (r.ok ? "ADVISORY PASS" : "ADVISORY FAIL");
   setTermMeta(
-    `<span class="${r.ok ? "ok" : "fail"}">${r.ok ? "ADVISORY PASS" : "ADVISORY FAIL"}</span> · ` +
+    `<span class="${r.ok ? "ok" : "fail"}">${label}</span> · ` +
     `<code>${esc(r.command)}</code> · ${r.duration_ms || 0}ms · ` +
-    `${(r.counts && r.counts.passed) || 0} passed / ${(r.counts && r.counts.failed) || 0} failed`
+    `${(r.counts && r.counts.passed) || 0} passed / ${(r.counts && r.counts.failed) || 0} failed` +
+    (r.notice ? ` · ${esc(r.notice)}` : "")
   );
   logTerm(lastTestOutput);
   try {

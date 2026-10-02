@@ -192,6 +192,9 @@ class TestRunResponse(BaseModel):
     command_id: str = "run_tests"
     runner: str = "local"
     error_code: str | None = None
+    tests: list[dict] = Field(default_factory=list)
+    notice: str | None = None
+    truncated: bool = False
 
 
 class DiffSummaryResponse(BaseModel):

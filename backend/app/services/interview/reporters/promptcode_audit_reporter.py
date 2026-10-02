@@ -6,7 +6,16 @@ _records = []
 
 
 def pytest_runtest_logreport(report):
-    _records.append({"id": report.nodeid, "phase": report.when, "outcome": report.outcome})
+    excerpt = ""
+    if report.failed:
+        excerpt = str(getattr(report, "longreprtext", "") or "")[:500]
+    _records.append({
+        "id": report.nodeid,
+        "phase": report.when,
+        "outcome": report.outcome,
+        "duration_ms": int(float(getattr(report, "duration", 0) or 0) * 1000),
+        "output": excerpt,
+    })
 
 
 def pytest_sessionfinish(session, exitstatus):

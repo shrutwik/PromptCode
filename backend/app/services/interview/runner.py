@@ -15,7 +15,12 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
-from app.services.interview.execution_feedback import complete_report, read_report
+from app.services.interview.execution_feedback import (
+    candidate_case_rows,
+    complete_report,
+    practice_notice,
+    read_report,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -338,12 +343,15 @@ class LocalDevelopmentRunner(ChallengeRunner):
                     command_id=command_id,
                     runner="local",
                 )
-            stdout = _clip(stdout_b.decode("utf-8", errors="replace"), output_limit)
-            stderr = _clip(stderr_b.decode("utf-8", errors="replace"), output_limit)
+            stdout, out_trunc = _clip(stdout_b.decode("utf-8", errors="replace"), output_limit)
+            stderr, err_trunc = _clip(stderr_b.decode("utf-8", errors="replace"), output_limit)
             counts = _parse_test_counts(stdout + "\n" + stderr)
+            exit_code = proc.returncode or 0
+            from app.services.interview.execution_feedback import practice_notice
+
             return _result(
                 ok=False,
-                exit_code=proc.returncode or 0,
+                exit_code=exit_code,
                 stdout=stdout,
                 stderr=stderr,
                 command=shlex.join(argv),
@@ -353,6 +361,16 @@ class LocalDevelopmentRunner(ChallengeRunner):
                 isolation="host",
                 command_id=command_id,
                 runner="local",
+                truncated=out_trunc or err_trunc,
+                notice=practice_notice(
+                    report=None,
+                    expected_ids=[],
+                    exit_code=exit_code,
+                    timed_out=False,
+                    truncated=out_trunc or err_trunc,
+                    report_ok=False,
+                    is_python=argv[0] in {"pytest", "python"},
+                ),
             )
         except FileNotFoundError as exc:
             return _result(
@@ -651,6 +669,8 @@ class IsolatedRunner(ChallengeRunner):
         stdout = ""
         stderr = ""
         report_ok = False
+        report = None
+        truncated = False
         try:
             container = client.containers.run(**run_kwargs)
             try:
@@ -665,10 +685,12 @@ class IsolatedRunner(ChallengeRunner):
                 exit_code = -1
                 stderr = f"Timed out after {timeout_seconds}s"
 
-            if not timed_out and exit_code == 0 and is_python:
+            if not timed_out and is_python:
                 try:
-                    report_ok = complete_report(read_report(container), expected_ids)
+                    report = read_report(container)
+                    report_ok = exit_code == 0 and complete_report(report, expected_ids)
                 except Exception:
+                    report = None
                     report_ok = False
             try:
                 logs = container.logs(stdout=True, stderr=True)
@@ -678,10 +700,10 @@ class IsolatedRunner(ChallengeRunner):
             cleaned = _scrub_host_paths(raw, workspace)
             if timed_out:
                 stdout = ""
-                stderr = _clip(stderr + ("\n" + cleaned if cleaned else ""), output_limit)
+                stderr, truncated = _clip(stderr + ("\n" + cleaned if cleaned else ""), output_limit)
             else:
                 # docker combines streams; split best-effort into stdout
-                stdout = _clip(cleaned, output_limit)
+                stdout, truncated = _clip(cleaned, output_limit)
                 stderr = ""
         except ImageNotFound:
             stderr = f"Runner image not found: {image}. Build interview runner images before enabling docker mode."
@@ -705,6 +727,16 @@ class IsolatedRunner(ChallengeRunner):
                         logger.warning("Failed to remove interview container %s", name)
 
         counts = _parse_test_counts(stdout + "\n" + stderr)
+        cases = candidate_case_rows((report or {}).get("records") if isinstance(report, dict) else [])
+        notice = practice_notice(
+            report=report,
+            expected_ids=expected_ids,
+            exit_code=exit_code,
+            timed_out=timed_out,
+            truncated=truncated,
+            report_ok=report_ok,
+            is_python=is_python,
+        )
         return _result(
             ok=(not timed_out) and exit_code == 0 and report_ok,
             exit_code=exit_code,
@@ -719,6 +751,9 @@ class IsolatedRunner(ChallengeRunner):
             timed_out=timed_out,
             command_id=command_id,
             runner="docker",
+            tests=cases,
+            notice=notice,
+            truncated=truncated,
         )
 
 
@@ -918,10 +953,12 @@ def _install_linux_node_modules(workspace: Path, image: str) -> None:
         logger.warning("Offline dependencies unavailable in reviewed runner image/cache")
 
 
-def _clip(text: str, limit: int) -> str:
+def _clip(text: str, limit: int) -> tuple[str, bool]:
     if len(text) <= limit:
-        return text
-    return text[-limit:]
+        return text, False
+    note = "\n[Output truncated. The run produced more text than the limit.]"
+    keep = max(0, limit - len(note))
+    return text[-keep:] + note, True
 
 
 def _scrub_host_paths(text: str, workspace: Path) -> str:
@@ -949,6 +986,9 @@ def _result(
     command_id: str | None = None,
     runner: str | None = None,
     error_code: str | None = None,
+    tests: list[dict] | None = None,
+    notice: str | None = None,
+    truncated: bool = False,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "ok": ok,
@@ -967,24 +1007,32 @@ def _result(
         "timed_out": timed_out,
         "command_id": command_id or "run_tests",
         "runner": runner or ("docker" if isolation == "docker" else "local"),
+        "tests": tests or [],
+        "truncated": bool(truncated),
     }
     if error_code:
         payload["error_code"] = error_code
+    if notice:
+        payload["notice"] = notice
     return payload
 
 
 def _parse_test_counts(output: str) -> dict[str, int]:
     """Best-effort structured counts from vitest/pytest output (not a scraper grade)."""
-    # pytest: "3 passed, 1 failed, 2 skipped"
-    m = re.search(
-        r"(\d+)\s+passed(?:,\s*(\d+)\s+failed)?(?:,\s*(\d+)\s+skipped)?",
-        output,
-        re.I,
-    )
-    if m:
-        passed = int(m.group(1))
-        failed = int(m.group(2) or 0)
-        skipped = int(m.group(3) or 0)
+    summary = ""
+    for line in output.splitlines():
+        if re.search(r"\d+\s+(?:passed|failed)\b", line, re.I):
+            summary = line
+    text = summary or output
+
+    def _count(label: str) -> int:
+        match = re.search(rf"(\d+)\s+{label}\b", text, re.I)
+        return int(match.group(1)) if match else 0
+
+    if re.search(r"\d+\s+(?:passed|failed)\b", text, re.I):
+        passed = _count("passed")
+        failed = _count("failed")
+        skipped = _count("skipped")
         return {
             "passed": passed,
             "failed": failed,

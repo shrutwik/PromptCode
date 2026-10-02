@@ -32,6 +32,83 @@ def complete_report(report, expected_ids):
     return actual == expected
 
 
+def candidate_case_rows(records):
+    """One visible row per test, with duration and a short failure excerpt."""
+    grouped: dict[str, dict] = {}
+    order: list[str] = []
+    for record in records or []:
+        if not isinstance(record, dict):
+            continue
+        test_id = str(record.get("id") or "").strip()
+        if not test_id:
+            continue
+        if test_id not in grouped:
+            grouped[test_id] = {
+                "id": test_id,
+                "outcome": "passed",
+                "duration_ms": 0,
+                "output": "",
+            }
+            order.append(test_id)
+        row = grouped[test_id]
+        row["duration_ms"] += int(record.get("duration_ms") or 0)
+        outcome = str(record.get("outcome") or "")
+        if outcome and outcome != "passed":
+            row["outcome"] = outcome
+        excerpt = str(record.get("output") or "").strip()
+        if excerpt and record.get("phase") == "call":
+            row["output"] = excerpt[:500]
+    return [grouped[test_id] for test_id in order]
+
+
+def missing_expected_ids(report, expected_ids):
+    if not isinstance(expected_ids, list):
+        return []
+    if not isinstance(report, dict):
+        return [f"{test_id} [report]" for test_id in expected_ids]
+    actual = set()
+    for record in report.get("records") or []:
+        if isinstance(record, dict) and record.get("outcome") == "passed":
+            actual.add((record.get("id"), record.get("phase")))
+    missing = []
+    for test_id in expected_ids:
+        for phase in ("setup", "call", "teardown"):
+            if (test_id, phase) not in actual:
+                missing.append(f"{test_id} [{phase}]")
+                break
+    return missing
+
+
+def practice_notice(*, report, expected_ids, exit_code, timed_out, truncated, report_ok, is_python):
+    notes = []
+    if truncated:
+        notes.append("Output truncated. The run produced more text than the limit.")
+    if timed_out:
+        notes.append("The run timed out before it finished.")
+    if exit_code == 0 and not report_ok:
+        if not is_python:
+            notes.append(
+                "This run did not produce the required test report, so it cannot be marked passed."
+            )
+        elif not expected_ids:
+            notes.append(
+                "No expected test inventory is configured, so this run cannot be marked passed."
+            )
+        else:
+            missing = missing_expected_ids(report, expected_ids)
+            if missing:
+                shown = ", ".join(missing[:8])
+                extra = "" if len(missing) <= 8 else f" (+{len(missing) - 8} more)"
+                notes.append(
+                    f"Missing expected test IDs ({shown}{extra}). The run fails closed."
+                )
+            else:
+                notes.append(
+                    "The test report was incomplete, so this run cannot be marked passed."
+                )
+    return " ".join(notes)
+
+
 def advisory_summary(summary):
     return {**(summary or {}), 'advisory': True, 'authoritative': False,
             'feedback_kind': 'advisory_practice', 'correctness_visible': None,
