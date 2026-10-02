@@ -158,6 +158,7 @@ class AIChatResponse(BaseModel):
     provider: str
     model: str
     proposed_edits: list[dict] = Field(default_factory=list)
+    refused_edits: list[dict] = Field(default_factory=list)
     latency_ms: int = 0
     rejected_attachments: list[str] = Field(default_factory=list)
     error_code: str | None = None

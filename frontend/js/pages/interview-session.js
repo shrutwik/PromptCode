@@ -13,6 +13,7 @@ let currentPath = null;
 let collapsed = new Set();
 let lastTestOutput = "";
 let lastProposed = null;
+let pendingEdits = [];
 let viewedOnce = new Set();
 let sessionReadOnly = false;
 
@@ -791,61 +792,97 @@ document.getElementById("chatForm").onsubmit = async (ev) => {
       selected_text: selected,
     });
     working.remove();
-    if (document.getElementById("attachTests").checked && lastTestOutput) {
-      // Context flag only — server does not auto-dump; append client-side note in UI.
-    }
     logChat("ai", r.reply, true);
-    lastProposed = (r.proposed_edits || [])[0] || null;
-    const bar = document.getElementById("applyBar");
-    if (lastProposed) {
-      bar.classList.remove("hidden");
-      bar.innerHTML = `Proposed edit <code>${esc(lastProposed.path)}</code>
-        <button class="btn btn-secondary btn-sm" type="button" id="acceptAi">Accept</button>
-        <button class="btn btn-ghost btn-sm" type="button" id="modifyAi">Apply as mixed</button>
-        <button class="btn btn-quiet btn-sm" type="button" id="rejectAi">Reject</button>`;
-      document.getElementById("acceptAi").onclick = () => applyDisposition("accepted");
-      document.getElementById("modifyAi").onclick = () => applyDisposition("modified");
-      document.getElementById("rejectAi").onclick = () => applyDisposition("rejected");
-    } else {
-      bar.classList.add("hidden");
-    }
+    renderProposals(r.proposed_edits || [], r.refused_edits || []);
   } catch (e) {
     document.getElementById("aiWorking")?.remove();
-    logChat("ai", "Error: " + e.message);
+    const message = e.name === "AbortError"
+      ? "The assistant timed out. Nothing was changed. Try again."
+      : e.message;
+    logChat("ai", "Error: " + message);
   }
 };
 
-async function applyDisposition(disposition) {
-  if (!lastProposed) return;
-  const path = lastProposed.path;
-  let content = lastProposed.content;
-  if (disposition === "modified" && currentPath === path && models[path]) {
-    content = models[path].model.getValue();
-  }
-  if (disposition === "rejected") content = models[path] ? models[path].saved : "";
-  let saved;
-  try {
-    saved = await InterviewAPI.applyAiEdit(sessionId, {
-      path,
-      content,
-      disposition,
-      proposed_content: lastProposed.content,
-      base_revision: lastProposed.base_revision,
-    });
-  } catch (e) {
-    PCUI.toast(e.message, { tone: "danger" });
+function renderProposals(edits, refused) {
+  pendingEdits = edits;
+  lastProposed = edits[0] || null;
+  const bar = document.getElementById("applyBar");
+  bar.replaceChildren();
+  if (!edits.length && !refused.length) {
+    bar.classList.add("hidden");
     return;
   }
-  if (disposition !== "rejected") {
-    const next = (saved && saved.content) || content;
-    if (!models[path]) await openFile(path);
-    else {
-      models[path].model.setValue(next);
-      models[path].saved = next;
-      models[path].dirty = false;
+  bar.classList.remove("hidden");
+  for (const edit of edits) {
+    const path = document.createElement("p");
+    path.textContent = edit.path;
+    const pre = document.createElement("pre");
+    pre.className = "diff-view";
+    pre.textContent = edit.unified || "(no diff)";
+    bar.append(path, pre);
+  }
+  for (const item of refused) {
+    const note = document.createElement("p");
+    note.textContent = "Refused " + item.path + " — " + item.reason;
+    bar.append(note);
+  }
+  if (!edits.length) return;
+  const accept = document.createElement("button");
+  accept.type = "button";
+  accept.className = "btn btn-secondary btn-sm";
+  accept.textContent = "Accept";
+  accept.onclick = () => applyDisposition("accepted");
+  const reject = document.createElement("button");
+  reject.type = "button";
+  reject.className = "btn btn-quiet btn-sm";
+  reject.textContent = "Reject";
+  reject.onclick = () => applyDisposition("rejected");
+  bar.append(accept, reject);
+}
+
+async function applyDisposition(disposition) {
+  if (!pendingEdits.length) return;
+  const applied = [];
+  for (const edit of pendingEdits) {
+    let content = edit.content;
+    if (disposition === "modified" && currentPath === edit.path && models[edit.path]) {
+      content = models[edit.path].model.getValue();
+    }
+    if (disposition === "rejected") content = models[edit.path] ? models[edit.path].saved : (edit.before || "");
+    let saved;
+    try {
+      saved = await InterviewAPI.applyAiEdit(sessionId, {
+        path: edit.path,
+        content,
+        disposition,
+        proposed_content: edit.content,
+        base_revision: edit.base_revision,
+      });
+    } catch (e) {
+      PCUI.toast(e.message, { tone: "danger" });
+      return;
+    }
+    if (disposition !== "rejected") {
+      const next = (saved && saved.content) || content;
+      if (!models[edit.path]) await openFile(edit.path);
+      if (models[edit.path]) {
+        const model = models[edit.path].model;
+        if (model.getValue() !== next) model.setValue(next);
+        models[edit.path].saved = next;
+        models[edit.path].dirty = false;
+      }
+      applied.push(edit.path);
     }
   }
   document.getElementById("applyBar").classList.add("hidden");
+  pendingEdits = [];
   lastProposed = null;
-  logTerm("AI edit " + disposition + " for " + path);
+  renderTree(document.getElementById("fileSearch").value);
+  updateDirtyPill();
+  renderTabs();
+  logTerm(
+    disposition === "rejected"
+      ? "Assistant edits rejected. Files were not changed."
+      : "Assistant edits applied for " + applied.join(", ")
+  );
 }

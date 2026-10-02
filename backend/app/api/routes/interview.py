@@ -55,6 +55,7 @@ from app.schemas.interview import (
     TestRunRequest,
     TestRunResponse,
 )
+from app.services.interview.assistant_changes import reconcile_assistant_proposals
 from app.services.interview.ai_budget import reserve_ai_budget
 from app.services.interview.execution_feedback import advisory_scoring, advisory_summary
 from app.services.interview.ai_provider import (
@@ -1055,7 +1056,19 @@ async def ai_chat(
             re.S | re.I,
         ):
             proposed.append({"path": m.group(1).strip(), "content": m.group(2)})
+    reply, proposed, refused = reconcile_assistant_proposals(
+        reply=reply,
+        proposed=proposed,
+        workspace=Path(session.workspace_path),
+    )
     proposed = await _stamp_revisions(db, session.id, proposed)
+    if refused:
+        await _add_event(
+            db,
+            session.id,
+            "ai_edit_refused",
+            {"paths": [item["path"] for item in refused], "reasons": refused},
+        )
     if proposed:
         await _add_event(
             db,
@@ -1100,6 +1113,7 @@ async def ai_chat(
         provider=ai_result.provider,
         model=ai_result.model,
         proposed_edits=proposed,
+        refused_edits=refused,
         latency_ms=ai_result.latency_ms,
         rejected_attachments=rejected_attachments,
         error_code=ai_result.error_code,
@@ -1163,9 +1177,31 @@ async def ai_apply_edit(
     if disposition == "modified":
         payload["content"] = body.content
         payload["proposed_content"] = body.proposed_content or ""
+    workspace = Path(session.workspace_path)
+    try:
+        try:
+            previous = read_file(workspace, body.path)
+        except FileNotFoundError:
+            previous = None
+        write_file(workspace, body.path, body.content)
+        stored = read_file(workspace, body.path)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="This file is read-only.") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if stored != body.content:
+        if previous is None:
+            written = workspace / body.path
+            if written.is_file() and not written.is_symlink():
+                written.unlink()
+        else:
+            write_file(workspace, body.path, previous)
+        raise HTTPException(
+            status_code=409,
+            detail="The workspace does not contain this assistant change.",
+        )
+    source = "assistant" if disposition == "accepted" else "mixed"
     await _add_event(db, session.id, event_map[disposition], payload)
-    source = "ai" if disposition == "accepted" else "mixed"
-    write_file(Path(session.workspace_path), body.path, body.content)
     db.add(
         InterviewSessionFile(
             session_id=session.id,

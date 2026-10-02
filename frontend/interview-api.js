@@ -89,6 +89,9 @@ const InterviewAPI = {
       try {
         const data = await resp.json();
         detail = data.detail || JSON.stringify(data);
+        if (detail && typeof detail === "object") {
+          detail = detail.message || detail.code || "Request failed";
+        }
       } catch (_) {}
       const err = new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
       err.status = resp.status;
