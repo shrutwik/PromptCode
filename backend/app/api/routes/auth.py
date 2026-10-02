@@ -4,12 +4,18 @@ import hashlib
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.client_ip import client_ip_from_request
 from app.core.config import get_settings
-from app.core.deps import ACCESS_COOKIE, get_current_user
+from app.core.deps import (
+    ACCESS_COOKIE,
+    _extract_access_token,
+    bearer_scheme,
+    get_current_user,
+)
 from app.core.ratelimit import enforce_rate_limit
 from app.core.security import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -84,6 +90,22 @@ def _clear_auth_cookies(response: Response) -> None:
 def _hash_token(token: str) -> str:
     """SHA-256 hex digest of a raw token string (64 chars)."""
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+async def _revoke_access_token(
+    db: AsyncSession,
+    *,
+    access_token: str,
+    now: datetime | None = None,
+) -> None:
+    now = now or datetime.now(timezone.utc)
+    token_hash = _hash_token(access_token)
+    expires_at = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    existing = await db.execute(
+        select(RevokedToken).where(RevokedToken.token_hash == token_hash)
+    )
+    if existing.scalar_one_or_none() is None:
+        db.add(RevokedToken(token_hash=token_hash, expires_at=expires_at))
 
 
 async def _revoke_refresh_token(
@@ -266,11 +288,13 @@ async def refresh_token_endpoint(
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def logout(
     payload: LogoutRequest,
+    request: Request,
     response: Response,
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    """Revoke a refresh token. Requires a valid access token."""
+    """Revoke the caller's refresh token and the access token used for this call."""
     user_id = decode_refresh_token(payload.refresh_token, get_settings().jwt_secret)
     if user_id != user.id:
         raise HTTPException(
@@ -283,6 +307,9 @@ async def logout(
         refresh_token=payload.refresh_token,
         now=now,
     )
+    access_token = _extract_access_token(request, creds)
+    if access_token:
+        await _revoke_access_token(db, access_token=access_token, now=now)
     await db.commit()
     _clear_auth_cookies(response)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

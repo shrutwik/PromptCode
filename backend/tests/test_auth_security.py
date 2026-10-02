@@ -507,6 +507,13 @@ def test_logout_revokes_refresh_token(tmp_path, monkeypatch):
         assert r3.status_code == 401
         assert "revoked" in r3.json()["detail"].lower()
 
+        me = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert me.status_code == 401
+        assert "revoked" in me.json()["detail"].lower()
+
     from app.core.config import get_settings
     get_settings.cache_clear()
     app.dependency_overrides.clear()
