@@ -102,7 +102,17 @@ def is_frozen_path(rel_path: str) -> bool:
     normalized = rel_path.replace("\\", "/").strip()
     if not normalized or "\x00" in normalized:
         return True
-    name = normalized.rsplit("/", 1)[-1].lower()
+    parts = normalized.lower().split("/")
+    name = parts[-1]
+    if "tests" in parts or "__tests__" in parts:
+        return True
+    if name.startswith("test_") and name.endswith(".py"):
+        return True
+    if any(name.endswith(suffix) for suffix in (
+        ".test.js", ".test.jsx", ".test.ts", ".test.tsx",
+        ".spec.js", ".spec.jsx", ".spec.ts", ".spec.tsx",
+    )):
+        return True
     if name in FROZEN_BASENAMES or name.startswith(".env"):
         return True
     return name.endswith(".sh")
