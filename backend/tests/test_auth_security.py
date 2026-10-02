@@ -190,7 +190,7 @@ def test_auth_rate_limit_blocks_on_eleventh_attempt(tmp_path, monkeypatch):
         for i in range(10):
             r = client.post(
                 "/api/auth/login",
-                json={"email": f"x{i}@example.com", "password": "Wr0ng!Passw0rd"},
+                json={"email": "x@example.com", "password": "Wr0ng!Passw0rd"},
             )
             assert r.status_code == 401, f"attempt {i + 1}: expected 401, got {r.status_code}"
 
@@ -574,21 +574,22 @@ def test_signup_rate_limit_blocks_on_eleventh_attempt(tmp_path, monkeypatch):
     with TestClient(app) as client:
         # 10 signup attempts with duplicate email → 409 (rate limit passes, conflict raised)
         for i in range(10):
-            client.post(
+            response = client.post(
                 "/api/auth/signup",
                 json={
-                    "email": f"rl{i}@example.com",
-                    "username": f"rluser{i:02d}",
+                    "email": "rl@example.com",
+                    "username": "rluser",
                     "password": _VALID_PASSWORD,
                 },
             )
+            assert response.status_code == (201 if i == 0 else 409)
 
         # 11th → 429
         r = client.post(
             "/api/auth/signup",
             json={
-                "email": "rl99@example.com",
-                "username": "rluser99",
+                "email": "rl@example.com",
+                "username": "rluser",
                 "password": _VALID_PASSWORD,
             },
         )

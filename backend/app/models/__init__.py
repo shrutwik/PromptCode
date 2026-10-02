@@ -1,3 +1,4 @@
+from app.models.rate_limit_counter import RateLimitCounter
 from app.models.ai_budget import AIBudget
 from app.models.auth_rate_limit import AuthRateLimitEvent
 from app.models.beta_ops import HumanReview, InviteCode, ProductAnalyticsEvent

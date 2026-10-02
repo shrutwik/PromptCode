@@ -48,6 +48,28 @@ def test_live_database_outage_recovery_and_pool_exhaustion():
                 assert time.monotonic()-started<3
                 container.start();ready()
                 async with engine.connect() as conn: assert (await conn.execute(text('SELECT 1'))).scalar_one()==1
+                # Exercise the production-dialect upsert with independent connections.
+                from app.models.rate_limit_counter import RateLimitCounter
+                from app.core.ratelimit import enforce_rate_limit
+                from sqlalchemy.ext.asyncio import async_sessionmaker
+                from fastapi import HTTPException
+                from datetime import datetime, timezone
+                counters=create_async_engine(url,pool_size=10,max_overflow=0,connect_args={'ssl':False,'timeout':2,'command_timeout':2})
+                try:
+                    async with counters.begin() as conn: await conn.run_sync(RateLimitCounter.__table__.create)
+                    sessions=async_sessionmaker(counters)
+                    now=datetime(2026,10,2,12,0,1,tzinfo=timezone.utc)
+                    async def hit(key):
+                        async with sessions() as db:
+                            try:
+                                await enforce_rate_limit(db=db,key=key,limit=10,window_seconds=60,now=now)
+                                return 1
+                            except HTTPException as exc:
+                                assert exc.status_code==429
+                                return 0
+                    assert sum(await asyncio.gather(*(hit('shared') for _ in range(30))))==10
+                    assert sum(await asyncio.gather(*(hit(f'distinct-{i}') for i in range(30))))==30
+                finally: await counters.dispose()
                 # Mid-request DB query hangs are bounded too.
                 started=time.monotonic()
                 with pytest.raises(Exception):

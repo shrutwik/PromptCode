@@ -1,60 +1,51 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+import os
+from datetime import datetime, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.auth_rate_limit import AuthRateLimitEvent
 
 
-async def _acquire_rate_limit_lock(*, db: AsyncSession, key: str) -> None:
-    bind = db.get_bind()
-    dialect_name = bind.dialect.name if bind is not None else ""
-    if dialect_name == "sqlite":
-        await db.execute(text("BEGIN IMMEDIATE"))
-        return
-    if dialect_name == "postgresql":
-        await db.execute(
-            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
-            {"key": key},
-        )
+def limit_from_env(name: str, default: int) -> int:
+    """Read a positive integer limit from the environment, otherwise use default."""
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value >= 1 else default
 
 
-async def enforce_rate_limit(
-    *,
-    db: AsyncSession,
-    key: str,
-    limit: int,
-    window_seconds: int,
-    now: datetime | None = None,
-) -> None:
-    """Persist a sliding-window rate limit so it survives restarts and shared workers."""
-    current_time = now or datetime.now(timezone.utc)
-    cutoff = current_time - timedelta(seconds=window_seconds)
-
-    await _acquire_rate_limit_lock(db=db, key=key)
-
-    await db.execute(
-        delete(AuthRateLimitEvent).where(
-            AuthRateLimitEvent.client_key == key,
-            AuthRateLimitEvent.created_at < cutoff,
-        )
-    )
-    count_result = await db.execute(
-        select(func.count())
-        .select_from(AuthRateLimitEvent)
-        .where(AuthRateLimitEvent.client_key == key)
-    )
-    count = int(count_result.scalar_one() or 0)
-    if count >= limit:
-        await db.commit()
-        raise HTTPException(
-            status_code=429,
-            detail=f"Rate limit exceeded. Retry in {window_seconds}s.",
-            headers={"Retry-After": str(window_seconds)},
-        )
-
-    db.add(AuthRateLimitEvent(client_key=key, created_at=current_time))
+async def enforce_rate_limit(*, db: AsyncSession, key: str, limit: int,
+                             window_seconds: int, now: datetime | None = None) -> None:
+    """Atomic fixed-window counter; no advisory lock or event-table scan."""
+    import hashlib
+    import hmac
+    from app.core.config import get_settings
+    from app.models.rate_limit_counter import RateLimitCounter
+    if limit < 1 or window_seconds < 1:
+        raise HTTPException(503, "Invalid rate limit configuration")
+    current = int((now or datetime.now(timezone.utc)).timestamp())
+    bucket = current // window_seconds * window_seconds
+    hashed = hmac.new(get_settings().jwt_secret.encode(), key.encode(), hashlib.sha256).hexdigest()
+    dialect = db.get_bind().dialect.name
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert
+    elif dialect == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert
+    else:
+        raise HTTPException(503, "Rate limiter unavailable")
+    stmt = insert(RateLimitCounter).values(key=hashed, window_start=bucket, count=1,
+                                         expires_at=bucket + window_seconds)
+    stmt = stmt.on_conflict_do_update(index_elements=[RateLimitCounter.key, RateLimitCounter.window_start],
+                                     set_={"count": RateLimitCounter.count + 1},
+                                     where=RateLimitCounter.count < limit).returning(RateLimitCounter.count)
+    accepted = (await db.execute(stmt)).scalar_one_or_none()
     await db.commit()
+    if accepted is None:
+        retry = max(1, bucket + window_seconds - current)
+        raise HTTPException(429, "Rate limit exceeded. Please retry later.", headers={"Retry-After": str(retry)})

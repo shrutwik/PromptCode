@@ -320,6 +320,14 @@ Added a 2 MB request-body ceiling including chunked uploads and a 10-second rece
 
 Local targeted batch: **52 passed in 13.39s**. Disposable bounded Postgres verified outage/restart recovery using the same pool, pool exhaustion (<1 second in the test configuration), and a hanging query bounded to <3 seconds. Initial test failed because Docker reassigned the ephemeral port on restart; the fixture now reserves a fixed loopback port. Body-limit tests verified declared, undeclared and chunked oversize rejection before routes. Fresh clean-commit verification pending. This does not complete D races, graceful shutdown, or E load testing. Status remains **NO-GO**.
 
+## D/E atomic limiter checkpoint
+
+49a1510 clean HEAD verification: **14 passed in 6.12s**, including live disposable PostgreSQL recovery and body validation (`/private/tmp/audit-reliability-clean.log`). No unrelated working-tree edits were needed.
+
+Replaced advisory locks and event scans with a database atomic upsert per HMAC client key and fixed window. PostgreSQL and SQLite concurrent tests each admitted exactly 10 of 30 requests to one limited key, and all 30 distinct keys. Shared classroom IP test admitted 30 requests under the default 120/minute IP budget; login/signup retain 10/minute account throttles. Counter keys contain no raw IP/email. Fixed windows allow up to twice a budget across a boundary; this is not a sliding-window guarantee. Expired counter retention cleanup remains pending F.
+
+Local targeted tests: **49 passed in 12.29s** (`/private/tmp/audit-atomic-local.log`). Updated the old window test to keep attempted requests inside one 60-second window; the prior 120-second sequence crossed windows and could not prove limiting. Account tests now use the same account and assert exact 401/201/409 responses before 429. Fresh SQLite migration upgrade completed successfully. The new migration merges the pre-existing role and AI-budget branches into one head; PostgreSQL migration execution is NOT TESTED yet. Fresh clean-commit verification pending. Actual HTTP multi-IP load, capacity/backpressure, races and graceful shutdown remain pending. **NO-GO**.
+
 ## Appendix — superseded historical audit narrative (UNVERIFIED)
 
 The following material predates clean-HEAD verification. Its pass, load, restart and scan claims are superseded; retain only as investigation history.

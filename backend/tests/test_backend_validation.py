@@ -113,7 +113,7 @@ def test_auth_rate_limit_allows_requests_after_window(tmp_path):
                 await auth_routes._check_auth_rate_limit(
                     request,
                     db=db,
-                    now=started_at + timedelta(seconds=attempt),
+                    now=started_at + timedelta(seconds=1),
                 )
 
         with pytest.raises(HTTPException):
@@ -121,7 +121,7 @@ def test_auth_rate_limit_allows_requests_after_window(tmp_path):
                 await auth_routes._check_auth_rate_limit(
                     request,
                     db=db,
-                    now=started_at + timedelta(seconds=auth_routes._AUTH_RATE_LIMIT),
+                    now=started_at + timedelta(seconds=2),
                 )
 
         async with session_factory() as db:

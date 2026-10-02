@@ -16,7 +16,7 @@ from app.core.deps import (
     bearer_scheme,
     get_current_user,
 )
-from app.core.ratelimit import enforce_rate_limit
+from app.core.ratelimit import enforce_rate_limit, limit_from_env
 from app.core.security import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     REFRESH_TOKEN_EXPIRE_DAYS,
@@ -55,7 +55,7 @@ from app.services.interview.beta_access import consume_invite_or_allowlist
 router = APIRouter()
 
 _AUTH_RATE_WINDOW = 60  # seconds
-_AUTH_RATE_LIMIT = 10  # max attempts per IP per window
+_AUTH_RATE_LIMIT = limit_from_env("PROMPTCODE_AUTH_RATE_LIMIT", 120)
 REFRESH_COOKIE = "pc_refresh_token"
 
 
@@ -135,6 +135,7 @@ async def _check_auth_rate_limit(
     *,
     db: AsyncSession,
     now: datetime | None = None,
+    identity: str | None = None,
 ) -> None:
     await enforce_rate_limit(
         db=db,
@@ -143,6 +144,11 @@ async def _check_auth_rate_limit(
         window_seconds=_AUTH_RATE_WINDOW,
         now=now,
     )
+    if identity:
+        import hmac
+        digest = hmac.new(get_settings().jwt_secret.encode(), identity.lower().encode(), hashlib.sha256).hexdigest()
+        await enforce_rate_limit(db=db, key="auth-account:" + digest, limit=10,
+                                 window_seconds=_AUTH_RATE_WINDOW, now=now)
 
 
 @router.post("/signup", response_model=TokenResponse, status_code=201)
@@ -152,7 +158,7 @@ async def signup(
     response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
-    await _check_auth_rate_limit(request, db=db)
+    await _check_auth_rate_limit(request, db=db, identity=payload.email)
     existing = await db.execute(
         select(User).where(
             (func.lower(User.email) == payload.email) | (User.username == payload.username)
@@ -213,7 +219,7 @@ async def login(
     response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
-    await _check_auth_rate_limit(request, db=db)
+    await _check_auth_rate_limit(request, db=db, identity=payload.email)
     result = await db.execute(select(User).where(func.lower(User.email) == payload.email))
     user = result.scalar_one_or_none()
     if not user or not verify_password(payload.password, user.password_hash):
