@@ -369,7 +369,30 @@ def _docker_client():
     """Lazy Docker client factory (patchable in unit tests)."""
     import docker
 
-    return docker.from_env()
+    return docker.from_env(timeout=10)
+
+
+def reap_expired_runners() -> int:
+    """Remove expired execution leases only; never touch unrelated Docker resources."""
+    client = _docker_client()
+    removed = 0
+    try:
+        containers = client.containers.list(all=True, filters={"label": [
+            "promptcode.role=interview-runner", "promptcode.component=interview",
+            "promptcode.expires_at",
+        ]})
+        for container in containers:
+            try:
+                expires = float(container.labels.get("promptcode.expires_at", ""))
+                if not (0 < expires <= time.time()):
+                    continue
+                container.remove(force=True, v=True)
+                removed += 1
+            except (ValueError, TypeError):
+                continue
+        return removed
+    finally:
+        client.close()
 
 
 def _docker_errors():
@@ -570,6 +593,7 @@ class IsolatedRunner(ChallengeRunner):
                 "promptcode.role": "interview-runner",
                 "promptcode.component": "interview",
                 "promptcode.command_id": command_id,
+                "promptcode.expires_at": str(time.time() + timeout_seconds + 30),
             },
             # Never mount docker.sock; never pass host secrets.
         }
@@ -619,10 +643,10 @@ class IsolatedRunner(ChallengeRunner):
         finally:
             if container is not None:
                 try:
-                    container.remove(force=True)
+                    container.remove(force=True, v=True)
                 except Exception:  # noqa: BLE001
                     try:
-                        client.containers.get(name).remove(force=True)
+                        client.containers.get(name).remove(force=True, v=True)
                     except Exception:  # noqa: BLE001
                         logger.warning("Failed to remove interview container %s", name)
 
@@ -719,7 +743,7 @@ def docker_runner_health(*, probe_exec: bool = True) -> dict[str, Any]:
             finally:
                 if container is not None:
                     try:
-                        container.remove(force=True)
+                        container.remove(force=True, v=True)
                     except Exception:  # noqa: BLE001
                         pass
     return report

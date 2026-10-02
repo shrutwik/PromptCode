@@ -228,8 +228,36 @@ async def _sandbox_executor_ready(settings) -> bool:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     validate_production_startup(get_settings())
-    yield
-    await engine.dispose()
+    reaper_task = None
+    if runner_mode_safe() == "docker":
+        from app.services.interview.runner import reap_expired_runners
+
+        async def cleanup():
+            try:
+                await asyncio.to_thread(reap_expired_runners)
+            except Exception:
+                logger.warning("Expired runner cleanup unavailable")
+
+        async def repeat_cleanup():
+            while True:
+                await asyncio.sleep(30)
+                await cleanup()
+
+        try:
+            await asyncio.wait_for(cleanup(), timeout=15)
+        except TimeoutError:
+            logger.warning("Expired runner cleanup timed out at startup")
+        reaper_task = asyncio.create_task(repeat_cleanup())
+    try:
+        yield
+    finally:
+        if reaper_task is not None:
+            reaper_task.cancel()
+            try:
+                await reaper_task
+            except asyncio.CancelledError:
+                pass
+        await engine.dispose()
 
 
 def create_app() -> FastAPI:

@@ -222,3 +222,60 @@ def test_fill():
     result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"image": "promptcode-runner-python:latest", "timeoutSeconds": 20, "memoryMb": 512, "cpuLimit": .5, "pidsLimit": 32}))
     assert result["ok"], result
     assert {p.name: p.read_bytes() for p in workspace.iterdir()} == before
+
+
+def test_live_timeout_removes_container_and_volumes(tmp_path, monkeypatch):
+    import docker
+    from types import SimpleNamespace
+    from app.services.interview import runner
+    client = docker.from_env(timeout=10)
+    collection = client.containers
+    create = collection.run
+    names = []
+    mounts = []
+    def capture(**kwargs):
+        container = create(**kwargs)
+        container.reload()
+        names.append(container.name)
+        mounts.extend(m["Name"] for m in container.attrs["Mounts"] if m["Type"] == "volume")
+        return container
+    monkeypatch.setattr(collection, "run", capture)
+    monkeypatch.setattr(runner, "_docker_client", lambda: SimpleNamespace(containers=collection))
+    workspace = tmp_path / "candidate"
+    workspace.mkdir(mode=0o777)
+    workspace.chmod(0o777)
+    (workspace / "test_hang.py").write_text("import time\ndef test_hang(): time.sleep(60)\n")
+    try:
+        result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"image": "promptcode-runner-python:latest", "timeoutSeconds": 1, "memoryMb": 128}))
+        assert result["timed_out"], result
+        assert len(names) == 1
+        assert client.containers.list(all=True, filters={"name": names[0]}) == []
+        assert mounts == []  # source bind + tmpfs create no Docker volumes
+    finally:
+        for name in names:
+            try: client.containers.get(name).remove(force=True, v=True)
+            except docker.errors.NotFound: pass
+        client.close()
+
+
+def test_live_startup_reaper_after_simulated_crash():
+    import docker,time
+    from app.services.interview.runner import reap_expired_runners
+    client = docker.from_env(timeout=10)
+    containers = []
+    try:
+        for deadline in (time.time()-1, time.time()+120):
+            containers.append(client.containers.run(
+                "promptcode-runner-python:latest", ["python", "-c", "import time;time.sleep(120)"],
+                detach=True, network_disabled=True, read_only=True, mem_limit="64m", pids_limit=16,
+                cap_drop=["ALL"], security_opt=["no-new-privileges"],
+                labels={"promptcode.role":"interview-runner", "promptcode.component":"interview", "promptcode.expires_at":str(deadline)},
+            ))
+        assert reap_expired_runners() >= 1
+        with pytest.raises(docker.errors.NotFound): client.containers.get(containers[0].id)
+        assert client.containers.get(containers[1].id).status == "running"
+    finally:
+        for container in containers:
+            try: container.remove(force=True, v=True)
+            except docker.errors.NotFound: pass
+        client.close()
