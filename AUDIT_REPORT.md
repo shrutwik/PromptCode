@@ -201,3 +201,11 @@ Changes: registry/workspace audit hunks enforce contained paths, reject symlinks
 Local verification: 14 workspace-boundary and runner-isolation tests passed. Clean HEAD verification follows this commit.
 Excluded: automatic question context and default workspace-path convenience change. Actual non-root/container/network isolation is NOT TESTED by these unit tests; B5 remains partly open.
 E1 clean HEAD verification: 10 validation tests passed without unrelated changes.
+
+## Verified continuation — D1 bounded database readiness
+
+Finding: a database hang could leave readiness requests waiting indefinitely; new Postgres connections lacked a connect timeout.
+Changes: db/session.py sets a 5-second connect timeout; main.py bounds both readiness pings to 5 seconds. The product /progress route is excluded.
+Local verification: reliability tests ran, 6 passed in 12.92s, using a loopback fake AI provider, refused local database/Docker ports, and mocked container cleanup. The first sandboxed run had 5 passes and a loopback-bind PermissionError; it was rerun with loopback permission.
+Clean HEAD verification follows this commit. Database recovery, real pool exhaustion, and live-container cleanup remain NOT TESTED.
+B5 clean HEAD verification: 14 workspace/runner tests passed with no unrelated changes.

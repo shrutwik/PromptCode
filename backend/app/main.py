@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import logging
@@ -193,6 +194,20 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
             reset_request_id(token)
 
 
+_READY_DB_TIMEOUT_SECONDS = 5.0
+
+
+async def _database_ready() -> bool:
+    """Ping the database, and give up if it does not answer quickly."""
+    try:
+        async with asyncio.timeout(_READY_DB_TIMEOUT_SECONDS):
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+    except Exception:
+        return False
+    return True
+
+
 async def _sandbox_executor_ready(settings) -> bool:
     executor_url = str(settings.sandbox_executor_url or "").strip()
     if not executor_url:
@@ -256,10 +271,7 @@ def create_app() -> FastAPI:
 
     @app.get("/health/ready")
     async def health_ready():
-        try:
-            async with engine.connect() as conn:
-                await conn.execute(text("SELECT 1"))
-        except Exception:
+        if not await _database_ready():
             return JSONResponse(
                 status_code=503,
                 content={"status": "error", "detail": "database unavailable"},
@@ -280,10 +292,7 @@ def create_app() -> FastAPI:
 
     @app.get("/ready")
     async def ready():
-        try:
-            async with engine.connect() as conn:
-                await conn.execute(text("SELECT 1"))
-        except Exception:
+        if not await _database_ready():
             return JSONResponse(
                 status_code=503,
                 content={"status": "error", "detail": "database unavailable"},

@@ -18,6 +18,9 @@ if settings.database_url.startswith("postgresql+"):
     # Supabase poolers (PgBouncer) don't support prepared statements in
     # transaction mode; disable asyncpg's statement cache to avoid issues.
     _connect_args["statement_cache_size"] = 0
+    # Fail a new connection quickly when the host is down. Readiness checks
+    # use the same bound so /ready does not sit on a multi-minute TCP timeout.
+    _connect_args["timeout"] = 5
 
 if settings.database_url.startswith("sqlite+"):
     engine = create_async_engine(
