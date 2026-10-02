@@ -1,7 +1,7 @@
 """Issue and consume hashed, single-use password reset tokens.
 
-No SMTP provider is configured. ``notify_password_reset`` is the delivery hook:
-it logs the raw token only when PROMPTCODE_DEBUG is true. Tests monkeypatch it.
+No SMTP provider is configured. ``notify_password_reset`` is the delivery hook.
+It must not log or return the raw token. Tests monkeypatch it.
 """
 
 from __future__ import annotations
@@ -57,9 +57,10 @@ async def issue_password_reset(db: AsyncSession, user: User) -> str:
 
 
 async def notify_password_reset(email: str, raw_token: str) -> None:
-    """Dev-only delivery. Production has no mailer; the HTTP body stays generic."""
+    """Dev-only delivery hook. The raw token stays with the caller, never the log."""
+    del raw_token
     if get_settings().debug:
-        logger.info("Dev password reset for %s token=%s", email, raw_token)
+        logger.info("Dev password reset requested for %s", email)
 
 
 async def reset_password_with_token(

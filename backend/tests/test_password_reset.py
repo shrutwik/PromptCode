@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
@@ -236,3 +237,15 @@ def test_stored_reset_token_is_a_hash(tmp_path, monkeypatch):
         assert stored != captured["token"]
     finally:
         _cleanup(app, test_engine)
+
+
+def test_notify_password_reset_does_not_log_the_token(caplog, monkeypatch):
+    monkeypatch.setenv("PROMPTCODE_DEBUG", "true")
+    get_settings.cache_clear()
+    from app.services.password_reset import notify_password_reset
+
+    caplog.set_level(logging.INFO, logger="app.services.password_reset")
+    asyncio.run(notify_password_reset("person@example.com", "raw-reset-token-value"))
+    assert "raw-reset-token-value" not in caplog.text
+    assert "person@example.com" in caplog.text
+    get_settings.cache_clear()

@@ -168,3 +168,20 @@ A 1MB login body was not a clean body-size test: the auth rate limit already ret
 - Keep production on the Docker runner, with debug off, a metrics token, and an internal token.
 - Do not return reset tokens, session source, or internal diagnostics in API responses.
 - After any sandbox change, confirm candidate processes cannot see `PROMPTCODE_*` secrets and cannot run package-install scripts from the session directory.
+
+
+
+
+
+
+
+
+
+
+## Verified continuation — A1 reset-token logging
+
+Finding: raw password-reset tokens appeared in debug logs.
+Changes: password_reset.py removes the token from logging; test_password_reset.py adds a regression test.
+Local verification: targeted regression ran, 1 passed (2026-10-02).
+Clean HEAD verification: pending immediately after this item commit. Previous report claims above have not been re-verified in this continuation.
+Scope: local test data only. No production calls. All other pending diffs remain outside this item.
