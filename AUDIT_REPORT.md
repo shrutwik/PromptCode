@@ -1,184 +1,6 @@
 # PromptCode security and stress audit
 
-**NO-GO. Historical narrative and unverified claims below are SUPERSEDED.** Only the dated continuation/clean-HEAD evidence sections establish current test results; earlier load, restart, scan and deployment claims are not accepted as verified. Remaining open security failures prevent deployment.
-
-Date: 2026-10-02. Branch: `security/audit-fixes`.
-
-Scope was the local app only. Nothing was sent to production. The live process on `127.0.0.1:8000` was probed with synthetic requests. It was started before these fixes, so live checks of admin routes still show the old behavior until that process is restarted.
-
-## Setup
-
-PromptCode is a practice-interview app plus an older LLM-submission scorer.
-
-- API: FastAPI (`backend/app/main.py`), served with uvicorn.
-- UI: static HTML/JS in `frontend/`, no separate frontend package.
-- Database: Postgres in Docker (`localhost:5433` by default). SQLAlchemy async. Optional Supabase Postgres. Tests use SQLite. There is no client-side database rules layer; access control is in the API.
-- Auth: email/password, bcrypt, HS256 JWTs from Authlib. Access tokens last 15 minutes. Refresh tokens last 30 days and rotate. HttpOnly cookies exist but are off unless `PROMPTCODE_AUTH_COOKIE_ENABLED` is set. The browser keeps tokens in `sessionStorage`.
-- AI: OpenAI-compatible HTTP API (`PROMPTCODE_OPENAI_API_KEY` / `PROMPTCODE_AI_API_KEY`).
-- Test runner: allowlisted `pytest` / `npm test` commands. Docker isolation is the production mode (`docker-compose.prod.yml` sets `PROMPTCODE_RUNNER=docker` and `PROMPTCODE_DEBUG=false`). A host subprocess runner exists only when `PROMPTCODE_ALLOW_UNSAFE_LOCAL_RUNNER=1`.
-- Other services: Sentry (optional DSN), Prometheus `/metrics`.
-
-Secrets live in environment variables. `.env` is not tracked. A scan of the current tree found rehearsal fixtures that look like keys but are short fake values, not live credentials. Full git history was not scanned.
-
-## What was already in good shape
-
-- Submission and interview session reads are scoped to the signed-in user. A mismatch returns 404.
-- Profile update only accepts name and bio fields.
-- Passwords require length, case, a digit, and a symbol, and reject bcrypt's 72-byte truncation.
-- Auth rate limit is 10 attempts per IP per minute and is stored in the database. A local burst of bad logins returned ten `401`s and then `429`.
-- Trusted proxy ranges default to localhost, so `X-Forwarded-For` is not trusted from the public internet.
-- Security headers are set (CSP, `nosniff`, frame deny, referrer policy). HSTS is set when debug is off.
-- CORS is an explicit origin list and rejects `*` when debug is off.
-- `alg: none` JWTs are rejected by Authlib 1.6.9 and 1.6.12. Verified locally.
-- The locked-down Docker test container drops all capabilities, sets `no-new-privileges`, and does not mount the Docker socket.
-- Challenge commands are an allowlist. Clients cannot pass a shell string.
-
-## Findings
-
-### High — Candidate npm install bypassed the sandbox. Fixed.
-
-`backend/app/services/interview/runner.py` (`restore_node_manifests`, `linux_npm_docker_argv`).
-
-The isolated test container is locked down. Before that container starts, Node dependencies were installed with a separate `docker run` that had network access, default capabilities, and `npm` lifecycle scripts enabled. Package manifests are frozen in the file API, but code running inside a test can still rewrite them on disk. The next test run would install that rewritten manifest.
-
-Fix: restore `package.json` and lockfiles from the session's starter snapshot, refuse the install when that snapshot is missing, and run npm with `--ignore-scripts`, dropped capabilities, `no-new-privileges`, a pid limit, a memory limit, and a read-only root. Verified by `tests/test_audit_runner_isolation.py` (no Docker daemon required).
-
-### High — Debug mode opened internal admin routes. Fixed.
-
-`backend/app/services/interview/beta_ops_helpers.py` `require_internal` (line 27).
-
-`/api/interview/internal/*` lists users, disables accounts, and reads session reviews. The check treated `PROMPTCODE_DEBUG=true` as enough, with no token. The local server still running old code returned `200` for `/api/interview/internal/users` and `/internal/disk` with no token. User records from that response are not copied here.
-
-Fix: the header `X-PromptCode-Internal-Token` must match the configured token. Placeholder tokens are rejected. Comparison uses `hmac.compare_digest`. Debug no longer bypasses it. Verified by `tests/test_private_beta_ops.py::test_internal_routes_stay_closed_when_debug_is_on`.
-
-Restart the local server before relying on this. Set a real `PROMPTCODE_INTERVIEW_INTERNAL_TOKEN`. The example value `change-me-internal-token` is rejected on purpose.
-
-### High — Password reset token was returned in the HTTP body in debug. Fixed.
-
-`backend/app/api/routes/auth.py` forgot-password handler. Previously, debug responses included `reset_token` for an existing user.
-
-Fix: the body is only the generic message. Verified by `tests/test_password_reset.py`.
-
-Still open: `backend/app/services/password_reset.py` line 62 logs the raw token when debug is on, and there is no production mailer. Forgot-password does not email anyone. See manual actions.
-
-### High — Disabled accounts could keep minting access tokens. Fixed.
-
-`backend/app/api/routes/auth.py` refresh handler (account-disabled check). Login and existing access tokens already returned 403. Refresh did not check `beta_status`, so a disabled user could get a new access token until the refresh token expired (30 days).
-
-Fix: refresh returns 403 for a disabled account and does not issue new tokens. Verified by `tests/test_private_beta_ops.py::test_disable_blocks_login_and_sessions`.
-
-### High — Opt-in host runner inherited server secrets. Fixed.
-
-`backend/app/services/interview/runner.py` `scrubbed_host_env` (line 131).
-
-When `PROMPTCODE_ALLOW_UNSAFE_LOCAL_RUNNER=1`, candidate tests were started with a copy of the server environment, including API keys and the database URL.
-
-Fix: the child process only receives an allowlist (`PATH`, `HOME`, locale, temp). Secret-like names are dropped. `PYTHONPATH` is set to the session directory. Verified by `tests/test_audit_runner_isolation.py`.
-
-The host runner still shares the machine's filesystem, network, and CPU. Do not enable it for anyone but yourself.
-
-### Medium — HTML catch-all could join a path outside `frontend/`. Fixed.
-
-`backend/app/main.py` `resolve_frontend_html` (line 40) and `serve_page`.
-
-`/{page}.html` built `FRONTEND_DIR / f"{page}.html"` and served it when the file existed. A segment containing `..` or a slash could leave the frontend directory. FastAPI usually does not put slashes in that parameter; the check is still required after URL decoding.
-
-Fix: reject empty names, `.`, `..`, slashes, backslashes, and NUL, then require the resolved path to stay inside `frontend/`. Verified by `tests/test_audit_static_pages.py`.
-
-### Medium — Logout left the access token valid. Fixed.
-
-`backend/app/api/routes/auth.py` `_revoke_access_token` (line 95).
-
-Logout revoked the refresh token only. A copied access token worked until the 15-minute expiry.
-
-Fix: the access token presented to logout is stored in the revocation table. Verified by `tests/test_auth_security.py::test_logout_revokes_refresh_token`.
-
-### Medium — Known vulnerable Python packages. Partially fixed.
-
-OSV was queried for the pinned versions. `pip-audit` is not installed; this was an OSV batch query, not a full lockfile scan.
-
-Fixed in `backend/requirements.txt`, then installed in the local venv. Auth, password-reset, static-page, and runner tests: 49 passed.
-
-| Package | Was | Now | Why |
-| --- | --- | --- | --- |
-| authlib | 1.6.9 | 1.6.12 | OAuth redirect and cache issues. This app uses Authlib for JWT, not the OAuth authorization server. |
-| python-multipart | 0.0.22 | 0.0.32 | Multipart and query-string denial of service. No route uses file upload. |
-| pydantic-settings | 2.13.1 | 2.14.2 | Symlink read if a secrets directory is configured. This app loads `.env`, not that directory. |
-
-Not upgraded: Starlette 0.49.3 (pulled in by FastAPI 0.120.4). OSV reports form-parsing and `Host` header issues fixed only in Starlette 1.x. This app does not define upload or form routes. Jumping FastAPI to 0.142 and Starlette to 1.7 was not done in this pass. Re-test the suite before that upgrade.
-
-### Medium — Interview list rate limit trips before the process falls over. Not a code change.
-
-Load was run against the already-running local server (`backend/benchmarks/audit_load.py`). It was not restarted onto this branch.
-
-`GET /health` (all 200):
-
-| Concurrency | Requests | p50 | p95 | p99 |
-| --- | --- | --- | --- | --- |
-| 1 | 10 | 0.61 ms | 17.16 ms | 17.16 ms |
-| 10 | 100 | 2.93 ms | 3.54 ms | 3.90 ms |
-| 25 | 250 | 7.61 ms | 9.44 ms | 9.65 ms |
-| 50 | 500 | 16.01 ms | 49.80 ms | 53.52 ms |
-
-`GET /api/interview/challenges`:
-
-| Concurrency | Requests | Result | p50 | p95 | p99 |
-| --- | --- | --- | --- | --- | --- |
-| 1 | 8 | 200 | 4.93 ms | 12.45 ms | 12.45 ms |
-| 10 | 80 | 200 | 13.50 ms | 130.61 ms | 205.94 ms |
-| 25 | 200 | 32×200, 168×429 | 24.04 ms | 371.08 ms | 553.89 ms |
-
-What broke first: the per-IP rate limit on the challenge list, not the process, database, or memory. No crash was observed. p99 at concurrency 1 is a tiny sample.
-
-Not tested: database down, OpenAI timeout, a long run for leaks, N+1 under Postgres, or production-sized data. `internal_list_users` runs one count query per user (`interview.py` around line 1898). That path is now token-gated and was not load tested.
-
-A 1MB login body was not a clean body-size test: the auth rate limit already returned 429. No global max body size was found in code.
-
-### Low — Remaining items, not changed
-
-- Debug logs still print the raw password-reset token (`password_reset.py` line 62).
-- `/metrics` is open when debug is on and `PROMPTCODE_METRICS_TOKEN` is empty. Production compose fails closed. Confirmed on the old local process: `GET /metrics` returned 200.
-- Candidate containers share the Docker network `promptcode-interview-internal`, so concurrent sessions can reach each other. They still have no route to the public internet.
-- Refresh rotation is not serialized. Two overlapping refresh calls with the same token can both succeed before the revocation row commits. Not reproduced with a test.
-- AI chat limits are in-memory on one process (`ai_provider.py` `check_session_ai_rate_limit`). A second web worker does not share them.
-- JWT in `sessionStorage` is readable by any script that runs on the page. Cookies are available and off by default.
-- CSP allows `esm.sh` and `jsdelivr.net`. A compromised script on those hosts runs in the page.
-- `scripts/rehearse-restore.sh` exports a fake `sk-live...` value (19 characters). It is not a real OpenAI key. Rename it so scanners stay quiet.
-
-## Checks that did not show a bug
-
-- SQL is SQLAlchemy expressions, not string-built queries, in the routes reviewed.
-- Workspace file reads reject `..`, absolute paths, and symlinks (`contained_file`).
-- Mass assignment on `PUT /api/auth/me` is limited by `UserUpdate`.
-
-## Manual actions
-
-1. Restart the local API so it loads this branch. Until then, internal routes on port 8000 still use the old debug bypass.
-2. Set `PROMPTCODE_INTERVIEW_INTERNAL_TOKEN` to a long random value. Do not use `change-me-internal-token`.
-3. Keep `PROMPTCODE_DEBUG=false` on any shared or deployed host. Production compose already does this.
-4. Keep `PROMPTCODE_ALLOW_UNSAFE_LOCAL_RUNNER` unset except on your own machine.
-5. Add a real password-reset email sender. Until then, users cannot reset passwords, and debug logs are the only copy of the token.
-6. Set `PROMPTCODE_METRICS_TOKEN` before exposing `/metrics`.
-7. Plan a FastAPI/Starlette upgrade and re-run the backend tests. Do not only bump Starlette.
-8. If this repo was ever public or a secret was pasted into git, run a history scanner (`gitleaks`) and rotate anything it finds. This audit did not do that.
-9. Rotate `PROMPTCODE_JWT_SECRET` if a host runner was used while the old environment leak existed and candidate code could have read it.
-
-## Ongoing checklist
-
-- Run `pytest` for `tests/test_auth_security.py`, `tests/test_password_reset.py`, `tests/test_private_beta_ops.py`, `tests/test_audit_runner_isolation.py`, and `tests/test_audit_static_pages.py` when auth or the runner changes.
-- Re-query OSV or install `pip-audit` when dependencies change.
-- Keep production on the Docker runner, with debug off, a metrics token, and an internal token.
-- Do not return reset tokens, session source, or internal diagnostics in API responses.
-- After any sandbox change, confirm candidate processes cannot see `PROMPTCODE_*` secrets and cannot run package-install scripts from the session directory.
-
-
-
-
-
-
-
-
-
+**NO-GO for authoritative scoring.** Current verified evidence is below. Historical claims are preserved only in the superseded appendix and are not accepted as current verification.
 
 ## Verified continuation — A1 reset-token logging
 
@@ -431,3 +253,214 @@ Live candidate attack writes a replacement test and results.json in the ephemera
 Manual decision required before B6 can be closed: choose authoritative grading with a separate trusted evaluator that never shares an interpreter/security boundary with candidate code, or practice-only execution with visible test results explicitly advisory and excluded from authoritative scoring. Existing arbitrary Python/Node challenge interfaces and rubric rely on in-process test execution; changing that trust model requires a deliberate architecture/product choice. No grading/rubric behavior was silently weakened.
 
 Still NO-GO: runtime grading integrity, verified execution broker privilege isolation, persistent source/dependency quotas, B7 live npm/Node probes, C full AI budget/isolation/outage audit, D/E recovery/atomic limiter/load/capacity, and F privacy/deployment/database review remain open. G final suite/E2E/scans/advisory audits remain NOT TESTED as final verification and must run last after those items. Prior manual hosting/secrets/backups/monitoring/rollback actions remain required. Do not deploy this branch based on the passing unit/live subset.
+
+78fb374 clean HEAD verification completed: shell syntax, report supersession banner and both renamed fixture values verified; grading/socket subset **8 passed, 1 xfailed in 0.66s**. The xfail is the open B6 security failure. This final verification note is left unstaged for the next audit-item commit; all six item commits above have been verified independently in clean worktrees.
+
+## Appendix — superseded historical audit narrative (UNVERIFIED)
+
+The following material predates clean-HEAD verification. Its pass, load, restart and scan claims are superseded; retain only as investigation history.
+
+Date: 2026-10-02. Branch: `security/audit-fixes`.
+
+Scope was the local app only. Nothing was sent to production. The API on `127.0.0.1:8000` was restarted onto this branch for the second load test. After that test, it was restarted again with the normal rate limits.
+
+## Setup
+
+PromptCode is a practice-interview app plus an older LLM-submission scorer.
+
+- API: FastAPI (`backend/app/main.py`), served with uvicorn.
+- UI: static HTML/JS in `frontend/`, no separate frontend package.
+- Database: Postgres in Docker (`localhost:5433` by default). SQLAlchemy async. Optional Supabase Postgres. Tests use SQLite. There is no client-side database rules layer; access control is in the API.
+- Auth: email/password, bcrypt, HS256 JWTs from Authlib. Access tokens last 15 minutes. Refresh tokens last 30 days and rotate. HttpOnly cookies exist but are off unless `PROMPTCODE_AUTH_COOKIE_ENABLED` is set. The browser keeps tokens in `sessionStorage`.
+- AI: OpenAI-compatible HTTP API (`PROMPTCODE_OPENAI_API_KEY` / `PROMPTCODE_AI_API_KEY`).
+- Test runner: allowlisted `pytest` / `npm test` commands. Docker isolation is the production mode (`docker-compose.prod.yml` sets `PROMPTCODE_RUNNER=docker` and `PROMPTCODE_DEBUG=false`). A host subprocess runner exists only when `PROMPTCODE_ALLOW_UNSAFE_LOCAL_RUNNER=1`.
+- Other services: Sentry (optional DSN), Prometheus `/metrics`.
+
+Secrets live in environment variables. `.env` is not tracked. A scan of the current tree found rehearsal fixtures that look like keys but are short fake values, not live credentials. Full git history was not scanned.
+
+## What was already in good shape
+
+- Submission and interview session reads are scoped to the signed-in user. A mismatch returns 404.
+- Profile update only accepts name and bio fields.
+- Passwords require length, case, a digit, and a symbol, and reject bcrypt's 72-byte truncation.
+- Auth rate limit is 10 attempts per IP per minute and is stored in the database. A local burst of bad logins returned ten `401`s and then `429`. Interview routes use a separate per-IP key (`interview:{ip}`, 120/minute). Chat and submissions are keyed by user id.
+- Forwarded headers are ignored unless the TCP peer is in `PROMPTCODE_AUTH_TRUSTED_PROXY_CIDRS` (default `127.0.0.1/32` and `::1/128`).
+- Security headers are set (CSP, `nosniff`, frame deny, referrer policy). HSTS is set when debug is off.
+- CORS is an explicit origin list and rejects `*` when debug is off.
+- `alg: none` JWTs are rejected by Authlib 1.6.9 and 1.6.12. Verified locally.
+- The locked-down Docker test container drops all capabilities, sets `no-new-privileges`, and does not mount the Docker socket.
+- Challenge commands are an allowlist. Clients cannot pass a shell string.
+
+## Findings
+
+### High — Candidate npm install bypassed the sandbox. Fixed.
+
+`backend/app/services/interview/runner.py` (`restore_node_manifests`, `linux_npm_docker_argv`).
+
+The isolated test container is locked down. Before that container starts, Node dependencies were installed with a separate `docker run` that had network access, default capabilities, and `npm` lifecycle scripts enabled. Package manifests are frozen in the file API, but code running inside a test can still rewrite them on disk. The next test run would install that rewritten manifest.
+
+Fix: restore `package.json` and lockfiles from the session's starter snapshot, refuse the install when that snapshot is missing, and run npm with `--ignore-scripts`, dropped capabilities, `no-new-privileges`, a pid limit, a memory limit, and a read-only root. Verified by `tests/test_audit_runner_isolation.py` (no Docker daemon required).
+
+### High — Debug mode opened internal admin routes. Fixed.
+
+`backend/app/services/interview/beta_ops_helpers.py` `require_internal` (line 27).
+
+`/api/interview/internal/*` lists users, disables accounts, and reads session reviews. The check treated `PROMPTCODE_DEBUG=true` as enough, with no token. The local server still running old code returned `200` for `/api/interview/internal/users` and `/internal/disk` with no token. User records from that response are not copied here.
+
+Fix: the header `X-PromptCode-Internal-Token` must match the configured token. Placeholder tokens are rejected. Comparison uses `hmac.compare_digest`. Debug no longer bypasses it. Verified by `tests/test_private_beta_ops.py::test_internal_routes_stay_closed_when_debug_is_on`. After the restart, `GET /api/interview/internal/users` with no token returned 404.
+
+Set a real `PROMPTCODE_INTERVIEW_INTERNAL_TOKEN`. The example value `change-me-internal-token` is rejected on purpose.
+
+### High — Password reset token was returned in the HTTP body in debug. Fixed.
+
+`backend/app/api/routes/auth.py` forgot-password handler. Previously, debug responses included `reset_token` for an existing user.
+
+Fix: the body is only the generic message. The debug log line no longer includes the token (`password_reset.py` `notify_password_reset`). Verified by `tests/test_password_reset.py`, including `test_notify_password_reset_does_not_log_the_token`.
+
+Still open: there is no production mailer. Forgot-password does not email anyone. See manual actions.
+
+### High — Disabled accounts could keep minting access tokens. Fixed.
+
+`backend/app/api/routes/auth.py` refresh handler (account-disabled check). Login and existing access tokens already returned 403. Refresh did not check `beta_status`, so a disabled user could get a new access token until the refresh token expired (30 days).
+
+Fix: refresh returns 403 for a disabled account and does not issue new tokens. Verified by `tests/test_private_beta_ops.py::test_disable_blocks_login_and_sessions`.
+
+### High — Opt-in host runner inherited server secrets. Fixed.
+
+`backend/app/services/interview/runner.py` `scrubbed_host_env` (line 131).
+
+When `PROMPTCODE_ALLOW_UNSAFE_LOCAL_RUNNER=1`, candidate tests were started with a copy of the server environment, including API keys and the database URL.
+
+Fix: the child process only receives an allowlist (`PATH`, `HOME`, locale, temp). Secret-like names are dropped. `PYTHONPATH` is set to the session directory. Verified by `tests/test_audit_runner_isolation.py`.
+
+The host runner still shares the machine's filesystem, network, and CPU. Do not enable it for anyone but yourself.
+
+### Medium — HTML catch-all could join a path outside `frontend/`. Fixed.
+
+`backend/app/main.py` `resolve_frontend_html` (line 40) and `serve_page`.
+
+`/{page}.html` built `FRONTEND_DIR / f"{page}.html"` and served it when the file existed. A segment containing `..` or a slash could leave the frontend directory. FastAPI usually does not put slashes in that parameter; the check is still required after URL decoding.
+
+Fix: reject empty names, `.`, `..`, slashes, backslashes, and NUL, then require the resolved path to stay inside `frontend/`. Verified by `tests/test_audit_static_pages.py`.
+
+### Medium — Logout left the access token valid. Fixed.
+
+`backend/app/api/routes/auth.py` `_revoke_access_token` (line 95).
+
+Logout revoked the refresh token only. A copied access token worked until the 15-minute expiry.
+
+Fix: the access token presented to logout is stored in the revocation table. Verified by `tests/test_auth_security.py::test_logout_revokes_refresh_token`.
+
+### Medium — Known vulnerable Python packages. Partially fixed.
+
+OSV was queried for the pinned versions. `pip-audit` is not installed; this was an OSV batch query, not a full lockfile scan.
+
+Fixed in `backend/requirements.txt`, then installed in the local venv. Auth, password-reset, static-page, and runner tests: 49 passed.
+
+| Package | Was | Now | Why |
+| --- | --- | --- | --- |
+| authlib | 1.6.9 | 1.6.12 | OAuth redirect and cache issues. This app uses Authlib for JWT, not the OAuth authorization server. |
+| python-multipart | 0.0.22 | 0.0.32 | Multipart and query-string denial of service. No route uses file upload. |
+| pydantic-settings | 2.13.1 | 2.14.2 | Symlink read if a secrets directory is configured. This app loads `.env`, not that directory. |
+
+Not upgraded: Starlette 0.49.3 (pulled in by FastAPI 0.120.4). OSV reports form-parsing and `Host` header issues fixed only in Starlette 1.x. This app does not define upload or form routes. Jumping FastAPI to 0.142 and Starlette to 1.7 was not done in this pass. Re-test the suite before that upgrade.
+
+### Medium — Forwarded client IP used the spoofable leftmost hop. Fixed.
+
+`backend/app/core/client_ip.py` `client_ip_from_request`.
+
+Auth and interview limits are per IP. Untrusted peers ignore `X-Forwarded-For` and `X-Real-IP`. That part was already correct, and a test covers it.
+
+When the peer is trusted, the old code used the first valid address in `X-Forwarded-For`. Caddy and nginx append the real client, so a request can arrive as `spoofed, real-client`. The spoofed value became the rate-limit key.
+
+Fix: from a trusted peer, use the rightmost address that is not itself inside the trusted proxy ranges. If every forwarded address is a trusted proxy, fall back to the peer. Verified by `tests/test_backend_validation.py` (`test_auth_client_key_ignores_spoofed_leftmost_forwarded_for` and the existing proxy tests).
+
+The proxy still has to append or replace the header. A proxy that forwards the client header unchanged, and does not append, cannot be distinguished from the real client.
+
+### Medium — With the limiter raised, challenge-list latency queues on one database lock. No code change.
+
+The process on port 8000 was restarted from this branch. For the probe only, `PROMPTCODE_INTERVIEW_RATE_LIMIT` and `PROMPTCODE_AUTH_RATE_LIMIT` were set to 1000000. The server was restarted afterward with those variables unset, so the normal limits (120/minute and 10/minute) are back.
+
+150 sequential `GET /api/interview/challenges` calls returned 200, which confirms the raised limit was in effect. With the default 120/minute cap, the earlier probe returned 429 at 25 clients.
+
+`GET /health` (all 200):
+
+| Concurrency | Requests | p50 | p95 | p99 |
+| --- | --- | --- | --- | --- |
+| 25 | 100 | 6.97 ms | 7.97 ms | 8.12 ms |
+| 50 | 200 | 15.73 ms | 17.68 ms | 18.15 ms |
+| 100 | 400 | 30.16 ms | 31.92 ms | 32.50 ms |
+| 200 | 600 | 43.07 ms | 157.54 ms | 161.02 ms |
+| 400 | 400 | 39.60 ms | 80.75 ms | 91.54 ms |
+
+`GET /health/ready` (database ping, all 200):
+
+| Concurrency | Requests | p50 | p95 | p99 |
+| --- | --- | --- | --- | --- |
+| 25 | 100 | 20.69 ms | 25.58 ms | 30.49 ms |
+| 50 | 200 | 42.08 ms | 74.35 ms | 78.46 ms |
+| 100 | 400 | 78.31 ms | 88.82 ms | 94.83 ms |
+| 200 | 600 | 152.11 ms | 351.97 ms | 650.72 ms |
+
+`GET /api/interview/challenges` (all 200; one rate-limit row and advisory lock per request, same client IP):
+
+| Concurrency | Requests | p50 | p95 | p99 |
+| --- | --- | --- | --- | --- |
+| 25 | 100 | 46.24 ms | 474.60 ms | 587.39 ms |
+| 50 | 200 | 90.93 ms | 857.39 ms | 954.58 ms |
+| 100 | 400 | 159.12 ms | 1.72 s | 1.92 s |
+| 200 | 600 | 545.14 ms | 3.25 s | 3.72 s |
+| 400 | 400 | 17.64 s | 18.71 s | 18.97 s |
+
+What breaks: not the process. Health at 400 clients stayed under 100 ms p99 and returned only 200. The challenge list never returned 5xx. Requests for one IP take a Postgres advisory lock inside `enforce_rate_limit`, so they queue. At 400 clients the median wait was 17.6 seconds and the slowest call was 19.3 seconds, just under the 20 second client timeout. That is the practical break: one busy IP stalls its own challenge-list calls for tens of seconds. A second IP would use a different lock.
+
+Not tested: a long run for leaks, N+1 under a large user table, or production-sized data. `internal_list_users` runs one count query per user (`interview.py` around line 1898). That path is token-gated and was not load tested.
+
+No global max body size was found in code.
+
+### Reliability
+
+`tests/test_audit_reliability.py` has 6 tests. Together with the password-reset log test and the forwarded-IP tests, the run was 9 passed.
+
+| Case | Result |
+| --- | --- |
+| Database hang on `/ready` and `/health/ready` | Returned 503 in under 12 seconds for both calls. `main.py` `_database_ready` now stops the ping after 5 seconds. New Postgres connections also use a 5 second connect timeout (`db/session.py`). A connect to `127.0.0.1:1` failed in under 3 seconds. |
+| AI provider slow response | A local server that slept 2 seconds, with `PROMPTCODE_AI_TIMEOUT_SECONDS=0.4`, raised `AIProviderError` code `timeout` in under 1.5 seconds. The provider already mapped `httpx.TimeoutException` to that error. |
+| Docker daemon down | `DOCKER_HOST=tcp://127.0.0.1:1`. The runner returned `error_code=docker_unavailable` in under 5 seconds and did not fall back to the host. |
+| Container left behind after a test timeout | A fake container whose `wait` raised was killed and `remove` was called. When `remove` raised, the runner removed the container by name. That cleanup was already in `IsolatedRunner._run_docker_sync`. The new test locks it in. No extra cleanup code was required. |
+
+### Low — Remaining items, not changed
+
+- `/metrics` is open when debug is on and `PROMPTCODE_METRICS_TOKEN` is empty. Production compose fails closed. After this branch's restart, `GET /metrics` still returned 200.
+- Candidate containers share the Docker network `promptcode-interview-internal`, so concurrent sessions can reach each other. They still have no route to the public internet.
+- Refresh rotation is not serialized. Two overlapping refresh calls with the same token can both succeed before the revocation row commits. Not reproduced with a test.
+- AI chat limits are in-memory on one process (`ai_provider.py` `check_session_ai_rate_limit`). A second web worker does not share them.
+- JWT in `sessionStorage` is readable by any script that runs on the page. Cookies are available and off by default.
+- CSP allows `esm.sh` and `jsdelivr.net`. A compromised script on those hosts runs in the page.
+- `scripts/rehearse-restore.sh` exports a fake `sk-live...` value (19 characters). It is not a real OpenAI key. Rename it so scanners stay quiet.
+
+## Checks that did not show a bug
+
+- SQL is SQLAlchemy expressions, not string-built queries, in the routes reviewed.
+- Workspace file reads reject `..`, absolute paths, and symlinks (`contained_file`).
+- Mass assignment on `PUT /api/auth/me` is limited by `UserUpdate`.
+
+## Manual actions
+
+1. Set `PROMPTCODE_INTERVIEW_INTERNAL_TOKEN` to a long random value. Do not use `change-me-internal-token`. The restarted local API already returns 404 for internal routes without that header.
+2. Keep `PROMPTCODE_DEBUG=false` on any shared or deployed host. Production compose already does this.
+3. Keep `PROMPTCODE_ALLOW_UNSAFE_LOCAL_RUNNER` unset except on your own machine.
+4. Add a real password-reset email sender. Until then, users cannot reset passwords. The raw token is no longer logged.
+5. Set `PROMPTCODE_METRICS_TOKEN` before exposing `/metrics`.
+6. Plan a FastAPI/Starlette upgrade and re-run the backend tests. Do not only bump Starlette.
+7. If this repo was ever public or a secret was pasted into git, run a history scanner (`gitleaks`) and rotate anything it finds. This audit did not do that.
+8. Rotate `PROMPTCODE_JWT_SECRET` if a host runner was used while the old environment leak existed and candidate code could have read it.
+9. Leave `PROMPTCODE_INTERVIEW_RATE_LIMIT` and `PROMPTCODE_AUTH_RATE_LIMIT` unset in production. They exist so a load test can raise the cap. The defaults are 120/minute and 10/minute.
+
+## Ongoing checklist
+
+- Run `pytest` for `tests/test_auth_security.py`, `tests/test_password_reset.py`, `tests/test_private_beta_ops.py`, `tests/test_audit_runner_isolation.py`, `tests/test_audit_static_pages.py`, `tests/test_audit_reliability.py`, and `tests/test_backend_validation.py` when auth, readiness, or the runner changes.
+- Re-query OSV or install `pip-audit` when dependencies change.
+- Keep production on the Docker runner, with debug off, a metrics token, and an internal token.
+- Do not return reset tokens, session source, or internal diagnostics in API responses.
+- After any sandbox change, confirm candidate processes cannot see `PROMPTCODE_*` secrets and cannot run package-install scripts from the session directory.
