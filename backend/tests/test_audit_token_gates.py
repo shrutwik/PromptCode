@@ -42,7 +42,7 @@ def test_metrics_missing_or_example_config_stays_closed(client, monkeypatch, tok
 
 def test_every_internal_route_rejects_missing_and_wrong_tokens(client):
     routes = {path: operations for path, operations in client.app.openapi()["paths"].items() if path.startswith("/api/interview/internal/")}
-    assert len(routes) >= 14
+    assert sum(len(set(operations) & {"get", "post", "put", "delete", "patch"}) for operations in routes.values()) >= 14
     for route, operations in routes.items():
         path = route.replace("{session_id}", "00000000-0000-0000-0000-000000000001").replace("{user_id}", "00000000-0000-0000-0000-000000000002")
         for method in set(operations) & {"get", "post", "put", "delete", "patch"}:

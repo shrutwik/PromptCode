@@ -300,3 +300,7 @@ Exact upstream fixed versions: GHSA-86qp-5c8j-p5mr Host parsing: 1.0.1; GHSA-jp8
 Full backend suite actually ran on clean A4 source with new dependencies: 383 passed, 6 failed, 1 skipped in 49.91s. Fixed audit test assumptions for FastAPI's lazy included-router enumeration using OpenAPI paths, and made the CSP hash test use its own inline-script fixture rather than unrelated frontend code. The runner network failure is a real B1 issue. Three frontend layout/starter contract failures are unrelated and remain untouched. The full suite is FAILED, not passing. Clean A5 HEAD verification follows this commit.
 A4 clean HEAD verification: 10 password-reset tests passed. Real SMTP remains NOT TESTED.
 Live B1 baseline: a disposable malicious candidate reached another disposable container on the shared internal network. Internet/metadata/host probes could not connect, but an unavailable target alone does not prove isolation. The disposable victim was removed. B1 fix/re-test is next.
+
+### A5 verification correction
+
+Clean b779d82 targeted verification actually ran: 25 passed, 1 failed. The remaining token test counted URL paths as routes: there are 14 internal operations across 13 paths because review supports both GET and POST. Corrected the coverage assertion to count operations without reducing coverage. Local token-gate re-test: 8 passed. Clean follow-up HEAD verification follows the corrective A5 test-only commit. Full-suite failures remain explicitly open.
