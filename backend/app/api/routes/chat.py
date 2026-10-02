@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import asyncio
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -12,6 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
+from app.services.interview.ai_budget import reserve_ai_budget
 from app.core.deps import get_current_user
 from app.core.model_policy import OPENAI_CHAT_MODELS, resolve_allowed_model
 from app.core.ratelimit import enforce_rate_limit
@@ -144,6 +146,8 @@ async def _post_chat_completion_with_model_fallback(
     messages: list[dict[str, Any]],
     max_tokens: int,
     temperature: float,
+    budget_db: AsyncSession | None = None,
+    budget_user: str = "",
 ) -> tuple[dict[str, Any], float, str]:
     latency_total_ms = 0.0
     if not model_candidates:
@@ -157,8 +161,16 @@ async def _post_chat_completion_with_model_fallback(
             "temperature": temperature,
             "stream": False,
         }
+        if budget_db is None or not budget_user:
+            raise HTTPException(503, "AI billing identity unavailable")
         start = time.perf_counter()
-        resp = await client.post(url, json=body, headers=headers)
+        for attempt in range(2):
+            await reserve_ai_budget(budget_db, budget_user, "legacy:" + budget_user,
+                                    len(json.dumps(messages).encode("utf-8")), output_tokens=max_tokens, attempts=1)
+            resp = await client.post(url, json=body, headers=headers)
+            if resp.status_code < 500 or attempt == 1:
+                break
+            await asyncio.sleep(.25 * (2 ** attempt))
         latency_total_ms += (time.perf_counter() - start) * 1000
 
         if resp.status_code == 200:
@@ -183,7 +195,7 @@ async def _post_chat_completion_with_model_fallback(
 
         raise HTTPException(
             status_code=502,
-            detail=f"AI API returned {resp.status_code}: {resp_text}",
+            detail="AI provider rejected the request. Please try again later.",
         )
 
     tried = ", ".join(model_candidates)
@@ -398,7 +410,7 @@ async def chat(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=15) as client:
             resolved_model: str | None = None
 
             async def _request_completion(current_messages: list[dict[str, Any]]) -> tuple[dict[str, Any], float]:
@@ -412,6 +424,7 @@ async def chat(
                     messages=current_messages,
                     max_tokens=_COACH_MAX_TOKENS,
                     temperature=0.7,
+                    budget_db=db, budget_user=str(user.id),
                 )
                 resolved_model = used_model
                 return data, request_latency_ms
@@ -425,7 +438,7 @@ async def chat(
     except HTTPException:
         raise
     except (httpx.HTTPError, TypeError, ValueError) as e:
-        raise HTTPException(status_code=502, detail=f"AI error: {e}") from e
+        raise HTTPException(status_code=502, detail="AI provider unavailable. Please try again later.") from e
 
     prompt_tokens = int(usage_raw.get("prompt_tokens") or 0)
     completion_tokens = int(usage_raw.get("completion_tokens") or 0)
@@ -434,7 +447,7 @@ async def chat(
     estimated_cost = _estimate_cost_usd(billing_model, prompt_tokens, completion_tokens)
 
     return ChatResponse(
-        reply=reply,
+        reply=reply.replace(settings.openai_api_key, "[REDACTED]"),
         model=model_name,
         usage={
             "prompt_tokens": prompt_tokens,
@@ -487,7 +500,7 @@ async def playground_run(
     temperature = max(0.0, min(float(payload.temperature), 2.0))
 
     try:
-        async with httpx.AsyncClient(timeout=90) as client:
+        async with httpx.AsyncClient(timeout=15) as client:
             resolved_model: str | None = None
 
             async def _request_completion(current_messages: list[dict[str, Any]]) -> tuple[dict[str, Any], float]:
@@ -501,6 +514,7 @@ async def playground_run(
                     messages=current_messages,
                     max_tokens=max_tokens,
                     temperature=temperature,
+                    budget_db=db, budget_user=str(user.id),
                 )
                 resolved_model = used_model
                 return data, request_latency_ms
@@ -513,7 +527,7 @@ async def playground_run(
     except HTTPException:
         raise
     except (httpx.HTTPError, TypeError, ValueError) as e:
-        raise HTTPException(status_code=502, detail=f"AI error: {e}") from e
+        raise HTTPException(status_code=502, detail="AI provider unavailable. Please try again later.") from e
 
     prompt_tokens = int(usage_raw.get("prompt_tokens") or 0)
     completion_tokens = int(usage_raw.get("completion_tokens") or 0)
@@ -521,7 +535,7 @@ async def playground_run(
     billing_model = resolve_allowed_model(model_name, _MODEL_PRICING.keys()) or canonical_model
 
     return PlaygroundRunResponse(
-        output=output,
+        output=output.replace(settings.openai_api_key, "[REDACTED]"),
         model=model_name,
         usage={
             "prompt_tokens": prompt_tokens,

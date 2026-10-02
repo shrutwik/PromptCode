@@ -55,6 +55,7 @@ from app.schemas.interview import (
     TestRunRequest,
     TestRunResponse,
 )
+from app.services.interview.ai_budget import reserve_ai_budget
 from app.services.interview.execution_feedback import advisory_scoring, advisory_summary
 from app.services.interview.ai_provider import (
     SYSTEM_PROMPT,
@@ -999,6 +1000,10 @@ async def ai_chat(
     )
     await db.commit()
 
+    await reserve_ai_budget(db, str(user.id), sid,
+                            len(body.message.encode("utf-8")) + len(SYSTEM_PROMPT.encode("utf-8"))
+                            + sum(len(a["content"].encode("utf-8")) for a in attachments)
+                            + len((body.selected_text or "").encode("utf-8")))
     provider = get_ai_provider()
     mark_session_ai_start(sid)
     session.ai_request_count = int(getattr(session, "ai_request_count", 0) or 0) + 1

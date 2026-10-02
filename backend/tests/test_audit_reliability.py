@@ -44,11 +44,11 @@ def test_ready_times_out_when_database_hangs(monkeypatch):
     monkeypatch.setattr(main_module, "engine", _HangingEngine())
     get_settings.cache_clear()
     app = main_module.create_app()
-    started = time.monotonic()
     with TestClient(app) as client:
+        started = time.monotonic()
         ready = client.get("/ready")
         health_ready = client.get("/health/ready")
-    elapsed = time.monotonic() - started
+        elapsed = time.monotonic() - started
     assert ready.status_code == 503
     assert ready.json()["detail"] == "database unavailable"
     assert health_ready.status_code == 503
@@ -125,6 +125,7 @@ def test_timed_out_container_is_killed_and_removed(tmp_path):
     workspace = tmp_path / "session"
     workspace.mkdir()
     container = MagicMock()
+    container.attrs = {"State": {"Running": False}}
     container.wait.side_effect = TimeoutError("still running")
     client = MagicMock()
     client.containers.run.return_value = container
@@ -154,6 +155,7 @@ def test_container_removed_by_name_when_remove_fails(tmp_path):
     workspace = tmp_path / "session"
     workspace.mkdir()
     container = MagicMock()
+    container.attrs = {"State": {"Running": False}}
     container.wait.side_effect = TimeoutError("still running")
     container.remove.side_effect = RuntimeError("device busy")
     named = MagicMock()

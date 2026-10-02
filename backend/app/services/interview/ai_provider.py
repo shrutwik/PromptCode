@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 import os
 import time
 from abc import ABC, abstractmethod
@@ -134,7 +135,7 @@ class ProductionAIProvider(AIProvider):
         self.api_url = _ai_base_url()
         self.api_key = _ai_api_key()
         self.model = _ai_model()
-        self.timeout_seconds = float(os.getenv("PROMPTCODE_AI_TIMEOUT_SECONDS") or "60")
+        self.timeout_seconds = max(.1, min(float(os.getenv("PROMPTCODE_AI_TIMEOUT_SECONDS") or "15"), 30))
 
     async def complete(
         self,
@@ -156,6 +157,7 @@ class ProductionAIProvider(AIProvider):
             "model": self.model,
             "messages": [{"role": "system", "content": system}, *messages],
             "temperature": 0.2,
+            "max_tokens": 2048,
         }
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -163,13 +165,17 @@ class ProductionAIProvider(AIProvider):
         }
         started = time.monotonic()
         try:
-            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                resp = await client.post(
-                    f"{self.api_url}/chat/completions",
-                    json=payload,
-                    headers=headers,
-                )
-        except httpx.TimeoutException as exc:
+            from app.services.interview.ai_budget import enabled
+            if not enabled():
+                raise AIProviderError("disabled", "AI assistant is temporarily disabled.")
+            async with asyncio.timeout(self.timeout_seconds * 2 + 1):
+                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                    for attempt in range(2):
+                        resp = await client.post(f"{self.api_url}/chat/completions", json=payload, headers=headers)
+                        if resp.status_code < 500 or attempt == 1:
+                            break
+                        await asyncio.sleep(.25 * (2 ** attempt))
+        except (httpx.TimeoutException, TimeoutError) as exc:
             raise AIProviderError(
                 "timeout",
                 "AI provider timed out. Your prompt was kept; try again.",
@@ -219,11 +225,12 @@ class ProductionAIProvider(AIProvider):
                 retryable=True,
             ) from exc
 
+        content = str(content).replace(self.api_key, "[REDACTED]")
         usage = data.get("usage") or {}
         return {
             "content": content,
             "provider": "production",
-            "model": data.get("model", self.model),
+            "model": str(data.get("model", self.model)).replace(self.api_key, "[REDACTED]"),
             "latency_ms": int((time.monotonic() - started) * 1000),
             "usage": {
                 "prompt_tokens": int(usage.get("prompt_tokens") or 0),
