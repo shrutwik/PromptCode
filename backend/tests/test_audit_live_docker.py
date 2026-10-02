@@ -63,3 +63,37 @@ def test_network():
             victim.remove(force=True)
         network.remove()
         client.close()
+
+
+def test_live_candidate_cannot_read_host_secrets_or_write_root(tmp_path, monkeypatch):
+    workspace = tmp_path / "candidate"
+    workspace.mkdir(mode=0o777)
+    workspace.chmod(0o777)
+    sentinel = tmp_path / "host-only-test-secret"
+    sentinel.write_text("test-data-never-production")
+    monkeypatch.setenv("PROMPTCODE_AUDIT_TEST_SECRET", "test-data-never-production")
+    source = '''import os
+from pathlib import Path
+
+def test_host_boundary():
+    assert os.getuid()!=0
+    assert not Path('/var/run/docker.sock').exists()
+    assert not Path(HOST_PATH).exists()
+    assert not any(name.startswith('PROMPTCODE_') for name in os.environ)
+    assert 'OPENAI_API_KEY' not in os.environ
+    status=Path('/proc/self/status').read_text()
+    caps=next(line.split(':',1)[1].strip() for line in status.splitlines() if line.startswith('CapEff:'))
+    assert int(caps,16)==0
+    privilege=next(line.split(':',1)[1].strip() for line in status.splitlines() if line.startswith('NoNewPrivs:'))
+    assert privilege=='1'
+    try:
+        Path('/etc/pc-audit-marker').write_text('test-only')
+    except OSError:
+        pass
+    else:
+        raise AssertionError('Root filesystem writable')
+'''.replace("HOST_PATH", repr(str(sentinel)))
+    (workspace / "test_host.py").write_text(source)
+    result = asyncio.run(IsolatedRunner().run_tests(workspace, "pytest -q", runner_config={"image": "promptcode-runner-python:latest", "timeoutSeconds": 15, "memoryMb": 128, "cpuLimit": .5, "pidsLimit": 32}))
+    assert result["ok"], result
+    assert sentinel.read_text() == "test-data-never-production"

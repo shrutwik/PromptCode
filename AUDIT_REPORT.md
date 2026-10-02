@@ -314,3 +314,8 @@ A5 corrective clean HEAD verification: 26 token/header/reset tests passed in 4.0
 ### B1 corrected verification
 
 Clean 81df263 live verification failed the same inactive-interface assertion. After correcting the test to require only loopback to be UP, the local bounded live/network/runner/workspace checks actually completed: 16 passed. The fixed test still requires localhost connectivity and rejects peer, public IP, metadata, and host connections. Clean corrective HEAD verification follows its commit.
+
+## Verified continuation — B2 live host-access boundaries
+
+PASSED for the installed Python runner image: candidate UID is non-root; /var/run/docker.sock and an outside-workspace test sentinel are absent; PROMPTCODE_* and OPENAI_API_KEY are not inherited; CapEff is zero; NoNewPrivs is 1; writing /etc is denied. Host sentinel remained unchanged. The live test ran: 1 passed in 0.82s. No real secrets or other candidate data were read. Clean B2 HEAD verification follows this test/evidence commit. Deployment backend Docker-socket/entrypoint changes remain excluded and need separate privilege review.
+B1 corrected clean HEAD verification: 16 live/unit/workspace tests passed (actual completed run). The inactive-interface failure and premature prior claim remain documented above.
