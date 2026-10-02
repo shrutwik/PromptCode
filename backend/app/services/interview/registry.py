@@ -104,6 +104,8 @@ def is_frozen_path(rel_path: str) -> bool:
         return True
     parts = normalized.lower().split("/")
     name = parts[-1]
+    if any(part in {"node_modules", ".venv", "venv"} for part in parts):
+        return True
     if "tests" in parts or "__tests__" in parts:
         return True
     if name.startswith("test_") and name.endswith(".py"):

@@ -278,6 +278,16 @@ Completed local verification: **30 passed in 21.43s**, including live valid-repo
 
 Design only: docs/audit-trusted-execution-design.md describes an evaluator outside the candidate interpreter, bounded challenge adapters, immutable source/inventory versions and signed job-bound results. It also describes a narrow fixed-flag broker on a dedicated disposable execution host. Existing sandbox-executor socket/group privileges imply full Docker-host control; a method-only socket proxy, non-root UID or read-only socket bind does not restrict that authority. Neither proposal is implemented. Owner approval is required before building either design. Estimated evaluator prototype 3–5 days, production infrastructure/verification 2–4 weeks plus challenge migration; broker 5–10 days plus disposable-host operations 3–5 days. These are planning estimates, not measured work. NO-GO for authoritative scoring.
 
+## Persistent source and dependency quotas
+
+69434e0 clean HEAD design review confirmed design-only/approval labels, fixed-template broker contract and effort estimates; **11 execution-feedback tests passed in 0.12s**. No broker/evaluator implementation performed.
+
+Per-session source budget is 20 MiB / 1,000 files, with 1.5 MiB per-file limit and maximum 16 path components. Upload checks run under a cross-process flock outside candidate-visible source. Replacements account for existing bytes, and over-budget writes leave existing content unchanged. API cannot upload into node_modules/.venv/venv. Existing dependency caches have a separate pre-execution budget of 128 MiB / 20,000 files; oversized caches fail before container startup. Candidate execution remains bounded to 256 MiB tmpfs.
+
+Removed runtime host dependency installation and prebuilt-venv copying from candidate execution. This prevents installer writes from exceeding a quota before validation. Reviewed Linux runner images or bounded prebuilt caches must supply dependencies. Unavailable dependencies fail rather than downloading into host storage. Node dependency image/cache preparation is a manual action and remains a functionality limitation; no claim of complete Node sessions yet. Budgets are per-session, not an aggregate storage admission policy; D/E and retention review must address aggregate capacity.
+
+Local quota/workspace tests: **14 passed in 0.20s**, including concurrent overcommit, byte/file bounds, replacement accounting, dependency budget and protected paths. Clean committed verification pending. NO-GO for authoritative scoring.
+
 ## Appendix — superseded historical audit narrative (UNVERIFIED)
 
 The following material predates clean-HEAD verification. Its pass, load, restart and scan claims are superseded; retain only as investigation history.

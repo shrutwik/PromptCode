@@ -710,6 +710,8 @@ async def save_session_file(
         write_file(Path(session.workspace_path), file_path, body.content)
     except PermissionError:
         raise HTTPException(status_code=404, detail="File not found") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     from difflib import SequenceMatcher
 
     additions = deletions = 0

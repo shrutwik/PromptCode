@@ -10,6 +10,7 @@ Never mutates source challenges/ or other session directories.
 from __future__ import annotations
 
 import os
+import fcntl
 import shutil
 from pathlib import Path
 
@@ -278,11 +279,23 @@ def read_file(workspace: Path, rel_path: str) -> str:
 
 
 def write_file(workspace: Path, rel_path: str, content: str) -> None:
+    # Cross-process lock outside candidate-visible workspace prevents quota races.
+    lock_path = Path(str(workspace) + ".upload.lock")
+    with lock_path.open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        _write_file_locked(workspace, rel_path, content)
+
+
+def _write_file_locked(workspace: Path, rel_path: str, content: str) -> None:
+    if len(Path(rel_path).parts) > 16:
+        raise ValueError("File path too deep")
     if is_blocked_path(rel_path) or is_frozen_path(rel_path):
         raise PermissionError("File not available")
     if len(content.encode("utf-8")) > MAX_FILE_BYTES:
         raise ValueError("File too large for editor")
     path = contained_file(workspace, rel_path)
+    from app.services.interview.workspace_quota import check_upload
+    check_upload(workspace, path, len(content.encode("utf-8")))
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_symlink():
         raise PermissionError("Path escape blocked")

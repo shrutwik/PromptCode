@@ -547,11 +547,15 @@ class IsolatedRunner(ChallengeRunner):
                 error_code="workspace_link",
             )
 
-        _ensure_prebuilt_deps(
-            workspace,
-            challenge_slug=str(runner_config.get("challengeSlug") or ""),
-        )
-        _install_linux_node_modules(workspace, image)
+        from app.services.interview.workspace_quota import usage
+        try:
+            usage(workspace)
+        except ValueError:
+            return _result(ok=False, exit_code=-1, stdout="", stderr="Session workspace quota exceeded.",
+                           command=shlex.join(argv), duration_ms=0, mode="full", isolation="docker",
+                           error_code="workspace_quota")
+        # No dependency installation/copy may write to the persistent host workspace.
+        # Dependencies must be supplied by a reviewed Linux runner image or bounded source cache.
 
         try:
             client = _docker_client()
