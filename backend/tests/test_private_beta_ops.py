@@ -189,6 +189,7 @@ def test_disable_blocks_login_and_sessions(tmp_path, monkeypatch):
             assert su.status_code == 201
             uid = su.json()["user"]["id"]
             token = su.json()["access_token"]
+            refresh = su.json()["refresh_token"]
             dis = client.post(
                 f"/api/interview/internal/users/{uid}/disable",
                 headers={"X-PromptCode-Internal-Token": "test-internal"},
@@ -208,6 +209,8 @@ def test_disable_blocks_login_and_sessions(tmp_path, monkeypatch):
                 headers={"Authorization": f"Bearer {token}"},
             )
             assert start.status_code == 403
+            refreshed = client.post("/api/auth/refresh", json={"refresh_token": refresh})
+            assert refreshed.status_code == 403
     finally:
         asyncio.run(engine.dispose())
 

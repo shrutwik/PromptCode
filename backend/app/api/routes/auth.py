@@ -247,6 +247,11 @@ async def refresh_token_endpoint(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
         )
+    if (user.beta_status or "active") == "disabled":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account disabled",
+        )
     await _revoke_refresh_token(db, refresh_token=payload.refresh_token)
     new_access = create_access_token(user.id, settings.jwt_secret)
     new_refresh = create_refresh_token(user.id, settings.jwt_secret)
