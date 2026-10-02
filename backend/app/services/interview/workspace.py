@@ -263,7 +263,11 @@ def list_files(workspace: Path) -> list[dict]:
             size = item.stat().st_size
         except OSError:
             size = 0
-        files.append({"path": rel, "size": size})
+        files.append({
+            "path": rel,
+            "size": size,
+            "writable": candidate_write_allowed(workspace, rel),
+        })
     return files
 
 

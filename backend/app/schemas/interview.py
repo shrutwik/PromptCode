@@ -119,6 +119,7 @@ class DashboardStatsResponse(BaseModel):
 class FileEntry(BaseModel):
     path: str
     size: int
+    writable: bool = True
 
 
 class FileContentResponse(BaseModel):

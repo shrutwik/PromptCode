@@ -145,10 +145,12 @@ function renderTree(filter = "") {
       }
       if (entry.__file) {
         const btn = document.createElement("button");
+        const locked = entry.__file.writable === false;
         btn.className = "file-item" + (currentPath === path ? " active" : "");
         btn.style.paddingLeft = 24 + depth * 12 + "px";
         const mod = models[path] && models[path].dirty ? " ●" : "";
-        btn.textContent = name + mod;
+        btn.textContent = name + (locked ? " · read-only" : "") + mod;
+        if (locked) btn.title = "This file is read-only.";
         btn.onclick = () => openFile(path);
         treeEl.appendChild(btn);
       }
@@ -193,16 +195,23 @@ async function openFile(path) {
   if (!openTabs.includes(path)) openTabs.push(path);
   currentPath = path;
   editor.setModel(models[path].model);
-  editor.updateOptions({ readOnly: sessionReadOnly });
-  document.getElementById("pathLabel").textContent = path;
+  const locked = fileLocked(path);
+  editor.updateOptions({ readOnly: sessionReadOnly || locked });
+  document.getElementById("pathLabel").textContent = path + (locked ? " · read-only" : "");
   document.getElementById("langLabel").textContent = langFor(path);
   renderTabs();
   renderTree(document.getElementById("fileSearch").value);
   updateDirtyPill();
 }
 
+function fileLocked(path) {
+  const meta = files.find((f) => f.path === path);
+  return !!(meta && meta.writable === false);
+}
+
 async function save() {
   if (!currentPath || !models[currentPath]) throw new Error("No file selected");
+  if (fileLocked(currentPath)) throw new Error("This file is read-only.");
   const content = models[currentPath].model.getValue();
   await InterviewAPI.saveFile(sessionId, currentPath, content, { source: "candidate" });
   models[currentPath].saved = content;

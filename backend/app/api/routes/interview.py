@@ -95,6 +95,7 @@ from app.services.interview.registry import (
     get_challenge,
     get_runner_config,
     is_blocked_path,
+    is_frozen_path,
     list_challenges,
 )
 from app.services.interview.rubric import (
@@ -699,6 +700,8 @@ async def save_session_file(
 ) -> FileContentResponse:
     if is_blocked_path(file_path):
         raise HTTPException(status_code=404, detail="File not found")
+    if is_frozen_path(file_path):
+        raise HTTPException(status_code=403, detail="This file is read-only.")
     session = await _load_owned_session(db=db, session_id=session_id, user=user)
     require_mutable(session)
     try:
@@ -1117,6 +1120,8 @@ async def ai_apply_edit(
     require_mutable(session)
     if is_blocked_path(body.path):
         raise HTTPException(status_code=404, detail="File not found")
+    if is_frozen_path(body.path):
+        raise HTTPException(status_code=403, detail="This file is read-only.")
     disposition = body.disposition if body.disposition in {
         "accepted", "modified", "rejected"
     } else "accepted"
