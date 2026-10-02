@@ -548,9 +548,8 @@ class IsolatedRunner(ChallengeRunner):
             },
             "mem_limit": f"{memory_mb}m",
             "nano_cpus": int(cpu * 1e9),
-            # Internal network: localhost works for Vitest, and there is no route
-            # to the public internet. network_disabled also drops localhost DNS.
-            "network": _interview_network(client),
+            # Each candidate has only loopback; no host, database, or peer route.
+            "network_disabled": True,
             "read_only": True,
             "tmpfs": {"/tmp": "rw,noexec,nosuid,size=64m"},
             "detach": True,

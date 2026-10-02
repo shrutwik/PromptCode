@@ -304,3 +304,9 @@ Live B1 baseline: a disposable malicious candidate reached another disposable co
 ### A5 verification correction
 
 Clean b779d82 targeted verification actually ran: 25 passed, 1 failed. The remaining token test counted URL paths as routes: there are 14 internal operations across 13 paths because review supports both GET and POST. Corrected the coverage assertion to count operations without reducing coverage. Local token-gate re-test: 8 passed. Clean follow-up HEAD verification follows the corrective A5 test-only commit. Full-suite failures remain explicitly open.
+
+## Verified continuation — B1 candidate network escape
+
+FAILED before patch: live candidate pytest code connected to a disposable HTTP peer on the shared internal Docker network (172.20.0.2:8765). Fixed candidate runs to use network_disabled=True rather than a shared network. Live re-test blocked the same peer; an automated test additionally verifies the only interface is lo and localhost socket connections work, while peer/internet/metadata/Docker-host connection attempts fail. This eliminates routing to real databases; no actual staging database was probed because none is running. A network-install phase for trusted manifests remains separate and is still subject to B7 review.
+Local automated verification: live network test plus runner-isolation/workspace tests and the existing mocked container-limit test ran, 16 passed. Test fixtures use bounded memory/CPU/PIDs, temporary directories, no real secrets, and remove their victim container/network. Clean B1 HEAD verification follows this commit.
+A5 corrective clean HEAD verification: 26 token/header/reset tests passed in 4.09s. Full backend suite remains pending re-run after network hardening, with three pre-existing frontend contract failures still open.
