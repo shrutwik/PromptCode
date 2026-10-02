@@ -6,7 +6,8 @@ from pathlib import Path
 
 def _python_starter() -> str:
     html = Path(__file__).resolve().parents[2] / "frontend" / "challenge.html"
-    source = html.read_text()
+    assert '<script src="/static/js/pages/challenge.js"></script>' in html.read_text()
+    source = (html.parent / "js/pages/challenge.js").read_text()
     match = re.search(r"python:\s*`(?P<code>[\s\S]*?)`,\s*javascript:", source)
     assert match, "Python starter block not found in challenge frontend."
     return match.group("code")

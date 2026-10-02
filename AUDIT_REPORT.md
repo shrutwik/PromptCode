@@ -384,3 +384,7 @@ The earlier exclusion table remains the detailed inventory. Later exceptions are
 4. Approve or reject the narrow stale frontend-test correction above. Choose and test a persistent workspace disk-quota strategy before users can execute code.
 5. Build reviewed backend and runner images and restart staging after the remaining fixes; verify image commit/version, proxy CIDRs, TLS, headers/CORS, non-root execution and Docker-daemon privilege boundaries. The pending entrypoint/socket/SSL changes are not approved by this checkpoint.
 6. Before launch, configure monitoring and alerts for auth failures, DB/Docker outages, orphan runners, queue saturation, disk use and AI spend; establish data retention/deletion, encrypted backups and a rehearsed restore. Set a reviewed rollback image and migration-compatible restoration procedure; rehearse it in staging. These operations were not performed here.
+
+### Continuation item 1 — strict frontend contract corrections
+
+Confirmed against committed HEAD: index links local responsive CSS, challenge links external starter JavaScript, and active chat attributes include accessibility metadata. Updated only the three stale assertions in test_frontend_layout_contract.py and test_frontend_starter_contract.py; retain breakpoint coverage for every page, exact active classes/action, unique chat tab/panel and starter runtime checks. Added accessibility relationship checks. No UI edits required. Local targeted verification: 7 passed. Clean-HEAD full-suite result pending below. Status remains NO-GO.
