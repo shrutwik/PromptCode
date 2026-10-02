@@ -1,6 +1,6 @@
 # PromptCode
 
-A LeetCode-style evaluation platform where users solve real-world problems using AI, and are scored on how efficiently and reliably they use LLMs — not just whether they get the right answer.
+PromptCode is a practice interview product: a challenge library, a workspace, tests, AI suggestions, v2 judgment from session events, and a defend step. The older submission and SDK evaluator, which scores how people use LLMs, is still in this repo.
 
 ## Architecture
 

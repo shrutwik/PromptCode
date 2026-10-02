@@ -23,14 +23,4 @@ document.documentElement.classList.add('lp-js');
   items.forEach(el => io.observe(el));
 })();
 
-(async function() {
-  PromptCodeAPI.updateNavAuth();
-  const el = document.getElementById('statChallenges');
-  if (!el) return;
-  try {
-    const challenges = await PromptCodeAPI.getChallenges();
-    el.textContent = String(challenges.length);
-  } catch (e) {
-    PromptCodeAPI.debugLog('Failed to load challenges:', e);
-  }
-})();
+PromptCodeAPI.updateNavAuth();

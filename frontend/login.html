@@ -57,9 +57,20 @@
         </div>
         <div class="auth-row">
           <label class="pc-check"><input type="checkbox"> Remember me</label>
-          <span class="auth-disabled" title="Password reset coming soon — contact support for now" aria-disabled="true">Forgot password?</span>
+          <a href="#forgot" id="forgotPasswordLink">Forgot password?</a>
         </div>
         <button type="submit" class="btn btn-primary btn-lg btn-block btn-submit">Sign in</button>
+      </form>
+
+      <form id="forgotForm" hidden>
+        <div class="pc-field">
+          <label for="forgotEmail">Email</label>
+          <input type="email" placeholder="you@company.com" id="forgotEmail" autocomplete="email" required>
+        </div>
+        <div class="pc-alert" data-tone="success" role="status" id="forgotNotice" hidden></div>
+        <div class="pc-alert" data-tone="danger" role="alert" id="forgotError" hidden></div>
+        <button type="submit" class="btn btn-primary btn-lg btn-block" id="forgotSubmit">Send reset link</button>
+        <p class="pc-auth-foot"><a href="/reset-password.html">Have a reset token?</a> <a href="#signin" id="backToSignIn">Back to sign in</a></p>
       </form>
 
       <div class="pc-or">or continue with</div>

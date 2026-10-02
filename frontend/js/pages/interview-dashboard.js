@@ -34,6 +34,11 @@ function scrollToProgress() {
 }
 window.addEventListener("hashchange", scrollToProgress);
 
+function ownedSessionHref(id, report) {
+  // Logged-in resume uses the bearer token. The owner token is not required.
+  return report ? `/session/${id}/report` : `/session/${id}`;
+}
+
 function renderContinue(sessions) {
   const active = sessions.find((s) => s.status === "active");
   const cont = document.getElementById("continue");
@@ -49,7 +54,7 @@ function renderContinue(sessions) {
           <span class="tag">Started ${esc(when(active.started_at))}</span>
         </div>
       </div>
-      <div class="dash-continue-actions"><a class="btn btn-primary" href="/session/${esc(active.id)}">Resume session</a></div>
+      <div class="dash-continue-actions"><a class="btn btn-primary" href="${esc(ownedSessionHref(active.id, false))}">Resume session</a></div>
     </div>`;
   } else {
     cont.innerHTML = `<div class="pc-panel dash-continue">
@@ -127,7 +132,7 @@ function renderSessions(sessions) {
     <thead><tr><th scope="col">Challenge</th><th scope="col">Status</th><th scope="col">Started</th><th scope="col" class="num">Attempt</th><th scope="col" class="num">Score</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
     <tbody data-stagger>${recent.map((s) => {
       const done = s.status === "submitted";
-      const href = done ? `/session/${s.id}/report` : `/session/${s.id}`;
+      const href = ownedSessionHref(s.id, done);
       return `<tr data-href="${esc(href)}" tabindex="0">
         <td class="title-cell"><a href="${esc(href)}" tabindex="-1">${esc(s.challenge_title || s.challenge_slug)}</a></td>
         <td><span class="tag" data-tone="${STATUS_TONE[s.status] || "idle"}">${esc(s.status)}</span></td>
@@ -135,8 +140,8 @@ function renderSessions(sessions) {
         <td class="num">${esc(s.attempt_number || 1)}</td>
         <td class="num">${s.total_score != null ? esc(s.total_score) : "—"}</td>
         <td class="actions">
-          <a class="btn btn-ghost btn-sm" href="/session/${esc(s.id)}">Workspace</a>
-          ${done ? `<a class="btn btn-secondary btn-sm" href="/session/${esc(s.id)}/report">Report</a>` : ""}
+          <a class="btn btn-ghost btn-sm" href="${esc(ownedSessionHref(s.id, false))}">Workspace</a>
+          ${done ? `<a class="btn btn-secondary btn-sm" href="${esc(ownedSessionHref(s.id, true))}">Report</a>` : ""}
         </td>
       </tr>`;
     }).join("")}</tbody></table></div>`;

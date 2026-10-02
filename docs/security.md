@@ -36,6 +36,7 @@ Honest beta security notes — not a compliance claim.
 
 - Host Docker socket privilege if runner mode is docker on the API host.
 - Bearer tokens in browser storage if cookies are not enabled.
-- No email-based password reset yet.
+- Password reset stores only a SHA-256 token hash. There is no mailer; the raw token is included in the forgot-password response only when `PROMPTCODE_DEBUG=true`.
+- `users.role = interviewer` receives defend answer guides. Candidates do not, and report metrics stay stripped.
 - SQLite/local defaults are for development only.
 - Rate limits are per-process/DB — not a distributed WAF.

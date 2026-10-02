@@ -70,14 +70,12 @@ Registry: `challenges/interview-registry.json` (metadata only; no spoilers).
 
 ## Status notes
 
-Shipped in this hardening pass: Monaco IDE, nested explorer, starter snapshot diffs, ChallengeRunner + commandId allowlist, AI apply attribution, session_analysis signals, evidence-backed rubric, defend UX (guides hidden), dashboard aggregates, architecture doc.
+Shipped in this hardening pass: Monaco IDE, nested explorer, starter snapshot diffs, ChallengeRunner + commandId allowlist, AI apply attribution, session_analysis signals, evidence-backed rubric, defend UX (guides hidden from candidates), dashboard aggregates, architecture doc. A logged-in owner can resume a session from another device with the bearer token alone. `users.role = interviewer` receives defend answer guides; candidates and reports do not.
 
 ## Still deferred / unsafe
 
-- Real Docker-isolated per-session runners (`IsolatedRunner` stub; host runner is **not** production-safe)
+- `IsolatedRunner` is a real Docker runner in `backend/app/services/interview/runner.py`. Production must set `PROMPTCODE_RUNNER=docker` and build the `promptcode-runner-node` and `promptcode-runner-python` images. The local runner is the dev default and is not safe for untrusted code.
 - Rich auto-install of challenge deps before first test run
-- Persistent multi-device session sync beyond owner token + optional auth
-- Interviewer-only auth role gating for answer guides in stored evaluation metrics
 - Deep prompt-quality ML judge (heuristics shipped; replaceable)
 
 See `docs/interview-architecture.md` for request flow, event schema, and Docker roadmap.

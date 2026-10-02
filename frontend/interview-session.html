@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&display=swap">
 <link rel="stylesheet" href="/static/css/pc-tokens.css?v=20260930">
 <link rel="stylesheet" href="/static/css/pc-components.css?v=20260930">
-<link rel="stylesheet" href="/static/interview.css?v=20260930">
+<link rel="stylesheet" href="/static/interview.css?v=20261001c">
 <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/editor/editor.main.css" />
 </head>
 <body class="ide-body">
@@ -49,15 +49,22 @@
   <button type="button" role="menuitem" data-action="toggle-explorer">Toggle explorer</button>
   <button type="button" role="menuitem" data-action="toggle-ai">Toggle AI panel</button>
   <button type="button" role="menuitem" data-action="toggle-term">Toggle terminal</button>
+  <div class="pc-menu-sep" role="separator"></div>
+  <button type="button" role="menuitem" data-action="abandon" id="abandonBtn">Leave session</button>
 </div>
 
 <div class="workspace" id="workspace">
-  <aside class="ide-panel explorer" id="explorerPanel" aria-label="Files">
-    <div class="ide-panel-head"><h2>Explorer</h2></div>
-    <details class="ticket-panel" id="ticketPanel" open>
-      <summary>Ticket</summary>
-      <div class="ticket-body" id="ticketBody">Loading scenario…</div>
-    </details>
+  <aside class="ide-panel explorer" id="explorerPanel" data-explorer="question" aria-label="Explorer">
+    <div class="ide-panel-head">
+      <h2>Explorer</h2>
+      <div class="view-toggle" role="group" aria-label="Show question or files">
+        <button type="button" data-view="question" aria-pressed="true">Question</button>
+        <button type="button" data-view="code" aria-pressed="false">Code</button>
+      </div>
+    </div>
+    <div id="questionPane" class="question-pane">
+      <div class="question-body" id="questionBody">Loading scenario…</div>
+    </div>
     <input class="file-search" id="fileSearch" type="search" placeholder="Search files…" aria-label="Search files" />
     <div id="tree" class="tree"></div>
   </aside>
@@ -133,12 +140,28 @@
   </div>
 </div>
 
+<div class="modal hidden" id="abandonModal" role="dialog" aria-modal="true" aria-labelledby="abandonModalTitle" aria-describedby="abandonSummary">
+  <div class="modal-card submit-card">
+    <div class="modal-head">
+      <h2 id="abandonModalTitle">Leave this session?</h2>
+      <button class="btn btn-ghost btn-sm" id="closeAbandon" type="button">Close</button>
+    </div>
+    <div class="modal-body">
+      <p id="abandonSummary">This marks the session abandoned and returns you to the dashboard.</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" type="button" id="cancelAbandon">Stay</button>
+        <button class="btn btn-primary" type="button" id="confirmAbandon">Leave session</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="/static/js/pages/interview-session-1.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/editor/editor.main.nls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/editor/editor.main.js"></script>
 <script src="/static/interview-api.js"></script>
 <script src="/static/js/pc-ui.js?v=20260930"></script>
-<script src="/static/js/pages/interview-session.js"></script>
+<script src="/static/js/pages/interview-session.js?v=20261001c"></script>
 </body>
 </html>

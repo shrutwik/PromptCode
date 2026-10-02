@@ -121,6 +121,16 @@ body.pc-landing .btn[hidden] { display: none; }
   box-shadow: var(--pc-shadow-lg);
   overflow: hidden;
   text-align: left;
+  transition:
+    translate var(--pc-dur-fast) var(--pc-ease-press),
+    border-color var(--pc-dur-fast) var(--pc-ease-press),
+    box-shadow var(--pc-dur-fast) var(--pc-ease-press);
+}
+
+.pc-seq-stage.is-live .pc-seq-panel:hover {
+  translate: 0 -4px;
+  border-color: var(--pc-border-strong);
+  box-shadow: var(--pc-shadow-lg), var(--pc-glow-accent);
 }
 
 .pc-seq-panel-bar {
@@ -209,8 +219,8 @@ body.pc-landing .btn[hidden] { display: none; }
 .pc-seq-ide-top {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   background: var(--pc-bg-elevated);
@@ -220,10 +230,10 @@ body.pc-landing .btn[hidden] { display: none; }
 }
 
 .pc-seq-ide-top .brand { font-family: var(--pc-font-sans); font-weight: 600; color: var(--pc-text); }
-.pc-seq-ide-top .slug { color: var(--pc-text); }
+.pc-seq-ide-top .slug { color: var(--pc-text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pc-seq-ide-top .timer { margin-left: auto; color: var(--pc-accent); }
 .pc-seq-ide-top .run,
-.pc-seq-ide-top .submit { padding: 3px 8px; border: 1px solid var(--border-light); border-radius: var(--pc-radius-xs); color: var(--pc-text-secondary); }
+.pc-seq-ide-top .submit { flex: 0 0 auto; white-space: nowrap; padding: 3px 8px; border: 1px solid var(--border-light); border-radius: var(--pc-radius-xs); color: var(--pc-text-secondary); }
 .pc-seq-ide-top .submit { background: var(--pc-accent); border-color: var(--pc-accent); color: var(--pc-accent-ink); font-weight: 600; }
 
 .pc-seq-phase {
@@ -276,7 +286,15 @@ body.pc-landing .btn[hidden] { display: none; }
 .pc-seq-table th,
 .pc-seq-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; }
 .pc-seq-table th { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--pc-faint); font-weight: 500; }
+.pc-seq-table tbody tr { transition: background var(--pc-dur-fast) var(--pc-ease-press); }
 .pc-seq-table tr.is-focus td { background: var(--pc-accent-dim); color: var(--pc-text); }
+.pc-seq-stage.is-live .pc-seq-table tbody tr:hover td {
+  background: var(--pc-accent-dim);
+  color: var(--pc-text);
+}
+.pc-seq-stage.is-live .pc-seq-table tbody tr:hover td:first-child {
+  box-shadow: inset 2px 0 0 var(--pc-accent);
+}
 .pc-seq-table .dim { color: var(--pc-faint); }
 .pc-seq-table .hi { color: var(--pc-accent); }
 
@@ -292,12 +310,39 @@ body.pc-landing .btn[hidden] { display: none; }
 .pc-seq-badge.warn { border-color: rgba(232, 165, 75, 0.35); color: var(--pc-warn); }
 .pc-seq-badge.ok { border-color: rgba(62, 207, 142, 0.35); color: var(--pc-success); }
 
-.pc-seq-ide { display: grid; grid-template-columns: 140px 1fr 160px; gap: 0; min-height: 210px; }
+.pc-seq-task {
+  margin: 0 12px 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--pc-radius-sm);
+  text-align: left;
+  background: var(--pc-surface);
+}
+.pc-seq-task .kicker { margin: 0; font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--pc-faint); }
+.pc-seq-task p { margin: 4px 0 0; font-size: 12px; color: var(--pc-text-secondary); }
+.pc-seq-task h3 { margin: 4px 0 0; font-size: 14px; color: var(--pc-text); }
+.pc-seq-task .dim { color: var(--pc-faint); }
+.pc-seq-ring-caption { margin: 8px 0 0; font-family: var(--pc-font-mono); font-size: 11px; color: var(--pc-faint); text-align: center; }
+.pc-seq-ide { display: grid; grid-template-columns: 140px 1fr 180px; gap: 0; min-height: 180px; }
 .pc-seq-ide > div { padding: 12px; border-right: 1px solid var(--border); font-family: var(--pc-font-mono); font-size: 11px; color: var(--pc-muted); }
 .pc-seq-ide > div:last-child { border-right: 0; }
 .pc-seq-ide .dim { color: var(--pc-faint); }
 .pc-seq-ide .dim.gap { margin-top: 8px; }
+.pc-seq-ide .file {
+  border-radius: var(--pc-radius-xs);
+  margin: 0 -4px;
+  padding: 1px 4px;
+  transition: background var(--pc-dur-fast) var(--pc-ease-press), color var(--pc-dur-fast) var(--pc-ease-press);
+}
 .pc-seq-ide .file.is-on { color: var(--pc-accent); }
+.pc-seq-stage.is-live .pc-seq-ide .file:hover { background: var(--pc-accent-dim); color: var(--pc-accent); }
+.pc-seq-stage.is-live .pc-seq-panel-body > div,
+.pc-seq-stage.is-live .pc-seq-dim {
+  border-radius: var(--pc-radius-xs);
+  transition: background var(--pc-dur-fast) var(--pc-ease-press);
+}
+.pc-seq-stage.is-live .pc-seq-panel-body > div:hover,
+.pc-seq-stage.is-live .pc-seq-dim:hover { background: var(--pc-accent-dim); }
 .pc-seq-ide .ai-msg { color: var(--pc-ai); margin-top: 8px; }
 .pc-seq-ide .code .add { color: var(--pc-success); }
 .pc-seq-ide .code .del { color: var(--pc-danger); }
@@ -325,6 +370,11 @@ body.pc-landing .btn[hidden] { display: none; }
 .pc-seq-dim strong { color: var(--pc-text); font-weight: 500; min-width: 24px; text-align: right; }
 
 .pc-seq-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+.pc-seq-actions .btn {
+  transition: translate var(--pc-dur-fast) var(--pc-ease-press), box-shadow var(--pc-dur-fast) var(--pc-ease-press);
+}
+.pc-seq-actions .btn:hover,
+.pc-seq-actions .btn:focus-visible { translate: 0 -3px; }
 .pc-seq-actions .btn-primary:hover { box-shadow: var(--pc-glow-accent-strong); }
 
 .pc-seq-progress { display: none !important; }
@@ -370,6 +420,14 @@ body.pc-landing .btn[hidden] { display: none; }
   z-index: 0;
 }
 
+/* Value and close: a faint wash can follow the pointer. The hero mark does not use it. */
+.pc-seq-stage[data-beat="value"] .pc-seq-glow,
+.pc-seq-stage[data-beat="cta"] .pc-seq-glow {
+  background:
+    radial-gradient(ellipse at var(--pc-seq-x, 50%) var(--pc-seq-y, 40%), rgba(var(--pc-ink), 0.07), transparent 58%),
+    radial-gradient(ellipse at 70% 60%, rgba(47, 95, 191, 0.05), transparent 55%);
+}
+
 .pc-seq-grid {
   position: absolute;
   inset: 0;
@@ -377,10 +435,14 @@ body.pc-landing .btn[hidden] { display: none; }
     linear-gradient(rgba(var(--pc-ink), 0.06) 1px, transparent 1px),
     linear-gradient(90deg, rgba(var(--pc-ink), 0.06) 1px, transparent 1px);
   background-size: 48px 48px;
-  mask-image: radial-gradient(ellipse 70% 55% at 50% 42%, black 30%, transparent 75%);
+  mask-image: radial-gradient(ellipse 70% 55% at var(--pc-seq-x, 50%) var(--pc-seq-y, 42%), black 30%, transparent 75%);
   opacity: 0.45;
   pointer-events: none;
   z-index: 0;
+}
+
+.pc-seq-stage[data-beat="brand"] .pc-seq-grid {
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 46%, black 40%, transparent 78%);
 }
 
 .pc-seq-stage > *:not(.pc-seq-glow):not(.pc-seq-grid) { position: relative; z-index: 1; }
@@ -415,6 +477,9 @@ body.pc-landing .btn[hidden] { display: none; }
 .lp-stats .stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .lp-stats .stat { background: var(--pc-surface); padding: 18px 20px; }
 .lp-stats .stat .n { font-size: 2rem; }
+.lp-stats-kicker { margin: 0 0 14px; font-family: var(--pc-font-mono); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--pc-faint); }
+.lp-stats .stat .l { line-height: 1.45; }
+.lp-stats .stat .src { display: block; margin-top: 10px; font-size: 11px; line-height: 1.4; color: var(--pc-faint); text-decoration: underline; text-underline-offset: 2px; }
 
 .lp-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .lp-step { padding: 24px; }
@@ -567,6 +632,15 @@ a.lp-score-card:hover, .lp-score-card:hover { border-color: var(--pc-border-stro
   .pc-seq-stage[data-beat="cta"] { padding-bottom: 32px; }
   .pc-seq-scrollhint { display: none !important; }
   .pc-seq-scrollhint::after { animation: none; }
+  .pc-seq-panel,
+  .pc-seq-actions .btn,
+  .pc-seq-table tbody tr,
+  .pc-seq-ide .file,
+  .pc-seq-panel-body > div,
+  .pc-seq-dim { transition: none; }
+  .pc-seq-stage.is-live .pc-seq-panel:hover,
+  .pc-seq-actions .btn:hover,
+  .pc-seq-actions .btn:focus-visible { translate: none; }
   .lp-stats { margin-top: 0; }
   .lp-js .lp-reveal,
   .lp-js .lp-head .lp-title,

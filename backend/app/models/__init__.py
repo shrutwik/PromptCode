@@ -10,6 +10,7 @@ from app.models.interview_session import (
     InterviewSessionFile,
 )
 from app.models.leaderboard import LeaderboardEntry
+from app.models.password_reset import PasswordResetToken
 from app.models.revoked_token import RevokedToken
 from app.models.run import Run
 from app.models.submission import Submission
@@ -28,6 +29,7 @@ __all__ = [
     "InterviewSessionFile",
     "InviteCode",
     "LeaderboardEntry",
+    "PasswordResetToken",
     "ProductAnalyticsEvent",
     "RevokedToken",
     "Run",

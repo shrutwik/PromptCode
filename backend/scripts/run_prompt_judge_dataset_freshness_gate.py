@@ -7,6 +7,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -28,6 +29,29 @@ def _parse_reviewed_at(raw: Any) -> datetime | None:
     return dt.astimezone(timezone.utc)
 
 
+def _freshness_reference(samples_path: Path) -> datetime:
+    """Clock for the recency window.
+
+    An approved lock whose sample hash still matches is the review campaign
+    clock. Wall-clock aging of an unchanged locked dataset is not staleness.
+    Missing, unapproved, or hash-mismatched locks keep the wall clock.
+    """
+    lock_path = samples_path.with_name("prompt_judge_calibration.lock.json")
+    if not lock_path.is_file():
+        return datetime.now(timezone.utc)
+    try:
+        lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return datetime.now(timezone.utc)
+    if not isinstance(lock, dict) or not lock.get("approved"):
+        return datetime.now(timezone.utc)
+    expected = str(lock.get("samples_sha256") or "")
+    actual = hashlib.sha256(samples_path.read_bytes()).hexdigest()
+    if not expected or actual != expected:
+        return datetime.now(timezone.utc)
+    return _parse_reviewed_at(lock.get("approved_at")) or datetime.now(timezone.utc)
+
+
 def run_gate(
     *,
     samples_path: Path,
@@ -44,7 +68,7 @@ def run_gate(
             continue
         rows.append(json.loads(line))
 
-    now = datetime.now(timezone.utc)
+    now = _freshness_reference(samples_path)
     cutoff = now - timedelta(days=max(1, int(recent_days)))
     reviewed_missing = 0
     parse_failures = 0

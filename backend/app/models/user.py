@@ -26,6 +26,8 @@ class User(Base):
     beta_status: Mapped[str] = mapped_column(String(32), default="active")
     beta_cohort: Mapped[str] = mapped_column(String(64), default="open")
     signup_source: Mapped[str] = mapped_column(String(64), default="direct")
+    # null and "candidate" are candidates. "interviewer" may see defend answer guides.
+    role: Mapped[str | None] = mapped_column(String(32), nullable=True, default=None)
     invite_code_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

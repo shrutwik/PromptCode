@@ -1,18 +1,21 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from scripts.run_prompt_judge_dataset_freshness_gate import run_gate
 
 
 def test_prompt_judge_dataset_freshness_gate_passes_with_reviewed_metadata(tmp_path: Path) -> None:
+    reviewed_on = datetime.now(timezone.utc).replace(microsecond=0)
+    stamps = [(reviewed_on - timedelta(days=offset)).isoformat() for offset in (0, 1, 2)]
     samples = tmp_path / "samples.jsonl"
     samples.write_text(
         "\n".join(
             [
-                '{"challenge_description":"A","human_overall":0.9,"reviewed_at":"2026-04-16T12:00:00+00:00"}',
-                '{"challenge_description":"B","human_overall":0.8,"reviewed_at":"2026-04-15T12:00:00+00:00"}',
-                '{"challenge_description":"C","human_overall":0.7,"reviewed_at":"2026-04-14T12:00:00+00:00"}',
+                f'{{"challenge_description":"A","human_overall":0.9,"reviewed_at":"{stamps[0]}"}}',
+                f'{{"challenge_description":"B","human_overall":0.8,"reviewed_at":"{stamps[1]}"}}',
+                f'{{"challenge_description":"C","human_overall":0.7,"reviewed_at":"{stamps[2]}"}}',
             ]
         )
         + "\n",

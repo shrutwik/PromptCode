@@ -54,8 +54,8 @@
     if (hint) hint.hidden = true;
     const ring = $(".pc-seq-ring");
     if (ring) {
-      ring.style.setProperty("--score", "87");
-      ring.textContent = "87";
+      ring.style.setProperty("--score", "72");
+      ring.textContent = "72";
     }
     $$(".pc-seq-dim-bar").forEach((b) => {
       b.style.setProperty("--fill", b.getAttribute("data-fill") || "80");
@@ -108,8 +108,8 @@
     const wsCode = $$('[data-beat="workspace"] .pc-seq-ide .code > div:not(.dim)');
     const wsAi = $('[data-beat="workspace"] .pc-seq-ide .ai-col');
     const wsPhase = $$('[data-beat="workspace"] .pc-seq-phase button');
-    const aiLines = $$('[data-beat="ai"] .pc-seq-panel-body > div');
-    const applyBtn = $(".pc-seq-apply");
+    const aiLines = [];
+    const applyBtn = null;
     const termFail = $$(".pc-seq-term-fail");
     const termPass = $$(".pc-seq-term-pass");
     const dimBars = $$(".pc-seq-dim-bar");
@@ -288,22 +288,6 @@
 
     // —— Report ——
     tl.addLabel("report", t);
-    if (ring) {
-      const scoreProxy = { v: 0 };
-      tl.to(
-        scoreProxy,
-        {
-          v: 87,
-          duration: HOLD * 0.75,
-          onUpdate: () => {
-            const n = Math.round(scoreProxy.v);
-            ring.style.setProperty("--score", String(n));
-            ring.textContent = String(n);
-          },
-        },
-        t + HOLD * 0.1
-      );
-    }
     if (dimItems.length) {
       tl.to(dimItems, { opacity: 1, x: 0, duration: HOLD * 0.4, stagger: 0.05 }, t + HOLD * 0.15);
     }
@@ -353,6 +337,9 @@
       });
     }
 
+    bindPointerLight();
+    bindButtonPull();
+
     // Refresh after layout; setTimeout works even when rAF is paused.
     setTimeout(() => ScrollTrigger.refresh(), 0);
     window.addEventListener(
@@ -365,6 +352,56 @@
 
     window.addEventListener("pagehide", () => {
       ScrollTrigger.getAll().forEach((st) => st.kill());
+    });
+  }
+
+  function finePointer() {
+    return (
+      !reduced &&
+      window.matchMedia("(hover: hover) and (pointer: fine)").matches
+    );
+  }
+
+  /** Light on the opening and closing beats follows the cursor. No tracking when motion is reduced. */
+  function bindPointerLight() {
+    if (!finePointer()) return;
+    const root = $(".pc-seq-sticky");
+    if (!root) return;
+    let frame = 0;
+    let px = 0;
+    let py = 0;
+    root.addEventListener(
+      "pointermove",
+      (event) => {
+        px = event.clientX;
+        py = event.clientY;
+        if (frame) return;
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          const rect = root.getBoundingClientRect();
+          const x = ((px - rect.left) / Math.max(rect.width, 1)) * 100;
+          const y = ((py - rect.top) / Math.max(rect.height, 1)) * 100;
+          root.style.setProperty("--pc-seq-x", x.toFixed(1) + "%");
+          root.style.setProperty("--pc-seq-y", y.toFixed(1) + "%");
+        });
+      },
+      { passive: true }
+    );
+  }
+
+  /** CTA buttons lean a few pixels toward the pointer. Uses `translate`, not `transform`, so the pin tween stays intact. */
+  function bindButtonPull() {
+    if (!finePointer()) return;
+    $$(".pc-seq-actions .btn").forEach((btn) => {
+      btn.addEventListener("pointermove", (event) => {
+        const rect = btn.getBoundingClientRect();
+        const dx = ((event.clientX - (rect.left + rect.width / 2)) / Math.max(rect.width, 1)) * 4;
+        const dy = ((event.clientY - (rect.top + rect.height / 2)) / Math.max(rect.height, 1)) * 3;
+        btn.style.translate = dx.toFixed(1) + "px " + dy.toFixed(1) + "px";
+      });
+      btn.addEventListener("pointerleave", () => {
+        btn.style.translate = "";
+      });
     });
   }
 

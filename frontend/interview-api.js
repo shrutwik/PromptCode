@@ -62,10 +62,13 @@ const InterviewAPI = {
 
   authHeaders() {
     const headers = { "Content-Type": "application/json" };
-    const sessionToken = this.getToken();
-    if (sessionToken) headers["X-Session-Token"] = sessionToken;
     const access = this.getAccessToken();
-    if (access) headers["Authorization"] = "Bearer " + access;
+    if (access) {
+      headers["Authorization"] = "Bearer " + access;
+    } else {
+      const sessionToken = this.getToken();
+      if (sessionToken) headers["X-Session-Token"] = sessionToken;
+    }
     return headers;
   },
 
@@ -204,6 +207,13 @@ const InterviewAPI = {
 
   submit(id) {
     return this.request("/sessions/" + id + "/submit", { method: "POST", body: "{}" });
+  },
+
+  abandon(id, reason) {
+    return this.request("/sessions/" + id + "/abandon", {
+      method: "POST",
+      body: JSON.stringify({ reason: reason || "" }),
+    });
   },
 
   report(id) {

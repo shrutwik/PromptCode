@@ -66,6 +66,10 @@ docker build -f docker/Dockerfile.interview-node -t promptcode-runner-node:lates
 docker build -f docker/Dockerfile.interview-python -t promptcode-runner-python:latest .
 ```
 
+#### Node dependency prebuild
+
+`scripts/prebuild-interview-node-deps.sh` installs npm packages into `challenges/<slug>/node_modules` for each challenge that has a `package.json`. `_ensure_prebuilt_deps` already copies that directory into the session workspace and does not run npm. Network is allowed only in the script. Candidate containers still do not install packages at run time. `node_modules` is gitignored.
+
 ### Runner health (admin/internal)
 
 `GET /api/interview/internal/runner-health` — daemon ping, image presence, simple exec probe, documented limits.
@@ -115,7 +119,7 @@ Allowed when `PROMPTCODE_DEBUG=true` or `X-PromptCode-Internal-Token` matches `P
 
 ## Deployment notes / risks
 
-- Prebuild challenge `node_modules` on the host (offline) if Node challenges need packages beyond the runner image toolchain; containers never install from the internet during runs.
+- Prebuild challenge `node_modules` on the host with `scripts/prebuild-interview-node-deps.sh` (network only in that script) when Node challenges need packages beyond the runner image toolchain; containers never install from the internet during runs.
 - Docker socket remains on the **API host** only (same model as existing sandbox executor) — not inside candidate containers.
 - Stronger isolation (gVisor/Firecracker/K8s jobs) can replace `IsolatedRunner` internals later without changing `command_id` APIs.
 - Remaining product risks: session cleanup TTL, auth hardening, observability, beta onboarding — not runner/AI rewrites.

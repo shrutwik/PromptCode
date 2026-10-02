@@ -27,6 +27,24 @@ def _normalize_optional_text(value: str | None) -> str | None:
     return value.strip()
 
 
+def _validate_password_strength(value: str) -> str:
+    if len(value) < 12:
+        raise ValueError("Password must be at least 12 characters long.")
+    if len(value.encode("utf-8")) > BCRYPT_PASSWORD_MAX_BYTES:
+        raise ValueError(
+            f"Password must be at most {BCRYPT_PASSWORD_MAX_BYTES} bytes long."
+        )
+    if not any(char.islower() for char in value):
+        raise ValueError("Password must include a lowercase letter.")
+    if not any(char.isupper() for char in value):
+        raise ValueError("Password must include an uppercase letter.")
+    if not any(char.isdigit() for char in value):
+        raise ValueError("Password must include a number.")
+    if not any(not char.isalnum() for char in value):
+        raise ValueError("Password must include a symbol.")
+    return value
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     username: str
@@ -46,21 +64,7 @@ class UserCreate(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password_strength(cls, value: str) -> str:
-        if len(value) < 12:
-            raise ValueError("Password must be at least 12 characters long.")
-        if len(value.encode("utf-8")) > BCRYPT_PASSWORD_MAX_BYTES:
-            raise ValueError(
-                f"Password must be at most {BCRYPT_PASSWORD_MAX_BYTES} bytes long."
-            )
-        if not any(char.islower() for char in value):
-            raise ValueError("Password must include a lowercase letter.")
-        if not any(char.isupper() for char in value):
-            raise ValueError("Password must include an uppercase letter.")
-        if not any(char.isdigit() for char in value):
-            raise ValueError("Password must include a number.")
-        if not any(not char.isalnum() for char in value):
-            raise ValueError("Password must include a symbol.")
-        return value
+        return _validate_password_strength(value)
 
     @field_validator("username")
     @classmethod
@@ -190,3 +194,33 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     refresh_token: str | None = None
     user: UserResponse
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: EmailStr) -> str:
+        normalized = str(value).strip().lower()
+        if len(normalized) > _MAX_EMAIL_CHARS:
+            raise ValueError(f"Email must be at most {_MAX_EMAIL_CHARS} characters long.")
+        return normalized
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("token")
+    @classmethod
+    def validate_token(cls, value: str) -> str:
+        token = value.strip()
+        if not token:
+            raise ValueError("Reset token is required.")
+        return token
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        return _validate_password_strength(value)

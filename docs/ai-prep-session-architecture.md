@@ -16,7 +16,7 @@ The skill, from candidate reports and from CHI 2026, is the same across those ro
 
 The person picks a task from the library and lands in the editor.
 
-1. The ticket shows the situation and only the current step.
+1. The task shows the situation and only the current step.
 2. They read the code, change it, and may ask the assistant.
 3. They run the tests for this step. That unlocks the next step. A failing run still unlocks it, because the suite covers later levels and must not trap them on step one.
 4. The next step’s text appears. Earlier steps stay visible. Later steps do not.
@@ -58,7 +58,7 @@ Already present, and kept:
 - Library and a brief page before the session starts.
 - Report with the rubric, a timeline, the diff, and defend questions.
 
-The ticket panel is the step card: situation, “step N of M”, the current title and body, and Next step. Next step stays disabled until this step has a test run. The last step says to submit.
+The task panel is the step card: situation, “step N of M”, the current title and body, and Next step. Next step stays disabled until this step has a test run. The last step says to submit.
 
 Test output appends. A Clear control empties it. The person can miss a failure if the log wipes itself.
 
@@ -162,17 +162,19 @@ These were considered and rejected.
 - Library, brief, workspace, starter snapshot, editor, chat, tests by allowlisted command, submit, rubric, defend, attempt number.
 - Accept, edit-then-accept, and reject, stored as events.
 - Solution files blocked from the candidate and from the model.
-- All ten tasks have a situation, a bug step, and feature levels. The ticket shows one step. Next step unlocks after a test run. The README does not list later levels.
+- All ten tasks have a situation, a bug step, and feature levels. The task shows one step. Next step unlocks after a test run. The README does not list later levels.
 
 ## What this plan still requires
 
-1. Accept checks the file revision and refuses a stale suggestion. Reject still writes nothing.
-2. The assistant instructions withhold the bug and the rest of the step, and may return a close-but-wrong change. The ticket says the assistant can be wrong.
-3. Judgment uses the points in the table above. New submits are `scoring_version` `v2`. Older reports stay `v1`.
-4. The report shows this attempt beside the previous submitted attempt on the same task and the same scoring version.
+These five are in place. `backend/tests/test_prep_session_architecture.py` covers them (9 tests).
+
+1. Stale accept is refused: accept checks the file revision. Reject still writes nothing.
+2. Assistant instructions withhold the bug and the rest of the step, and may return a close-but-wrong change.
+3. New submits are `scoring_version` `v2`, taken from events. Older reports stay `v1`.
+4. The report compares this attempt with the previous submitted attempt on the same task and the same scoring version.
 5. The extra defend question is filled from a path they accepted.
 
-Do them in that order. Each one is done when a fixture session produces the event or the report line without a model in the score.
+Host deploy, live OpenAI, and built Docker runner images are outside this section.
 
 ## Rules that do not bend
 

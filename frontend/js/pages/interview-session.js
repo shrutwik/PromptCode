@@ -47,6 +47,47 @@ function logChat(role, text, expandable) {
 function esc(s) {
   return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 }
+
+function renderReadme(el, text) {
+  const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+  let html = "";
+  let inCode = false;
+  let para = [];
+  const flush = () => {
+    if (!para.length) return;
+    html += `<p>${para.join("<br>")}</p>`;
+    para = [];
+  };
+  for (const line of lines) {
+    if (line.trim().startsWith("```")) {
+      flush();
+      if (!inCode) html += "<pre>";
+      else html += "</pre>";
+      inCode = !inCode;
+      continue;
+    }
+    if (inCode) {
+      html += esc(line) + "\n";
+      continue;
+    }
+    const heading = /^(#{1,3})\s+(.*)$/.exec(line);
+    if (heading) {
+      flush();
+      const tag = "h" + heading[1].length;
+      html += `<${tag}>${esc(heading[2])}</${tag}>`;
+      continue;
+    }
+    if (!line.trim()) {
+      flush();
+      continue;
+    }
+    para.push(esc(line));
+  }
+  flush();
+  if (inCode) html += "</pre>";
+  el.classList.add("is-readme");
+  el.innerHTML = html || "<p>No task description.</p>";
+}
 function updateDirtyPill() {
   const dirty = openTabs.some((p) => models[p] && models[p].dirty);
   document.getElementById("dirtyPill").classList.toggle("hidden", !dirty);
@@ -191,15 +232,93 @@ async function runCmd(commandId) {
   }
 }
 
+function bindDialog(modal, primaryId) {
+  let prev = null;
+  let onKey = null;
+
+  function focusable() {
+    return Array.from(modal.querySelectorAll("button, a[href], input, select, textarea")).filter(
+      (el) => !el.disabled && !el.hidden && el.getAttribute("tabindex") !== "-1"
+    );
+  }
+
+  function close() {
+    if (modal.classList.contains("hidden") && !onKey) return;
+    modal.classList.add("hidden");
+    if (onKey) {
+      document.removeEventListener("keydown", onKey, true);
+      onKey = null;
+    }
+    const back = prev;
+    prev = null;
+    if (back && back.isConnected && !modal.contains(back) && !back.closest(".hidden, [hidden]")) {
+      back.focus();
+    }
+  }
+
+  function open(restoreEl) {
+    prev = restoreEl || document.activeElement;
+    modal.classList.remove("hidden");
+    if (onKey) document.removeEventListener("keydown", onKey, true);
+    onKey = (e) => {
+      if (modal.classList.contains("hidden")) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+        return;
+      }
+      if (e.key === "Tab") {
+        const list = focusable();
+        if (!list.length) {
+          e.preventDefault();
+          return;
+        }
+        const first = list[0];
+        const last = list[list.length - 1];
+        const active = document.activeElement;
+        if (!modal.contains(active)) {
+          e.preventDefault();
+          (e.shiftKey ? last : first).focus();
+          return;
+        }
+        if (e.shiftKey && active === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+        const active = document.activeElement;
+        if (active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT")) return;
+        if (active && active.tagName === "BUTTON" && modal.contains(active)) return;
+        const primary = document.getElementById(primaryId);
+        if (primary && !primary.disabled) {
+          e.preventDefault();
+          primary.click();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    const primary = document.getElementById(primaryId);
+    (primary || focusable()[0])?.focus();
+  }
+
+  return { open, close };
+}
+
+const submitDialog = bindDialog(document.getElementById("submitModal"), "confirmSubmit");
+const abandonDialog = bindDialog(document.getElementById("abandonModal"), "confirmAbandon");
+
 async function submit() {
   const dirtyCount = openTabs.filter((p) => models[p] && models[p].dirty).length;
-  const modal = document.getElementById("submitModal");
   document.getElementById("submitDirtyLine").textContent =
     "Unsaved files: " + dirtyCount + (dirtyCount ? " (will be saved)" : "");
   document.getElementById("submitSummary").textContent =
     "Score this attempt. You can still open the workspace afterward in read-only mode.";
-  modal.classList.remove("hidden");
-  const close = () => modal.classList.add("hidden");
+  const close = () => submitDialog.close();
   document.getElementById("closeSubmit").onclick = close;
   document.getElementById("cancelSubmit").onclick = close;
   document.getElementById("confirmSubmit").onclick = async () => {
@@ -216,6 +335,30 @@ async function submit() {
     await InterviewAPI.submit(sessionId);
     location.href = "/session/" + sessionId + "/report";
   };
+  submitDialog.open(document.getElementById("submitBtn"));
+}
+
+function openAbandon() {
+  const more = document.getElementById("moreBtn");
+  const menu = document.getElementById("moreMenu");
+  menu.classList.add("hidden");
+  more.setAttribute("aria-expanded", "false");
+  const close = () => abandonDialog.close();
+  document.getElementById("closeAbandon").onclick = close;
+  document.getElementById("cancelAbandon").onclick = close;
+  document.getElementById("confirmAbandon").onclick = async () => {
+    const btn = document.getElementById("confirmAbandon");
+    btn.disabled = true;
+    try {
+      await InterviewAPI.abandon(sessionId, "");
+      abandonDialog.close();
+      location.href = "/dashboard";
+    } catch (err) {
+      btn.disabled = false;
+      PCUI.toast(err.message, { tone: "danger" });
+    }
+  };
+  abandonDialog.open(more);
 }
 
 function setSessionStatus(state, label) {
@@ -269,8 +412,30 @@ async function openDiff() {
   }
 }
 
+function setMainView(view) {
+  const next = view === "code" ? "code" : "question";
+  const panel = document.getElementById("explorerPanel");
+  panel.dataset.explorer = next;
+  panel.querySelectorAll(".view-toggle button").forEach((btn) => {
+    const on = btn.dataset.view === next;
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.classList.toggle("is-active", on);
+  });
+  try { sessionStorage.setItem("pc_explorer_view", next); } catch (e) { /* ignore */ }
+  if (window.__pcApplyPanelSizes) window.__pcApplyPanelSizes();
+  if (editor) requestAnimationFrame(() => editor.layout());
+}
+
+document.querySelectorAll(".view-toggle button").forEach((btn) => {
+  btn.addEventListener("click", () => setMainView(btn.dataset.view));
+});
+try {
+  const savedView = sessionStorage.getItem("pc_explorer_view");
+  if (savedView === "code" || savedView === "question") setMainView(savedView);
+} catch (e) { /* ignore */ }
+
 function renderLevel(level) {
-  const ticketEl = document.getElementById("ticketBody");
+  const ticketEl = document.getElementById("questionBody");
   const stepNo = level.index + 1;
   const earlier = (level.earlier || []).map((step) => `<div class="step-card is-earlier">
     <p class="step-kicker">Step ${step.index + 1} of ${level.total} · ${esc(step.kind)}</p>
@@ -308,10 +473,10 @@ require(["vs/editor/editor.main"], async function () {
     inherit: true,
     rules: [],
     colors: {
-      "editor.background": "#0b0d11",
-      "editorLineNumber.foreground": "#5c6370",
-      "editor.selectionBackground": "#6ea8ff33",
-      "editorCursor.foreground": "#11110f",
+      "editor.background": "#0a0a0a",
+      "editorLineNumber.foreground": "#6b675e",
+      "editor.selectionBackground": "#f3f1ea33",
+      "editorCursor.foreground": "#f3f1ea",
       "focusBorder": "#11110f66",
     },
   });
@@ -332,9 +497,14 @@ require(["vs/editor/editor.main"], async function () {
     save().catch((e) => PCUI.toast(e.message, { tone: "danger" }));
   });
 
+  if (!InterviewAPI.isLoggedIn()) {
+    InterviewAPI.requireAuth("/session/" + sessionId);
+    return;
+  }
   const s = await InterviewAPI.getSession(sessionId);
-  InterviewAPI.setToken(s.owner_token);
   sessionReadOnly = s.status !== "active";
+  const leave = document.getElementById("abandonBtn");
+  if (leave) leave.hidden = !(s.status === "active" || s.status === "created");
   document.getElementById("slugLabel").textContent = s.challenge_slug;
   const started = s.started_at ? parseUtc(s.started_at) : Date.now();
   const tick = () => {
@@ -344,7 +514,7 @@ require(["vs/editor/editor.main"], async function () {
   setInterval(tick, 1000);
   files = await InterviewAPI.listFiles(sessionId);
   renderTree();
-  const ticketEl = document.getElementById("ticketBody");
+  const ticketEl = document.getElementById("questionBody");
   try {
     renderLevel(await InterviewAPI.level(sessionId));
   } catch {
@@ -356,11 +526,11 @@ require(["vs/editor/editor.main"], async function () {
       const file = await InterviewAPI.getFile(sessionId, readme.path);
       const text = typeof file === "string" ? file : (file.content || file.text || "");
       if (!ticketEl.querySelector(".step-card")) {
-        ticketEl.textContent = text.slice(0, 4000) || "No ticket content.";
+        renderReadme(ticketEl, text.slice(0, 4000) || "No task description.");
       }
     } catch {
       if (!ticketEl.querySelector(".step-card")) {
-        ticketEl.textContent = "Open README.md in the editor for the full ticket.";
+        ticketEl.textContent = "Open the code view for the full task.";
       }
     }
     await openFile(readme.path);
@@ -409,7 +579,7 @@ document.getElementById("fileSearch").oninput = (e) => renderTree(e.target.value
   const css = getComputedStyle(document.documentElement);
   const tok = (name, fallback) => parseInt(css.getPropertyValue(name), 10) || fallback;
   const lim = {
-    explorer: [tok("--pc-panel-min-explorer", 200), tok("--pc-panel-max-explorer", 280)],
+    explorer: [tok("--pc-panel-min-explorer", 200), Math.max(tok("--pc-panel-max-explorer", 280), 480)],
     ai: [tok("--pc-panel-min-ai", 280), tok("--pc-panel-max-ai", 400)],
     term: [tok("--pc-panel-min-term", 160), tok("--pc-panel-max-term", 280)],
   };
@@ -421,14 +591,20 @@ document.getElementById("fileSearch").oninput = (e) => renderTree(e.target.value
   sizes.explorer = clamp("explorer", sizes.explorer || 240);
   sizes.ai = clamp("ai", sizes.ai || 340);
   sizes.term = clamp("term", sizes.term || 200);
+  function explorerWidth() {
+    if (sizes.explorerHidden) return 0;
+    const showingQuestion = document.getElementById("explorerPanel").dataset.explorer !== "code";
+    return showingQuestion ? Math.max(sizes.explorer, 360) : sizes.explorer;
+  }
   function applySizes() {
-    ws.style.setProperty("--pc-explorer-w", (sizes.explorerHidden ? 0 : sizes.explorer) + "px");
+    ws.style.setProperty("--pc-explorer-w", explorerWidth() + "px");
     ws.style.setProperty("--pc-ai-w", (sizes.aiHidden ? 0 : sizes.ai) + "px");
     ws.style.setProperty("--pc-term-h", (sizes.termHidden ? 0 : sizes.term) + "px");
     document.getElementById("explorerPanel").style.display = sizes.explorerHidden ? "none" : "";
     document.getElementById("aiPanel").style.display = sizes.aiHidden ? "none" : "";
     document.getElementById("termPanel").style.display = sizes.termHidden ? "none" : "";
   }
+  window.__pcApplyPanelSizes = applySizes;
   applySizes();
   function drag(handle, onMove) {
     handle.addEventListener("pointerdown", (e) => {
@@ -509,7 +685,7 @@ const palette = PCUI.createCommandPalette([
     menu.style.right = Math.max(8, window.innerWidth - r.right) + "px";
     menu.style.left = "auto";
   };
-  const items = () => Array.from(menu.querySelectorAll("[role=menuitem]"));
+  const items = () => Array.from(menu.querySelectorAll("[role=menuitem]:not([hidden])"));
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
     const open = menu.classList.contains("hidden");
@@ -533,10 +709,12 @@ const palette = PCUI.createCommandPalette([
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      const submitOpen = !document.getElementById("submitModal").classList.contains("hidden");
+      const abandonOpen = !document.getElementById("abandonModal").classList.contains("hidden");
+      if (submitOpen || abandonOpen) return;
       menu.classList.add("hidden");
       btn.setAttribute("aria-expanded", "false");
       document.getElementById("diffModal").classList.add("hidden");
-      document.getElementById("submitModal").classList.add("hidden");
     }
   });
   menu.addEventListener("click", (e) => {
@@ -547,6 +725,7 @@ const palette = PCUI.createCommandPalette([
     if (a === "toggle-explorer") window.__pcTogglePanel("explorer");
     if (a === "toggle-ai") window.__pcTogglePanel("ai");
     if (a === "toggle-term") window.__pcTogglePanel("term");
+    if (a === "abandon") openAbandon();
   });
 })();
 

@@ -62,6 +62,7 @@ def test_settings_require_sandbox_executor_token_when_url_is_configured():
             debug=True,
             jwt_secret="local-dev-secret-change-in-production",
             sandbox_executor_url="http://sandbox-executor:8090",
+            sandbox_executor_token="",
         )
 
     assert "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN" in str(exc_info.value)

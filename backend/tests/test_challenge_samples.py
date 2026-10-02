@@ -20,8 +20,8 @@ def test_sdk_guide_mentions_every_sample_solution():
     repo_root = Path(__file__).resolve().parents[2]
     guide = (repo_root / "docs" / "SDK_GUIDE.md").read_text(encoding="utf-8")
 
-    for challenge_dir in sorted((repo_root / "challenges").glob("*")):
-        if not challenge_dir.is_dir():
-            continue
-        sample_path = f"challenges/{challenge_dir.name}/sample_solution.py"
+    sample_solutions = sorted((repo_root / "challenges").glob("*/sample_solution.py"))
+    assert len(sample_solutions) == 10
+    for sample_file in sample_solutions:
+        sample_path = f"challenges/{sample_file.parent.name}/sample_solution.py"
         assert sample_path in guide

@@ -171,11 +171,13 @@ async function load() {
       return `<div class="pc-panel defend-card is-locked"><span class="defend-progress">Locked</span><h3>Q${i + 1}</h3><p class="muted">Answer the previous question first.</p></div>`;
     }
     return `<div class="pc-panel defend-card"><div class="pc-row"><span class="defend-progress">Question ${i + 1} / ${q.length} · ${answeredCount} answered</span><span class="tag" data-tone="info">Current</span></div><h3>Q${i + 1} of ${q.length}</h3><p>${esc(question)}</p>
-      <div class="pc-field"><label for="defendAnswer" class="sr-only">Your answer</label><textarea id="defendAnswer" placeholder="Your defense…"></textarea></div>
-      <div class="pc-row">
-        <button class="btn btn-primary" id="defendSubmit" type="button">Submit answer</button>
-        <a class="btn btn-ghost" href="/session/${sessionId}">Review code</a>
-      </div></div>`;
+      <form id="defendForm">
+        <div class="pc-field"><label for="defendAnswer">Your answer</label><textarea id="defendAnswer" name="answer" required></textarea></div>
+        <div class="pc-row">
+          <button class="btn btn-primary" id="defendSubmit" type="submit">Submit answer</button>
+          <a class="btn btn-ghost" href="/session/${sessionId}">Review code</a>
+        </div>
+      </form></div>`;
   }).join("") || `<div class="pc-empty"><h3>No defend questions</h3><p>This session has no follow-up questions.</p></div>`;
 
   const signals = (r.signals || []).map((s) =>
@@ -516,14 +518,22 @@ async function load() {
     });
   });
 
-  const btn = document.getElementById("defendSubmit");
-  if (btn) {
-    btn.onclick = async () => {
+  const defendForm = document.getElementById("defendForm");
+  if (defendForm) {
+    defendForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
       const answer = document.getElementById("defendAnswer").value.trim();
       if (!answer) return PCUI.toast("Write an answer first", { tone: "warn" });
       await InterviewAPI.answerDefend(sessionId, nextIdx, answer);
       load();
-    };
+    });
+    defendForm.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+      if (document.activeElement && document.activeElement.id === "defendSubmit") {
+        e.preventDefault();
+        defendForm.requestSubmit();
+      }
+    });
   }
   const fbSend = document.getElementById("fbSend");
   if (fbSend) {

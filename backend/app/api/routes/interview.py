@@ -167,9 +167,15 @@ async def _load_owned_session(
     session_id: uuid.UUID,
     user: User,
 ) -> InterviewSession:
+    """Load a session for a bearer user.
+
+    user_id match is enough to read and write. The owner token is not required,
+    so the same account can resume on another device without sessionStorage.
+    A different user gets 404, including when they send someone else's token.
+    Anonymous owner-token routes are unchanged: these handlers still require a user.
+    """
     session = await db.get(InterviewSession, session_id)
-    if session is None or session.user_id != user.id:
-        # Avoid leaking existence across users
+    if session is None or session.user_id is None or session.user_id != user.id:
         raise HTTPException(status_code=404, detail="Session not found")
     maybe_expire_session(session)
     return session
@@ -191,6 +197,39 @@ def _candidate_questions(evaluation: InterviewEvaluation, slug: str) -> list[dic
         text = item.get("question", item) if isinstance(item, dict) else str(item)
         questions.append({"question": sanitize_candidate_question(text), "index": i})
     return questions
+
+
+def _is_interviewer(user: User) -> bool:
+    role = (getattr(user, "role", None) or "").strip().lower()
+    return role == "interviewer"
+
+
+def _defend_questions_for_user(
+    user: User, evaluation: InterviewEvaluation, slug: str
+) -> list[dict]:
+    """Questions only for candidates. Interviewers also receive answer guides."""
+    questions = [
+        {k: v for k, v in q.items() if k != "answer_guide"}
+        for q in _candidate_questions(evaluation, slug)
+    ]
+    if not _is_interviewer(user):
+        return questions
+    stored = (evaluation.metrics or {}).get("answer_guides")
+    guides = stored if isinstance(stored, list) and stored else parse_defend_questions(slug)
+    attached: list[dict] = []
+    for question in questions:
+        item = dict(question)
+        try:
+            idx = int(item.get("index"))
+        except (TypeError, ValueError):
+            idx = -1
+        guide = ""
+        if 0 <= idx < len(guides) and isinstance(guides[idx], dict):
+            guide = str(guides[idx].get("answer_guide") or "").strip()
+        if guide:
+            item["answer_guide"] = guide
+        attached.append(item)
+    return attached
 
 
 async def _current_revision(db: AsyncSession, session_id: uuid.UUID, path: str) -> int:
@@ -1355,8 +1394,7 @@ async def get_defend(
     if ev is None:
         raise HTTPException(status_code=404, detail="Report not ready")
     answers = (ev.metrics or {}).get("defend_answers") or {}
-    # Never return answer_guide to candidate
-    questions = _candidate_questions(ev, session.challenge_slug)
+    questions = _defend_questions_for_user(user, ev, session.challenge_slug)
     await track_event(
         db,
         event_name="defend_started",
@@ -1404,7 +1442,7 @@ async def post_defend_answer(
         "defend_answer",
         {"index": body.index, "chars": len(body.answer), "answer": body.answer[:4000]},
     )
-    questions = _candidate_questions(ev, session.challenge_slug)
+    questions = _defend_questions_for_user(user, ev, session.challenge_slug)
     if len(answers) >= len(questions):
         await track_event(
             db,

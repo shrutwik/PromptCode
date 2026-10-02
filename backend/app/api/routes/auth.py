@@ -24,13 +24,23 @@ from app.db.session import get_db
 from app.models.revoked_token import RevokedToken
 from app.models.user import User
 from app.schemas.user import (
+    ForgotPasswordRequest,
     LogoutRequest,
     RefreshRequest,
+    ResetPasswordRequest,
     TokenResponse,
     UserCreate,
     UserLogin,
     UserResponse,
     UserUpdate,
+)
+from app.services.password_reset import (
+    FORGOT_PASSWORD_MESSAGE,
+    PASSWORD_UPDATED_MESSAGE,
+    ResetTokenError,
+    issue_password_reset,
+    notify_password_reset,
+    reset_password_with_token,
 )
 from app.services.interview.analytics import track_event
 from app.services.interview.beta_access import consume_invite_or_allowlist
@@ -289,3 +299,42 @@ async def update_me(
     await db.commit()
     await db.refresh(user)
     return user
+
+
+@router.post("/forgot-password")
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    await _check_auth_rate_limit(request, db=db)
+    result = await db.execute(select(User).where(func.lower(User.email) == payload.email))
+    user = result.scalar_one_or_none()
+    body: dict[str, str] = {"message": FORGOT_PASSWORD_MESSAGE}
+    if user is not None:
+        raw_token = await issue_password_reset(db, user)
+        await notify_password_reset(user.email, raw_token)
+        if get_settings().debug:
+            body["reset_token"] = raw_token
+    return body
+
+
+@router.post("/reset-password")
+async def reset_password(
+    payload: ResetPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    await _check_auth_rate_limit(request, db=db)
+    try:
+        await reset_password_with_token(
+            db,
+            raw_token=payload.token,
+            new_password=payload.new_password,
+        )
+    except ResetTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token",
+        ) from None
+    return {"message": PASSWORD_UPDATED_MESSAGE}
