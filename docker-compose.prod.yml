@@ -60,8 +60,10 @@ services:
           memory: 512m
           cpus: "1.0"
     environment:
+      PROMPTCODE_ENVIRONMENT: production
       PROMPTCODE_DEBUG: "false"
       PROMPTCODE_DATABASE_SSL_REQUIRE: ${PROMPTCODE_DATABASE_SSL_REQUIRE:-true}
+      PROMPTCODE_RUNNER: docker
       PROMPTCODE_METRICS_TOKEN: ${PROMPTCODE_METRICS_TOKEN:-}
       # Caddy reaches the backend over Docker's private bridge network.
       # Override this if your deployment uses a custom proxy subnet.
@@ -84,6 +86,7 @@ services:
           memory: 768m
           cpus: "2.0"
     environment:
+      PROMPTCODE_ENVIRONMENT: production
       PROMPTCODE_DEBUG: "false"
 
   worker-b:
@@ -99,6 +102,7 @@ services:
           memory: 768m
           cpus: "2.0"
     environment:
+      PROMPTCODE_ENVIRONMENT: production
       PROMPTCODE_DEBUG: "false"
 
   caddy:

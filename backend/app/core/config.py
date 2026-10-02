@@ -52,11 +52,15 @@ def _is_localhost_domain(value: str) -> bool:
 class Settings(BaseSettings):
     app_name: str = "PromptCode"
     debug: bool = False
+    environment: str = "development"
+    allow_unsafe_local_runner: bool = False
+    interview_internal_token: str = ""
 
     database_url: str = _DEFAULT_DATABASE_URL
     database_echo: bool = False
 
     interview_workspace_root: str = ""  # optional override for session workspaces
+    runner: str = "local"
     session_ttl_hours: int = 24
     max_runners: int = 4
     max_runners_acquire_timeout_seconds: int = 15

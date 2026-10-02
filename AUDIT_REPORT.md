@@ -209,3 +209,75 @@ Changes: db/session.py sets a 5-second connect timeout; main.py bounds both read
 Local verification: reliability tests ran, 6 passed in 12.92s, using a loopback fake AI provider, refused local database/Docker ports, and mocked container cleanup. The first sandboxed run had 5 passes and a loopback-bind PermissionError; it was rerun with loopback permission.
 Clean HEAD verification follows this commit. Database recovery, real pool exhaustion, and live-container cleanup remain NOT TESTED.
 B5 clean HEAD verification: 14 workspace/runner tests passed with no unrelated changes.
+
+## Continuation checkpoint — NO-GO for real users
+
+Four hardening items were committed separately and verified in clean worktrees of each HEAD. These are the first four completed items. The full A–G deployment audit is ongoing under the latest user instruction to continue with remaining items.
+
+| Item / commit | Included files and hunks | Clean HEAD tests actually run |
+| --- | --- | --- |
+| A1 / c6ae0ca | password_reset.py: remove raw token logging and correct delivery-hook docstring; test_password_reset.py: logging import and regression; this report: new evidence only | test_password_reset.py: 6 passed |
+| E1 / 9a91e1a | client_ip.py: trusted-proxy chain selection; test_backend_validation.py: expected rightmost hop and spoofing regression; this report: new evidence only | test_backend_validation.py: 10 passed |
+| B5 / 6cfb8fc | registry.py: frozen control-file recognition, including .env normalization fix; workspace.py: os/imports/byte cap, diff containment, symlink rejection, contained paths, runner helper, write validation; new test_audit_workspace_boundaries.py; this report: new evidence only | workspace-boundary and audit-runner-isolation tests: 14 passed |
+| D1 / e17627e | db/session.py: connect timeout; main.py: asyncio, bounded readiness helper and both readiness callers; new test_audit_reliability.py; this report: new evidence only | test_audit_reliability.py: 6 passed in 12.97s |
+
+Test environments used explicit test-only JWT secrets, SQLite temporary databases, mock providers or a loopback HTTP mock, refused localhost ports, and mock Docker containers. No production environment was used. The installed workspace Python environment was reused: dependency installation from a fresh lockfile was NOT TESTED. B5 does not close actual container isolation; D1 does not close recovery, request-time database failures, or pool exhaustion.
+
+The clean baseline runner test initially failed (4 passed, 1 failed) because HEAD referenced the missing audit helper workspace_has_escape_link. Adding only the audit isolation helpers fixed it. The new boundary regression initially failed on .env writes; preserving the leading dot fixed it. No tested audit check required unrelated product changes. An initial reliability run failed to bind its loopback server under filesystem/network sandbox restrictions; rerunning with loopback permission passed. Do not interpret mocked cleanup as real-container cleanup evidence.
+
+### Excluded and pending hunks
+
+All exclusions remain uncommitted in the primary checkout. The original changed-file inventory is /private/tmp/promptcode-audit-changed-files.md.
+
+| File | Hunks left out / reason |
+| --- | --- |
+| .github/workflows/backend-ci.yml | Runner build/push/tag/rollback additions: deployment changes, not yet verified as an audit item; no CI security scan added in this batch. |
+| backend/app/api/routes/interview.py | Product progress selection, automatic question attachments/test-output context, dashboard title, and disk-root convenience changes excluded. Rate-limit override, write-error handling, edit limits, guardrails, and runner-health token gating remain pending audit review/test. |
+| backend/app/schemas/interview.py | guide, challenge_title, test_output fields: product/context changes excluded. |
+| backend/app/services/interview/ai_provider.py | Model/config/fallback, prompt, context, and guardrail hunks mix product and audit behavior. None staged; limits, injection protections, and error handling need an independent audit patch/test. |
+| backend/app/services/interview/registry.py | No pending hunks after staging only frozen-file protection and fixing .env handling. |
+| backend/app/services/interview/workspace.py | Default workspace-root path change excluded as convenience; automatic question-context constants/helpers excluded as product behavior. The mixed additions were cleanly split with add -p edit; only security helpers were staged. |
+| backend/tests/test_deployment_contracts.py | Bundled-Postgres SSL-default expectation and Docker-runner assertion: deployment contract not validated; excluded. |
+| backend/tests/test_interview_mvp.py | Automatic question-context import/test: product behavior excluded. |
+| backend/tests/test_interview_production.py | Pending isolation/provider/guardrail tests mix audit and model/context behavior; not staged or claimed passing. New independent audit tests avoid that dependency. |
+| docker-compose.prod.yml | SSL-default weakening, AI model/provider, runner/profile/workspace settings: pending deployment review and live checks; excluded. |
+| docker-compose.yml | Runner services, Docker-socket and host-workspace mounts, assistant configuration: pending host-access review; excluded. A backend Docker socket requires careful privilege analysis. |
+| docker/Dockerfile.backend | Dependency prebuild and entrypoint/user changes: deployment changes pending non-root verification; excluded. |
+| docker/Dockerfile.interview-python | Added challenge framework dependencies: excluded; pinned versions need the dependency advisory review. |
+| docker/entrypoint-backend.sh | Untracked deployment entrypoint: excluded until privilege and startup behavior are verified. |
+| docs/deployment.md | Model convenience and deployment/SSL explanations: excluded pending associated implementation verification. |
+| docs/pre-beta-checklist.md | Live-provider/model convenience instructions: excluded. |
+| backend/app/main.py | /progress product route excluded; only readiness changes staged. |
+| backend/app/core/config.py | Runner .env convenience and assistant model/provider settings excluded; production startup enforcement not implemented by these hunks. |
+| backend/app/api/routes/auth.py; backend/app/core/ratelimit.py | Configurable rate-limit helper/override: pending staging load-test item; excluded from spoofing fix. |
+| .env.example | Provider/model and runner convenience additions excluded. |
+| AUDIT_REPORT.md | Pre-existing restart, load results, reliability, and verification claims left unstaged because this continuation did not reproduce them. Only new explicitly verified evidence entries are committed. |
+| All other inventory files | Challenge, UI, scoring, prompt/level, architecture, screenshots, pitch/video, tooling artifacts: unrelated; untouched and unstaged. |
+
+No inseparable hunk was silently included. The workspace mixed hunk was edited only for staging; its product code remains in the working tree.
+
+### Highest-priority next work
+
+- A2: enforce production startup refusal for debug/unsafe host runner, missing/example internal and metrics tokens, and default JWT secrets. Production recognition must be explicit and covered by boot tests.
+- A3: close the debug /metrics bypass and pending runner-health debug bypass; exercise all internal routes with missing, wrong, placeholder, and valid tokens.
+- A4: disable reset cleanly or configure bounded email delivery, preserving identical known/unknown-account responses. Current token-safe hook does not send mail.
+- A5: jointly upgrade FastAPI/Starlette against exact current advisory versions and run the full suite. Advisory lookup and dependency scans were NOT TESTED in this batch.
+- B1–B7: live Docker network/host/resource/timeout/isolation/tampering/lifecycle attacks with test-only workspaces. The unit checks cannot prove memory/CPU/PID/disk/output enforcement or prevention of fabricated scoring results.
+- C: shared request/token/spend controls and provider kill switch; key/log/error review, prompt injection and candidate-data isolation, timeout/retry behavior beyond the one slow loopback response.
+- D/E/F: database recovery/pool exhaustion, real Docker outages, oversized/JWT/race/shutdown behavior, staging restart/load ramps and run backpressure, deployment headers/auth/privacy/retention/migrations/health checks.
+- G: full suite, Docker candidate end-to-end, history/tree secrets scan, pip-audit/npm audit, and complete re-audit remain NOT TESTED. They must run last after the remaining fixes.
+
+### Manual actions for me — deployment remains blocked
+
+- Do not deploy this checkpoint to real users. Keep debug and the unsafe host runner disabled on any shared environment; configure strong unique JWT, internal, metrics, and provider secrets. Production boot enforcement is still pending.
+- Rotate JWT/provider/database/internal secrets if earlier host-runner execution or token logs could have exposed them; determine actual exposure before asserting a rotation is complete.
+- Configure a password-reset mail provider or approve the cleanly-disabled reset behavior; no real reset email is currently sent.
+- Restart local/staging only after the remaining fixes, build patched runner images, and verify the reviewed commit plus effective environment. Never reuse real candidate data in attack/load tests.
+- Verify proxy trust ranges, HTTPS/HSTS/CORS/CSP, database TLS and least privilege, Docker-daemon privileges, runner network isolation, and quotas before hosting approval.
+- Establish and test encrypted backups/restores, retention and deletion procedures, monitoring/alerts for unavailable dependencies, orphan runners, queue saturation, authentication failures, and provider spend.
+- Prepare rollback to a reviewed image/commit and compatible migration state; rehearse restoration and rollback in staging. These operational actions have not been performed in this continuation.
+
+## Verified continuation — A2 production startup refusal
+
+Added a startup gate: debug-off is production; PROMPTCODE_ENVIRONMENT=production additionally catches debug-on deployments. Refuses debug, selected host runner or unsafe host opt-in, missing/example metrics/internal tokens, and default/example JWT secrets. Only security settings/startup call and production marker/Docker runner compose hunks are included; assistant config and SSL weakening remain excluded.
+Local verification: 12 startup tests passed, including actual lifespan boot refusal. Clean HEAD verification follows the item commit. D1 clean HEAD tests previously ran: 6 passed in 12.97s.

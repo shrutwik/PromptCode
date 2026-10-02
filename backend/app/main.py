@@ -26,6 +26,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.routes import auth, challenges, chat, interview, leaderboard, submissions, users
 from app.core.config import get_settings
+from app.core.startup_security import validate_production_startup
 from app.core.logging import configure_logging, reset_request_id, set_request_id
 from app.core.metrics import (
     get_metrics_registry,
@@ -225,6 +226,7 @@ async def _sandbox_executor_ready(settings) -> bool:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_production_startup(get_settings())
     yield
     await engine.dispose()
 
