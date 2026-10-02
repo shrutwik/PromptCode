@@ -8,6 +8,7 @@ import os
 import re
 import shlex
 import shutil
+import subprocess
 import time
 import uuid
 from abc import ABC, abstractmethod
@@ -82,13 +83,71 @@ def resolve_command_id(
     return challenge_test_command
 
 
+def local_runner_allowed() -> bool:
+    """Host execution is opt-in. Untrusted candidate code must use Docker."""
+    return os.getenv("PROMPTCODE_ALLOW_UNSAFE_LOCAL_RUNNER", "").strip() == "1"
+
+
+def candidate_module_env(root: str) -> dict[str, str]:
+    """Point Python and Node at the session tree only. root is the process cwd."""
+    root = (root or "").rstrip("/") or "/"
+    opts = " ".join(
+        [
+            "--rootdir",
+            shlex.quote(root),
+            "--confcutdir",
+            shlex.quote(root),
+            "--import-mode=prepend",
+        ]
+    )
+    return {
+        "PYTHONPATH": root,
+        "NODE_PATH": root,
+        "PYTEST_ADDOPTS": opts,
+    }
+
+
+_HOST_ENV_ALLOWLIST = frozenset(
+    {
+        "PATH",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "TMPDIR",
+        "TEMP",
+        "TMP",
+        "USER",
+        "LOGNAME",
+        "SHELL",
+    }
+)
+_SECRET_ENV_NAME = re.compile(
+    r"(KEY|SECRET|TOKEN|PASSWORD|PASSWD|DSN|DATABASE|CREDENTIAL|PRIVATE)",
+    re.IGNORECASE,
+)
+
+
+def scrubbed_host_env() -> dict[str, str]:
+    """Environment for the opt-in host runner. Never inherit API keys or DB URLs."""
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if key in _HOST_ENV_ALLOWLIST and not _SECRET_ENV_NAME.search(key)
+    }
+
+
 def runner_mode() -> str:
     """Resolved runner mode: local | docker. Prefers PROMPTCODE_RUNNER."""
-    raw = (
-        os.getenv("PROMPTCODE_RUNNER")
-        or os.getenv("INTERVIEW_RUNNER")
-        or "local"
-    ).strip().lower()
+    raw = (os.getenv("PROMPTCODE_RUNNER") or os.getenv("INTERVIEW_RUNNER") or "").strip()
+    if not raw:
+        try:
+            from app.core.config import get_settings
+
+            raw = str(getattr(get_settings(), "runner", "") or "").strip()
+        except Exception:
+            raw = ""
+    raw = raw.lower() or "local"
     if raw in {"docker", "isolated"}:
         return "docker"
     return "local"
@@ -214,10 +273,44 @@ class LocalDevelopmentRunner(ChallengeRunner):
         argv = resolve_command(command)
         started = time.monotonic()
         output_limit = int((runner_config or {}).get("outputLimit") or DEFAULT_OUTPUT_LIMIT)
+        if not local_runner_allowed():
+            return _result(
+                ok=False,
+                exit_code=-1,
+                stdout="",
+                stderr="Test runner is not isolated. An administrator must enable the isolated runner.",
+                command=shlex.join(argv),
+                duration_ms=0,
+                mode="full",
+                isolation="host",
+                command_id=command_id,
+                runner="local",
+                error_code="unsafe_runner",
+            )
+        from app.services.interview.workspace import workspace_has_escape_link
+
+        if workspace_has_escape_link(workspace):
+            return _result(
+                ok=False,
+                exit_code=-1,
+                stdout="",
+                stderr="Workspace contains a link and was not executed.",
+                command=shlex.join(argv),
+                duration_ms=0,
+                mode="full",
+                isolation="host",
+                command_id=command_id,
+                runner="local",
+                error_code="workspace_link",
+            )
         try:
+            root = str(workspace)
+            child_env = scrubbed_host_env()
+            child_env.update(candidate_module_env(root))
             proc = await asyncio.create_subprocess_exec(
                 *argv,
-                cwd=str(workspace),
+                cwd=root,
+                env=child_env,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -394,10 +487,28 @@ class IsolatedRunner(ChallengeRunner):
                 error_code="workspace_missing",
             )
 
+        from app.services.interview.workspace import workspace_has_escape_link
+
+        if workspace_has_escape_link(workspace):
+            return _result(
+                ok=False,
+                exit_code=-1,
+                stdout="",
+                stderr="Workspace contains a link and was not executed.",
+                command=shlex.join(argv),
+                duration_ms=int((time.monotonic() - started) * 1000),
+                mode="full",
+                isolation="docker",
+                command_id=command_id,
+                runner="docker",
+                error_code="workspace_link",
+            )
+
         _ensure_prebuilt_deps(
             workspace,
             challenge_slug=str(runner_config.get("challengeSlug") or ""),
         )
+        _install_linux_node_modules(workspace, image)
 
         try:
             client = _docker_client()
@@ -429,12 +540,19 @@ class IsolatedRunner(ChallengeRunner):
                 "HOME": "/tmp",
                 "npm_config_cache": "/tmp/npm-cache",
                 "PIP_DISABLE_PIP_VERSION_CHECK": "1",
-                # Block package installs during candidate runs (defense in depth).
+                "PYTHONDONTWRITEBYTECODE": "1",
+                # Block package installs and lifecycle scripts during candidate runs.
                 "npm_config_offline": "true",
+                "npm_config_ignore_scripts": "true",
+                **candidate_module_env(WORKSPACE_MOUNT),
             },
             "mem_limit": f"{memory_mb}m",
             "nano_cpus": int(cpu * 1e9),
-            "network_disabled": True,
+            # Internal network: localhost works for Vitest, and there is no route
+            # to the public internet. network_disabled also drops localhost DNS.
+            "network": _interview_network(client),
+            "read_only": True,
+            "tmpfs": {"/tmp": "rw,noexec,nosuid,size=64m"},
             "detach": True,
             "stdout": True,
             "stderr": True,
@@ -615,10 +733,8 @@ async def run_tests(
 
 def _ensure_prebuilt_deps(workspace: Path, *, challenge_slug: str = "") -> None:
     """
-    Copy prebuilt deps from challenge source if present.
-
-    Never runs npm/pip install. Candidate runs must use offline/prebuilt deps
-    (image toolchain + optional host-preinstalled node_modules/.venv).
+    Copy a prebuilt Python virtualenv from the challenge source when one exists.
+    Node dependencies are installed separately for the Linux runner.
     """
     if not challenge_slug:
         return
@@ -628,15 +744,142 @@ def _ensure_prebuilt_deps(workspace: Path, *, challenge_slug: str = "") -> None:
         src_root = challenge_dir(challenge_slug)
     except (FileNotFoundError, ValueError, ImportError):
         return
-    for name in ("node_modules", ".venv"):
+    for name in (".venv",):
         target = workspace / name
         source = src_root / name
         if target.exists() or not source.exists():
             continue
         try:
-            shutil.copytree(source, target, dirs_exist_ok=True)
+            shutil.copytree(source, target, dirs_exist_ok=True, symlinks=True)
         except OSError:
             logger.warning("Could not copy prebuilt %s for %s", name, challenge_slug)
+
+
+def _interview_network(client: Any) -> str:
+    name = "promptcode-interview-internal"
+    try:
+        client.networks.get(name)
+    except Exception:
+        client.networks.create(name, internal=True, check_duplicate=True)
+    return name
+
+
+_NODE_MANIFESTS = ("package.json", "package-lock.json", "npm-shrinkwrap.json")
+
+
+def starter_snapshot_for_workspace(workspace: Path) -> Path:
+    return Path(str(workspace) + ".starter")
+
+
+def restore_node_manifests(workspace: Path) -> bool:
+    """Put package manifests back from the immutable starter snapshot.
+
+    Candidate code can rewrite these files during a test run. The next install
+    must not execute that copy. Returns False when there is no trusted snapshot.
+    """
+    starter = starter_snapshot_for_workspace(workspace)
+    if not starter.is_dir():
+        return False
+    for name in _NODE_MANIFESTS:
+        src = starter / name
+        dest = workspace / name
+        if src.is_file():
+            data = src.read_bytes()
+            if dest.is_symlink() or not dest.is_file() or dest.read_bytes() != data:
+                if dest.is_symlink() or dest.exists():
+                    dest.unlink()
+                dest.write_bytes(data)
+        elif dest.is_symlink() or dest.exists():
+            dest.unlink()
+    return True
+
+
+def node_install_argv(workspace: Path) -> list[str]:
+    locked = (workspace / "package-lock.json").is_file() or (
+        workspace / "npm-shrinkwrap.json"
+    ).is_file()
+    command = "ci" if locked else "install"
+    return ["npm", command, "--ignore-scripts", "--no-audit", "--no-fund"]
+
+
+def linux_npm_docker_argv(workspace: Path, image: str, install: list[str]) -> list[str]:
+    """Install args for a trusted manifest. No extra caps, no lifecycle scripts."""
+    return [
+        "docker",
+        "run",
+        "--rm",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "--pids-limit",
+        "128",
+        "--memory",
+        "512m",
+        "--network",
+        "bridge",
+        "-v",
+        f"{workspace}:/workspace",
+        "-w",
+        "/workspace",
+        "--user",
+        f"{os.getuid()}:{os.getgid()}",
+        "--read-only",
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,size=256m",
+        "-e",
+        "HOME=/tmp",
+        "-e",
+        "npm_config_cache=/tmp/npm-cache",
+        "-e",
+        "npm_config_ignore_scripts=true",
+        image,
+        *install,
+    ]
+
+
+def _install_linux_node_modules(workspace: Path, image: str) -> None:
+    """Install Node deps inside the Linux runner image.
+
+    A Mac npm install cannot run in that image: native packages such as rollup
+    are built for the host OS. Candidate test runs stay offline; this install
+    uses the starter snapshot's lockfile only.
+    """
+    if not restore_node_manifests(workspace):
+        logger.warning(
+            "Refusing Node install without a trusted starter snapshot for %s",
+            workspace.name,
+        )
+        return
+    if not (workspace / "package.json").is_file():
+        return
+    modules = workspace / "node_modules"
+    stamp = modules / ".promptcode-platform"
+    if stamp.is_file() and stamp.read_text(encoding="utf-8").strip() == "linux":
+        return
+    if modules.exists():
+        shutil.rmtree(modules)
+    install = node_install_argv(workspace)
+    try:
+        completed = subprocess.run(
+            linux_npm_docker_argv(workspace, image, install),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        logger.warning("Linux npm install failed to start for %s", workspace.name)
+        return
+    if completed.returncode != 0:
+        logger.warning(
+            "Linux npm install failed for %s: %s",
+            workspace.name,
+            (completed.stderr or completed.stdout or "")[:400],
+        )
+        return
+    if modules.is_dir():
+        stamp.write_text("linux", encoding="utf-8")
 
 
 def _clip(text: str, limit: int) -> str:
