@@ -4,7 +4,7 @@ FROM python:3.12.12-slim-bookworm
 
 # Use the audited lock; candidate execution never installs dependencies.
 COPY backend/requirements.lock /opt/runner-requirements.lock
-RUN pip install --no-cache-dir -r /opt/runner-requirements.lock pytest==8.3.5 \
+RUN pip install --no-cache-dir -r /opt/runner-requirements.lock pytest==9.0.3 \
   && useradd -m -u 10001 runner
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
