@@ -55,6 +55,7 @@ from app.schemas.interview import (
     TestRunRequest,
     TestRunResponse,
 )
+from app.services.interview.execution_feedback import advisory_scoring, advisory_summary
 from app.services.interview.ai_provider import (
     SYSTEM_PROMPT,
     AIProviderError,
@@ -278,8 +279,8 @@ async def _previous_attempt(
             {
                 "status": "submitted",
                 "scoring_version": prev_eval.scoring_version,
-                "total_score": prev_eval.total_score,
-                "rubric": prev_eval.rubric,
+                "total_score": 0.0,
+                "rubric": advisory_scoring({"rubric": prev_eval.rubric})["rubric"],
                 "steps": (prev_eval.metrics or {}).get("steps"),
             }
         ],
@@ -309,12 +310,13 @@ async def _evaluation_response(
             )
         ).scalars().all()
     ]
+    practice = advisory_scoring({"rubric": evaluation.rubric, "metrics": evaluation.metrics or {}})
     return EvaluationResponse(
-        total_score=evaluation.total_score,
-        rubric=evaluation.rubric,
-        metrics={k: v for k, v in (evaluation.metrics or {}).items() if k != "answer_guides"},
+        total_score=0.0,
+        rubric=practice["rubric"],
+        metrics={k: v for k, v in practice["metrics"].items() if k != "answer_guides"},
         insights=evaluation.insights,
-        test_summary=evaluation.test_summary,
+        test_summary=advisory_summary(evaluation.test_summary),
         defend_questions=[
             {
                 "question": sanitize_candidate_question(
@@ -454,7 +456,7 @@ async def challenges_with_progress(
                     )
                 ).scalar_one_or_none()
                 if ev is not None:
-                    best = max(best or 0.0, float(ev.total_score))
+                    best = max(best or 0.0, 0.0)
         out.append(
             ChallengeProgressCard(
                 slug=c["slug"],
@@ -1312,7 +1314,9 @@ async def submit_session(
             "stdout_tail": test_result["stdout"][-4000:],
             "stderr_tail": test_result["stderr"][-2000:],
             # Honest: no hidden evaluator leakage
-            "correctness_visible": test_result["ok"],
+            "correctness_visible": None,
+            "advisory": True,
+            "authoritative": False,
             "hidden_tests_leaked": False,
         },
         defend_questions=defend_for_candidate,
@@ -1434,7 +1438,7 @@ async def post_defend_answer(
     if (ev.scoring_version or "") == "v2":
         rubric, total = apply_communication_score(ev.rubric or {}, list(answers.values()))
         ev.rubric = rubric
-        ev.total_score = total
+        ev.total_score = 0.0
     ev.metrics = metrics
     await _add_event(
         db,
@@ -1521,14 +1525,14 @@ async def dashboard(
                 attempt_number=getattr(s, "attempt_number", 1) or 1,
                 started_at=s.started_at,
                 submitted_at=s.submitted_at,
-                total_score=ev.total_score if ev else None,
+                total_score=0.0 if ev else None,
             )
         )
         if ev is not None:
-            scores.append(float(ev.total_score))
+            scores.append(0.0)
             rub = ev.rubric or {}
             if "A_correctness" in rub:
-                correctness.append(float(rub["A_correctness"].get("score", 0)))
+                correctness.append(0.0)
             if "B_investigation" in rub:
                 exploration.append(float(rub["B_investigation"].get("score", 0)))
             if "D_ai_leverage" in rub:
@@ -1607,7 +1611,7 @@ async def submit_feedback(
         "ai_as_expected": body.ai_as_expected,
         "confusing_or_broken": body.confusing_or_broken,
         "most_like_real_interview": body.most_like_real_interview,
-        "total_score": ev.total_score if ev else None,
+        "total_score": 0.0 if ev else None,
         "scoring_version": (ev.scoring_version if ev else None) or session.scoring_version,
         "wall_duration_ms": session.wall_duration_ms,
         "active_duration_ms": session.active_duration_ms,

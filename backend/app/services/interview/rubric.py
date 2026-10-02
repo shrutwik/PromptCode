@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.services.interview.execution_feedback import advisory_scoring
+
 import re
 from typing import Any
 
@@ -25,7 +27,7 @@ def _prompt_quality(prompts: list[str]) -> float:
     return sum(scores) / len(scores)
 
 
-def score_session(
+def _practice_score_session(
     *,
     events: list[dict[str, Any]],
     test_summary: dict[str, Any],
@@ -304,10 +306,10 @@ def apply_communication_score(rubric: dict, texts: list[str]) -> tuple[dict, flo
         ),
         1,
     )
-    return updated, total
+    return advisory_scoring({"rubric": updated})["rubric"], 0.0
 
 
-def score_session_v2(
+def _practice_score_session_v2(
     *,
     events: list[dict[str, Any]],
     test_summary: dict[str, Any],
@@ -606,3 +608,10 @@ def _default_defend() -> list[dict[str, str]]:
             "answer_guide": "Edge cases, perf, authz, or ordering caveats.",
         },
     ]
+
+def score_session(**kwargs):
+    return advisory_scoring(_practice_score_session(**kwargs))
+
+
+def score_session_v2(**kwargs):
+    return advisory_scoring(_practice_score_session_v2(**kwargs))

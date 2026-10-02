@@ -256,6 +256,18 @@ Still NO-GO: runtime grading integrity, verified execution broker privilege isol
 
 78fb374 clean HEAD verification completed: shell syntax, report supersession banner and both renamed fixture values verified; grading/socket subset **8 passed, 1 xfailed in 0.66s**. The xfail is the open B6 security failure. This final verification note is left unstaged for the next audit-item commit; all six item commits above have been verified independently in clean worktrees.
 
+## Advisory execution mitigation — Option A
+
+7f62b69 verified in clean HEAD: report appendix relocation and committed pending verification note confirmed by direct assertions. No application changes in that commit.
+
+Execution and evaluation APIs now declare advisory=true, authoritative=false, feedback_kind=advisory_practice. Public scoring boundaries zero numeric rubric/total grades; legacy evaluation reads also remove numeric grading authority. UI labels runs and reports advisory. No candidate execution result is accepted as an authoritative score.
+
+Python runs use a platform-supplied read-only reporter and exact server-controlled expectedTestIds inventory. Setup/call/teardown must all pass for every ID; duplicates, missing/short reports, skipped tests and zero-exit early termination fail. The expected inventory must be configured in the trusted challenge runner registry; missing inventory fails closed. Local runner and Node currently cannot satisfy this reporter contract and fail closed. Output counts are presentation only. A wrapper keeps tmpfs alive while bounded report bytes are read; timeout/removal and lease cleanup remain enforced.
+
+**MITIGATION, NOT A FIX:** the reporter shares the candidate interpreter and its report files are writable inside the isolated run. Deliberately forged complete reports or interpreter monkeypatching can still lie. Expected-ID completeness blocks the demonstrated early-exit bypass; it does not authenticate correctness. NO-GO for authoritative scoring until the separate trusted evaluator is built and audited.
+
+Completed local verification: **30 passed in 21.43s**, including live valid-report, short-report, early-exit and prior CPU/PID/memory/disk/network/cleanup attacks. Earlier verification attempts exposed Docker archive omission of tmpfs, then missing audit fixture inventories; those attempts failed and were corrected. Clean committed verification pending. No unrelated product edits were required for this targeted verification.
+
 ## Appendix — superseded historical audit narrative (UNVERIFIED)
 
 The following material predates clean-HEAD verification. Its pass, load, restart and scan claims are superseded; retain only as investigation history.

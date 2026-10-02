@@ -175,6 +175,9 @@ class TestRunRequest(BaseModel):
 
 
 class TestRunResponse(BaseModel):
+    advisory: bool = True
+    authoritative: bool = False
+    feedback_kind: str = "advisory_practice"
     ok: bool
     exit_code: int
     stdout: str
@@ -213,6 +216,9 @@ class DefendQuestionsResponse(BaseModel):
 
 
 class EvaluationResponse(BaseModel):
+    advisory: bool = True
+    authoritative: bool = False
+    feedback_kind: str = "advisory_practice"
     total_score: float
     rubric: dict
     metrics: dict

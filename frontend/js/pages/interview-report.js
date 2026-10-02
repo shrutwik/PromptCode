@@ -258,11 +258,11 @@ async function load() {
           <span class="tag">${Math.round(target)} / 100</span>
           <span class="tag">${esc(fmtDuration(durationMs))}</span>
           <span class="tag" data-tone="${status === "submitted" ? "success" : "idle"}">${esc(status)}</span>
-          <span class="tag" data-tone="${testsOk ? "success" : "danger"}">visible tests ${testsOk ? "passed" : "failed"}</span>
           ${steps ? `<span class="tag">Steps ${esc(steps.opened)} of ${esc(steps.total)}</span>` : ""}
+          <span class="tag" data-tone="${testsOk ? "success" : "danger"}">advisory tests ${testsOk ? "passed" : "failed"}</span>
           <span class="tag">hidden tests not leaked</span>
         </div>
-        <p class="report-hero-note">Evidence-tied practice score from this session’s rubric and events. ${events.length} logged events across ${phases.filter((p) => (grouped[p] || []).length).length} workflow categories.</p>
+        <p class="report-hero-note">Advisory practice feedback only. Execution results do not establish correctness or an authoritative score. ${events.length} logged events across ${phases.filter((p) => (grouped[p] || []).length).length} workflow categories.</p>
       </div>
     </section>
 
@@ -320,7 +320,7 @@ async function load() {
         ${diffHtml}
       </section>
       <section class="pc-panel" aria-labelledby="correctTitle">
-        <div class="pc-panel-head"><h2 id="correctTitle">Final correctness</h2><span class="tag" data-tone="${testsOk ? "success" : "danger"}">${testsOk ? "passing" : "failing"}</span></div>
+        <div class="pc-panel-head"><h2 id="correctTitle">Advisory execution feedback</h2><span class="tag" data-tone="${testsOk ? "success" : "danger"}">${testsOk ? "passing" : "failing"}</span></div>
         <pre class="report-pre">${esc(JSON.stringify({
           visible_ok: r.test_summary?.ok,
           command: r.test_summary?.command,

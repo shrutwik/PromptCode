@@ -220,7 +220,7 @@ async function runCmd(commandId) {
   lastTestOutput = `$ ${r.command}\nexit ${r.exit_code} · ${r.duration_ms || 0}ms · isolation=${r.isolation}\n` +
     `counts ${JSON.stringify(r.counts || {})}\n\n${r.stdout}\n${r.stderr}`;
   setTermMeta(
-    `<span class="${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span> · ` +
+    `<span class="${r.ok ? "ok" : "fail"}">${r.ok ? "ADVISORY PASS" : "ADVISORY FAIL"}</span> · ` +
     `<code>${esc(r.command)}</code> · ${r.duration_ms || 0}ms · ` +
     `${(r.counts && r.counts.passed) || 0} passed / ${(r.counts && r.counts.failed) || 0} failed`
   );
