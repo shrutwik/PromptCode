@@ -91,7 +91,8 @@ def test_auth_rate_limit_is_shared_across_sessions(tmp_path, monkeypatch):
 
     asyncio.run(exercise_limit())
     asyncio.run(engine.dispose())
-    assert auth_routes._auth_client_key(request) == "203.0.113.10"
+    # Rightmost untrusted hop. 203.0.113.10 is the client-supplied prefix.
+    assert auth_routes._auth_client_key(request) == "10.0.0.1"
     get_settings.cache_clear()
 
 
@@ -133,6 +134,19 @@ def test_auth_rate_limit_allows_requests_after_window(tmp_path):
 
     asyncio.run(exercise_window())
     asyncio.run(engine.dispose())
+
+
+def test_auth_client_key_ignores_spoofed_leftmost_forwarded_for():
+    get_settings.cache_clear()
+    request = Request(
+        {
+            "type": "http",
+            "headers": [(b"x-forwarded-for", b"198.51.100.9, 203.0.113.50")],
+            "client": ("127.0.0.1", 1234),
+        }
+    )
+    assert auth_routes._auth_client_key(request) == "203.0.113.50"
+    get_settings.cache_clear()
 
 
 def test_auth_client_key_ignores_forwarded_headers_from_untrusted_peer(monkeypatch):

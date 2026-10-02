@@ -185,3 +185,11 @@ Changes: password_reset.py removes the token from logging; test_password_reset.p
 Local verification: targeted regression ran, 1 passed (2026-10-02).
 Clean HEAD verification: pending immediately after this item commit. Previous report claims above have not been re-verified in this continuation.
 Scope: local test data only. No production calls. All other pending diffs remain outside this item.
+
+## Verified continuation — E1 forwarded-IP spoofing
+
+Finding: trusted proxies could use a candidate-supplied leftmost X-Forwarded-For value as the rate-limit key.
+Changes: client_ip.py chooses the rightmost untrusted hop; test_backend_validation.py covers spoofing and shared limiter state.
+Local verification: 10 validation tests passed. Clean HEAD verification follows this commit.
+A1 clean HEAD verification: all 6 password-reset tests passed; no unrelated changes required.
+Runner baseline in clean HEAD: 4 passed, 1 failed because the committed runner references the pending audit-only workspace_has_escape_link helper. Actual Docker isolation remains NOT TESTED.
