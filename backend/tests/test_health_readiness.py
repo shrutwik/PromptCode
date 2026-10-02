@@ -74,7 +74,11 @@ def test_health_and_ready_are_ok_with_live_database(monkeypatch):
     asyncio.run(async_engine.dispose())
 
 
-def test_health_sets_security_headers(monkeypatch):
+def test_health_sets_security_headers(monkeypatch, tmp_path):
+    # A controlled inline-script fixture verifies hashes independently of page refactors.
+    (tmp_path / "test.html").write_text("<script>console.log('fixture')</script>")
+    monkeypatch.setattr(main_module, "FRONTEND_DIR", tmp_path)
+    main_module._frontend_inline_script_hashes.cache_clear()
     async_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     monkeypatch.setattr(main_module, "engine", async_engine)
     get_settings.cache_clear()
@@ -91,6 +95,7 @@ def test_health_sets_security_headers(monkeypatch):
     assert "script-src-attr 'none'" in csp
     assert "'unsafe-inline'" not in csp.partition("script-src")[2].partition(";")[0]
     assert "'sha256-" in csp
+    main_module._frontend_inline_script_hashes.cache_clear()
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["X-Frame-Options"] == "DENY"
     assert response.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"

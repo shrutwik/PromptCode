@@ -41,11 +41,11 @@ def test_metrics_missing_or_example_config_stays_closed(client, monkeypatch, tok
 
 
 def test_every_internal_route_rejects_missing_and_wrong_tokens(client):
-    routes = [route for route in client.app.routes if getattr(route, "path", "").startswith("/api/interview/internal/")]
+    routes = {path: operations for path, operations in client.app.openapi()["paths"].items() if path.startswith("/api/interview/internal/")}
     assert len(routes) >= 14
-    for route in routes:
-        path = route.path.replace("{session_id}", "00000000-0000-0000-0000-000000000001").replace("{user_id}", "00000000-0000-0000-0000-000000000002")
-        for method in route.methods:
+    for route, operations in routes.items():
+        path = route.replace("{session_id}", "00000000-0000-0000-0000-000000000001").replace("{user_id}", "00000000-0000-0000-0000-000000000002")
+        for method in set(operations) & {"get", "post", "put", "delete", "patch"}:
             for headers in ({}, {"X-PromptCode-Internal-Token": "wrong"}):
                 response = client.request(method, path, headers=headers, json={})
                 assert response.status_code == 404, (method, path, response.text)
