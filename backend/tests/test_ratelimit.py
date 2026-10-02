@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -10,9 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 import app.models  # noqa: F401 - ensure ORM models are registered
-from app.core.ratelimit import _acquire_rate_limit_lock, enforce_rate_limit
+from app.core.ratelimit import enforce_rate_limit
 from app.db.base import Base
-from app.models.auth_rate_limit import AuthRateLimitEvent
+from app.models.rate_limit_counter import RateLimitCounter
 
 
 def _build_session_factory(tmp_path) -> tuple[async_sessionmaker[AsyncSession], object]:
@@ -132,212 +131,44 @@ def test_limit_of_one(tmp_path) -> None:
     asyncio.run(engine.dispose())
 
 
-def test_expired_entries_do_not_count(tmp_path) -> None:
-    session_factory, engine = _build_session_factory(tmp_path)
-
-    async def exercise() -> None:
-        started_at = datetime(2026, 3, 1, tzinfo=timezone.utc)
-        for _ in range(5):
-            async with session_factory() as db:
-                db.add(
-                    AuthRateLimitEvent(
-                        client_key="ip:old",
-                        created_at=started_at - timedelta(seconds=61),
-                    )
-                )
-                await db.commit()
-
-        async with session_factory() as db:
-            await enforce_rate_limit(
-                db=db,
-                key="ip:old",
-                limit=5,
-                window_seconds=60,
-                now=started_at,
-            )
-
-    asyncio.run(exercise())
-    asyncio.run(engine.dispose())
+def test_expired_entries_do_not_count(tmp_path):
+    factory, engine = _build_session_factory(tmp_path)
+    async def exercise():
+        now = datetime(2026, 3, 1, tzinfo=timezone.utc)
+        async with factory() as db:
+            await enforce_rate_limit(db=db,key="old",limit=1,window_seconds=60,now=now-timedelta(seconds=61))
+            await enforce_rate_limit(db=db,key="old",limit=1,window_seconds=60,now=now)
+            with pytest.raises(HTTPException) as exc:
+                await enforce_rate_limit(db=db,key="old",limit=1,window_seconds=60,now=now)
+            assert exc.value.status_code == 429
+    asyncio.run(exercise());asyncio.run(engine.dispose())
 
 
-def test_mixed_old_and_recent_entries(tmp_path) -> None:
-    session_factory, engine = _build_session_factory(tmp_path)
-
-    async def exercise() -> None:
-        started_at = datetime(2026, 3, 1, tzinfo=timezone.utc)
-        for _ in range(4):
-            async with session_factory() as db:
-                db.add(
-                    AuthRateLimitEvent(
-                        client_key="ip:mix",
-                        created_at=started_at - timedelta(seconds=61),
-                    )
-                )
-                await db.commit()
-
-        for attempt in range(4):
-            async with session_factory() as db:
-                await enforce_rate_limit(
-                    db=db,
-                    key="ip:mix",
-                    limit=5,
-                    window_seconds=60,
-                    now=started_at + timedelta(seconds=attempt),
-                )
-
-        async with session_factory() as db:
-            await enforce_rate_limit(
-                db=db,
-                key="ip:mix",
-                limit=5,
-                window_seconds=60,
-                now=started_at + timedelta(seconds=4),
-            )
-
-        async with session_factory() as db:
-            with pytest.raises(HTTPException):
-                await enforce_rate_limit(
-                    db=db,
-                    key="ip:mix",
-                    limit=5,
-                    window_seconds=60,
-                    now=started_at + timedelta(seconds=5),
-                )
-
-    asyncio.run(exercise())
-    asyncio.run(engine.dispose())
+def test_store_bounded_after_expiry(tmp_path):
+    factory, engine = _build_session_factory(tmp_path)
+    async def exercise():
+        now = datetime(2026, 3, 1, tzinfo=timezone.utc)
+        async with factory() as db:
+            await enforce_rate_limit(db=db,key="old",limit=5,window_seconds=60,now=now-timedelta(seconds=61))
+            await enforce_rate_limit(db=db,key="recent",limit=5,window_seconds=60,now=now)
+            rows=(await db.execute(select(RateLimitCounter))).scalars().all()
+            assert len(rows)==1
+            assert rows[0].expires_at > int(now.timestamp())
+    asyncio.run(exercise());asyncio.run(engine.dispose())
 
 
-def test_store_bounded_after_expiry(tmp_path) -> None:
-    session_factory, engine = _build_session_factory(tmp_path)
-
-    async def exercise() -> None:
-        started_at = datetime(2026, 3, 1, tzinfo=timezone.utc)
-        async with session_factory() as db:
-            db.add(
-                AuthRateLimitEvent(
-                    client_key="ip:clean",
-                    created_at=started_at - timedelta(seconds=61),
-                )
-            )
-            await db.commit()
-
-        async with session_factory() as db:
-            await enforce_rate_limit(
-                db=db,
-                key="ip:clean",
-                limit=5,
-                window_seconds=60,
-                now=started_at,
-            )
-
-        async with session_factory() as db:
-            rows = (
-                await db.execute(
-                    select(AuthRateLimitEvent).where(AuthRateLimitEvent.client_key == "ip:clean")
-                )
-            ).scalars().all()
-            assert len(rows) == 1
-
-    asyncio.run(exercise())
-    asyncio.run(engine.dispose())
-
-
-def test_sqlite_lock_serializes_concurrent_limit_checks():
-    class _SharedState:
-        def __init__(self) -> None:
-            self.rows: list[object] = []
-            self.sqlite_lock = asyncio.Lock()
-            self.count_gate = asyncio.Event()
-            self.count_calls = 0
-            self.lock_enabled = False
-
-    class _ScalarResult:
-        def __init__(self, value: int) -> None:
-            self.value = value
-
-        def scalar_one(self) -> int:
-            return self.value
-
-    class _FakeSession:
-        def __init__(self, shared: _SharedState) -> None:
-            self.shared = shared
-            self.pending: list[object] = []
-            self.holds_sqlite_lock = False
-
-        def get_bind(self):
-            return SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
-
-        async def execute(self, stmt, params=None):
-            sql = str(stmt)
-            if sql == "BEGIN IMMEDIATE":
-                self.shared.lock_enabled = True
-                await self.shared.sqlite_lock.acquire()
-                self.holds_sqlite_lock = True
-                return None
-            if sql.startswith("DELETE FROM auth_rate_limit_events"):
-                return None
-            if sql.startswith("SELECT count(*) AS count_1"):
-                if not self.shared.lock_enabled:
-                    self.shared.count_calls += 1
-                    if self.shared.count_calls >= 2:
-                        self.shared.count_gate.set()
-                    await self.shared.count_gate.wait()
-                return _ScalarResult(len(self.shared.rows))
-            raise AssertionError(f"Unexpected SQL in fake session: {sql}")
-
-        def add(self, row) -> None:
-            self.pending.append(row)
-
-        async def commit(self) -> None:
-            self.shared.rows.extend(self.pending)
-            self.pending.clear()
-            if self.holds_sqlite_lock:
-                self.holds_sqlite_lock = False
-                self.shared.sqlite_lock.release()
-
-    async def exercise() -> None:
-        shared = _SharedState()
-        started_at = datetime(2026, 3, 1, tzinfo=timezone.utc)
-        sessions = [_FakeSession(shared), _FakeSession(shared)]
-
-        async def attempt(session: _FakeSession) -> str:
-            try:
-                await enforce_rate_limit(
-                    db=session,
-                    key="ip:race",
-                    limit=1,
-                    window_seconds=60,
-                    now=started_at,
-                )
-                return "ok"
-            except HTTPException as exc:
-                return f"http_{exc.status_code}"
-
-        results = await asyncio.gather(*(attempt(session) for session in sessions))
-        assert results.count("ok") == 1
-        assert results.count("http_429") == 1
-        assert len(shared.rows) == 1
-
-    asyncio.run(exercise())
-
-
-def test_postgres_lock_uses_advisory_transaction_lock():
-    executed: list[tuple[str, dict[str, str] | None]] = []
-
-    class _FakeSession:
-        def get_bind(self):
-            return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
-
-        async def execute(self, stmt, params=None):
-            executed.append((str(stmt), params))
-            return None
-
-    asyncio.run(_acquire_rate_limit_lock(db=_FakeSession(), key="auth:127.0.0.1"))
-
-    assert executed == [
-        (
-            "SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))",
-            {"key": "auth:127.0.0.1"},
-        )
-    ]
+def test_atomic_counter_serializes_concurrent_limit_checks(tmp_path):
+    factory, engine = _build_session_factory(tmp_path)
+    async def exercise():
+        now = datetime(2026, 3, 1, tzinfo=timezone.utc)
+        async def attempt():
+            async with factory() as db:
+                try:
+                    await enforce_rate_limit(db=db,key="race",limit=1,window_seconds=60,now=now)
+                    return 200
+                except HTTPException as exc:
+                    return exc.status_code
+        results=await asyncio.gather(*(attempt() for _ in range(10)))
+        assert results.count(200)==1
+        assert results.count(429)==9
+    asyncio.run(exercise());asyncio.run(engine.dispose())

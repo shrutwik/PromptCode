@@ -569,3 +569,11 @@ No global max body size was found in code.
 - Keep production on the Docker runner, with debug off, a metrics token, and an internal token.
 - Do not return reset tokens, session source, or internal diagnostics in API responses.
 - After any sandbox change, confirm candidate processes cannot see `PROMPTCODE_*` secrets and cannot run package-install scripts from the session directory.
+
+## Final closeout — first verification attempt
+
+User narrowed scope to report cleanup, secret/dependency scans, full suite and end-to-end workflow only; no new load/hardening work. Discarded the unverified load harness and committed the pending note through report archival (68fa2cf). Clean full suite initially failed collection: stale test_ratelimit import referenced removed advisory-lock helper. Updated coverage to actual counter expiration, atomic concurrent admission and existing window limits; retained expired-storage cleanup by deleting expired counters. Final full-suite verification pending.
+
+Gitleaks 8.30.1 official binary checksum verified. Raw working-tree scan: six findings, one non-placeholder PROMPTCODE_OPENAI_API_KEY in ignored .env and five explicit JWT test-fixture strings. Raw all-local-history scan: five JWT test-fixture findings; no provider key found in history. Values are not reproduced here. Local provider key needs owner rotation; automated scans are not proof no secrets exist.
+
+Initial pip-audit lock: 21 advisory records in six packages (some duplicate IDs). Initial npm audit: six challenge locks failed, with four to twelve vulnerable dependency entries each. Dependency patch updates in progress; no clean audit claim yet.

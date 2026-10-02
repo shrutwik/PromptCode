@@ -45,6 +45,8 @@ async def enforce_rate_limit(*, db: AsyncSession, key: str, limit: int,
                                      set_={"count": RateLimitCounter.count + 1},
                                      where=RateLimitCounter.count < limit).returning(RateLimitCounter.count)
     accepted = (await db.execute(stmt)).scalar_one_or_none()
+    from sqlalchemy import delete
+    await db.execute(delete(RateLimitCounter).where(RateLimitCounter.expires_at <= current))
     await db.commit()
     if accepted is None:
         retry = max(1, bucket + window_seconds - current)
