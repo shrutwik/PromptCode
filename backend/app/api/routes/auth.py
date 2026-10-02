@@ -314,8 +314,6 @@ async def forgot_password(
     if user is not None:
         raw_token = await issue_password_reset(db, user)
         await notify_password_reset(user.email, raw_token)
-        if get_settings().debug:
-            body["reset_token"] = raw_token
     return body
 
 

@@ -98,7 +98,7 @@ def test_forgot_password_unknown_email_returns_same_message(tmp_path, monkeypatc
         _cleanup(app, test_engine)
 
 
-def test_debug_response_includes_reset_token_only_for_existing_user(tmp_path, monkeypatch):
+def test_debug_response_never_includes_reset_token(tmp_path, monkeypatch):
     app, test_engine = _build_test_app(tmp_path, monkeypatch)
     captured = _capture_tokens(monkeypatch)
     get_settings().debug = True
@@ -115,8 +115,9 @@ def test_debug_response_includes_reset_token_only_for_existing_user(tmp_path, mo
             )
 
         assert known.status_code == 200
-        assert known.json()["message"] == FORGOT_PASSWORD_MESSAGE
-        assert known.json()["reset_token"] == captured["token"]
+        assert known.json() == {"message": FORGOT_PASSWORD_MESSAGE}
+        assert "reset_token" not in known.json()
+        assert captured["token"]
         assert unknown.status_code == 200
         assert unknown.json() == {"message": FORGOT_PASSWORD_MESSAGE}
     finally:
