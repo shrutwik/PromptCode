@@ -1,5 +1,7 @@
 # PromptCode security and stress audit
 
+**NO-GO. Historical narrative and unverified claims below are SUPERSEDED.** Only the dated continuation/clean-HEAD evidence sections establish current test results; earlier load, restart, scan and deployment claims are not accepted as verified. Remaining open security failures prevent deployment.
+
 Date: 2026-10-02. Branch: `security/audit-fixes`.
 
 Scope was the local app only. Nothing was sent to production. The live process on `127.0.0.1:8000` was probed with synthetic requests. It was started before these fixes, so live checks of admin routes still show the old behavior until that process is restarted.
@@ -418,3 +420,14 @@ ed29d47 clean HEAD: **29 passed, 1 skipped in 27.86s**, including eight live Doc
 B6 editor protection fixed: tests/, __tests__/, root test_*.py, and JS/TS .test/.spec files are now immutable through candidate/assistant file writes. Candidate implementation remains editable. Local tests: **16 passed, 1 xfailed in 0.67s** across grading/workspace boundaries. The xfail is explicitly an OPEN security failure, not a passing audit item.
 
 Live candidate attack writes a replacement test and results.json in the ephemeral workspace, emits fake pass text, and calls os._exit(0) while pytest imports candidate code. Running its assertion with --runxfail gives **1 FAILED in 0.61s**: runner returns ok=True, exit_code=0, stdout empty (pytest captures the emitted text). Thus successful process exit alone fakes correctness without running the real assertion. Result-file writes cannot persist into the host source after B3, but process/harness trust is broken. File permissions or a signed result inside that same interpreter do not solve this. Candidate code and trusted grader require separate execution/security boundaries, or correctness must be explicitly advisory and excluded from authoritative scores. This is a blocking architecture/product decision; no rubric/prompt/challenge edits made. B6 remains FAILED. Full session/G and remaining B7/C/D/E/F are NOT TESTED to completion, deferred while this decision is unresolved. Status NO-GO.
+
+### Continuation item 11 / decision checkpoint
+
+- e1b7404 clean HEAD grading/workspace verification: **16 passed, 1 xfailed in 0.70s**. Log: /private/tmp/audit-grade-clean.log. The xfail reproduces the runtime grading vulnerability; B6 is FAILED, not passed. No unrelated edits required.
+- Marked historical/unverified report claims SUPERSEDED at the top; retained their working-tree content for review without committing those edits.
+- Renamed both fake sk-live rehearsal values to test-only-restore-provider-placeholder. Shell syntax check ran successfully. Full destructive restore rehearsal: NOT TESTED (outside this narrow fixture rename; no database wiped).
+- All continuation commits were verified in clean HEAD worktrees. Excluded hunks remain: UI/challenges/prompts/rubric/product context, progress route, deployment convenience/root entrypoint, SSL weakening and unverified runner profiles. The mixed production-test file contributed only the source-read-only mount assertion. The public backend socket mount addition was removed and never committed; existing executor daemon privilege is unresolved.
+
+Manual decision required before B6 can be closed: choose authoritative grading with a separate trusted evaluator that never shares an interpreter/security boundary with candidate code, or practice-only execution with visible test results explicitly advisory and excluded from authoritative scoring. Existing arbitrary Python/Node challenge interfaces and rubric rely on in-process test execution; changing that trust model requires a deliberate architecture/product choice. No grading/rubric behavior was silently weakened.
+
+Still NO-GO: runtime grading integrity, verified execution broker privilege isolation, persistent source/dependency quotas, B7 live npm/Node probes, C full AI budget/isolation/outage audit, D/E recovery/atomic limiter/load/capacity, and F privacy/deployment/database review remain open. G final suite/E2E/scans/advisory audits remain NOT TESTED as final verification and must run last after those items. Prior manual hosting/secrets/backups/monitoring/rollback actions remain required. Do not deploy this branch based on the passing unit/live subset.
