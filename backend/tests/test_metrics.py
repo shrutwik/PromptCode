@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -11,6 +13,7 @@ from app.core.config import get_settings
 
 def test_metrics_endpoint_returns_prometheus_text(monkeypatch):
     monkeypatch.setenv("PROMPTCODE_DEBUG", "true")
+    monkeypatch.setenv("PROMPTCODE_METRICS_TOKEN", "metrics-secret")
     async_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     monkeypatch.setattr(main_module, "engine", async_engine)
     get_settings.cache_clear()
@@ -20,7 +23,7 @@ def test_metrics_endpoint_returns_prometheus_text(monkeypatch):
     with TestClient(app) as client:
         # Hit /health so there is at least one recorded request.
         client.get("/health")
-        response = client.get("/metrics")
+        response = client.get("/metrics", headers={"Authorization": "Bearer metrics-secret"})
 
     assert response.status_code == 200
     assert "http_requests_total" in response.text
@@ -32,6 +35,8 @@ def test_metrics_endpoint_returns_prometheus_text(monkeypatch):
 
 def test_metrics_endpoint_requires_token_in_non_debug_mode(monkeypatch):
     monkeypatch.setenv("PROMPTCODE_DEBUG", "false")
+    monkeypatch.setenv("PROMPTCODE_RUNNER", "docker")
+    monkeypatch.setenv("PROMPTCODE_INTERVIEW_INTERNAL_TOKEN", "test-internal-token")
     monkeypatch.setenv("PROMPTCODE_JWT_SECRET", "prod-metrics-test-secret")
     monkeypatch.setenv("DOMAIN", "api.example.com")
     monkeypatch.setenv(
@@ -46,11 +51,9 @@ def test_metrics_endpoint_requires_token_in_non_debug_mode(monkeypatch):
 
     app = main_module.create_app()
 
-    with TestClient(app) as client:
-        response = client.get("/metrics")
-
-    assert response.status_code == 401
-    assert response.text == "Unauthorized"
+    with pytest.raises(RuntimeError, match="PROMPTCODE_METRICS_TOKEN"):
+        with TestClient(app):
+            pytest.fail("Missing production metrics secret must prevent startup")
 
     get_settings.cache_clear()
     asyncio.run(async_engine.dispose())
@@ -58,6 +61,8 @@ def test_metrics_endpoint_requires_token_in_non_debug_mode(monkeypatch):
 
 def test_metrics_endpoint_accepts_bearer_token_in_non_debug_mode(monkeypatch):
     monkeypatch.setenv("PROMPTCODE_DEBUG", "false")
+    monkeypatch.setenv("PROMPTCODE_RUNNER", "docker")
+    monkeypatch.setenv("PROMPTCODE_INTERVIEW_INTERNAL_TOKEN", "test-internal-token")
     monkeypatch.setenv("PROMPTCODE_JWT_SECRET", "prod-metrics-test-secret")
     monkeypatch.setenv("DOMAIN", "api.example.com")
     monkeypatch.setenv(

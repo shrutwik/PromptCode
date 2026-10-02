@@ -1934,12 +1934,7 @@ async def interview_runner_health(
     Available when PROMPTCODE_DEBUG=true, or with header X-PromptCode-Internal: 1
     in non-debug only if PROMPTCODE_INTERVIEW_INTERNAL_TOKEN matches.
     """
-    settings = get_settings()
-    internal_token = (request.headers.get("X-PromptCode-Internal-Token") or "").strip()
-    expected = (os.getenv("PROMPTCODE_INTERVIEW_INTERNAL_TOKEN") or "").strip()
-    allowed = bool(settings.debug) or (expected and internal_token == expected)
-    if not allowed:
-        raise HTTPException(status_code=404, detail="Not found")
+    require_internal(request)
     await enforce_rate_limit(
         db=db,
         key=f"interview-health:{client_ip_from_request(request)}",

@@ -281,3 +281,8 @@ No inseparable hunk was silently included. The workspace mixed hunk was edited o
 
 Added a startup gate: debug-off is production; PROMPTCODE_ENVIRONMENT=production additionally catches debug-on deployments. Refuses debug, selected host runner or unsafe host opt-in, missing/example metrics/internal tokens, and default/example JWT secrets. Only security settings/startup call and production marker/Docker runner compose hunks are included; assistant config and SSL weakening remain excluded.
 Local verification: 12 startup tests passed, including actual lifespan boot refusal. Clean HEAD verification follows the item commit. D1 clean HEAD tests previously ran: 6 passed in 12.97s.
+
+## Verified continuation — A3 token-protected metrics and internal APIs
+
+Closed the /metrics debug bypass and pending internal runner-health debug bypass. Metrics and internal checks reject missing/example configuration and compare token bytes in constant time. New tests exercise all registered internal routes with missing/wrong tokens without allowing database access, plus missing/example metrics/internal secrets and a correct metrics token. Updated existing metrics tests for the intentional production boot refusal introduced by A2.
+Local verification: token gates 8 passed; metrics/private-beta checks run before commit below. Clean HEAD verification follows this commit. A2 clean HEAD: 12 startup tests passed.

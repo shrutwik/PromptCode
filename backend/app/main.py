@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import hashlib
+import hmac
 import logging
 import re
 import time
@@ -26,7 +27,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.routes import auth, challenges, chat, interview, leaderboard, submissions, users
 from app.core.config import get_settings
-from app.core.startup_security import validate_production_startup
+from app.core.startup_security import invalid_deployment_token, validate_production_startup
 from app.core.logging import configure_logging, reset_request_id, set_request_id
 from app.core.metrics import (
     get_metrics_registry,
@@ -309,10 +310,10 @@ def create_app() -> FastAPI:
     @app.get("/metrics", include_in_schema=False)
     async def metrics_endpoint(request: Request):
         token = get_settings().metrics_token.strip()
-        if token:
-            if request.headers.get("Authorization") != f"Bearer {token}":
-                return PlainTextResponse("Unauthorized", status_code=401)
-        elif not settings.debug:
+        supplied = request.headers.get("Authorization", "").encode("utf-8")
+        if invalid_deployment_token(token) or not hmac.compare_digest(
+            supplied, f"Bearer {token}".encode("utf-8")
+        ):
             return PlainTextResponse("Unauthorized", status_code=401)
         return PlainTextResponse(generate_latest(get_metrics_registry()), media_type=CONTENT_TYPE_LATEST)
 

@@ -15,11 +15,9 @@ _INSECURE_INTERNAL_TOKENS = {
 
 def _expected_internal_token() -> str:
     token = (os.getenv("PROMPTCODE_INTERVIEW_INTERNAL_TOKEN") or "").strip()
-    if not token or token.lower() in _INSECURE_INTERNAL_TOKENS:
-        return ""
-    from app.core.config import _looks_like_placeholder
+    from app.core.startup_security import invalid_deployment_token
 
-    if _looks_like_placeholder(token):
+    if invalid_deployment_token(token):
         return ""
     return token
 
@@ -31,7 +29,7 @@ def require_internal(request: Request) -> None:
     """
     internal_token = (request.headers.get("X-PromptCode-Internal-Token") or "").strip()
     expected = _expected_internal_token()
-    allowed = bool(expected) and hmac.compare_digest(internal_token, expected)
+    allowed = bool(expected) and hmac.compare_digest(internal_token.encode("utf-8"), expected.encode("utf-8"))
     if not allowed:
         raise HTTPException(status_code=404, detail="Not found")
 
