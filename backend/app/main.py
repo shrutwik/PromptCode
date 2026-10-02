@@ -50,7 +50,6 @@ def resolve_frontend_html(page: str) -> Path | None:
     if not candidate.is_file():
         return None
     return candidate
-access_logger = logging.getLogger("app.access")
 
 
 access_logger = logging.getLogger("app.access")
