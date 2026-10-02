@@ -327,3 +327,60 @@ The first log-inspection fixture run had 4 passed/1 failed because Docker return
 FAILED / remaining: /workspace is still a read-write host bind with no per-session storage quota. Only /tmp has an enforced disk ceiling. A host-fill attack was NOT TESTED because it would be destructive. This requires an explicit bounded execution-workspace or host-filesystem quota design before deployment.
 Orphan read check after the live probes: docker ps -a with interview-runner and audit test labels returned no containers. This is actual cleanup evidence for completed probes, not proof of timeout cleanup or orphaned volume handling.
 B2 clean HEAD verification: the live host-boundary test passed (1 passed in 1.20s).
+
+## Current review checkpoint — NO-GO (latest status supersedes earlier checkpoints)
+
+Latest implementation HEAD tested: e90292f. The clean worktree was confirmed empty with git status before running the full backend suite under FastAPI 0.142.2 / Starlette 1.7.0 in the isolated audit environment, explicit SQLite/test workspaces and mocked provider. Live local Docker audit opt-in was enabled.
+
+**FULL suite actually ran: 391 passed, 3 failed, 1 skipped in 54.49s. Overall FAILED.** All five bounded live Docker tests passed in this full run. The sole skip is the pre-existing test_docker_integration_smoke, which has an unconditional skip=True decorator; its legacy smoke path remains NOT TESTED. The new live tests do run, and do not constitute a complete candidate session.
+
+### Authorization boundary requiring a user answer
+
+The three failures below are unrelated frontend contract assumptions. They cannot be made passing without changing unrelated tests or UI, both outside the current audit-hunks authorization. Stopping before modifying them follows the user's instruction to stop when an audit gate needs unrelated changes. The security-only tests do not depend on uncommitted product code.
+
+- test_frontend_layout_contract.py::test_core_frontend_pages_have_mobile_breakpoints (line 38): scans only inline HTML for breakpoints; committed index.html links an external stylesheet containing them.
+- test_frontend_layout_contract.py::test_challenge_page_defaults_to_ai_assistant_tab (line 61): matches an exact adjacent class/data-tab string; the committed active chat button has intervening accessibility attributes.
+- test_frontend_starter_contract.py::test_python_starter_matches_runtime_contract (line 16): expects the Python starter embedded in HTML; it is in the committed external frontend/js/pages/challenge.js.
+
+Proposed scope for approval: update only these three stale test assertions to read the existing linked CSS/JS and parse semantic HTML attributes. Preserve the committed UI, its behavior, and all uncommitted UI/challenge/product edits. This is an unrelated test-contract correction, not a security patch; no such edit has been made.
+
+### Commit ledger and verification
+
+Earlier per-item entries specify exact files/hunks and actual clean-worktree checks. This is the complete new commit ledger before the documentation checkpoint:
+
+| Finding | Commit(s) | Result and limits |
+| --- | --- | --- |
+| A1 reset-token logs | c6ae0ca | Fixed; clean password-reset suite 6 passed, subsequently 10 passed after A4. |
+| E1 spoofed forwarded IP | 9a91e1a | Spoofed-key fix; clean validation tests 10 passed. Shared-IP volume/load tests still NOT TESTED. |
+| B5 workspace boundaries | 6cfb8fc | Traversal/symlink/control-file/byte guards and .env fix; clean unit checks 14 passed. Concurrent file races and full cross-candidate live session flows NOT TESTED. |
+| D1 database hangs | e17627e | 5-second readiness/connect bounds; clean reliability checks 6 passed. Recovery/pool exhaustion/mid-request failures NOT TESTED. |
+| A2 production API startup | ba93460 | Refuses unsafe mode/tokens/default JWT; clean 12 tests passed. Effective deployed worker/hosting startup is NOT TESTED. |
+| A3 metrics/internal token gates | 9bbb68f | Debug bypasses closed; clean 16 token/metrics/private-beta tests passed with temporary workspace root. |
+| A4 reset delivery/disable | 7efea04 | Configured SMTP TLS/timeouts or no token issuance; clean 10 tests passed. Real staging SMTP NOT TESTED. |
+| A5 dependency advisories | b779d82, 648ca08 | Patched compatible pins/lock; audit-test compatibility correction verified clean with 26 passes. Current full suite still FAILED on three unrelated frontend tests. |
+| B1 peer network escape | 81df263, ca27227 | Live escape reproduced and removed; corrected clean checks 16 passed. Internet/metadata/host attempts blocked and only loopback UP. Actual database target was unavailable; no production network/data accessed. |
+| B2 host/privilege isolation | 5642a09 | Live Python image boundary test passed locally and in clean HEAD. Node image privilege probe NOT TESTED. |
+| B3 resource/log limits | e90292f | Live CPU/PID/memory/tmpfs/output/log bounds passed in clean full run. FAILED overall: persistent /workspace host bind still has no per-session disk quota. |
+
+### Hunks still excluded (updated)
+
+The earlier exclusion table remains the detailed inventory. Later exceptions are limited to audit findings: config.py now includes production recognition/unsafe-runner/internal-token/SMTP fields and the effective runner field; main.py includes startup and metrics security; interview.py includes only runner-health token gating; docker-compose.prod.yml includes only production markers and Docker runner mode. Its SSL weakening, assistant settings, runner profiles, and host workspace changes remain excluded. Runner isolation, log bounds, dependency files and independent audit tests are committed. No prompt, scoring, challenge, UI, model convenience, entrypoint, Docker-socket mount or automatic context behavior was committed. Historic unverified report claims remain unstaged. No inseparable mixed hunk was included; the workspace and compose mixed hunks were edited for staging only.
+
+### Remaining / NOT TESTED
+
+- B3 persistent workspace disk quotas are missing. Host-filling disk abuse was not run because destructive. Need a bounded ephemeral execution workspace or enforced persistent-directory quotas.
+- B4 live timeout orphan/volume cleanup; B6 scoring/test/result tampering; B7 complete live npm lifecycle/config/manifest adversarial re-verification remain incomplete. Existing manifest/lifecycle unit tests passed, but do not close those live items.
+- C provider-key exposure across all browser/log/error paths, distributed per-user/session/token quotas and global kill switch/spend cap, prompt injection, outages/retries, and candidate conversation isolation were not audited to completion. The loopback hang test passed only the timeout case.
+- D recovery/pools, real Docker outage integration, body/JWT/race/shutdown coverage and a complete timeout inventory remain incomplete.
+- E staging restart and real ramp/load/concurrent-run cap measurement were not run in this continuation; the earlier uncommitted load claims were not imported as evidence. No new p50/p95/p99/cap recommendation is claimed.
+- F deployment HTTPS/CORS/security headers configuration, auth lifecycle/throttling review, all-log PII audit, retention/deletion, migration/least-privilege checks and /health disclosure review remain incomplete. CSP/header unit tests passed in the clean full suite; that is not a deployed hosting check.
+- G final candidate Docker end-to-end, history/working-tree gitleaks/trufflehog scan, pip-audit/npm audit and final re-audit remain NOT TESTED, deferred until the outstanding audit and authorization boundary are resolved. The full suite above was A5/current-commit verification, not a claim that G is complete.
+
+### Manual actions for me (current)
+
+1. Keep this branch out of production; review each item diff. Production API boot now fails closed for unsafe settings, but the whole system has not passed the deployment audit.
+2. Set PROMPTCODE_ENVIRONMENT=production, PROMPTCODE_DEBUG=false, PROMPTCODE_RUNNER=docker; keep PROMPTCODE_ALLOW_UNSAFE_LOCAL_RUNNER unset/false. Set unique non-example JWT/internal/metrics secrets and verify effective hosting/worker environment. Rotate any secrets plausibly exposed by prior host execution/reset-token logs; a history scan is still required to determine exposure.
+3. For email, set PROMPTCODE_SMTP_HOST, PORT (587 default), USERNAME/PASSWORD, PASSWORD_RESET_FROM_EMAIL and HTTPS FRONTEND_URL. Stage a test-only SMTP delivery check; without configuration reset issuance stays disabled.
+4. Approve or reject the narrow stale frontend-test correction above. Choose and test a persistent workspace disk-quota strategy before users can execute code.
+5. Build reviewed backend and runner images and restart staging after the remaining fixes; verify image commit/version, proxy CIDRs, TLS, headers/CORS, non-root execution and Docker-daemon privilege boundaries. The pending entrypoint/socket/SSL changes are not approved by this checkpoint.
+6. Before launch, configure monitoring and alerts for auth failures, DB/Docker outages, orphan runners, queue saturation, disk use and AI spend; establish data retention/deletion, encrypted backups and a rehearsed restore. Set a reviewed rollback image and migration-compatible restoration procedure; rehearse it in staging. These operations were not performed here.
