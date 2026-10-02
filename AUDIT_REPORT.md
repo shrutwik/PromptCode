@@ -1,27 +1,25 @@
-# PromptCode beta readiness — security/audit-fixes
+# PromptCode — invite-only practice beta readiness
 
-**Decision: NO-GO pending final verification. Authoritative scoring remains NO-GO.** Scope: local/staging, test data only. Target: small invite-only practice beta with clearly advisory scores. Full evidence: [appendix](docs/AUDIT_APPENDIX.md).
+**NO-GO today, including a small invite-only beta. Authoritative scoring remains NO-GO.** Verification used clean committed worktrees, local Docker and disposable test data. Details and superseded evidence: [appendix](docs/AUDIT_APPENDIX.md).
 
 ## Fixed
 
-- Reset tokens removed from logs; generic password-reset responses, TLS email delivery or clean provider-disabled behavior.
-- Production startup rejects unsafe debug/host-runner/default-secret configurations. Metrics/internal APIs require dedicated tokens; proxy-aware atomic IP/account throttles.
-- Candidate runs: network disabled, non-root, read-only root/source, reduced privileges, CPU/memory/PID/output limits, 256 MiB ephemeral workspace, bounded uploads/dependencies, timeout cleanup and expired-run reaping. Npm lifecycle/manifest/.npmrc attack checks completed.
-- Practice results explicitly advisory; numeric authoritative grades removed. Exact expected-test report completeness blocks demonstrated early-exit bypass. **Mitigation only:** candidate code can still forge in-process reports.
-- Persistent assistant request/token/cost reservations, kill switch, bounded provider waits/retries and generic/redacted errors; owned-context isolation tests.
-- Body/upload/time limits; bounded DB connection/command/pool waits and verified outage recovery. Shared execution slots/backpressure retain capacity during request cancellation. Fresh PostgreSQL migration ID mismatch corrected.
+- Reset-token logging, generic reset responses and provider-disabled behavior; unsafe production startup configurations rejected; protected metrics/internal APIs and atomic rate counters.
+- Docker network/root/capability restrictions, bounded workspace/uploads/dependencies/output, timeout cleanup/reaping and execution backpressure; npm lifecycle/manifest protections.
+- Results explicitly advisory, authoritative grades zeroed; expected-test completeness rejects early exits. **Mitigation, not a trusted evaluator:** candidate code can forge in-process reports.
+- Assistant request/token/cost reservations, kill switch, bounded provider calls and owned-context checks; request/DB limits and outage handling.
+- Vulnerable Python/npm dependencies patched; reproducible Python runner built from audited lock. Workspace authentication now refreshes/retries once; submission wording says advisory feedback.
 
-## Open / verification
+## Verification and open issues
 
-- Final full suite, workflow (assistant edit visible → tests → submission), history/tree secret scans and dependency audits: **PENDING**.
-- Docker-daemon privilege isolation and trusted evaluator are design-only; executor retains host-level daemon privilege. No authoritative evaluation permitted.
-- Complete report inventories and compatible runner dependencies must be supplied; Node currently lacks a trusted completeness reporter. Real-provider jailbreak/billing, hosting HTTPS, existing DB upgrade/rollback, crash recovery/races and production capacity: **NOT TESTED**.
-- Legacy AI judge is outside assistant budgets; disable it. Full privacy/retention/deletion and expired-counter maintenance review remains incomplete. No completed load/maximum-capacity claim. Unverified load script discarded; prior evidence and verification note preserved in appendix.
+- Latest clean code suite: **453 passed, 0 failed, 1 skipped** (84.06s). Skip: permanently disabled legacy Docker smoke; dedicated live Docker tests ran. Earlier run: **452 passed, 1 failed, 1 skipped**; memory attack was rejected but unexpectedly reported exit 0 rather than 137. **Unresolved intermittent result; not a consistent memory-containment pass.**
+- Browser/Docker workflow completed: signup, assistant proposal accepted and present in editor, 4/4 tests, submission, advisory report (`authoritative=false`, score 0), no remaining runner containers. Local HTTP provider stub only; real-provider behavior/billing **NOT TESTED**.
+- pip-audit: zero known vulnerabilities in backend lock and installed Python runner. npm audit: zero in each of six challenge locks. Gitleaks: tree six findings (one actual credential in ignored local `.env`, five fixtures); history five deterministic fixtures. **Raw scans are not clean passes.**
+- Open: executor Docker-daemon host privilege; Node completeness reporter/runtime workflow; production capacity/load, hosting controls, existing DB upgrade/rollback, complete privacy/deletion review and other unfinished reliability checks. **NOT TESTED / incomplete**, with earlier evidence in appendix. Unverified load script discarded; verification note committed in appendix.
 
 ## Manual actions before invitations
 
-- Deploy only reviewed commits; set invite-only access, Docker-only runner, debug off, strong unique JWT/internal/metrics/executor secrets, AI budget prices/caps and kill switch. Rotate any real secrets found by scans; never use example credentials.
-- Run execution on a dedicated disposable host with no production credentials/data; public API must not receive a Docker socket. Review the restricted-broker design before implementation.
-- Set a conservative runner cap (initially 2), identical across workers sharing the private lock directory; monitor saturation, failed cleanup, disk, DB errors and provider spending. Stop invitations if limits/cleanup fail.
-- Configure HTTPS/HSTS, secure cookies, exact CORS/proxy allowlists, least-privilege runtime DB credentials, verified migrations/backups and a restore/rollback plan. Publish retention/deletion policy and provide a manual deletion contact.
-- Restart from reviewed branch artifacts, perform staging smoke check, keep last known-good image/config for rollback. Do not expose unfinished legacy routes or paid judge.
+- Rotate local provider credential; set unique JWT/internal/metrics/executor secrets, debug off, Docker-only execution, invite access, exact proxy/CORS allowlists and configured AI prices/caps/kill switch. Disable legacy AI judge outside assistant budgets.
+- Use a dedicated disposable execution host with no production credentials/data. Public API must not receive Docker socket access. Restricted broker and trusted evaluator remain design-only, awaiting approval.
+- Resolve memory-test inconsistency; provide verified Node reporting or restrict supported tickets. Verify hosting HTTPS/HSTS, least-privilege DB access, migrations, backups/restore and rollback.
+- Publish retention/deletion policy and contact. Start runner cap at 2; monitor saturation, cleanup, disk/DB errors and spending. Restart reviewed artifacts, smoke-test staging and preserve last known-good image/config. No merge performed.
