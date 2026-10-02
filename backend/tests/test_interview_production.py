@@ -147,7 +147,7 @@ def test_isolated_runner_container_cleanup_and_limits(tmp_path):
         )
 
     assert result["ok"] is False
-    assert result["error_code"] == "incomplete_report"
+    assert result["error_code"] == "incomplete_test_report"
     assert result["authoritative"] is False
     assert result["runner"] == "docker"
     assert result["timed_out"] is False
