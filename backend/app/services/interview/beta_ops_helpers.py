@@ -2,19 +2,36 @@
 
 from __future__ import annotations
 
+import hmac
 import os
 
 from fastapi import HTTPException, Request
 
-from app.core.config import get_settings
+_INSECURE_INTERNAL_TOKENS = {
+    "change-me-internal-token",
+    "change-me",
+}
+
+
+def _expected_internal_token() -> str:
+    token = (os.getenv("PROMPTCODE_INTERVIEW_INTERNAL_TOKEN") or "").strip()
+    if not token or token.lower() in _INSECURE_INTERNAL_TOKENS:
+        return ""
+    from app.core.config import _looks_like_placeholder
+
+    if _looks_like_placeholder(token):
+        return ""
+    return token
 
 
 def require_internal(request: Request) -> None:
-    """404 when unauthorized — do not leak that internal tools exist."""
-    settings = get_settings()
+    """404 when unauthorized — do not leak that internal tools exist.
+
+    Debug mode does not bypass this. A missing or placeholder token fails closed.
+    """
     internal_token = (request.headers.get("X-PromptCode-Internal-Token") or "").strip()
-    expected = (os.getenv("PROMPTCODE_INTERVIEW_INTERNAL_TOKEN") or "").strip()
-    allowed = bool(settings.debug) or (expected and internal_token == expected)
+    expected = _expected_internal_token()
+    allowed = bool(expected) and hmac.compare_digest(internal_token, expected)
     if not allowed:
         raise HTTPException(status_code=404, detail="Not found")
 

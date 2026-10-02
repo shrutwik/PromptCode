@@ -154,6 +154,26 @@ def test_invite_code_signup_and_analytics(tmp_path, monkeypatch):
         asyncio.run(engine.dispose())
 
 
+def test_internal_routes_stay_closed_when_debug_is_on(tmp_path, monkeypatch):
+    app, engine, _ = _build_test_app(tmp_path, monkeypatch, invite_required=False)
+    try:
+        with TestClient(app) as client:
+            missing = client.get("/api/interview/internal/users")
+            wrong = client.get(
+                "/api/interview/internal/users",
+                headers={"X-PromptCode-Internal-Token": "not-the-token"},
+            )
+            ok = client.get(
+                "/api/interview/internal/users",
+                headers={"X-PromptCode-Internal-Token": "test-internal"},
+            )
+        assert missing.status_code == 404
+        assert wrong.status_code == 404
+        assert ok.status_code == 200
+    finally:
+        asyncio.run(engine.dispose())
+
+
 def test_disable_blocks_login_and_sessions(tmp_path, monkeypatch):
     app, engine, _ = _build_test_app(tmp_path, monkeypatch, invite_required=False)
     try:
