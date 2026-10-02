@@ -123,7 +123,7 @@ def _judge_with_llm(
         raise RuntimeError("OPENAI_API_KEY not available for judge")
 
     base_url = settings.openai_base_url.strip() if settings.openai_base_url else ""
-    client = openai.OpenAI(api_key=api_key, base_url=base_url or None)
+    client = openai.OpenAI(api_key=api_key, base_url=base_url or None, timeout=15, max_retries=1)
     candidate_models = _resolve_judge_models(settings)
 
     prompt_listing = ""

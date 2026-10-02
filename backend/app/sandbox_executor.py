@@ -117,7 +117,7 @@ def _executor_runtime_report() -> dict[str, Any]:
         }
 
     try:
-        client = docker.from_env()
+        client = docker.from_env(timeout=10)
         client.ping()
         checks["docker"] = {"ok": True, "detail": "daemon reachable"}
     except DockerException as exc:

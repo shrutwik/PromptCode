@@ -27,6 +27,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.routes import auth, challenges, chat, interview, leaderboard, submissions, users
 from app.core.config import get_settings
+from app.core.body_limit import BodyLimitMiddleware
 from app.core.startup_security import invalid_deployment_token, validate_production_startup
 from app.core.logging import configure_logging, reset_request_id, set_request_id
 from app.core.metrics import (
@@ -286,6 +287,7 @@ def create_app() -> FastAPI:
         allow_headers=["Authorization", "Content-Type", "X-Session-Token", "X-Request-ID"],
     )
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(BodyLimitMiddleware)
     app.add_middleware(AccessLogMiddleware)
 
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])

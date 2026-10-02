@@ -735,7 +735,7 @@ def docker_runner_health(*, probe_exec: bool = True) -> dict[str, Any]:
         return report
 
     try:
-        client = docker.from_env()
+        client = docker.from_env(timeout=10)
         client.ping()
         report["docker"] = {"ok": True, "detail": "daemon reachable"}
     except Exception as exc:  # noqa: BLE001

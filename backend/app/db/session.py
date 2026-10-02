@@ -21,6 +21,7 @@ if settings.database_url.startswith("postgresql+"):
     # Fail a new connection quickly when the host is down. Readiness checks
     # use the same bound so /ready does not sit on a multi-minute TCP timeout.
     _connect_args["timeout"] = 5
+    _connect_args["command_timeout"] = 10
 
 if settings.database_url.startswith("sqlite+"):
     engine = create_async_engine(
@@ -33,6 +34,7 @@ else:
         settings.database_url,
         echo=settings.database_echo,
         pool_size=20,
+        pool_timeout=5,
         max_overflow=10,
         pool_pre_ping=True,
         pool_recycle=1800,  # recycle connections every 30 min; prevents silent drops by pgbouncer

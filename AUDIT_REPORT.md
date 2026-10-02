@@ -312,6 +312,14 @@ Prompt-injection result: context assembly keeps explicit owned attachments as un
 
 14fddf2 clean HEAD: **22 passed, 1 FAILED in 14.52s**. The failure was an assertion expecting an untrusted-content marker supplied only by excluded prompt-formatting edits. Those unrelated prompt edits remain excluded. Corrected the test to verify the actual owned-context boundary: exactly one owned marker and its path, no provider key, no other-candidate data, and no system instructions inside user attachment content. This test does not prove model resistance to injected instructions. No broader product/prompt change is required; fresh clean verification pending. The earlier local 16-pass result was insufficient to establish that marker assertion in committed code.
 
+## D reliability checkpoint — bounded bodies and external waits
+
+C follow-up e379a8a verified independently in clean HEAD: **23 passed in 13.88s** (`/private/tmp/audit-ai-context.log`). Real-provider jailbreak resistance and invoiced spend remain NOT TESTED; no paid test provider was supplied.
+
+Added a 2 MB request-body ceiling including chunked uploads and a 10-second receive deadline. PostgreSQL commands now have a 10-second timeout and pool acquisition a 5-second timeout; remaining Docker clients use 10 seconds; legacy judge SDK uses 15 seconds and one retry. The legacy judge remains outside assistant budgets and must stay disabled until separately metered.
+
+Local targeted batch: **52 passed in 13.39s**. Disposable bounded Postgres verified outage/restart recovery using the same pool, pool exhaustion (<1 second in the test configuration), and a hanging query bounded to <3 seconds. Initial test failed because Docker reassigned the ephemeral port on restart; the fixture now reserves a fixed loopback port. Body-limit tests verified declared, undeclared and chunked oversize rejection before routes. Fresh clean-commit verification pending. This does not complete D races, graceful shutdown, or E load testing. Status remains **NO-GO**.
+
 ## Appendix — superseded historical audit narrative (UNVERIFIED)
 
 The following material predates clean-HEAD verification. Its pass, load, restart and scan claims are superseded; retain only as investigation history.

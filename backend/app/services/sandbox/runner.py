@@ -166,7 +166,7 @@ def _run_in_sandbox_local(
                 error="Invalid challenge file configuration.",
             )
 
-        client = docker.from_env()
+        client = docker.from_env(timeout=10)
         container = None
 
         try:

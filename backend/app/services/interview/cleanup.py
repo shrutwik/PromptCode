@@ -135,7 +135,7 @@ def cleanup_promptcode_containers() -> int:
     except ImportError:
         return 0
     try:
-        client = docker.from_env()
+        client = docker.from_env(timeout=10)
         containers = client.containers.list(
             all=True,
             filters={"label": "promptcode.role=interview-runner"},
