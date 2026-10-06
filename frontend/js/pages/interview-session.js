@@ -367,14 +367,14 @@ function closeTab(path) {
   updateDirtyPill();
 }
 
-async function openFile(path) {
+async function openFile(path, initialData) {
   if (!editor) return;
   if (currentPath && models[currentPath]) {
     models[currentPath].dirty =
       models[currentPath].model.getValue() !== models[currentPath].saved;
   }
   if (!models[path]) {
-    const data = await InterviewAPI.getFile(sessionId, path);
+    const data = initialData ?? await InterviewAPI.getFile(sessionId, path);
     const uri = monaco.Uri.parse(
       "file:///" + path.split("/").map(encodeURIComponent).join("/")
     );
@@ -895,21 +895,27 @@ require(["vs/editor/editor.main"], async function () {
     InterviewAPI.requireAuth("/session/" + sessionId);
     return;
   }
-  const s = await InterviewAPI.getSession(sessionId);
+  const [s, sessionFiles, level] = await Promise.all([
+    InterviewAPI.getSession(sessionId),
+    InterviewAPI.listFiles(sessionId),
+    InterviewAPI.level(sessionId).catch(() => null),
+  ]);
   syncSession(s);
   document.getElementById("slugLabel").textContent = s.challenge_slug;
-  files = await InterviewAPI.listFiles(sessionId);
+  files = sessionFiles;
   renderTree();
   const ticketEl = document.getElementById("questionBody");
   try {
-    renderLevel(await InterviewAPI.level(sessionId));
+    if (!level) throw new Error("No task steps");
+    renderLevel(level);
   } catch {
     ticketEl.textContent = "This task has no steps yet.";
   }
   const readme = files.find((f) => f.path === "README.md");
   if (readme) {
+    let readmeFile;
     try {
-      const file = await InterviewAPI.getFile(sessionId, readme.path);
+      const file = readmeFile = await InterviewAPI.getFile(sessionId, readme.path);
       const text = typeof file === "string" ? file : (file.content || file.text || "");
       if (!ticketEl.querySelector(".brief")) {
         renderReadme(ticketEl, text.slice(0, 4000) || "No task description.");
@@ -919,7 +925,7 @@ require(["vs/editor/editor.main"], async function () {
         ticketEl.textContent = "Open the code view for the full task.";
       }
     }
-    await openFile(readme.path);
+    await openFile(readme.path, readmeFile);
   }
   // Start only after the workspace is usable; draft recovery precedes autosaving.
   if (!sessionTerminal) {
