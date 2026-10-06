@@ -379,7 +379,7 @@
           ${product}
           <a href="/privacy">Privacy</a>
         </nav>
-        <span>© ${new Date().getFullYear()} PromptCode · Private beta</span>
+        <span>© ${new Date().getFullYear()} PromptCode · Open beta</span>
       </div>`;
     enhanceWordmarks(host);
   }

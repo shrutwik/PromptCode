@@ -85,7 +85,6 @@ async function handleSignup(e) {
   const email = document.getElementById('email').value.trim();
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value;
-  const invite = (document.getElementById('invite')?.value || '').trim();
   const passwordError = passwordValidationError(password);
 
   const errors = {
@@ -114,9 +113,8 @@ async function handleSignup(e) {
       first_name: fname,
       last_name: lname,
       password,
-      invite_code: invite || null,
     });
-    window.location.href = '/onboarding.html';
+    window.location.href = '/onboarding';
   } catch (err) {
     showFormError(err.message || 'Signup failed — try again.');
     btn.textContent = label;
