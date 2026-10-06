@@ -75,13 +75,13 @@ The assistant is available for the whole ticket. The product does not turn the c
 
 Default instructions for the model:
 
-- The assistant already has the ticket, the tests, and the source files for that question. There is no context picker. Ask for one hypothesis. At most a small hint.
-- Do not name the bug, the root cause, or the line to change.
+- The assistant already has the ticket, the tests, and the source files for that question. There is no context picker. Allow orientation, summaries, explanations of supplied files, and clarification of the active question without requiring a hypothesis.
+- For debugging and proposed fixes, ask for one hypothesis before suggesting a change. Offer at most a small hint; do not name the bug, the root cause, or the line to change.
 - Do not solve the whole task in one reply.
 - A proposed change may be close and wrong.
 - Do not use solution files or hidden tests.
 - A full-file rewrite of a file the person did not attach is dropped, as is any reply that quotes hidden solution material.
-- A question that tries to change the instructions, reveal them, or leave this ticket is answered locally. That reply does not call the model.
+- The local filter accepts bounded orientation phrases and supplied filenames while rejecting recognized unrelated requests and attempts to change or reveal instructions. The model must keep every answer within the active question and supplied codebase, even when an unrelated request mentions code or a supplied filename.
 
 The brief tells the person, in one line, that the assistant can be wrong. The score does not assume the model obeyed. If it blurts the bug, that reply is still just a suggestion they can reject.
 

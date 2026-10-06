@@ -1084,7 +1084,9 @@ async def ai_chat(
     )
     await db.commit()
 
-    refusal = screen_assistant_input(body.message)
+    refusal = screen_assistant_input(
+        body.message, supplied_paths=[a["path"] for a in attachments]
+    )
     if refusal:
         # Local refusal: no model call, so this does not spend a credit or a session quota.
         mark_session_ai_start(sid)
