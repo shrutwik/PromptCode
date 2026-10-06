@@ -1214,7 +1214,8 @@ async def ai_chat(
                             len(json.dumps(wire_messages).encode("utf-8")),
                             output_tokens=MAX_OUTPUT_TOKENS, attempts=1)
     mark_session_ai_start(sid)
-    session.ai_request_count = int(getattr(session, "ai_request_count", 0) or 0) + 1
+    request_count = int(getattr(session, "ai_request_count", 0) or 0) + 1
+    session.ai_request_count = request_count
     try:
         ai_result = await provider.complete_request(ai_request)
 
@@ -1267,7 +1268,9 @@ async def ai_chat(
             re.S | re.I,
         ):
             proposed.append({"path": m.group(1).strip(), "content": m.group(2)})
-    workspace = Path(session.workspace_path)
+    # A denied review-budget reservation rolls back and expires ORM state.
+    # Use the resolved workspace, then reload the session before accessing it.
+    workspace = Path(workspace_path)
     proposed = [
         edit
         for edit in proposed
@@ -1283,6 +1286,7 @@ async def ai_chat(
     session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
     require_mutable(session)
     require_editor(session, request.headers.get("X-Editor-Token") if request else None)
+    session.ai_request_count = max(int(session.ai_request_count or 0), request_count)
     proposed = await _stamp_revisions(db, session.id, proposed)
     if proposed:
         await _add_event(

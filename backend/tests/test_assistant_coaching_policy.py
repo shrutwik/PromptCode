@@ -120,7 +120,7 @@ def test_recent_history_query_is_session_isolated(tmp_path):
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('allowed', [True, False])
+@pytest.mark.parametrize('allowed', [True, False, 'budget_blocked'])
 def test_interview_route_reviews_reply_and_bills_both_calls(monkeypatch, tmp_path, allowed):
     from app.api.routes import interview as route
     from app.schemas.interview import AIChatRequest
@@ -138,7 +138,13 @@ def test_interview_route_reviews_reply_and_bills_both_calls(monkeypatch, tmp_pat
     monkeypatch.setattr(route, '_add_event', AsyncMock())
     monkeypatch.setattr(route, '_stamp_revisions', AsyncMock(side_effect=lambda db,sid,p: p))
     bills = []
-    async def bill(db,user,sid,n,**kwargs): bills.append((n,kwargs))
+    async def bill(db,user,sid,n,**kwargs):
+        bills.append((n,kwargs))
+        if len(bills) == 2 and allowed == 'budget_blocked':
+            # Model a failed reservation rolling back and expiring session state.
+            del session.workspace_path
+            session.ai_request_count = 0
+            raise HTTPException(429, 'Review budget exhausted')
     monkeypatch.setattr(route, 'reserve_ai_budget', bill)
     draft = 'The supplied README describes the task.' if allowed else 'Replace the membership key with record_id.'
     provider = SimpleNamespace(complete_request=AsyncMock(return_value=AIResponse(text=draft,provider='test',model='test',usage={'prompt_tokens':5})),
@@ -146,12 +152,16 @@ def test_interview_route_reviews_reply_and_bills_both_calls(monkeypatch, tmp_pat
     monkeypatch.setattr(route, 'get_ai_provider', lambda: provider)
     db = MagicMock(); db.commit = AsyncMock()
     reply = asyncio.run(route.ai_chat(sid, AIChatRequest(message='The second option'), request=None, db=db, user=SimpleNamespace(id=uuid.uuid4())))
-    assert (reply.reply == draft) is allowed
+    assert (reply.reply == draft) is (allowed is True)
     assert reply.proposed_edits == []
     assert len(bills) == 2 and all(b[1]['attempts'] == 1 for b in bills)
     assert provider.complete_request.call_args.args[0].history == history
-    assert provider.complete.call_args.kwargs['system'] == REVIEW_SYSTEM_PROMPT
-    assert 'The second option is the public test' in provider.complete.call_args.kwargs['messages'][0]['content']
+    assert session.ai_request_count == 1
+    if allowed == 'budget_blocked':
+        provider.complete.assert_not_awaited()
+    else:
+        assert provider.complete.call_args.kwargs['system'] == REVIEW_SYSTEM_PROMPT
+        assert 'The second option is the public test' in provider.complete.call_args.kwargs['messages'][0]['content']
 
 
 @pytest.mark.parametrize('allowed', [True, False])
