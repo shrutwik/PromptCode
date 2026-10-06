@@ -39,6 +39,9 @@ def test_settings_allow_non_default_secret_in_production():
         database_url="postgresql+asyncpg://user:pass@db.example.com:5432/promptcode",
         openai_api_key="sk-live-test-key",
         domain="api.example.com",
+        # Validator tests must not inherit the developer's repo .env: that file
+        # pins an AI provider, which would mask key-validation errors.
+        _env_file=None,
     )
 
     assert settings.jwt_secret == "prod-secret-with-real-entropy"
@@ -106,6 +109,7 @@ def test_settings_collect_missing_and_placeholder_production_values():
             domain="",
             sandbox_executor_url="http://sandbox-executor:8090",
             sandbox_executor_token="replace-this-with-a-random-secret",
+            _env_file=None,
         )
 
     error_text = str(exc_info.value)
@@ -138,6 +142,7 @@ def test_settings_reject_valid_looking_placeholder_openai_key():
             database_url="postgresql+asyncpg://user:pass@db.example.com:5432/promptcode",
             openai_api_key="sk-placeholder-prod-key-looks-real",
             domain="api.example.com",
+            _env_file=None,
         )
 
     assert "PROMPTCODE_OPENAI_API_KEY must be changed" in str(exc_info.value)
@@ -171,6 +176,7 @@ def test_settings_lists_all_invalid_values_in_one_exception():
             domain="127.0.0.1",
             sandbox_executor_url="http://sandbox-executor:8090",
             sandbox_executor_token="replace-this-with-a-random-secret",
+            _env_file=None,
         )
 
     error_text = str(exc_info.value)

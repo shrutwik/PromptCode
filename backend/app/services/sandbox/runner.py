@@ -162,8 +162,10 @@ def _run_in_sandbox_with_slot(
 
     with tempfile.TemporaryDirectory(prefix=f"pc_{run_id}_", **temp_dir_kwargs) as tmpdir:
         workspace = Path(tmpdir)
+        # No telemetry directory is mounted into the candidate container. The
+        # application relay records provider usage itself, so a candidate cannot
+        # forge cost, token or prompt-quality accounting by writing files.
         telemetry_dir = workspace / "telemetry"
-        telemetry_dir.mkdir()
         code_dir = workspace / "code"
         code_dir.mkdir()
 
@@ -186,6 +188,7 @@ def _run_in_sandbox_with_slot(
 
         client = docker.from_env(timeout=10)
         container = None
+        trusted_telemetry: list[dict[str, Any]] = []
 
         try:
             llm_budget = _build_sandbox_llm_budget(challenge_config)
@@ -212,6 +215,9 @@ def _run_in_sandbox_with_slot(
                 exit_code = int(wait_result.get("StatusCode", 1))
                 logs = container.logs(stdout=True, stderr=True)
                 stdout = logs.decode("utf-8", errors="replace") if isinstance(logs, (bytes, bytearray)) else str(logs)
+                # Snapshot the relay's own accounting before the relay shuts down.
+                recorder = getattr(relay, "recorded_calls", None)
+                trusted_telemetry = recorder() if callable(recorder) else []
                 if exit_code != 0:
                     raise ContainerError(
                         container=container,
@@ -264,13 +270,13 @@ def _run_in_sandbox_with_slot(
                 except Exception:
                     pass
 
-        telemetry = _read_telemetry(telemetry_dir)
-
+        # Provider usage comes from the application relay that was actually billed.
+        # Nothing the candidate container wrote is consulted.
         return SandboxResult(
             success=True,
             output=stdout,
             exit_code=0,
-            telemetry=telemetry,
+            telemetry=trusted_telemetry,
         )
 
 
@@ -377,8 +383,16 @@ def _build_sandbox_llm_budget(challenge_config: dict[str, Any]) -> SandboxLLMBud
         if str(model).strip()
     ) or ("gpt-4o", "gpt-4o-mini")
 
-    if settings.openai_base_url.rstrip("/") == "https://api.deepseek.com":
-        allowed_models = ("deepseek-flash",)
+    # Challenge-declared models are never replaced. A deployment may additionally
+    # accept legacy provider model aliases from old candidates; the relay maps every
+    # accepted alias to the configured model before any paid call. This is
+    # deployment configuration, not a hardcoded vendor assumption.
+    extra_aliases = tuple(
+        alias.strip() for alias in str(getattr(settings, "ai_model_aliases", "") or "").split(",")
+        if alias.strip()
+    )
+    if extra_aliases:
+        allowed_models = tuple(dict.fromkeys((*allowed_models, *extra_aliases)))
 
     max_llm_calls = int(constraints.get("max_llm_calls") or max(4, int(challenge_config.get("expected_calls", 3)) * 3))
     max_prompt_chars = int(challenge_config.get("max_prompt_chars") or 20_000)
@@ -419,6 +433,10 @@ def _build_container_run_kwargs(
     network_mode: str | None,
     run_id: str,
 ) -> dict[str, Any]:
+    # ``telemetry_dir`` is accepted for signature compatibility but is deliberately
+    # NOT mounted: a candidate-writable telemetry file could forge cost, token and
+    # prompt-quality accounting. Usage is taken from ``relay.recorded_calls()``.
+    del telemetry_dir
     run_kwargs: dict[str, Any] = {
         "image": settings.sandbox_image,
         "command": ["python", f"/workspace/{entrypoint}"],
@@ -426,7 +444,6 @@ def _build_container_run_kwargs(
         "user": "runner",
         "volumes": {
             str(code_dir): {"bind": "/workspace", "mode": "ro"},
-            str(telemetry_dir): {"bind": "/tmp/promptcode_telemetry", "mode": "rw"},
         },
         "environment": _build_container_environment(relay=relay, budget=budget),
         "mem_limit": settings.sandbox_memory_limit,

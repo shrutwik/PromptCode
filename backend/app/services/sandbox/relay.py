@@ -102,10 +102,20 @@ class SandboxLLMRelay:
         self._calls_started = 0
         self._total_tokens = 0
         self._total_cost_usd = 0.0
+        self._records: list[dict[str, Any]] = []
 
     @property
     def token(self) -> str:
         return self._token
+
+    def recorded_calls(self) -> list[dict[str, Any]]:
+        """Provider usage this relay observed, for authoritative grading input.
+
+        Never sourced from the candidate container: a sandbox that writes its own
+        ``calls.jsonl`` cannot influence cost, token or prompt-quality accounting.
+        """
+        with self._lock:
+            return [dict(record) for record in self._records]
 
     @property
     def proxy_url(self) -> str:
@@ -257,6 +267,23 @@ class SandboxLLMRelay:
             self._total_cost_usd += cost_usd
             calls_used = self._calls_started
             remaining_calls = max(0, self._budget.max_calls - self._calls_started)
+            # Authoritative per-call accounting, recorded by the application that
+            # actually made (and is billed for) the provider call. Grading reads
+            # this instead of anything a candidate container could write.
+            self._records.append({
+                "call_id": str(uuid.uuid4()),
+                "model": response_model,
+                "prompt": prompt,
+                "system": system,
+                "response": content,
+                "temperature": temperature,
+                "tokens_prompt": prompt_tokens,
+                "tokens_completion": completion_tokens,
+                "tokens_total": total_tokens,
+                "latency_ms": round(latency_ms, 1),
+                "cost_usd": round(cost_usd, 6),
+                "retry_index": 0,
+            })
 
         return {
             "content": content,

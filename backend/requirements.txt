@@ -5,6 +5,8 @@ sqlalchemy[asyncio]==2.0.37
 asyncpg==0.31.0
 pydantic==2.10.6
 pydantic-settings==2.14.2
+# Only needed by the self-managed Docker execution backend
+# (PROMPTCODE_EXECUTION_BACKEND=docker). A Modal deployment never imports it.
 docker==7.1.0
 openai==2.24.0
 python-multipart==0.0.32
@@ -15,3 +17,8 @@ email-validator==2.3.0
 alembic==1.18.4
 sentry-sdk[fastapi]==2.54.0
 prometheus-client==0.21.1
+# Modal deployment entry point (backend/modal_app.py) and the Modal Sandboxes the
+# trusted execution backend drives. Required for PROMPTCODE_EXECUTION_BACKEND=modal;
+# harmless for the docker backend. httpx (imported directly by app/main.py) still
+# arrives transitively via openai.
+modal==1.6.1

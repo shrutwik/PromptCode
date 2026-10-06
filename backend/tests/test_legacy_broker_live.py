@@ -33,13 +33,16 @@ def live_broker(monkeypatch, tmp_path):
         interview_workspace_root=str(tmp_path), interview_storage_min_free_bytes=0,
         sandbox_timeout_seconds=15, sandbox_image='promptcode-sandbox:latest',
         sandbox_memory_limit='128m', sandbox_cpu_limit=1, openai_api_key='',
-        openai_base_url='', openai_model='gpt-4o', sandbox_executor_url='')
+        openai_base_url='', openai_model='gpt-4o', sandbox_executor_url='',
+        max_runner_waiters=8, max_runners_acquire_timeout_seconds=15)
     monkeypatch.setattr(broker, 'get_settings', lambda: settings)
     monkeypatch.setattr(config, 'get_settings', lambda: settings)
     monkeypatch.setattr(runner_capacity, 'get_settings', lambda: settings)
     monkeypatch.setattr(runner, 'settings', settings)
     monkeypatch.setattr(broker, '_legacy_jobs', {})
-    monkeypatch.setattr(broker, '_active', 0)
+    # Admission is a bounded CapacityQueue now; reset it so each test starts with
+    # every slot free instead of patching the retired _active counter.
+    monkeypatch.setattr(broker, '_execution_queue', None)
     monkeypatch.setenv('PROMPTCODE_SANDBOX_HOST_WORKDIR', str(tmp_path))
     monkeypatch.setenv('PROMPTCODE_SANDBOX_NETWORK_MODE', 'bridge')
     starts = []

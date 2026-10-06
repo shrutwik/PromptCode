@@ -20,8 +20,11 @@ if settings.database_url.startswith("postgresql+"):
     _connect_args["statement_cache_size"] = 0
     # Fail a new connection quickly when the host is down. Readiness checks
     # use the same bound so /ready does not sit on a multi-minute TCP timeout.
-    _connect_args["timeout"] = 5
-    _connect_args["command_timeout"] = 10
+    _connect_args["timeout"] = settings.database_connect_timeout_seconds
+    # A statement cap must exceed the pool wait, otherwise a transaction queued
+    # behind the pool (or a row lock) is killed by the statement timeout before
+    # pool_timeout can apply, surfacing as an unhandled 500.
+    _connect_args["command_timeout"] = settings.database_command_timeout_seconds
 
 if settings.database_url.startswith("sqlite+"):
     engine = create_async_engine(
@@ -33,11 +36,11 @@ else:
     engine = create_async_engine(
         settings.database_url,
         echo=settings.database_echo,
-        pool_size=20,
-        # A simultaneous save burst waits behind the shared storage quota lock.
+        pool_size=settings.database_pool_size,
+        # A simultaneous save burst waits behind the shared storage admission.
         # Keep connection counts bounded, but allow those transactions to finish.
-        pool_timeout=15,
-        max_overflow=10,
+        pool_timeout=settings.database_pool_timeout_seconds,
+        max_overflow=settings.database_max_overflow,
         pool_pre_ping=True,
         pool_recycle=1800,  # recycle connections every 30 min; prevents silent drops by pgbouncer
         connect_args=_connect_args,

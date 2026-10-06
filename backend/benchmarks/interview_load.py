@@ -268,11 +268,12 @@ def run(args):
             advisory = summary["steps"].get("advisory_run", {}).get("statuses", {})
             advisory_total = sum(advisory.values())
             advisory_shed = advisory.get("429", 0) + advisory.get("503", 0)
+            shed_rate = advisory_shed / advisory_total if advisory_total else None
             summary["readiness_gates"] = {
                 "unexpected_http_error_rate": summary["unexpected_errors"] / max(1, summary["requests"]),
                 "unexpected_http_errors_absent": summary["unexpected_errors"] == 0,
-                "advisory_shed_rate": advisory_shed / advisory_total if advisory_total else None,
-                "advisory_shed_rate_at_most_25_percent": advisory_shed / advisory_total <= 0.25 if advisory_total else None,
+                "advisory_shed_rate": shed_rate,
+                "advisory_shed_rate_at_most_25_percent": shed_rate <= args.max_advisory_shed_rate if shed_rate is not None else None,
                 "latency_acceptance": "unassessed: no product latency target specified",
                 "production_headroom": "unassessed: deployment resource acceptance is outside this workload report",
             }
@@ -294,13 +295,43 @@ def run(args):
               "requested_stages": args.stages, "stages": stages, "host_samples": host_samples,
               "bounds": {"stage_timeout_seconds": args.stage_timeout, "max_error_rate": args.max_error_rate,
                          "max_throttle_rate": args.max_throttle_rate, "advisory_capacity_retries": args.capacity_retries},
-              "capacity_validated": False,
+              "readiness_gate_scope": "enforced only with --require-readiness-gates; skipping execution has no advisory runs",
               "capacity_scope": "workflow measurement; latency acceptance and deployed resource headroom remain unverified",
               "workflow_completed": len(stages) == len(args.stages) and all(
                   stage["flows"].get("completed") == stage["concurrency"] for stage in stages)}
+    result["readiness_bounds"] = {
+        "max_unexpected_error_rate": args.max_error_rate,
+        "max_advisory_shed_rate": args.max_advisory_shed_rate,
+    }
+    result["readiness_gates_satisfied"] = _readiness_gates_satisfied(result, args)
+    result["capacity_validated"] = bool(
+        result["workflow_completed"] and result["readiness_gates_satisfied"]
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n")
     return result
+
+
+def _readiness_gates_satisfied(result: dict, args) -> bool:
+    """Whether every measurable readiness gate passed.
+
+    Advisory shedding is a capacity signal only when execution was exercised, so
+    a `--skip-execution` route/DB measurement does not fail on it. Latency
+    acceptance and deployed headroom have no threshold and stay unassessed.
+    """
+    if not result["workflow_completed"]:
+        return False
+    for stage in result["stages"]:
+        gates = stage["readiness_gates"]
+        if not gates["unexpected_http_errors_absent"]:
+            return False
+        if gates["unexpected_http_error_rate"] > args.max_error_rate:
+            return False
+        if result["execution_exercised"]:
+            shed = gates["advisory_shed_rate_at_most_25_percent"]
+            if shed is None or not shed:
+                return False
+    return True
 
 
 def parse_args(argv=None):
@@ -316,6 +347,10 @@ def parse_args(argv=None):
     parser.add_argument("--max-error-rate", type=float, default=0.10)
     parser.add_argument("--max-throttle-rate", type=float, default=0.25)
     parser.add_argument("--capacity-retries", type=int, default=10, help="bounded advisory-run retries after explicit overload")
+    parser.add_argument("--max-advisory-shed-rate", type=float, default=0.25,
+                        help="readiness gate for explicit 429/503 shed responses on advisory runs")
+    parser.add_argument("--require-readiness-gates", action="store_true",
+                        help="exit non-zero unless every measurable readiness gate passes, not just workflow completion")
     parser.add_argument("--skip-execution", action="store_true", help="route/DB-only measurement; excludes runs and worker completion")
     parser.add_argument("--local-host-telemetry", action="store_true")
     parser.add_argument("--host-pids", nargs="*", type=int, default=[])
@@ -335,8 +370,8 @@ def parse_args(argv=None):
     if (not 0.1 <= args.poll_interval <= 30 or not 1 <= args.request_timeout <= 300
             or not 1 <= args.stage_timeout <= 1800):
         parser.error("invalid timeout or polling bounds")
-    if not all(0 <= value <= 1 for value in (args.max_error_rate, args.max_throttle_rate)):
-        parser.error("error and throttle rates must be between zero and one")
+    if not all(0 <= value <= 1 for value in (args.max_error_rate, args.max_throttle_rate, args.max_advisory_shed_rate)):
+        parser.error("error, throttle and advisory-shed rates must be between zero and one")
     if not 0 <= args.capacity_retries <= 20:
         parser.error("capacity retries must be from zero through 20")
     if any(pid <= 0 for pid in args.host_pids):
@@ -346,10 +381,15 @@ def parse_args(argv=None):
 
 
 def main():
-    result = run(parse_args())
-    print(json.dumps({"workflow_completed": result["workflow_completed"], "stages": [
+    args = parse_args()
+    result = run(args)
+    print(json.dumps({"workflow_completed": result["workflow_completed"],
+                      "readiness_gates_satisfied": result["readiness_gates_satisfied"],
+                      "capacity_validated": result["capacity_validated"], "stages": [
         {key: stage[key] for key in ("concurrency", "duration_seconds", "flows", "throttles")}
         for stage in result["stages"]]}))
+    if args.require_readiness_gates:
+        raise SystemExit(0 if result["capacity_validated"] else 1)
     raise SystemExit(0 if result["workflow_completed"] else 1)
 
 

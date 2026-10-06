@@ -2,7 +2,13 @@
 # backup-db.sh — Host-level PostgreSQL backup for PromptCode.
 #
 # Usage:
-#   bash /opt/promptcode/scripts/backup-db.sh
+#   bash /opt/promptcode/scripts/backup-db.sh                 # full backup + off-host upload
+#   bash /opt/promptcode/scripts/backup-db.sh --pre-migration  # local DB dump only (deploy safety net)
+#
+# --pre-migration exists because the deploy job runs Alembic migrations on backend
+# startup with no restore point. It writes a plain database dump plus checksum into
+# BACKUP_DIR and deliberately does not require rclone, so it cannot fail for a
+# reason unrelated to the migration risk it protects against.
 #
 # Env vars (sourced from /opt/promptcode/.env if not already exported):
 #   PROMPTCODE_DB_PASSWORD  — Postgres password (required by pg_dump inside container)
@@ -18,6 +24,14 @@
 set -euo pipefail
 umask 077
 
+MODE="full"
+if [[ "${1:-}" == "--pre-migration" ]]; then
+    MODE="pre-migration"
+elif [[ -n "${1:-}" ]]; then
+    echo "[backup] Unknown argument: $1" >&2
+    exit 2
+fi
+
 DEPLOY_DIR="${DEPLOY_DIR:-/opt/promptcode}"
 BACKUP_DIR="${BACKUP_DIR:-${DEPLOY_DIR}/backups}"
 BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
@@ -28,6 +42,14 @@ CHECKSUM_FILE="${BACKUP_DIR}/promptcode-${TIMESTAMP}.sha256"
 LAST_SUCCESS_FILE="${BACKUP_DIR}/last-successful-backup.txt"
 LAST_SUCCESS_COMPAT_FILE="${BACKUP_DIR}/.last-success-timestamp"
 
+NOTIFY_SCRIPT="${NOTIFY_SCRIPT:-${DEPLOY_DIR}/scripts/notify-alert.sh}"
+notify_failure() {
+    if [[ -x "${NOTIFY_SCRIPT}" ]]; then
+        bash "${NOTIFY_SCRIPT}" critical "Backup failed (${MODE})" "$1" >/dev/null 2>&1 || true
+    fi
+}
+trap 'notify_failure "backup aborted at line $LINENO"' ERR
+
 # Load .env if password not already in environment
 if [[ -z "${PROMPTCODE_DB_PASSWORD:-}" && -f "${DEPLOY_DIR}/.env" ]]; then
     # shellcheck disable=SC1090
@@ -37,17 +59,43 @@ fi
 PROMPTCODE_DB_USER="${PROMPTCODE_DB_USER:-promptcode}"
 PROMPTCODE_DB_NAME="${PROMPTCODE_DB_NAME:-promptcode}"
 
-if [[ -z "${RCLONE_REMOTE:-}" ]]; then
-    echo "[backup] RCLONE_REMOTE must be set for off-host backups." >&2
-    exit 1
-fi
+if [[ "${MODE}" == "full" ]]; then
+    if [[ -z "${RCLONE_REMOTE:-}" ]]; then
+        echo "[backup] RCLONE_REMOTE must be set for off-host backups." >&2
+        exit 1
+    fi
 
-if ! command -v rclone >/dev/null 2>&1; then
-    echo "[backup] rclone is required for off-host backups." >&2
-    exit 1
+    if ! command -v rclone >/dev/null 2>&1; then
+        echo "[backup] rclone is required for off-host backups." >&2
+        exit 1
+    fi
 fi
 
 mkdir -p "${BACKUP_DIR}"
+
+if [[ "${MODE}" == "pre-migration" ]]; then
+    # Database only: the risk being covered is a bad schema migration, and this
+    # must work before rclone/artifact configuration is guaranteed.
+    echo "[backup] Pre-migration dump to ${BACKUP_FILE}..."
+    docker compose -f "${DEPLOY_DIR}/docker-compose.yml" \
+                   -f "${DEPLOY_DIR}/docker-compose.prod.yml" \
+        exec -T db pg_dump -U "${PROMPTCODE_DB_USER}" "${PROMPTCODE_DB_NAME}" \
+        | gzip > "${BACKUP_FILE}"
+    python3 - "${BACKUP_DIR}" "$(basename "${BACKUP_FILE}")" > "${CHECKSUM_FILE}" <<'PY'
+import hashlib, pathlib, sys
+digest = hashlib.sha256()
+with (pathlib.Path(sys.argv[1]) / sys.argv[2]).open('rb') as stream:
+    for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+        digest.update(chunk)
+print(f'{digest.hexdigest()}  {sys.argv[2]}')
+PY
+    # Pre-migration dumps are cheap; keep a short local window rather than
+    # letting them accumulate on the application host.
+    find "${BACKUP_DIR}" -type f -name 'promptcode-*.sql.gz' -mtime "+${BACKUP_PRE_MIGRATION_RETENTION_DAYS:-3}" -delete
+    echo "[backup] Pre-migration dump complete: $(du -sh "${BACKUP_FILE}" | cut -f1)"
+    exit 0
+fi
+
 ARTIFACT_ROOT="${BACKUP_ARTIFACT_ROOT:-${PROMPTCODE_INTERVIEW_HOST_WORKDIR:-/var/promptcode/interview_workspaces}}"
 if [[ ! -d "${ARTIFACT_ROOT}" ]]; then
     echo '[backup] Interview artifact root is missing; refusing an incomplete backup.' >&2

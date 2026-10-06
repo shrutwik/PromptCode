@@ -19,6 +19,7 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from app.core.capacity_queue import CapacityExceeded, CapacityQueue, CapacityTimeout
 from app.core.config import get_settings
 from app.services.interview.execution_transfer import SourceBundle, MAX_REQUEST_BYTES
 from app.services.interview.registry import get_challenge, get_runner_config
@@ -132,21 +133,51 @@ async def lifespan(app):
 
 app = FastAPI(title='PromptCode execution broker', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(BrokerBoundary)
-_active = 0
+
+# Bounded, fair admission replaces instant rejection. A saturated execution host
+# now makes callers wait in FIFO order up to a bounded backlog and deadline; past
+# that the broker still fails closed with 503 + Retry-After. Built lazily because
+# the broker role is validated when the service starts, not when it is imported.
+_execution_queue: CapacityQueue | None = None
+
+
+def _queue() -> CapacityQueue:
+    global _execution_queue
+    if _execution_queue is None:
+        settings = _settings()
+        _execution_queue = CapacityQueue(
+            slots=settings.max_runners,
+            max_waiters=settings.max_runner_waiters,
+            deadline_seconds=settings.max_runners_acquire_timeout_seconds,
+        )
+    return _execution_queue
 
 
 async def execute(operation):
-    global _active
-    if _active >= _settings().max_runners:
-        raise HTTPException(503, 'Execution capacity reached')
-    _active += 1
+    queue = _queue()
+    try:
+        await queue.acquire()
+    except CapacityExceeded as exc:
+        raise HTTPException(503, 'Execution capacity reached',
+                            headers={'Retry-After': '2'}) from exc
+    except CapacityTimeout as exc:
+        raise HTTPException(503, 'Timed out waiting for execution capacity',
+                            headers={'Retry-After': '5'}) from exc
+    slot_released = False
+
+    def release_once() -> None:
+        nonlocal slot_released
+        if not slot_released:
+            slot_released = True
+            queue.release()
+
     task = asyncio.create_task(asyncio.to_thread(operation))
     def finished(task):
-        global _active
-        _active -= 1
-        # Retrieve exceptions even after client cancellation.
+        # Retrieve exceptions even after client cancellation, and keep the slot
+        # until the worker thread actually stops.
         if not task.cancelled():
             task.exception()
+        release_once()
     task.add_done_callback(finished)
     return await asyncio.shield(task)
 
@@ -196,7 +227,9 @@ async def ready():
         await asyncio.to_thread(inspect)
     except Exception:
         raise HTTPException(503, 'Execution host not ready') from None
-    return {'status': 'ok', 'active': _active, 'capacity': _settings().max_runners}
+    stats = _queue().stats()
+    return {'status': 'ok', 'active': stats.active, 'capacity': _settings().max_runners,
+            'waiting': stats.waiting}
 
 
 @app.post('/v1/interview/run')
@@ -214,6 +247,38 @@ async def run(payload: AdvisoryRequest):
     return await execute(operation)
 
 
+def _run_probe_sweep(source, challenge_slug: str, image) -> list[dict]:
+    """Run the inventory's independent probes with a bounded worker pool.
+
+    Every case is an independent, read-only probe over the same frozen source, so
+    running them concurrently shortens how long one job occupies an execution slot
+    (the dominant grading-queue latency). The pool size is bounded by
+    ``PROMPTCODE_PROBE_CONCURRENCY`` so a multi-case sweep cannot oversubscribe the
+    execution host. Results are returned in inventory order, which is what the
+    trusted evaluator cross-checks against.
+    """
+    inventory = list(cases_for(challenge_slug))
+    if not inventory:
+        return []
+    # Read the plain setting: this helper runs inside an already-admitted
+    # operation, so the broker-role check would be redundant here.
+    workers = min(max(1, int(get_settings().probe_concurrency)), len(inventory))
+    if workers == 1:
+        return [{'id': case.id, **_probe_observation(source, challenge_slug, case.probe, image)}
+                for case in inventory]
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix='probe') as pool:
+        futures = [pool.submit(_probe_observation, source, challenge_slug, case.probe, image)
+                   for case in inventory]
+        results = [future.result() for future in futures]
+    return [{'id': case.id, **observation} for case, observation in zip(inventory, results)]
+
+
+def _probe_observation(source, challenge_slug: str, probe: str, image) -> dict:
+    observed, error = _run_probe(source, challenge_slug, probe, image=image)
+    return {'observed': observed, 'error': error}
+
+
 @app.post('/v1/interview/probes')
 async def probes(payload: ProbeRequest):
     if get_challenge(payload.challenge_slug) is None or payload.evaluator_version != VERSION:
@@ -223,11 +288,8 @@ async def probes(payload: ProbeRequest):
         from app.services.runner_capacity import execution_slot
         with execution_slot(), _temporary_source(payload.source) as tmp:
             source = payload.source.materialize(Path(tmp))
-            observations = []
-            for case in cases_for(payload.challenge_slug):
-                observed, error = _run_probe(source, payload.challenge_slug, case.probe, image=image)
-                observations.append({'id': case.id, 'observed': observed, 'error': error})
-            return {'digest': payload.source.digest, 'observations': observations}
+            return {'digest': payload.source.digest,
+                    'observations': _run_probe_sweep(source, payload.challenge_slug, image)}
     return await execute(operation)
 
 # Legacy candidates call a short-lived local relay. The app worker performs the
@@ -324,7 +386,7 @@ async def start_legacy(payload: LegacyRequest):
     if not settings.debug and not re.fullmatch(r'[^\s]+@sha256:[a-f0-9]{64}', settings.sandbox_image):
         raise HTTPException(503, 'Sandbox image must be pinned by digest')
     reap_legacy_jobs()
-    if _active >= settings.max_runners or len(_legacy_jobs) >= settings.max_runners:
+    if _queue().stats().active >= settings.max_runners or len(_legacy_jobs) >= settings.max_runners:
         raise HTTPException(503, 'Execution capacity reached')
     require_storage()
     job_id = str(uuid.uuid4())

@@ -8,6 +8,19 @@ from app.services.evaluation import prompt_quality
 from app.services.evaluation.prompt_quality import _resolve_judge_models
 
 
+def _allow_budget(monkeypatch):
+    """Let the parsing tests run without budget infrastructure.
+
+    ``_judge_with_llm`` reserves budget before any credential or provider work (the
+    denial path is covered by
+    ``test_shared_ai_budget.py::test_judges_cannot_reach_provider_after_budget_denial``).
+    These tests are about parsing judge responses, so the reservation is a no-op
+    here rather than an implicit budget bypass.
+    """
+    from app.services.interview import ai_budget
+    monkeypatch.setattr(ai_budget, "reserve_worker_budget", lambda *args, **kwargs: None)
+
+
 def test_resolve_judge_models_prefers_primary_then_fallback():
     settings = SimpleNamespace(
         prompt_judge_model="gpt-4o-mini",
@@ -96,6 +109,7 @@ def test_score_prompt_quality_accepts_string_judge_response(monkeypatch):
 
     monkeypatch.setattr(config_module, "get_settings", lambda: settings)
     monkeypatch.setattr(prompt_quality.openai, "OpenAI", lambda **kwargs: _FakeClient())
+    _allow_budget(monkeypatch)
 
     result = prompt_quality.score_prompt_quality(
         [
@@ -151,6 +165,7 @@ def test_score_prompt_quality_accepts_event_stream_string_response(monkeypatch):
 
     monkeypatch.setattr(config_module, "get_settings", lambda: settings)
     monkeypatch.setattr(prompt_quality.openai, "OpenAI", lambda **kwargs: _FakeClient())
+    _allow_budget(monkeypatch)
 
     result = prompt_quality.score_prompt_quality(
         [

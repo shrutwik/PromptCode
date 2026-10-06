@@ -227,3 +227,34 @@ def test_staff_failed_job_retry_auth_bounds_integrity_and_history(tmp_path,monke
             assert event.payload=={'actor_id':str(users[1].id),'job_id':str(job.id),'previous_attempts':3}
         await engine.dispose()
     asyncio.run(run())
+
+
+def test_batch_projection_matches_single_session_projection(tmp_path,monkeypatch):
+    """The dashboard batch must answer the same question as the per-session call."""
+    from app.models.interview_grading import InterviewGradeAppeal
+    from app.services.interview.grading_review import (
+        candidate_review_status, published_reviews_for_sessions,
+    )
+    async def run():
+        engine,factory,users,session,job=await setup(tmp_path,monkeypatch)
+        async with factory() as db:
+            _,_,_,assessment=await review_context(db,session.id,users[1])
+            row=await append_review(db,session.id,users[1],review(assessment,users[1]));await db.commit()
+            # A session with no graded review at all must be absent, not fabricated.
+            absent=InterviewSession(user_id=users[0].id,owner_token='t2',challenge_slug=session.challenge_slug,workspace_path='/no')
+            db.add(absent);await db.commit()
+            published=await published_reviews_for_sessions(db,[session.id,absent.id])
+            assert published[str(session.id)]['review_id']==str(row.id)
+            assert str(absent.id) not in published
+            # Same value as the single-session projection.
+            assert published[str(session.id)]==await candidate_review_status(db,session.id)
+            # A pending appeal withholds publication for that session only.
+            db.add(InterviewGradeAppeal(session_id=session.id,review_id=row.id,candidate_id=users[0].id,reason='I dispute the evidence evaluation.'))
+            await db.commit()
+            published=await published_reviews_for_sessions(db,[session.id,absent.id])
+            assert str(session.id) not in published
+            # And the publication gate short-circuits the whole batch.
+            monkeypatch.setattr('app.services.interview.grading_calibration.publication_allowed',lambda:False)
+            assert await published_reviews_for_sessions(db,[session.id])=={}
+        await engine.dispose()
+    asyncio.run(run())

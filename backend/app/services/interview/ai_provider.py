@@ -313,11 +313,16 @@ def _ai_provider_mode() -> str:
 
 
 def _ai_api_key() -> str:
+    # An explicitly configured AI-scoped key is authoritative and is not restricted
+    # to one vendor's endpoint. Legacy generic provider keys (OPENAI_API_KEY) are
+    # still never forwarded to a different vendor below.
+    for name in ("PROMPTCODE_AI_API_KEY", "INTERVIEW_AI_API_KEY"):
+        key = _usable_api_key(os.getenv(name))
+        if key:
+            return key
     if urlparse(_ai_base_url()).hostname == "api.deepseek.com":
         return _usable_api_key(_first_set(os.getenv("DEEPSEEK_API_KEY"), os.getenv("PROMPTCODE_DEEPSEEK_API_KEY"), _settings_attr("deepseek_api_key")))
     for candidate in (
-        os.getenv("PROMPTCODE_AI_API_KEY"),
-        os.getenv("INTERVIEW_AI_API_KEY"),
         os.getenv("PROMPTCODE_OPENAI_API_KEY"),
         os.getenv("OPENAI_API_KEY"),
         _settings_attr("ai_api_key"),

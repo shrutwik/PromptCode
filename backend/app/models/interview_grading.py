@@ -1,18 +1,42 @@
 """Durable grading jobs and append-only human review decisions."""
 from __future__ import annotations
+
 import uuid
 from datetime import datetime
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.db.base import Base
 from app.db.types import GUID, JSONType
 
+
 class InterviewGradingJob(Base):
     __tablename__ = "interview_grading_jobs"
+    __table_args__ = (
+        # Claim, lease recovery and queue-age metrics all filter on these.
+        Index("ix_interview_grading_jobs_status_available", "status", "available_at"),
+        Index("ix_interview_grading_jobs_status_lease", "status", "lease_expires_at"),
+        Index("ix_interview_grading_jobs_created_at", "created_at"),
+    )
     id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
     session_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("interview_sessions.id"), unique=True, index=True)
     source_digest: Mapped[str] = mapped_column(String(64))
     snapshot_path: Mapped[str] = mapped_column(String(512))
+    # Provider-neutral object key of the immutable submission
+    # (``submitted/<session_id>/<source_digest>``). Rows written before the
+    # managed-storage migration have NULL here and resolve through
+    # ``snapshot_path`` (filesystem mode) or through the digest (managed mode).
+    snapshot_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     snapshot_manifest: Mapped[dict] = mapped_column(JSONType(), default=dict)
     challenge_slug: Mapped[str] = mapped_column(String(128))
     challenge_version: Mapped[str] = mapped_column(String(64))

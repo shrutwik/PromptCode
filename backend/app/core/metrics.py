@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import os
 import asyncio
-from datetime import datetime, timezone
+import os
 import shutil
+from datetime import datetime, timezone
 
 from prometheus_client import REGISTRY, CollectorRegistry, Counter, Histogram
 
@@ -42,11 +42,11 @@ def get_metrics_registry() -> CollectorRegistry:
 
 async def operational_metrics(engine) -> bytes:
     """Read durable job state per scrape; never export candidate data or errors."""
+    from prometheus_client import Gauge, generate_latest
     from sqlalchemy import func, select
+
     from app.models.interview_grading import InterviewGradingJob
     from app.services.interview.workspace import workspace_root
-    from app.services.interview.workspace_quota import retained_bytes
-    from prometheus_client import Gauge, generate_latest
     registry = CollectorRegistry()
     jobs = Gauge('promptcode_grading_jobs', 'Persisted grading jobs by status.', ['status'], registry=registry)
     oldest = Gauge('promptcode_grading_oldest_queued_seconds', 'Age of oldest pending grading job.', registry=registry)
@@ -67,6 +67,9 @@ async def operational_metrics(engine) -> bytes:
     oldest.set(max(0, (now - first).total_seconds()) if first else 0)
     stale.set(expired)
     root = workspace_root()
-    Gauge('promptcode_interview_storage_bytes', 'Bytes of retained interview artifacts.', registry=registry).set(await asyncio.to_thread(retained_bytes, root))
+    # Read the incremental ledger instead of walking the whole artifact tree on
+    # every scrape; the scheduled reconciliation keeps it honest.
+    from app.services.interview.workspace_quota import ledger_total
+    Gauge('promptcode_interview_storage_bytes', 'Bytes of retained interview artifacts.', registry=registry).set(await asyncio.to_thread(ledger_total, root))
     Gauge('promptcode_interview_storage_free_bytes', 'Free bytes on interview artifact filesystem.', registry=registry).set(shutil.disk_usage(root).free)
     return generate_latest(registry)

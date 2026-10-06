@@ -259,6 +259,20 @@ async def lifespan(app: FastAPI):
         except TimeoutError:
             logger.warning("Expired runner cleanup timed out at startup")
         reaper_task = asyncio.create_task(repeat_cleanup())
+
+    # The API owns artifact writes (grading workers mount the root read-only), so
+    # it is also the process that keeps retained-byte accounting reconciled.
+    async def repeat_ledger_reconcile():
+        from app.services.interview.workspace_quota import refresh_ledger
+        while True:
+            await asyncio.sleep(900)
+            try:
+                await asyncio.to_thread(refresh_ledger)
+            except Exception:
+                logger.warning("Storage ledger reconciliation failed", exc_info=True)
+
+    ledger_task = asyncio.create_task(repeat_ledger_reconcile())
+
     try:
         yield
     finally:
@@ -268,6 +282,11 @@ async def lifespan(app: FastAPI):
                 await reaper_task
             except asyncio.CancelledError:
                 pass
+        ledger_task.cancel()
+        try:
+            await ledger_task
+        except asyncio.CancelledError:
+            pass
         await engine.dispose()
 
 

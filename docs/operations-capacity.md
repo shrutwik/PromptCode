@@ -10,6 +10,27 @@ Host bootstrap installs `scripts/cleanup-interview.sh` daily at 04:00; it runs s
 
 Restore all three matching files using `scripts/restore-db.sh <dump.sql.gz>` while application and workers are stopped, into an empty target database and the original artifact path. Restoration refuses existing nonempty artifact destinations and links; move any current artifact tree aside first. Run as root when the archive contains another user ID; the script preserves numeric application ownership so restored progress remains editable. The source path stored in grading jobs is absolute, so changing that mount requires an explicit database path migration. Checksums and archive entry paths are validated before source/database restoration. Legacy SQL-only backups warn that source cannot be recovered. `scripts/rehearse-restore.sh` verifies a disposable PostgreSQL database, frozen source, and active coding progress round trip with a local simulated remote; it does not prove access to a real off-host destination.
 
-Authenticated `/metrics` exposes durable grading counts by status, oldest queued age, expired running leases, retained storage bytes, and free disk bytes. It exports no candidate source, errors, or IDs. Missing production tables or failed database queries return 503. `scripts/check-prod-health.sh` exits nonzero for grading failures, expired leases, or queue age above five minutes in addition to existing worker/backup checks. Wire its exit status or these Prometheus gauges into your alert destination before launch. Retry failed grading through the existing staff flow after investigating; a durable failed job keeps the alert active until resolved.
+Authenticated `/metrics` exposes durable grading counts by status, oldest queued age, expired running leases, retained storage bytes, and free disk bytes. It exports no candidate source, errors, or IDs. Missing production tables or failed database queries return 503. `scripts/check-prod-health.sh` exits nonzero for grading failures, expired leases, queue age above five minutes, queue depth above the cap, a stale worker heartbeat (counted **per worker**, so one dead replica among healthy ones is visible), free disk below the reserve, backup age, and last-deploy status.
 
-Local verification includes a 12-account simultaneous PostgreSQL admission test proving exactly three accepts at a cap of three, a PostgreSQL submit/cleanup race check preserving submitted status, cross-session storage contention tests, cleanup retention tests, durable metrics tests, backup upload-failure/checksum tests, and an actual isolated PostgreSQL/source restore rehearsal. Deployment scheduling, off-host upload, and alert delivery still require a configured host.
+### Alert delivery
+
+There is no alert manager in this stack. `scripts/notify-alert.sh` is the single
+transport and is a no-op until configured, so a health check never fails merely
+because alerting is absent. Configure **one** destination before launch
+(`PROMPTCODE_ALERT_WEBHOOK_URL` or `PROMPTCODE_ALERT_COMMAND`); see `.env.example`.
+
+| Caller | Alerts when |
+| --- | --- |
+| `scripts/check-prod-health.sh` | any health gate fails (reason plus the measured detail) |
+| `scripts/backup-db.sh` | the backup aborts (including a partial upload) |
+| deploy workflow | the pre-migration dump fails, so the deploy is refused |
+
+Retry failed grading through the existing staff flow after investigating; a durable failed job keeps the alert active until resolved. Alert delivery itself is **unverified**: no destination has been configured in this repository.
+
+`scripts/backup-db.sh --pre-migration` writes a local database dump plus checksum
+before the deploy workflow starts the backend (migrations run on container start),
+and deliberately does not require rclone. It is a restore point, not a replacement
+for the daily off-host backup: the archive of immutable submissions and active
+candidate work still comes from the scheduled full backup.
+
+Local verification includes a 12-account simultaneous PostgreSQL admission test proving exactly three accepts at a cap of three, a PostgreSQL submit/cleanup race check preserving submitted status, cross-session storage contention tests, cleanup retention tests, durable metrics tests, backup upload-failure/checksum tests, an actual isolated PostgreSQL/source restore rehearsal, and the alert-transport contract tests. Deployment scheduling, off-host upload, and real alert delivery still require a configured host.

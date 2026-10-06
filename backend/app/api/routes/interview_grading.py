@@ -126,7 +126,9 @@ async def feedback(session_id: uuid.UUID, user: User = Depends(get_current_user)
     if not get_settings().grading_feedback_enabled:
         raise HTTPException(409, "AI review feedback is disabled")
     evidence = await reviewer_evidence(db, session_id, user)
-    session, _, evaluation, assessment = await review_context(db, session_id, user)
+    # This route writes evaluation.metrics, so hold the row lock across the
+    # packet-digest re-check instead of racing a concurrent writer.
+    session, _, evaluation, assessment = await review_context(db, session_id, user, lock=True)
     # The helper treats source as untrusted supplementary text, never as a rating.
     revision = assessment["packet_digest"]
     transient_metrics = dict(evaluation.metrics or {})
@@ -169,11 +171,15 @@ async def retry_grading(session_id: uuid.UUID, user: User = Depends(get_current_
     try:
         from app.services.interview.calibration import challenge_version_for
         from app.services.interview.registry import get_challenge
+        from app.services.interview.workspace_store import verified_job_source
         if (job.challenge_version != session.challenge_version or job.challenge_slug != session.challenge_slug
                 or get_challenge(job.challenge_slug) is None
                 or job.challenge_version != challenge_version_for(job.challenge_slug)):
             raise ValueError("Challenge identity mismatch")
-        verify_snapshot(Path(job.snapshot_path), job.source_digest)
+        # Hydrate through the shared resolver so a retry works in a fresh container,
+        # where the submit-time host path does not exist.
+        with verified_job_source(job, require_ownership=False) as source_root:
+            verify_snapshot(source_root, job.source_digest)
     except (ValueError, OSError):
         raise HTTPException(409, "Frozen submission identity or integrity is invalid") from None
     db.add(InterviewSessionEvent(session_id=session_id, event_type="grading_retry_requested",

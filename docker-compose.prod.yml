@@ -86,6 +86,12 @@ services:
     <<: *backend-image
     build: !reset null
     volumes:
+      # The API owns all writes to candidate workspaces and immutable submissions;
+      # workers mount the same host path read-only. Without this mount the
+      # configured PROMPTCODE_INTERVIEW_WORKSPACE_ROOT resolves inside the
+      # container's ephemeral filesystem, so submitted source is invisible to
+      # grading workers and lost on restart.
+      - ${PROMPTCODE_INTERVIEW_HOST_WORKDIR:-/var/promptcode/interview_workspaces}:${PROMPTCODE_INTERVIEW_HOST_WORKDIR:-/var/promptcode/interview_workspaces}
       - ${BROKER_CA_DIR:-./docker/broker-ca}:/etc/promptcode/broker-ca:ro
     ports: !reset []  # do not expose port 8000 externally; Caddy routes internally via backend:8000
     depends_on: !override

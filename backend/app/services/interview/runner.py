@@ -530,9 +530,124 @@ class IsolatedRunner(ChallengeRunner):
         from app.services.runner_capacity import execution_slot, RunnerBusy
         try:
             with execution_slot():
+                from app.services.execution.backend import get_execution_backend
+
+                backend = get_execution_backend()
+                if backend.name == "modal":
+                    return self._run_modal_with_slot(
+                        workspace, command, timeout_seconds, command_id, runner_config, backend,
+                    )
                 return self._run_docker_with_slot(workspace, command, timeout_seconds, command_id, runner_config)
         except RunnerBusy:
             return self._busy_result(command, command_id)
+
+    def _run_modal_with_slot(
+        self,
+        workspace: Path,
+        command: str,
+        timeout_seconds: int,
+        command_id: str,
+        runner_config: dict[str, Any],
+        backend: Any,
+    ) -> dict[str, Any]:
+        """Advisory candidate run inside a Modal Sandbox.
+
+        Applies the same allowlisted argv, workspace validation and result shape
+        as the Docker path. The Docker reporter wrapper is intentionally not used:
+        the Modal image is operator-supplied and the sandbox outcome carries no
+        reporter inventory, so ``ok`` reflects the process exit code only. These
+        results remain advisory (``authoritative`` is always False).
+        """
+        argv = resolve_command(command)
+        # Mirror the Docker runner's run.sh layout (candidate tree at /source, a
+        # writable copy at /workspace, reviewed per-challenge deps linked in).
+        # run.sh itself cannot be reused: it sleeps to keep its tmpfs alive for a
+        # post-exit report read, which would make every Modal run time out.
+        from app.services.execution.modal_backend import bootstrap_argv
+
+        sandbox_argv = bootstrap_argv(
+            argv, challenge_slug=str(runner_config.get("challengeSlug") or "")
+        )
+        image = str(runner_config.get("image") or DEFAULT_IMAGES["node"])
+        memory_mb = int(runner_config.get("memoryMb") or DEFAULT_MEMORY_MB)
+        cpu = float(runner_config.get("cpuLimit") or DEFAULT_CPU_LIMIT)
+        output_limit = int(runner_config.get("outputLimit") or DEFAULT_OUTPUT_LIMIT)
+        started = time.monotonic()
+
+        if not workspace.is_dir():
+            return _result(
+                ok=False, exit_code=-1, stdout="", stderr="Session workspace missing",
+                command=shlex.join(argv), duration_ms=int((time.monotonic() - started) * 1000),
+                mode="full", isolation="modal", command_id=command_id, runner="modal",
+                error_code="workspace_missing",
+            )
+
+        from app.services.interview.workspace import workspace_has_escape_link
+
+        if workspace_has_escape_link(workspace):
+            return _result(
+                ok=False, exit_code=-1, stdout="", stderr="Workspace contains a link and was not executed.",
+                command=shlex.join(argv), duration_ms=int((time.monotonic() - started) * 1000),
+                mode="full", isolation="modal", command_id=command_id, runner="modal",
+                error_code="workspace_link",
+            )
+
+        from app.services.interview.workspace_quota import usage
+
+        try:
+            usage(workspace)
+        except ValueError:
+            return _result(
+                ok=False, exit_code=-1, stdout="", stderr="Session workspace quota exceeded.",
+                command=shlex.join(argv), duration_ms=int((time.monotonic() - started) * 1000),
+                mode="full", isolation="modal", command_id=command_id, runner="modal",
+                error_code="workspace_quota",
+            )
+
+        try:
+            outcome = backend.run_challenge(
+                source_dir=workspace.resolve(), argv=sandbox_argv, image=image,
+                timeout_seconds=timeout_seconds, memory_mb=memory_mb, cpu_limit=cpu,
+                output_limit_bytes=output_limit,
+            )
+        except Exception:  # noqa: BLE001 — never fall back to host execution
+            logger.exception("Unexpected Modal interview runner error")
+            return _result(
+                ok=False, exit_code=-1, stdout="",
+                stderr="Failed to start isolated Modal sandbox. Production runner cannot fall back to host.",
+                command=shlex.join(argv), duration_ms=int((time.monotonic() - started) * 1000),
+                mode="full", isolation="modal", command_id=command_id, runner="modal",
+                error_code="modal_unavailable",
+            )
+
+        timed_out = bool(outcome.timed_out)
+        cleaned = _scrub_host_paths(outcome.output, workspace)
+        if timed_out:
+            exit_code = -1
+            stdout = ""
+            stderr = _clip(
+                f"Timed out after {timeout_seconds}s" + (f"\n{cleaned}" if cleaned else ""),
+                output_limit,
+            )
+        else:
+            exit_code = int(outcome.exit_code)
+            stdout = _clip(cleaned, output_limit)
+            stderr = ""
+        counts = _parse_test_counts(stdout + "\n" + stderr)
+        return _result(
+            ok=(not timed_out) and exit_code == 0,
+            exit_code=exit_code,
+            stdout=stdout,
+            stderr=stderr,
+            command=shlex.join(argv),
+            duration_ms=int((time.monotonic() - started) * 1000),
+            mode="full",
+            counts=counts,
+            isolation="modal",
+            timed_out=timed_out,
+            command_id=command_id,
+            runner="modal",
+        )
 
     def _run_docker_with_slot(
         self,
@@ -762,8 +877,22 @@ class IsolatedRunner(ChallengeRunner):
 
 
 def get_challenge_runner() -> ChallengeRunner:
+    """Select the advisory runner for this deployment.
+
+    ``PROMPTCODE_RUNNER=docker`` keeps the self-managed container path. On the
+    managed stack (``PROMPTCODE_EXECUTION_BACKEND=modal``) the legacy runner stays
+    at ``local`` by design and candidate code is forbidden from running on the API
+    host, so the isolated runner is selected too: its dispatcher routes the
+    allowlisted argv to the Modal execution backend. Without this, every advisory
+    ``/tests`` run on the managed stack answered ``unsafe_runner`` and no sandbox
+    was ever created.
+    """
     mode = runner_mode()
     if mode == "docker":
+        return IsolatedRunner()
+    from app.core.config import get_settings
+
+    if str(getattr(get_settings(), "execution_backend", "")).strip().lower() == "modal":
         return IsolatedRunner()
     return LocalDevelopmentRunner()
 

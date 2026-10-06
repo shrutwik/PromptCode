@@ -132,9 +132,11 @@ from app.services.interview.workspace import (
     read_file,
     starter_snapshot_path,
     unified_diff_for_file,
+    storage_report,
     workspace_root,
     write_file,
 )
+from app.services.interview.workspace_store import ensure_workspace
 
 router = APIRouter()
 
@@ -173,6 +175,17 @@ def _session_to_response(session: InterviewSession) -> SessionResponse:
 def _public_error(detail: str, *, status_code: int = 400) -> HTTPException:
     """User-facing errors without paths/stack traces/Docker internals."""
     return HTTPException(status_code=status_code, detail=detail)
+
+
+def advisory_retry_after_seconds() -> int:
+    """Retry hint for a saturated execution host.
+
+    A one- or two-second hint makes a caller re-enter the queue before its turn
+    could possibly come up, which turns overload into a retry storm. Use half the
+    admission wait window, floored at a few seconds.
+    """
+    from app.core.config import get_settings
+    return max(3, int(get_settings().max_runners_acquire_timeout_seconds) // 2)
 
 
 async def _load_owned_session(
@@ -689,7 +702,8 @@ async def session_files(
     x_session_token: str | None = Header(None, alias="X-Session-Token"),
 ) -> list[FileEntry]:
     session = await _load_owned_session(db=db, session_id=session_id, user=user)
-    files = await asyncio.to_thread(list_files, Path(session.workspace_path))
+    workspace = await ensure_workspace(db, session)
+    files = await asyncio.to_thread(list_files, workspace)
     return [FileEntry(**f) for f in files]
 
 
@@ -705,8 +719,9 @@ async def get_session_file(
     if is_blocked_path(file_path):
         raise HTTPException(status_code=404, detail="File not found")
     session = await _load_owned_session(db=db, session_id=session_id, user=user)
+    workspace = await ensure_workspace(db, session)
     try:
-        content = await asyncio.to_thread(read_file, Path(session.workspace_path), file_path)
+        content = await asyncio.to_thread(read_file, workspace, file_path)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found") from None
     except PermissionError:
@@ -734,14 +749,15 @@ async def save_session_file(
         raise HTTPException(status_code=404, detail="File not found")
     session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
     require_mutable(session)
+    workspace = await ensure_workspace(db, session)
     try:
         # Diff against previous content when present for event metadata
         prev = ""
         try:
-            prev = await asyncio.to_thread(read_file, Path(session.workspace_path), file_path)
+            prev = await asyncio.to_thread(read_file, workspace, file_path)
         except FileNotFoundError:
             prev = ""
-        await asyncio.to_thread(write_file, Path(session.workspace_path), file_path, body.content)
+        await asyncio.to_thread(write_file, workspace, file_path, body.content)
     except PermissionError:
         raise HTTPException(status_code=404, detail="File not found") from None
     except ValueError as exc:
@@ -879,6 +895,7 @@ async def run_session_tests(
     await db.commit()
     runner = get_challenge_runner()
     timeout = int(runner_cfg.get("timeoutSeconds") or 60)
+    workspace = await ensure_workspace(db, session)
     run_kwargs = {
         "timeout_seconds": timeout,
         "command_id": command_id,
@@ -887,15 +904,15 @@ async def run_session_tests(
     try:
         if command_id == "run_targeted_tests":
             result = await runner.run_targeted_tests(
-                Path(session.workspace_path), command, **run_kwargs
+                workspace, command, **run_kwargs
             )
         elif command_id == "run_benchmark":
             result = await runner.run_benchmark(
-                Path(session.workspace_path), command, **run_kwargs
+                workspace, command, **run_kwargs
             )
         else:
             result = await runner.run_tests(
-                Path(session.workspace_path), command, **run_kwargs
+                workspace, command, **run_kwargs
             )
     except Exception:
         tag_infra_failure(session, "runner", blocked_ms=0)
@@ -905,7 +922,14 @@ async def run_session_tests(
             detail="Test runner temporarily unavailable. Try again shortly.",
         )
     if result.get("error_code") == "runner_busy":
-        raise HTTPException(503, "Execution capacity reached. Retry shortly.", headers={"Retry-After": "2"})
+        # Match the execution host's queueing window. A two-second hint made
+        # callers re-queue almost immediately, which amplified overload instead of
+        # easing it.
+        raise HTTPException(
+            503,
+            "Execution capacity reached. Retry shortly.",
+            headers={"Retry-After": str(advisory_retry_after_seconds())},
+        )
     session.test_run_count = int(getattr(session, "test_run_count", 0) or 0) + 1
     session.runner_duration_ms = int(getattr(session, "runner_duration_ms", 0) or 0) + int(
         result.get("duration_ms") or 0
@@ -1010,8 +1034,10 @@ async def ai_chat(
         raise HTTPException(status_code=429, detail=exc.message) from exc
 
     # The ticket, its tests, and its source. The client does not choose context.
-    workspace_path = Path(session.workspace_path)
-    attachments = _question_attachments(workspace_path)
+    # Reading them walks the workspace and reads files, so run it off the event
+    # loop: doing it inline stalls every other concurrent request.
+    workspace_path = await ensure_workspace(db, session)
+    attachments = await asyncio.to_thread(_question_attachments, workspace_path)
     rejected_attachments: list[str] = []
     stored_tests = await _latest_test_output(db, session.id)
     test_output = stored_tests or (body.test_output or "").strip()[:4000]
@@ -1247,7 +1273,7 @@ async def ai_apply_edit(
         )
         await db.commit()
         try:
-            content = await asyncio.to_thread(read_file, Path(session.workspace_path), body.path)
+            content = await asyncio.to_thread(read_file, await ensure_workspace(db, session), body.path)
         except FileNotFoundError:
             content = ""
         return FileContentResponse(path=body.path, content=content)
@@ -1274,7 +1300,7 @@ async def ai_apply_edit(
     await _add_event(db, session.id, event_map[disposition], payload)
     source = "ai" if disposition == "accepted" else "mixed"
     try:
-        await asyncio.to_thread(write_file, Path(session.workspace_path), body.path, body.content)
+        await asyncio.to_thread(write_file, await ensure_workspace(db, session), body.path, body.content)
     except PermissionError:
         raise HTTPException(status_code=404, detail="File not found") from None
     except ValueError as exc:
@@ -1338,10 +1364,13 @@ async def submit_session(
     from app.services.interview.grading_admission import require_grading_capacity
     await require_grading_capacity(db, session.user_id)
     # Freeze before any execution; the durable evaluator grades these bytes only.
+    # The workspace is rehydrated first so a submit served by a fresh container
+    # freezes the saved revisions rather than an empty tree.
     from app.services.interview.snapshot import freeze_submission
     from app.workers.interview_grading import enqueue_grading_job
     try:
-        snapshot = await asyncio.to_thread(freeze_submission, Path(session.workspace_path), str(session.id))
+        workspace = await ensure_workspace(db, session)
+        snapshot = await asyncio.to_thread(freeze_submission, workspace, str(session.id))
     except (OSError, ValueError):
         raise HTTPException(409, "Submitted source could not be frozen safely") from None
     if not session.challenge_version:
@@ -1458,10 +1487,11 @@ async def session_diff_summary(
     x_session_token: str | None = Header(None, alias="X-Session-Token"),
 ) -> DiffSummaryResponse:
     session = await _load_owned_session(db=db, session_id=session_id, user=user)
+    workspace = await ensure_workspace(db, session)
     starter = starter_snapshot_path(str(session.id))
     if not starter.exists():
         raise HTTPException(status_code=404, detail="Starter snapshot missing")
-    stats = await asyncio.to_thread(compute_diff_stats, starter, Path(session.workspace_path))
+    stats = await asyncio.to_thread(compute_diff_stats, starter, workspace)
     if record:
         await _add_event(db, session.id, "final_diff_viewed", {"file_count": stats["file_count"]})
         await db.commit()
@@ -1480,10 +1510,11 @@ async def session_diff_file(
     if is_blocked_path(file_path):
         raise HTTPException(status_code=404, detail="File not found")
     session = await _load_owned_session(db=db, session_id=session_id, user=user)
+    workspace = await ensure_workspace(db, session)
     starter = starter_snapshot_path(str(session.id))
     try:
         unified = await asyncio.to_thread(unified_diff_for_file,
-            starter, Path(session.workspace_path), file_path
+            starter, workspace, file_path
         )
     except PermissionError:
         raise HTTPException(status_code=404, detail="File not found") from None
@@ -1624,12 +1655,14 @@ async def dashboard(
         .limit(50)
     )
     sessions = (await db.execute(q)).scalars().all()
+    # One batch query for every row instead of a projection call per session.
+    from app.services.interview.grading_review import published_reviews_for_sessions
+    published = await published_reviews_for_sessions(db, [s.id for s in sessions])
     items: list[DashboardSessionItem] = []
     for s in sessions:
         maybe_expire_session(s)
         meta = get_challenge(s.challenge_slug) or {}
-        from app.services.interview.grading_review import candidate_review_status
-        published_review = await candidate_review_status(db, s.id)
+        published_review = published.get(str(s.id))
         items.append(
             DashboardSessionItem(
                 id=s.id,
@@ -1994,22 +2027,11 @@ async def internal_incidents(
 async def internal_disk(request: Request) -> dict:
     require_internal(request)
     root = workspace_root()
-    total = 0
-    count = 0
-    if root.exists():
-        for p in root.rglob("*"):
-            if p.is_file():
-                try:
-                    total += p.stat().st_size
-                    count += 1
-                except OSError:
-                    pass
-    return {
-        "workspace_root": str(root),
-        "file_count": count,
-        "bytes": total,
-        "note": "Docker disk: docker system df (operator)",
-    }
+    # The ledger is the request-path accounting; this endpoint exists to inspect
+    # the filesystem itself, so it walks — but never on the event loop.
+    report = await asyncio.to_thread(storage_report, root)
+    report["note"] = "Docker disk: docker system df (operator)"
+    return report
 
 
 @router.get("/internal/runner-health")

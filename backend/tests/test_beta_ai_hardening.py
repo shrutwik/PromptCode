@@ -111,6 +111,11 @@ def test_session_budget_includes_assembled_test_output(monkeypatch, tmp_path):
     session = SimpleNamespace(id=sid, workspace_path=str(tmp_path), ai_request_count=0)
     monkeypatch.setattr(route, '_load_owned_session', AsyncMock(return_value=session))
     monkeypatch.setattr(route, 'require_mutable', lambda session: None)
+    # The subject here is budget accounting, not workspace hydration. On the managed
+    # stack the route rehydrates a missing workspace from starter + saved revisions,
+    # which needs a real session/database; stub the resolver so this unit test stays
+    # focused (the hydration path has its own integration coverage).
+    monkeypatch.setattr(route, 'ensure_workspace', AsyncMock(return_value=tmp_path))
     monkeypatch.setattr(route, 'get_settings', lambda: SimpleNamespace(interview_max_ai_requests_per_session=40))
     monkeypatch.setattr(route, 'check_session_ai_rate_limit', lambda sid: None)
     attachments = [{'path': 'src/file.py', 'content': 'print("é")'}]

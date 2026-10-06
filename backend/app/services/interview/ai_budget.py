@@ -20,6 +20,21 @@ def positive(name, default):
     return value
 
 
+def _trial_enabled():
+    """Whether an additional lifetime/trial ceiling applies.
+
+    The old hardcoded $5 trial cap is gone. Spending is still bounded by the
+    global, per-user and per-session caps below; a deployment may add an extra
+    lifetime ceiling with PROMPTCODE_AI_TRIAL_ENABLED=true.
+    """
+    from app.core.config import get_settings
+    raw = os.getenv('PROMPTCODE_AI_TRIAL_ENABLED')
+    if raw is not None:
+        return raw.strip().lower() in {'1','true','yes','on'}
+    # getattr: settings may be a partial object in tests and older deployments.
+    return bool(getattr(get_settings(), 'ai_trial_enabled', False))
+
+
 async def reserve_ai_budget(db, user_id, session_id, input_bytes, output_tokens=2048, attempts=2):
     if not enabled(): raise HTTPException(503,'AI assistant is temporarily disabled')
     if not (0 <= input_bytes <= 256000 and 1 <= output_tokens <= 4096 and 1 <= attempts <= 8):
@@ -28,10 +43,11 @@ async def reserve_ai_budget(db, user_id, session_id, input_bytes, output_tokens=
     tokens=(input_bytes+512+output_tokens)*attempts
     cost=tokens*positive('PROMPTCODE_AI_MAX_MICROS_PER_TOKEN',100)
     day=int(time.time())//86400
-    scopes=[('trial:all', 'TRIAL', 1000000, 1000000000, 5000000),
-            ('global:'+str(day),'GLOBAL',1000,10000000,20000000),
+    scopes=[('global:'+str(day),'GLOBAL',1000,10000000,20000000),
             (f'user:{user_id}:{day}','USER',100,1000000,5000000),
             (f'session:{session_id}','SESSION',20,200000,2000000)]
+    if _trial_enabled():
+        scopes.insert(0, ('trial:all', 'TRIAL', 1000000, 1000000000, 5000000))
     dialect=db.get_bind().dialect.name
     if dialect=='postgresql': from sqlalchemy.dialects.postgresql import insert
     elif dialect=='sqlite': from sqlalchemy.dialects.sqlite import insert

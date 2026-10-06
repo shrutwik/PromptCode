@@ -1,0 +1,18 @@
+# Deploy ONLY the static frontend and the Vercel configuration.
+#
+# The Vercel project's Root Directory is the repository root (that is where this
+# configuration and the root `vercel.json` live), so without this file the whole
+# repository is published as static files. That would expose, among others:
+#   - `challenges/<slug>/SOLUTION.md` — the answer keys for every challenge. They are
+#     deliberately blocked from the API (`app/services/interview/registry.py` lists
+#     SOLUTION.md in BLOCKED_NAME_FRAGMENTS), and a static deployment would bypass
+#     that control entirely because an existing file wins over a rewrite.
+#   - `backend/app/**` — the server source, including the auth and grading logic.
+#   - `docs/**`, `scripts/**`, `docker/**`, `docker-compose*.yml`, `.env.example`.
+#
+# `/*` is anchored to the repository root and does not match nested paths, so only
+# top-level entries are ignored; negating the two entries below re-includes them and
+# everything beneath them.
+/*
+!/frontend
+!/vercel.json

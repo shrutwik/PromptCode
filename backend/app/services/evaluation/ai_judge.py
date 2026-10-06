@@ -21,13 +21,6 @@ from typing import Any
 import httpx
 
 from app.core.config import get_settings
-from app.services.evaluation.code_analysis import analyze_code, score_code_quality
-from app.services.evaluation.engine import (
-    SCORE_WEIGHTS,
-    EvaluationResult,
-    _apply_overall_caps,
-)
-from app.services.evaluation.prompt_quality import _heuristic_score
 
 logger = logging.getLogger(__name__)
 _AI_JUDGE_FAILURES = (
@@ -262,6 +255,12 @@ def _call_judge(system_prompt: str, user_prompt: str) -> JudgeResponse:
     import httpx
 
     settings = get_settings()
+    # Budget and kill switch are checked BEFORE any credential or provider work so
+    # a denied reservation can never fall through to a paid call, and so a missing
+    # key cannot mask a spending-control failure.
+    from app.services.interview.ai_budget import reserve_worker_budget
+    reserve_worker_budget([{"role": "system", "content": system_prompt},
+                           {"role": "user", "content": user_prompt}], 2048)
     if not settings.openai_api_key:
         raise RuntimeError("OPENAI_API_KEY not configured — set a real key in .env")
 
@@ -269,9 +268,6 @@ def _call_judge(system_prompt: str, user_prompt: str) -> JudgeResponse:
     url = f"{base}/chat/completions"
 
     start = time.perf_counter()
-    from app.services.interview.ai_budget import reserve_worker_budget
-    reserve_worker_budget([{"role": "system", "content": system_prompt},
-                           {"role": "user", "content": user_prompt}], 2048)
     resp = httpx.post(
         url,
         json={
@@ -306,229 +302,3 @@ def _call_judge(system_prompt: str, user_prompt: str) -> JudgeResponse:
     tokens = usage.get("total_tokens", 0)
 
     return JudgeResponse(json.loads(text), tokens, latency_ms)
-
-
-def ai_judge_evaluate(
-    code: str,
-    entrypoint: str,
-    challenge_config: dict[str, Any],
-) -> EvaluationResult:
-    """Evaluate a submission using GPT-4o as the judge instead of sandbox execution."""
-
-    # --- Static code analysis (always works, no LLM needed) ---
-    code_analysis_result = analyze_code(code, entrypoint)
-    code_quality_result = score_code_quality(code_analysis_result)
-
-    # --- Extract prompts from code for prompt quality scoring ---
-    extracted_prompts = _extract_prompts_from_code(code)
-
-    # --- Call GPT-4o to judge the submission ---
-    judge_scores: dict[str, Any] = {}
-    pq_result: dict[str, Any] = {}
-
-    total_tokens = 0
-    total_latency = 0.0
-    total_api_calls = 0
-
-    try:
-        judge_prompt = _build_judge_prompt(code, challenge_config, entrypoint)
-        judge_resp = _call_judge(
-            "You are a code evaluation AI. Return only valid JSON.",
-            judge_prompt,
-        )
-        judge_scores = judge_resp.parsed
-        total_tokens += judge_resp.tokens
-        total_latency += judge_resp.latency_ms
-        total_api_calls += 1
-        logger.info("AI judge returned scores: %s", {
-            k: v for k, v in judge_scores.items()
-            if k not in ("feedback", "accuracy_reasoning", "rule_adherence_details")
-        })
-    except _AI_JUDGE_FAILURES:
-        logger.exception("AI judge call failed, using heuristic fallback")
-        judge_scores = {
-            "accuracy": 0.5,
-            "prompt_quality": 0.5,
-            "rule_adherence": 0.5,
-            "efficiency": 0.5,
-            "reliability": 0.5,
-            "orchestration": 0.5,
-            "code_quality": 0.5,
-            "edge_case_handling": 0.5,
-            "feedback": "AI judge unavailable — scored via heuristic fallback.",
-            "estimated_llm_calls": 3,
-            "estimated_cost_usd": 0.05,
-        }
-
-    # --- Prompt quality scoring (separate, more detailed) ---
-    try:
-        if extracted_prompts:
-            prompt_listing = ""
-            for i, p in enumerate(extracted_prompts, 1):
-                prompt_listing += f"\n--- Prompt #{i} ---\n{p['user']}\n"
-
-            pq_prompt = PROMPT_QUALITY_JUDGE_PROMPT.format(
-                description=challenge_config.get("description", ""),
-                prompts=prompt_listing,
-            )
-            pq_resp = _call_judge(
-                "You are a prompt engineering evaluator. Return only valid JSON.",
-                pq_prompt,
-            )
-            pq_result = pq_resp.parsed
-            total_tokens += pq_resp.tokens
-            total_latency += pq_resp.latency_ms
-            total_api_calls += 1
-            for key in ("clarity", "specificity", "structure", "efficiency",
-                        "robustness", "grounding", "overall"):
-                pq_result[key] = max(0.0, min(1.0, float(pq_result.get(key, 0.0))))
-            pq_result.setdefault("method", "llm_judge")
-        else:
-            pq_result = _heuristic_score([{"user": code[:500], "system": ""}])
-            pq_result["feedback"] = "No distinct prompts found in code. Scored based on code content."
-    except _AI_JUDGE_FAILURES:
-        logger.exception("Prompt quality judge failed, falling back to heuristic")
-        pq_result = _heuristic_score(
-            extracted_prompts if extracted_prompts else [{"user": code[:500], "system": ""}]
-        )
-
-    # --- Clamp and combine scores ---
-    def _clamp(v: Any) -> float:
-        try:
-            return max(0.0, min(1.0, float(v)))
-        except (ValueError, TypeError):
-            return 0.5
-
-    acc = _clamp(judge_scores.get("accuracy", 0.5))
-    pq = _clamp(pq_result.get("overall", judge_scores.get("prompt_quality", 0.5)))
-    ra = _clamp(judge_scores.get("rule_adherence", 0.5))
-    eff = _clamp(judge_scores.get("efficiency", 0.5))
-    rel = _clamp(judge_scores.get("reliability", 0.5))
-    orch = _clamp(judge_scores.get("orchestration", 0.5))
-    cq_static = _clamp(code_quality_result.get("score", 0.5))
-    cq_judge = _clamp(judge_scores.get("code_quality", 0.5))
-    cq = round((cq_static + cq_judge) / 2, 4)
-    ech = _clamp(judge_scores.get("edge_case_handling", 0.5))
-    calibration = 0.5
-    calibration_details = {
-        "score": calibration,
-        "ece": None,
-        "brier": None,
-        "samples": 0,
-        "method": "ai_judge_default",
-    }
-
-    # --- Hardcode detection ---
-    has_llm_usage = any(
-        kw in code.lower()
-        for kw in ["llm.call", "openai", "client.chat", "completion", "llm("]
-    )
-    hardcoded = False
-    if not has_llm_usage and acc > 0.3:
-        logger.warning("No LLM usage detected — possible hardcoded answer")
-        hardcoded = True
-        acc = pq = ra = eff = rel = orch = cq = ech = calibration = 0.0
-        calibration_details = {
-            "score": calibration,
-            "ece": None,
-            "brier": None,
-            "samples": 0,
-            "method": "hardcoded_zeroed",
-        }
-
-    raw_overall = round(
-        acc * SCORE_WEIGHTS["accuracy"]
-        + ech * SCORE_WEIGHTS["robustness"]
-        + rel * SCORE_WEIGHTS["reliability"]
-        + eff * SCORE_WEIGHTS["efficiency"]
-        + pq * SCORE_WEIGHTS["prompt_quality"]
-        + orch * SCORE_WEIGHTS["orchestration"]
-        + calibration * SCORE_WEIGHTS["calibration"],
-        4,
-    )
-    overall, cap_events = _apply_overall_caps(
-        raw_overall=raw_overall,
-        accuracy=acc,
-        rule_adherence=ra,
-        anti_gaming_triggered=False,
-    )
-
-    estimated_user_calls = int(judge_scores.get("estimated_llm_calls", 1))
-    estimated_user_cost = float(judge_scores.get("estimated_cost_usd", 0.02))
-
-    run_records = [
-        {
-            "run_type": "code_evaluation",
-            "run_index": 0,
-            "success": True,
-            "status": "pass" if acc >= 0.8 and ra >= 0.5 else "fail",
-            "accuracy": round(acc, 4),
-            "schema_valid": ra >= 0.5,
-            "tokens_total": total_tokens,
-            "cost_usd": round(estimated_user_cost, 6),
-            "latency_ms": round(total_latency, 1),
-            "llm_calls": estimated_user_calls,
-            "retries": 0,
-            "error": None,
-            "feedback": judge_scores.get("feedback", ""),
-            "accuracy_reasoning": judge_scores.get("accuracy_reasoning", ""),
-            "rule_adherence_details": judge_scores.get("rule_adherence_details", ""),
-        },
-        {
-            "run_type": "prompt_quality",
-            "run_index": 1,
-            "success": True,
-            "status": "pass" if pq >= 0.7 else "fail",
-            "accuracy": round(pq, 4),  # kept for run-table compatibility
-            "schema_valid": True,
-            "tokens_total": 0,
-            "cost_usd": 0.0,
-            "latency_ms": 0.0,
-            "llm_calls": 0,
-            "retries": 0,
-            "error": None,
-            "feedback": pq_result.get("feedback", ""),
-            "accuracy_reasoning": "",
-        },
-    ]
-
-    return EvaluationResult(
-        accuracy=round(acc, 4),
-        prompt_quality=round(pq, 4),
-        rule_adherence=round(ra, 4),
-        efficiency=round(eff, 4),
-        reliability=round(rel, 4),
-        orchestration=round(orch, 4),
-        code_quality=round(cq, 4),
-        edge_case_handling=round(ech, 4),
-        calibration=calibration,
-        overall=overall,
-        cost_usd=estimated_user_cost,
-        latency_ms=round(total_latency, 1),
-        llm_calls=total_api_calls,
-        prompt_tokens=0,
-        completion_tokens=0,
-        retries=0,
-        runs=run_records,
-        prompt_quality_details=pq_result,
-        code_analysis_details=code_quality_result,
-        calibration_details=calibration_details,
-        diagnostics=[
-            {
-                "metric": "summary",
-                "severity": "low",
-                "message": str(judge_scores.get("feedback", "AI-judge evaluation completed.")),
-            }
-        ],
-        evaluation_config={
-            "mode": "ai_judge",
-            "judge_model": _get_judge_model(),
-            "score_weights": SCORE_WEIGHTS,
-            "caps_applied": cap_events,
-            "raw_overall": raw_overall,
-        },
-        confidence_intervals={},
-        audit_trail=[],
-        evaluation_manifest={},
-        hardcoded=hardcoded,
-    )

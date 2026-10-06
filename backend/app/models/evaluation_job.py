@@ -6,6 +6,7 @@ from datetime import datetime
 from sqlalchemy import (
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -22,6 +23,8 @@ class EvaluationJob(Base):
     __tablename__ = "evaluation_jobs"
     __table_args__ = (
         UniqueConstraint("submission_id", name="uq_evaluation_jobs_submission_id"),
+        # The claim query filters on status + available_at and orders by created_at.
+        Index("ix_evaluation_jobs_status_available", "status", "available_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

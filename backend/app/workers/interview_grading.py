@@ -3,8 +3,12 @@ from __future__ import annotations
 
 import asyncio
 import secrets
-from types import SimpleNamespace
+import shutil
+import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 from sqlalchemy import select, update
@@ -23,8 +27,14 @@ async def enqueue_grading_job(db, session, snapshot):
         if existing.source_digest != snapshot.source_digest:
             raise ValueError("Submission already bound to different source")
         return existing
+    # The durable job stores the provider-neutral object key, never a host path:
+    # a different container must be able to hydrate the source from the key alone.
+    from app.services.interview.object_store import submission_prefix
+    object_key = getattr(snapshot, "object_key", None) or submission_prefix(
+        str(session.id), snapshot.source_digest)
     job = InterviewGradingJob(session_id=session.id, source_digest=snapshot.source_digest,
-        snapshot_path=str(snapshot.source_path), snapshot_manifest={"files": snapshot.manifest},
+        snapshot_path=str(snapshot.source_path), snapshot_key=object_key,
+        snapshot_manifest={"files": snapshot.manifest},
         challenge_slug=session.challenge_slug, challenge_version=session.challenge_version,
         status="queued", attempts=0, max_attempts=3, available_at=datetime.now(timezone.utc))
     db.add(job)
@@ -34,13 +44,16 @@ async def enqueue_grading_job(db, session, snapshot):
 
 async def claim_next_job(db):
     now = datetime.now(timezone.utc)
-    expired = (InterviewGradingJob.status == "running") & (InterviewGradingJob.lease_expires_at <= now)
+    expired = ((InterviewGradingJob.status == "running")
+               & (InterviewGradingJob.lease_expires_at.is_not(None))
+               & (InterviewGradingJob.lease_expires_at <= now))
     await db.execute(update(InterviewGradingJob).execution_options(synchronize_session="fetch").where(expired).values(
         status="queued", lease_token=None, lease_expires_at=None,
         available_at=now, last_error="Worker lease expired"))
+    exhausted = ((InterviewGradingJob.status == "queued")
+                 & (InterviewGradingJob.attempts >= InterviewGradingJob.max_attempts))
     await db.execute(update(InterviewGradingJob).execution_options(synchronize_session="fetch").where(
-        InterviewGradingJob.status == "queued",
-        InterviewGradingJob.attempts >= InterviewGradingJob.max_attempts).values(
+        exhausted).values(
             status="failed", finished_at=now, last_error="Grading retry limit reached"))
     candidate = (await db.execute(select(InterviewGradingJob.id).where(
         InterviewGradingJob.status == "queued", InterviewGradingJob.available_at <= now,
@@ -55,7 +68,7 @@ async def claim_next_job(db):
         InterviewGradingJob.available_at <= now,
         InterviewGradingJob.attempts < InterviewGradingJob.max_attempts).values(
             status="running", lease_token=token,
-            lease_expires_at=now + timedelta(seconds=get_settings().grading_job_timeout_seconds + 30),
+            lease_expires_at=now + timedelta(seconds=_lease_seconds()),
             started_at=now, attempts=InterviewGradingJob.attempts + 1)
         .returning(InterviewGradingJob.id))).scalar_one_or_none()
     await db.commit()
@@ -64,24 +77,56 @@ async def claim_next_job(db):
     return await db.get(InterviewGradingJob, claimed, populate_existing=True)
 
 
+def _lease_seconds() -> float:
+    """Lease lifetime for one grading attempt.
+
+    Must outlast the longest bounded attempt (per-case probes plus the durable
+    retry window) or a slow-but-successful job is reclaimed mid-flight and its
+    result discarded. Bounded so a crashed worker is still recovered promptly.
+    """
+    timeout = float(get_settings().grading_job_timeout_seconds)
+    return min(max(timeout * 2.0, timeout + 120.0), timeout * 4.0)
+
+
+@contextmanager
+def _resolved_source(job):
+    """Yield a verified local copy of the immutable submission.
+
+    Thin wrapper over the shared resolver so the worker, staff review, appeal and
+    retry paths all prove submission identity the same way.
+    """
+    from app.services.interview.workspace_store import verified_job_source
+
+    with verified_job_source(job) as source:
+        yield source
+
+
+def _in_process_execution(settings) -> bool:
+    """Whether the trusted evaluator runs inside this worker.
+
+    A broker deployment sets ``execution_broker_url``; a Modal deployment sets
+    ``execution_backend=modal`` and has neither a broker nor a sandbox executor
+    URL, so selecting on the broker URL alone would fail every claimed job.
+    """
+    if getattr(settings, "execution_broker_url", ""):
+        return True
+    return str(getattr(settings, "execution_backend", "")).strip().lower() == "modal"
+
+
 async def _execute(job):
     settings = get_settings()
-    if getattr(settings, "execution_broker_url", ""):
+    if _in_process_execution(settings):
         import asyncio
-        from pathlib import Path
-        from app.services.interview.trusted_evaluator import evaluate_snapshot
-        from app.services.interview.workspace import workspace_root
+
         from app.services.interview.calibration import challenge_version_for
-        source = Path(job.snapshot_path)
-        expected = workspace_root().resolve() / '.submitted' / str(job.session_id) / job.source_digest / 'source'
-        if source.is_symlink() or source.resolve() != expected:
-            raise ValueError("Invalid submitted source ownership")
+        from app.services.interview.trusted_evaluator import evaluate_snapshot
         if job.challenge_version != challenge_version_for(job.challenge_slug):
             raise ValueError("Challenge evaluation version changed")
-        return await asyncio.to_thread(evaluate_snapshot, source, session_id=str(job.session_id),
-            job_id=str(job.id), challenge_slug=job.challenge_slug, source_digest=job.source_digest,
-            signing_key=settings.grading_signing_key, challenge_version=job.challenge_version,
-            lease_token=job.lease_token)
+        with _resolved_source(job) as source:
+            return await asyncio.to_thread(evaluate_snapshot, source, session_id=str(job.session_id),
+                job_id=str(job.id), challenge_slug=job.challenge_slug, source_digest=job.source_digest,
+                signing_key=settings.grading_signing_key, challenge_version=job.challenge_version,
+                lease_token=job.lease_token)
     if not settings.grading_signing_key or not settings.sandbox_executor_url or not settings.sandbox_executor_token:
         raise ValueError("Trusted grading executor is not configured")
     async with httpx.AsyncClient(timeout=settings.grading_job_timeout_seconds) as client:
@@ -151,9 +196,9 @@ async def process_one_grading_job():
         if job is None:
             return False
         # Rollback expires ORM state; retain only the immutable lease identity.
-        job = SimpleNamespace(**{name: getattr(job, name) for name in (
+        job = SimpleNamespace(**{name: getattr(job, name, None) for name in (
             "id", "session_id", "challenge_slug", "challenge_version", "source_digest", "lease_token",
-            "attempts", "max_attempts", "snapshot_path")})
+            "attempts", "max_attempts", "snapshot_path", "snapshot_key", "snapshot_manifest")})
         try:
             envelope = await asyncio.wait_for(_execute(job), get_settings().grading_job_timeout_seconds)
             await finish_job(db, job, envelope)

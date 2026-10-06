@@ -17,6 +17,28 @@ Each simultaneous user verifies their authenticated identity, reads a challenge,
 
 The default stages launch 50 users, wait for completion, then launch 100 users. Each user owns a separate account and session; the same benchmark accounts may create a new session in the second stage. At most 100 client threads exist. A stage has a 600-second deadline, request timeouts are bounded, and advisory overload has at most ten retries with jitter. The test stops scheduling further stages if unexpected HTTP errors exceed 10% or explicit throttles exceed 25% after at least 20 requests. Any incomplete user flow makes `workflow_completed` false and exits unsuccessfully. `capacity_validated` remains false: completion and readiness are separate conclusions. Intentional overload is reported separately from unexpected failures. Per-stage readiness gates report unexpected errors and whether the advisory shed fraction exceeds 25%; latency acceptance and production headroom remain explicitly unassessed. Adjust bounds through the authenticated workload's CLI only after understanding the measurements.
 
+### Readiness gates and the exit code
+
+`workflow_completed` only says every flow finished, possibly through many retries.
+The harness also computes `readiness_gates_satisfied` and `capacity_validated` from
+the per-stage gates (unexpected errors absent and under the bound; advisory shed
+rate within `--max-advisory-shed-rate`, default 0.25, whenever execution ran).
+
+The default exit code still follows `workflow_completed`, so existing practice is
+unchanged. Pass `--require-readiness-gates` to make the process exit non-zero
+unless `capacity_validated` is true:
+
+```sh
+.venv/bin/python backend/benchmarks/interview_load.py \
+  --base-url https://YOUR-STAGING-HOST --accounts /private/path/accounts.json \
+  --namespace staging_pilot --stages 50 100 \
+  --require-readiness-gates --output /private/path/capacity-results.json
+```
+
+Use the strict form for any decision about opening the beta. A report that
+completed all flows while shedding most advisory runs is a **failure** under
+`--require-readiness-gates`, which is the point.
+
 Reports include per-operation HTTP status counts and p50/p95/p99 latency for all requests and successful responses separately, explicit throttle counts, completed/incomplete flows, real advisory execution duration, durable job statuses, retry attempts, queue waiting and execution duration. Durable timing uses the latest worker claim for each job; when retries occur, queue waiting includes retry backoff. Client-observed queue waiting is an upper bound based on polling and may miss very fast jobs. The local runner additionally measures host load, host process CPU, selected service RSS, memory and disk space once per second, and records Docker's available CPU and memory. Host process CPU is the sum reported by `ps`, not an instantaneous kernel utilization counter. Selected service RSS excludes the PostgreSQL and runner containers inside Docker's VM. Local Docker allocation and shared developer-host activity differ from a production server.
 
 If a protective throttle stop prevents measuring completion under intentional overload, retain that report and run a separate diagnostic rehearsal with explicitly relaxed protection:
@@ -71,6 +93,13 @@ Collect host, database, queue and isolated execution-host monitoring in parallel
 Review both stages, all flow failures and intentional throttles, p95/p99 response time, queue wait, grading completion and resource headroom. A completed local workflow establishes local behavior under this workload only. Choose the beta's acceptable response and grading delays explicitly, then apply those same bounds to the deployed test. A small cohort with staggered requests has different requirements from 100 users running tests at once.
 
 ## Measured local checkpoint (2026-10-05)
+
+**Superseded by the re-run in
+[refactor-verification.md](refactor-verification.md#2b-capacity-rehearsal-re-run-same-host-same-bounds).**
+Source-save p95 fell ~70% and submit p95 ~76% after the storage-ledger and
+read-lock changes. The shedding figures below are **unchanged** by that work: four
+execution slots cannot drain a 100-user retry storm, which is a capacity limit
+rather than a scheduling-policy defect.
 
 [Measured report](capacity-local-results.json) records a macOS developer computer sharing the backend, broker, load client and two workers. Docker had 11 CPUs and 8.22 GB available; the broker retained four execution slots. No paid AI ran. The diagnostic measurement allowed a 50% protective throttle threshold and twenty advisory retries; the separate advisory-shedding readiness gate remained 25%.
 

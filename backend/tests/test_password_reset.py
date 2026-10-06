@@ -21,9 +21,25 @@ _VALID_PASSWORD = "Str0ng!P@ssw0rd"
 _NEW_PASSWORD = "N3w!Reset#Pass"
 
 
+def _host_independent_startup(monkeypatch) -> None:
+    """Make production-startup validation deterministic on any host.
+
+    ``validate_production_startup`` refuses to boot when ``/var/run/docker.sock``
+    exists. A developer machine with Docker installed therefore fails these tests
+    while a CI runner passes them. The startup-security suite already patches this;
+    do the same here so the result depends on the test, not the host.
+    """
+    import app.core.startup_security as startup_security
+
+    monkeypatch.setattr(startup_security.Path, "exists", lambda _path: False)
+    monkeypatch.delenv("DOCKER_HOST", raising=False)
+
+
 def _build_test_app(tmp_path, monkeypatch):
     from app import main as main_module
     from app.db import session as session_module
+
+    _host_independent_startup(monkeypatch)
 
     db_file = tmp_path / "password_reset_test.db"
     test_engine = create_async_engine(f"sqlite+aiosqlite:///{db_file}")
@@ -46,6 +62,11 @@ def _build_test_app(tmp_path, monkeypatch):
     monkeypatch.setenv("PROMPTCODE_RUNNER", "docker")
     monkeypatch.setenv("PROMPTCODE_METRICS_TOKEN", "reset-test-metrics-token")
     monkeypatch.setenv("PROMPTCODE_INTERVIEW_INTERNAL_TOKEN", "reset-test-internal-token")
+    # Some tests flip debug off to exercise production behaviour; satisfy the
+    # deployment gates they then trip so the assertion under test is what fails.
+    monkeypatch.setenv("PROMPTCODE_EXECUTION_BROKER_URL", "https://execution.example.com")
+    monkeypatch.setenv("PROMPTCODE_SANDBOX_EXECUTOR_TOKEN", "reset-test-execution-management-secret")
+    monkeypatch.setenv("PROMPTCODE_GRADING_SIGNING_KEY", "reset-test-grading-signing-key-32bytes")
     get_settings.cache_clear()
 
     app = create_app()

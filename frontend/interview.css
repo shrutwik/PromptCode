@@ -478,6 +478,8 @@ a.practice-path { display: flex; flex-direction: column; gap: 4px; padding: 14px
 .term-meta { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-family: var(--pc-font-mono); font-size: 11px; color: #c8c3b6; }
 .term-meta .ok { color: var(--pc-success); font-weight: 500; }
 .term-meta .fail { color: var(--pc-danger); font-weight: 500; }
+/* Explicit queued state while execution slots are saturated (429/503 + Retry-After). */
+.term-meta .queued { color: var(--pc-warn); font-weight: 500; }
 .term-meta code { font-size: 11px; color: var(--pc-text-secondary); }
 .term-log { flex: 1; min-height: 0; overflow: auto; margin: 0; padding: 8px 12px; white-space: pre-wrap; font-size: 12px; line-height: 1.5; color: #e7e3d8; background: #0a0a0a; }
 #aiPanel { background: #111111; color: #f3f1ea; }

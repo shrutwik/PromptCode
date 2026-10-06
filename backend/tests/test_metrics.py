@@ -89,6 +89,12 @@ def test_metrics_endpoint_accepts_bearer_token_in_non_debug_mode(monkeypatch):
     monkeypatch.setenv("PROMPTCODE_EXECUTION_BROKER_URL", "https://runner.example.net")
     monkeypatch.setenv("PROMPTCODE_SANDBOX_EXECUTOR_TOKEN", "prod-executor-secret-abcdef-0123456789")
     monkeypatch.setenv("PROMPTCODE_METRICS_TOKEN", "metrics-secret")
+    # Production startup validation requires a >=32-byte signing key. Supply it here
+    # rather than depending on the developer's (or CI's) environment, which made this
+    # test pass or fail depending on who ran it.
+    monkeypatch.setenv("PROMPTCODE_GRADING_SIGNING_KEY", "metrics-test-grading-signing-key-32bytes+")
+    # An explicit provider keeps the key from being replaced by legacy DeepSeek routing.
+    monkeypatch.setenv("PROMPTCODE_AI_PROVIDER", "openai")
     async_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     monkeypatch.setattr(main_module, "engine", async_engine)
     asyncio.run(create_schema(async_engine))

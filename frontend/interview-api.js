@@ -3,6 +3,28 @@ const InterviewAPI = {
   authBase: window.location.origin + "/api/auth",
   _refreshPromise: null,
 
+  // Execution capacity and AI budgets answer with 429/503 plus Retry-After when
+  // the system is saturated. Callers should wait that long rather than showing a
+  // raw error: the request is queued or throttled, not broken.
+  RETRYABLE_STATUSES: [429, 503],
+  MAX_CAPACITY_WAIT_MS: 120000,
+
+  _retryAfterMs(resp) {
+    const raw = resp.headers.get("Retry-After");
+    if (!raw) return null;
+    const seconds = Number(raw);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, this.MAX_CAPACITY_WAIT_MS);
+    const when = Date.parse(raw);
+    if (!Number.isNaN(when)) {
+      return Math.max(0, Math.min(when - Date.now(), this.MAX_CAPACITY_WAIT_MS));
+    }
+    return null;
+  },
+
+  isRetryable(error) {
+    return !!error && this.RETRYABLE_STATUSES.includes(error.status);
+  },
+
   _get(key) {
     const s = sessionStorage.getItem(key);
     if (s !== null) return s;
@@ -132,6 +154,8 @@ const InterviewAPI = {
       } catch (_) {}
       const err = new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
       err.status = resp.status;
+      err.retryAfterMs = this._retryAfterMs(resp);
+      err.retryable = this.isRetryable(err);
       if (requestId) err.requestId = requestId;
       throw err;
     }
@@ -209,11 +233,39 @@ const InterviewAPI = {
     return this.request("/sessions/" + id + "/level/next", { method: "POST", body: "{}" });
   },
 
-  runTests(id, commandId = "run_tests") {
+  runTests(id, commandId = "run_tests", opts = {}) {
     return this.request("/sessions/" + id + "/tests", {
       method: "POST",
       body: JSON.stringify({ command_id: commandId }),
     });
+  },
+
+  // Runs an advisory test command, waiting out explicit capacity throttling.
+  //
+  // The execution host is saturated when every slot is busy; it answers 429/503
+  // with Retry-After instead of failing. Retrying here keeps that overload out of
+  // the UI as an error and keeps the server's own backpressure signal intact.
+  // `opts.onWait(attempt, waitMs)` lets the caller show a queued state.
+  async runTestsQueued(id, commandId = "run_tests", opts = {}) {
+    const deadline = Date.now() + (opts.maxWaitMs || 90000);
+    let attempt = 0;
+    for (;;) {
+      try {
+        return await this.runTests(id, commandId);
+      } catch (err) {
+        if (!this.isRetryable(err) || opts.signal?.aborted) throw err;
+        const suggested = err.retryAfterMs != null ? err.retryAfterMs : 2000;
+        const remaining = deadline - Date.now();
+        if (remaining <= 0 || attempt >= (opts.maxAttempts || 12)) {
+          err.queued = true;
+          throw err;
+        }
+        attempt += 1;
+        const waitMs = Math.min(suggested, remaining);
+        if (typeof opts.onWait === "function") opts.onWait(attempt, waitMs, err);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
+    }
   },
 
   chat(id, message, attached_paths = [], opts = {}) {

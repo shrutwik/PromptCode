@@ -72,6 +72,7 @@ async def worker_loop(*, poll_interval_seconds: float = 1.0) -> None:
     )
     heartbeat_task = asyncio.create_task(_heartbeat_loop(worker_state))
     cleanup_task = asyncio.create_task(_rate_limit_cleanup_loop())
+    ledger_task = asyncio.create_task(_storage_ledger_reconcile_loop())
     logger.info("Evaluation queue worker started", extra={"worker_id": worker_state.worker_id})
     _consecutive_errors = 0
     _MAX_BACKOFF = 60.0
@@ -100,10 +101,43 @@ async def worker_loop(*, poll_interval_seconds: float = 1.0) -> None:
     finally:
         heartbeat_task.cancel()
         cleanup_task.cancel()
+        ledger_task.cancel()
         with suppress(asyncio.CancelledError):
             await heartbeat_task
         with suppress(asyncio.CancelledError):
             await cleanup_task
+        with suppress(asyncio.CancelledError):
+            await ledger_task
+
+
+_STORAGE_LEDGER_RECONCILE_INTERVAL_SECONDS = 900.0
+
+
+async def _storage_ledger_reconcile_loop() -> None:
+    """Reconcile retained-byte accounting with the filesystem periodically.
+
+    The ledger is derived state; this bounds any drift from out-of-band writes or
+    a crash between a file write and its accounting update. A worker mounts the
+    artifact root read-only, so the loop stands down instead of failing every
+    interval when this role cannot write the ledger.
+    """
+    from app.services.interview.storage_ledger import is_writable
+    from app.services.interview.workspace import workspace_root
+    if not await asyncio.to_thread(is_writable, workspace_root()):
+        logger.debug("Storage ledger is read-only for this role; the API reconciles it")
+        return
+    while True:
+        await asyncio.sleep(_STORAGE_LEDGER_RECONCILE_INTERVAL_SECONDS)
+        try:
+            from app.services.interview.workspace_quota import refresh_ledger
+            snapshot = await asyncio.to_thread(refresh_ledger)
+            logger.debug(
+                "Storage ledger reconciled: %d bytes across %d entries",
+                snapshot.total_bytes,
+                snapshot.workspaces,
+            )
+        except Exception:  # pragma: no cover - accounting must never kill a worker
+            logger.warning("Storage ledger reconciliation failed", exc_info=True)
 
 
 async def _process_one_available_job(

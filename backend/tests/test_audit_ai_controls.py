@@ -14,6 +14,10 @@ from app.services.interview.ai_provider import ProductionAIProvider,AIProviderEr
 def test_persistent_concurrent_global_user_session_budgets(tmp_path,monkeypatch):
     monkeypatch.setenv('PROMPTCODE_AI_GLOBAL_REQUESTS','2')
     monkeypatch.setenv('PROMPTCODE_AI_MAX_MICROS_PER_TOKEN','1')
+    # The lifetime/trial ceiling is opt-in now that the hardcoded $5 cap is gone.
+    # Enable it here so this test still covers all four persisted scope rows; the
+    # global/user/session caps it asserts are unaffected either way.
+    monkeypatch.setenv('PROMPTCODE_AI_TRIAL_ENABLED','true')
     async def run():
         engine=create_async_engine('sqlite+aiosqlite:///'+str(tmp_path/'budgets.db'))
         async with engine.begin() as conn: await conn.run_sync(AIBudget.__table__.create)

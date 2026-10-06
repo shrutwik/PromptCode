@@ -9,8 +9,8 @@ Never mutates source challenges/ or other session directories.
 
 from __future__ import annotations
 
-import os
 import fcntl
+import os
 import shutil
 from pathlib import Path
 
@@ -84,11 +84,12 @@ def create_workspace(session_id: str, slug: str) -> Path:
     src = challenge_dir(slug)
     dest = workspace_root() / session_id
     starter = starter_snapshot_path(session_id)
-    from app.services.interview.workspace_quota import storage_capacity
-    source_bytes = sum(item.stat().st_size for item in src.rglob('*') if item.is_file()
-                       and not any(part in SKIP_DIR_NAMES for part in item.relative_to(src).parts)
-                       and not is_blocked_path(item.relative_to(src).as_posix()) and not _should_skip(item))
-    with storage_capacity(2 * source_bytes):
+    from app.services.interview.workspace_quota import (
+        record_snapshot_usage,
+        record_workspace_usage,
+        storage_capacity,
+    )
+    with storage_capacity(_tree_source_bytes(src)) as reserve_capacity:
         if dest.exists():
             shutil.rmtree(dest)
         if starter.exists():
@@ -100,7 +101,24 @@ def create_workspace(session_id: str, slug: str) -> Path:
             shutil.rmtree(dest, ignore_errors=True)
             shutil.rmtree(starter, ignore_errors=True)
             raise
+        # Measure the real trees once and record both in the same admission.
+        dest_bytes, dest_files = record_workspace_usage(dest, record=False)
+        starter_bytes, starter_files = record_snapshot_usage(starter, record=False)
+        reserve_capacity(session_id, dest_bytes + starter_bytes, dest_files + starter_files)
+        record_snapshot_usage(starter, record=True)
     return dest
+
+
+def _tree_source_bytes(src: Path) -> int:
+    """Source bytes copied into a new workspace (used to size the reservation)."""
+    return sum(
+        item.stat().st_size
+        for item in src.rglob('*')
+        if item.is_file()
+        and not any(part in SKIP_DIR_NAMES for part in item.relative_to(src).parts)
+        and not is_blocked_path(item.relative_to(src).as_posix())
+        and not _should_skip(item)
+    )
 
 
 def assert_session_isolation(session_id: str, challenge_slug: str) -> None:
@@ -227,6 +245,27 @@ def contained_file(workspace: Path, rel_path: str) -> Path:
     except ValueError:
         raise PermissionError("Path escape blocked") from None
     return current
+
+
+def storage_report(root: Path | None = None) -> dict:
+    """Filesystem measurement plus ledger total for operational inspection.
+
+    Owned here so transport handlers never reach into storage internals directly.
+    """
+    from app.services.interview.workspace_quota import ledger_total
+    target = root if root is not None else workspace_root()
+    total = 0
+    count = 0
+    if target.exists():
+        for path in target.rglob("*"):
+            if path.is_file():
+                try:
+                    total += path.stat().st_size
+                    count += 1
+                except OSError:
+                    continue
+    return {"workspace_root": str(target), "file_count": count, "bytes": total,
+            "ledger": ledger_total(target)}
 
 
 def workspace_has_escape_link(workspace: Path) -> bool:
@@ -369,15 +408,18 @@ def _write_file_locked(workspace: Path, rel_path: str, content: str) -> None:
         raise ValueError("File path too deep")
     if is_blocked_path(rel_path) or is_frozen_path(rel_path):
         raise PermissionError("File not available")
-    if len(content.encode("utf-8")) > MAX_FILE_BYTES:
+    encoded = content.encode("utf-8")
+    if len(encoded) > MAX_FILE_BYTES:
         raise ValueError("File too large for editor")
     path = contained_file(workspace, rel_path)
-    from app.services.interview.workspace_quota import check_upload
-    check_upload(workspace, path, len(content.encode("utf-8")))
-    from app.services.interview.workspace_quota import storage_capacity
-    # Reserve the full write so an existing file replacement also respects free disk.
-    with storage_capacity(len(content.encode('utf-8'))):
+    from app.services.interview import workspace_quota
+    from app.services.interview.workspace_quota import check_upload, storage_capacity
+    check_upload(workspace, path, len(encoded))
+    with storage_capacity(len(encoded)) as reserve_capacity:
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.is_symlink():
             raise PermissionError("Path escape blocked")
         path.write_text(content, encoding="utf-8")
+        # Record the measured workspace and settle the reservation together.
+        source_bytes, source_files = workspace_quota.measure_workspace(workspace)
+        reserve_capacity(workspace.name, source_bytes, source_files)

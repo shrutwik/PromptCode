@@ -21,8 +21,30 @@
 - `PROMPTCODE_FRONTEND_URL` — optional canonical UI URL
 - `PROMPTCODE_SESSION_TTL_HOURS` — default 24
 - `PROMPTCODE_MAX_RUNNERS` — interview Docker concurrency (default 4)
+- `PROMPTCODE_MAX_RUNNER_WAITERS` — bounded FIFO execution backlog (default 32); beyond it admission fails closed with 503 + `Retry-After`
+- `PROMPTCODE_PROBE_CONCURRENCY` — grading probes run in parallel inside one execution slot (default 2)
+- `PROMPTCODE_MAX_RUNNERS_ACQUIRE_TIMEOUT_SECONDS` — per-request wait bound for an execution slot (default 15)
+- `PROMPTCODE_DATABASE_POOL_SIZE` / `PROMPTCODE_DATABASE_MAX_OVERFLOW` — connections per process block (defaults 20 + 10); size against the database's `max_connections` across every API and worker process
+- `PROMPTCODE_DATABASE_COMMAND_TIMEOUT_SECONDS` — per-statement cap (default 30); startup validation requires it to exceed `PROMPTCODE_DATABASE_POOL_TIMEOUT_SECONDS`
 - `PROMPTCODE_INTERVIEW_INTERNAL_TOKEN` — protects `/api/interview/internal/*`
 - `PROMPTCODE_METRICS_TOKEN` — required for `/metrics` when not debug
+
+## Storage accounting
+
+Retained interview artifacts are tracked by an incremental SQLite ledger at
+`<artifact root>/.storage-ledger.db` (WAL mode). Capacity admission is O(one
+workspace) instead of a full artifact-root walk, and the API no longer holds the
+host-wide storage lock across the copy or write.
+
+- The application and every worker **must** share the artifact root, exactly as
+  they already must for `.submitted` and `.storage.lock`.
+- The ledger is derived state. Workers reconcile it from the filesystem every 15
+  minutes, `cleanup` reconciles at the end of every sweep, and
+  `python -m scripts.cleanup_interview_sessions` remains the manual equivalent.
+- Deleting `.storage-ledger.db` is safe: it is rebuilt from disk on the next
+  reconciliation or first write. Deleting it does **not** delete candidate data.
+- `python -m scripts.benchmark_storage_accounting` measures admission cost on a
+  disposable tree.
 
 ## Startup
 

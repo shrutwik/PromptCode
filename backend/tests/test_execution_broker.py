@@ -5,7 +5,6 @@ import hashlib
 import json
 import time
 import uuid
-from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
@@ -14,7 +13,11 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from app import execution_broker as broker
-from app.services.interview.execution_transfer import SourceBundle, SourceFile, bundle_source
+from app.services.interview.execution_transfer import (
+    SourceBundle,
+    SourceFile,
+    bundle_source,
+)
 from app.services.interview.snapshot import manifest_digest
 
 
@@ -30,11 +33,24 @@ def make_bundle(files=None):
 def configured(monkeypatch, tmp_path):
     settings = SimpleNamespace(execution_broker_mode=True, max_runners=2, debug=True,
         sandbox_executor_token='x' * 48, broker_python_image='approved-python', broker_node_image='approved-node',
-        interview_workspace_root=str(tmp_path), sandbox_timeout_seconds=2, sandbox_image='approved-sandbox')
+        interview_workspace_root=str(tmp_path), sandbox_timeout_seconds=2, sandbox_image='approved-sandbox',
+        max_runner_waiters=8, max_runners_acquire_timeout_seconds=1)
     monkeypatch.setattr(broker, 'get_settings', lambda: settings)
-    monkeypatch.setattr(broker, '_active', 0)
+    monkeypatch.setattr(broker, '_execution_queue', None)
     monkeypatch.setattr(broker, '_legacy_jobs', {})
     return settings
+
+
+def saturated_queue(settings, *, waiting: int = 0):
+    """A queue holding every slot, for admission-path tests."""
+    from app.core.capacity_queue import CapacityQueue
+    queue = CapacityQueue(slots=settings.max_runners, max_waiters=settings.max_runner_waiters,
+                          deadline_seconds=settings.max_runners_acquire_timeout_seconds)
+    for _ in range(settings.max_runners):
+        queue._semaphore._value -= 1
+        queue._active += 1
+    queue._waiting = waiting
+    return queue
 
 
 def client():
@@ -113,7 +129,7 @@ def test_production_requires_pinned_image(configured):
 
 
 def test_saturation_does_not_start_work(configured, monkeypatch):
-    monkeypatch.setattr(broker, '_active', configured.max_runners)
+    monkeypatch.setattr(broker, '_execution_queue', saturated_queue(configured))
     monkeypatch.setattr(broker.IsolatedRunner, '_run_docker_sync', lambda *args: pytest.fail('No capacity'))
     assert client().post('/v1/interview/run', json={'challenge_slug': 'order-hold-reason', 'source': make_bundle().model_dump()}).status_code == 503
 
@@ -125,18 +141,50 @@ def test_cancellation_keeps_execution_slot_until_thread_finishes(configured):
         entered.set()
         release.wait(2)
     async def exercise():
+        queue = broker._queue()
         task = asyncio.create_task(broker.execute(operation))
         await asyncio.to_thread(entered.wait, 1)
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
-        assert broker._active == 1
+        assert queue.stats().active == 1
         release.set()
         for _ in range(50):
-            if broker._active == 0:
+            if queue.stats().active == 0:
                 break
             await asyncio.sleep(.01)
-        assert broker._active == 0
+        assert queue.stats().active == 0
+    asyncio.run(exercise())
+
+
+def test_full_queue_fails_closed_with_retry_hint(configured, monkeypatch):
+    """A bounded backlog refuses the next request instead of queueing forever."""
+    monkeypatch.setattr(broker, '_execution_queue',
+                        saturated_queue(configured, waiting=configured.max_runner_waiters))
+    monkeypatch.setattr(broker.IsolatedRunner, '_run_docker_sync', lambda *args: pytest.fail('No capacity'))
+    response = client().post('/v1/interview/run', json={'challenge_slug': 'order-hold-reason', 'source': make_bundle().model_dump()})
+    assert response.status_code == 503
+    assert response.headers.get('Retry-After')
+
+
+def test_queued_request_waits_for_a_slot_instead_of_shedding(configured):
+    """A saturated host admits a queued caller as soon as a slot frees."""
+    async def exercise():
+        queue = broker._queue()
+        holders = [asyncio.create_task(queue.acquire()) for _ in range(configured.max_runners)]
+        await asyncio.gather(*holders)
+        assert queue.stats().active == configured.max_runners
+        waiter = asyncio.create_task(queue.acquire())
+        await asyncio.sleep(0.05)
+        assert queue.stats().waiting == 1
+        assert not waiter.done()
+        queue.release()  # one holder finishes and frees a slot
+        await waiter
+        assert queue.stats().active == configured.max_runners
+        assert queue.stats().waiting == 0
+        for _ in range(configured.max_runners):
+            queue.release()
+        assert queue.stats().active == 0
     asyncio.run(exercise())
 
 
@@ -230,6 +278,7 @@ def test_legacy_candidate_cannot_write_execution_host(configured, monkeypatch, t
 def test_grading_worker_retains_snapshot_identity_across_transaction(monkeypatch):
     from contextlib import asynccontextmanager
     from unittest.mock import AsyncMock
+
     from app.workers import interview_grading as jobs
     job = SimpleNamespace(id=uuid.uuid4(), session_id=uuid.uuid4(), challenge_slug='order-hold-reason',
         challenge_version='reviewed', source_digest='a' * 64, lease_token='lease', attempts=1,

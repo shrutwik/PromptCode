@@ -241,7 +241,10 @@ def test_scoring_version_on_submit(tmp_path, monkeypatch):
             )
             assert submitted.status_code == 200, submitted.text
             report = submitted.json()
-            assert report["scoring_version"] == "v2"
+            # Reference the canonical constant: a literal here silently went stale
+            # when scoring moved from v2 to the evidence-based v3.
+            from app.services.interview.analytics import SCORING_VERSION
+            assert report["scoring_version"] == SCORING_VERSION
             assert report.get("challenge_version")
             fb = client.post(
                 f"/api/interview/sessions/{sess['id']}/feedback",

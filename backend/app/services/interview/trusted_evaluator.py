@@ -106,14 +106,34 @@ def _wait_exit(container, timeout_seconds: int) -> dict[str, int]:
     raise TimeoutError('Candidate execution deadline exceeded')
 
 
-def _run_probe(snapshot_path: Path, slug: str, probe: str, *, docker_client=None, image=None) -> tuple[object,str|None]:
+def _observe_probe_result(exit_code: int, raw: bytes) -> tuple[object,str|None]:
+    """Map a probe process result onto the fixed observation contract.
+
+    Shared by the docker and Modal paths so the grading taxonomy
+    (``None``/``'timeout'``/``'candidate_error'``/``'invalid_output'``) cannot
+    drift between substrates.
+    """
+    if int(exit_code) != 0: return None,'candidate_error'
+    if len(raw)>MAX_OUTPUT_BYTES: return None,'invalid_output'
+    try:
+        value=json.loads(raw.decode('utf-8'),parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
+        if len(_canonical(value))>MAX_OUTPUT_BYTES: return None,'invalid_output'
+        return value,None
+    except (ValueError,UnicodeError,TypeError,RecursionError): return None,'invalid_output'
+
+
+def _run_probe_container(snapshot_path: Path, argv: list[str], *, image: str,
+                         timeout_seconds: int = PROBE_TIMEOUT_SECONDS, docker_client=None) -> tuple[int,bytes]:
+    """Run one probe argv in the locked-down Docker container.
+
+    This is the existing self-managed path, unchanged; only the deadline is now
+    reported to the caller as :class:`TimeoutError` instead of a return value.
+    """
     import docker
-    from .registry import get_runner_config
-    cfg=get_runner_config(slug)
     client=docker_client or docker.from_env()
     container=None
     try:
-        container=client.containers.run(image=image or cfg['image'],command=_probe_command(slug,probe),
+        container=client.containers.run(image=image,command=list(argv),
             user='10001:10001',working_dir='/workspace',volumes={str(snapshot_path):{'bind':'/source','mode':'ro'}},
             environment={'HOME':'/tmp','PYTHONDONTWRITEBYTECODE':'1'},
             network_mode='none',extra_hosts={'localhost':'127.0.0.1'},read_only=True,
@@ -121,25 +141,48 @@ def _run_probe(snapshot_path: Path, slug: str, probe: str, *, docker_client=None
             mem_limit='768m',nano_cpus=1500000000,pids_limit=128,cap_drop=['ALL'],security_opt=['no-new-privileges'],
             detach=True,stdout=True,stderr=True,remove=False,
             log_config={'type':'local','config':{'max-size':'64k','max-file':'1','compress':'false'}},
-            labels={'promptcode.role':'interview-runner','promptcode.component':'trusted-grading','promptcode.expires_at':str(time.time()+PROBE_TIMEOUT_SECONDS+30)})
+            labels={'promptcode.role':'interview-runner','promptcode.component':'trusted-grading','promptcode.expires_at':str(time.time()+timeout_seconds+30)})
         try:
-            status=_wait_exit(container,PROBE_TIMEOUT_SECONDS)
+            status=_wait_exit(container,timeout_seconds)
         except TimeoutError:
             container.kill()
-            return None,'timeout'
-        if int(status.get('StatusCode',1)) != 0: return None,'candidate_error'
-        raw=container.logs(stdout=True,stderr=False)
-        if len(raw)>MAX_OUTPUT_BYTES: return None,'invalid_output'
-        try:
-            value=json.loads(raw.decode('utf-8'),parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
-            if len(_canonical(value))>MAX_OUTPUT_BYTES: return None,'invalid_output'
-            return value,None
-        except (ValueError,UnicodeError,TypeError,RecursionError): return None,'invalid_output'
+            raise
+        code=int(status.get('StatusCode',1))
+        return code,(container.logs(stdout=True,stderr=False) if code == 0 else b'')
     finally:
         if container is not None:
             try: container.remove(force=True)
             except Exception: pass
         if docker_client is None: client.close()
+
+
+def _run_probe(snapshot_path: Path, slug: str, probe: str, *, docker_client=None, image=None) -> tuple[object,str|None]:
+    """Run one independent probe through the configured execution backend.
+
+    ``docker`` keeps the existing container path; ``modal`` runs the identical
+    argv in a Modal Sandbox. The returned observation contract is the same for
+    both, which is what ``_run_probe_sweep`` and grading depend on.
+    """
+    from .registry import get_runner_config
+    cfg=get_runner_config(slug)
+    argv=_probe_command(slug,probe)
+    resolved_image=str(image or cfg['image'])
+    if docker_client is not None:
+        from app.services.execution.backend import DockerExecutionBackend
+        backend=DockerExecutionBackend(docker_client)
+    else:
+        from app.services.execution.backend import get_execution_backend
+        backend=get_execution_backend()
+    from app.services.execution.modal_backend import SandboxTimeout
+    try:
+        # Ask for one byte more than the accepted maximum: the Docker path rejects
+        # oversized observations instead of truncating them, so the backend must be
+        # able to report overflow rather than silently capping it.
+        exit_code,raw=backend.run_probe(source_dir=snapshot_path,argv=argv,image=resolved_image,
+            timeout_seconds=PROBE_TIMEOUT_SECONDS,output_limit_bytes=MAX_OUTPUT_BYTES+1)
+    except (TimeoutError,SandboxTimeout):
+        return None,'timeout'
+    return _observe_probe_result(exit_code,raw)
 
 
 def evaluate_snapshot(snapshot_path: str|Path, *, session_id: str, job_id: str,

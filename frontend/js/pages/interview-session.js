@@ -314,7 +314,29 @@ async function runCmd(commandId) {
   const saved = await saveDirtyModels();
   setTermMeta(`Running <code>${esc(commandId)}</code>…`);
   logTerm(saved.length ? "Saved " + saved.join(", ") : "…");
-  const r = await InterviewAPI.runTests(sessionId, commandId);
+  const r = await InterviewAPI.runTestsQueued(sessionId, commandId, {
+    onWait(attempt, waitMs) {
+      const seconds = Math.max(1, Math.round(waitMs / 1000));
+      setSessionStatus("busy", "Queued");
+      setTermMeta(
+        `<span class="queued">QUEUED</span> · execution slots busy · retry ${attempt} in ${seconds}s`
+      );
+      if (attempt === 1) {
+        logTerm("All execution slots are busy. Keeping your run queued — this can take a moment.");
+      }
+    },
+  }).catch((err) => {
+    if (err && err.queued) {
+      setSessionStatus("fail", "Busy");
+      logTerm(
+        "Execution capacity stayed busy past the wait window. Your code is saved; run tests again shortly."
+      );
+      return null;
+    }
+    throw err;
+  });
+  if (!r) return;
+  setSessionStatus(r.ok ? "ok" : "fail", r.ok ? "Ready" : "Tests failing");
   lastTestOutput = `$ ${r.command}\nexit ${r.exit_code} · ${r.duration_ms || 0}ms · isolation=${r.isolation}\n` +
     `counts ${JSON.stringify(r.counts || {})}\n\n${r.stdout}\n${r.stderr}`;
   setTermMeta(

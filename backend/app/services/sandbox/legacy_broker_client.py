@@ -9,7 +9,6 @@ import httpx
 from app.core.execution_transport import broker_tls_context, broker_json
 
 from app.services.sandbox.relay import RelayError, SandboxLLMRelay
-from app.core.model_policy import OPENAI_CHAT_MODELS
 
 
 def run_legacy_broker(code: str, entrypoint: str, challenge_config: dict[str, Any], *,
@@ -31,10 +30,21 @@ def run_legacy_broker(code: str, entrypoint: str, challenge_config: dict[str, An
     broker_config = {k: v for k, v in challenge_config.items() if k != "_ai_billing_identity"}
     constraints = dict(broker_config.get("constraints") or {})
     allowed_models = list(budget.allowed_models)
-    if settings.openai_base_url.rstrip("/") == "https://api.deepseek.com":
-        # Legacy SDK callers may use an OpenAI alias; the app relay still maps
-        # every permitted alias to the pinned DeepSeek model before any payment.
-        allowed_models += list(OPENAI_CHAT_MODELS)
+    # Legacy SDK callers may request a model id from an older provider. The app relay
+    # maps every deployment-accepted alias to the configured model before any
+    # payment. This list is configuration, not a hardcoded vendor assumption.
+    for alias in str(getattr(settings, "ai_model_aliases", "") or "").split(","):
+        alias = alias.strip()
+        if alias and alias not in allowed_models:
+            allowed_models.append(alias)
+    # The model this deployment is configured to use is always accepted: the relay
+    # maps every accepted id onto it before any paid call, so accepting it grants no
+    # extra capability. Config-driven, so no vendor is assumed.
+    configured_model = str(
+        getattr(settings, "openai_model", "") or getattr(settings, "ai_model", "") or ""
+    ).strip()
+    if configured_model and configured_model not in allowed_models:
+        allowed_models.append(configured_model)
     constraints["allowed_models"] = allowed_models
     broker_config["constraints"] = constraints
     payload = {"code": code, "entrypoint": entrypoint,

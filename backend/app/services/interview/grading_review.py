@@ -19,18 +19,31 @@ def require_reviewer(user: User) -> None:
         raise HTTPException(403, "Reviewer access required")
 
 
-async def review_context(db: AsyncSession, session_id: uuid.UUID, user: User | None) -> tuple:
+async def review_context(db: AsyncSession, session_id: uuid.UUID, user: User | None, *, lock: bool = False) -> tuple:
+    """Verify and assemble review evidence.
+
+    Read-only by default. `candidate_review_status` runs on every report and
+    dashboard view, so taking `FOR UPDATE` locks here serialized concurrent
+    readers against each other for no benefit. Only the mutation path
+    (`append_review`) asks for the lock, and it keeps it until the revision is
+    inserted so two reviewers cannot compute the same revision.
+    """
     if user is not None:
         require_reviewer(user)
-    session = (await db.execute(select(InterviewSession).where(InterviewSession.id == session_id)
-                               .with_for_update().execution_options(populate_existing=True))).scalar_one_or_none()
+    session_query = select(InterviewSession).where(InterviewSession.id == session_id)
+    evaluation_query = select(InterviewEvaluation).where(InterviewEvaluation.session_id == session_id)
+    if lock:
+        session_query = session_query.with_for_update()
+        evaluation_query = evaluation_query.with_for_update()
+    session = (await db.execute(
+        session_query.execution_options(populate_existing=True))).scalar_one_or_none()
     if session is None:
         raise HTTPException(404, "Session not found")
     if user is not None and session.user_id == user.id:
         raise HTTPException(403, "Self-review is prohibited")
     job = (await db.execute(select(InterviewGradingJob).where(InterviewGradingJob.session_id == session_id))).scalar_one_or_none()
-    evaluation = (await db.execute(select(InterviewEvaluation).where(InterviewEvaluation.session_id == session_id)
-                                  .with_for_update().execution_options(populate_existing=True))).scalar_one_or_none()
+    evaluation = (await db.execute(
+        evaluation_query.execution_options(populate_existing=True))).scalar_one_or_none()
     if not job or not evaluation or job.status != "completed" or not job.result:
         raise HTTPException(409, "Verified evaluation is not ready")
     from app.services.interview.calibration import challenge_version_for
@@ -39,8 +52,12 @@ async def review_context(db: AsyncSession, session_id: uuid.UUID, user: User | N
     from app.services.interview.trusted_evaluator import verify_result
     settings = get_settings()
     from app.services.interview.snapshot import verify_snapshot
+    from app.services.interview.workspace_store import verified_job_source
     try:
-        verify_snapshot(Path(job.snapshot_path), job.source_digest)
+        # The shared resolver hydrates and digest-verifies the immutable submission,
+        # so review works in a fresh container instead of only on the submit host.
+        with verified_job_source(job, require_ownership=False) as source_root:
+            verify_snapshot(source_root, job.source_digest)
         if job.challenge_version != session.challenge_version:
             raise ValueError("Challenge version mismatch")
         verified = verify_result(job.result, signing_key=settings.grading_signing_key,
@@ -71,7 +88,9 @@ async def review_context(db: AsyncSession, session_id: uuid.UUID, user: User | N
 
 
 async def append_review(db: AsyncSession, session_id: uuid.UUID, user: User, review: HumanReview, manual_checks: dict[str, DimensionReview] | None = None) -> InterviewGradeReview:
-    session, job, evaluation, assessment = await review_context(db, session_id, user)
+    # The mutation path takes the lock and holds it through the insert so two
+    # reviewers cannot both compute revision N.
+    session, job, evaluation, assessment = await review_context(db, session_id, user, lock=True)
     if review.reviewer_id != str(user.id):
         raise HTTPException(403, "Reviewer identity cannot be supplied by another user")
     try:
@@ -125,11 +144,15 @@ async def append_review(db: AsyncSession, session_id: uuid.UUID, user: User, rev
 async def reviewer_evidence(db: AsyncSession, session_id: uuid.UUID, user: User) -> dict:
     session, job, evaluation, assessment = await review_context(db, session_id, user)
     from app.services.interview.snapshot import verify_snapshot
+    from app.services.interview.workspace_store import verified_job_source
     try:
-        manifest = verify_snapshot(Path(job.snapshot_path), job.source_digest)
-        if sum(item["size"] for item in manifest) > 2_000_000:
-            raise ValueError("Snapshot exceeds review limit")
-        source = [{"path": item["path"], "content": (Path(job.snapshot_path) / item["path"]).read_text()} for item in manifest]
+        # Hydrate through the shared resolver: on the managed stack the submit-time
+        # host path does not exist in a fresh container.
+        with verified_job_source(job, require_ownership=False) as source_root:
+            manifest = verify_snapshot(source_root, job.source_digest)
+            if sum(item["size"] for item in manifest) > 2_000_000:
+                raise ValueError("Snapshot exceeds review limit")
+            source = [{"path": item["path"], "content": (source_root / item["path"]).read_text()} for item in manifest]
     except (ValueError, OSError, UnicodeError):
         raise HTTPException(409, "Submitted source integrity check failed") from None
     events = (await db.execute(select(InterviewSessionEvent).where(InterviewSessionEvent.session_id == session_id).order_by(InterviewSessionEvent.created_at))).scalars().all()
@@ -139,6 +162,46 @@ async def reviewer_evidence(db: AsyncSession, session_id: uuid.UUID, user: User)
         "events": [{"id": str(e.id), "event_type": e.event_type, "payload": e.payload} for e in events],
         "ai_transcript": [{"role": m.role, "content": m.content} for m in messages],
         "defend_answers": (evaluation.metrics or {}).get("defend_answers", {})}
+
+
+async def published_reviews_for_sessions(db: AsyncSession, session_ids: list[uuid.UUID]) -> dict[str, dict]:
+    """Batch form of :func:`candidate_review_status` for a session list.
+
+    The dashboard previously called the single-session projection once per row, so
+    a 50-session dashboard issued roughly 300 queries. This answers the same
+    question in a constant number of queries. A session is omitted from the result
+    when it has no published review, matching the single-session contract.
+    """
+    from app.services.interview.grading_calibration import publication_allowed
+    from app.models.interview_grading import InterviewGradeAppeal
+    if not publication_allowed() or not session_ids:
+        return {}
+    reviews = (await db.execute(
+        select(InterviewGradeReview)
+        .where(InterviewGradeReview.session_id.in_(session_ids))
+        .order_by(InterviewGradeReview.session_id, InterviewGradeReview.revision.desc())
+    )).scalars().all()
+    latest: dict[str, InterviewGradeReview] = {}
+    for review in reviews:
+        key = str(review.session_id)
+        if key not in latest:
+            latest[key] = review
+    if not latest:
+        return {}
+    held = {
+        str(row[0])
+        for row in (await db.execute(
+            select(InterviewGradeAppeal.review_id).where(
+                InterviewGradeAppeal.review_id.in_([review.id for review in latest.values()]),
+                InterviewGradeAppeal.status.in_(("pending", "re_review_required")),
+            )
+        )).all()
+    }
+    return {
+        key: {"review_id": str(review.id), "revision": review.revision, **review.outcome}
+        for key, review in latest.items()
+        if str(review.id) not in held
+    }
 
 
 async def candidate_review_status(db: AsyncSession, session_id: uuid.UUID) -> dict | None:

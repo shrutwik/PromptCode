@@ -13,15 +13,18 @@ import logging
 import shutil
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.interview_grading import (
+    InterviewGradeAppeal,
+    InterviewGradeReview,
+    InterviewGradingJob,
+)
 from app.models.interview_session import InterviewSession
-from app.models.interview_grading import InterviewGradingJob, InterviewGradeReview, InterviewGradeAppeal
 from app.services.interview.lifecycle import maybe_expire_session, utcnow
 from app.services.interview.workspace import starter_snapshot_path, workspace_root
 
@@ -45,6 +48,10 @@ def _safe_rmtree(path: Path, report: CleanupReport, *, kind: str) -> None:
         return
     try:
         shutil.rmtree(path)
+        # Retained-byte accounting is derived; forgetting the removed entry keeps
+        # the storage cap honest without a rescan.
+        from app.services.interview.workspace_quota import forget_workspace
+        forget_workspace(path)
         if kind == "workspace":
             report.workspaces_removed += 1
         elif kind == "starter":
@@ -141,6 +148,16 @@ async def cleanup_interview_resources(
 
     if cleanup_docker:
         report.containers_removed = cleanup_promptcode_containers()
+
+    # Deletions above already decremented the ledger; reconcile from the
+    # filesystem at the end of every sweep so drift cannot accumulate.
+    try:
+        import asyncio
+
+        from app.services.interview.workspace_quota import refresh_ledger
+        await asyncio.to_thread(refresh_ledger)
+    except Exception:
+        logger.warning("storage ledger reconciliation failed", exc_info=True)
 
     return report
 

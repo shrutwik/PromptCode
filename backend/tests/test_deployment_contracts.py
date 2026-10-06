@@ -759,6 +759,62 @@ def test_deploy_workflow_uses_extended_ssh_connection_timeout() -> None:
     assert workflow_text.count("timeout: ${{ env.DEPLOY_SSH_TIMEOUT }}") >= 6
 
 
+def _load_compose_services(compose_text: str) -> dict[str, dict[str, list[str]]]:
+    """Minimal service->volumes reader.
+
+    The deployment files use custom YAML tags (``!reset``, ``!override``) that a
+    plain loader rejects, so read only the top-level service blocks and their
+    ``volumes:`` list items.
+    """
+    services: dict[str, dict[str, list[str]]] = {}
+    current: str | None = None
+    in_volumes = False
+    for line in compose_text.splitlines():
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip())
+        if indent == 2 and stripped.endswith(":") and not stripped.startswith("-"):
+            current = stripped[:-1]
+            services[current] = {"volumes": []}
+            in_volumes = False
+            continue
+        if current is None:
+            continue
+        if indent == 4 and stripped == "volumes:":
+            in_volumes = True
+            continue
+        if in_volumes:
+            if indent >= 6 and stripped.startswith("- "):
+                services[current]["volumes"].append(stripped[2:].split("#")[0].strip())
+                continue
+            if stripped and indent <= 4:
+                in_volumes = False
+    return services
+
+
+def test_prod_compose_mounts_the_artifact_root_for_api_and_workers() -> None:
+    """The API and every worker must share one host artifact path.
+
+    The API writes candidate workspaces and immutable submissions; workers read
+    the frozen snapshots to grade. If the API's configured root is not mounted,
+    it resolves inside the container's ephemeral filesystem: submissions become
+    invisible to workers and are lost on restart.
+    """
+    prod_compose = DOCKER_COMPOSE_PROD.read_text(encoding="utf-8")
+    services = _load_compose_services(prod_compose)
+    mount = "${PROMPTCODE_INTERVIEW_HOST_WORKDIR:-/var/promptcode/interview_workspaces}"
+    backend_mounts = services["backend"]["volumes"]
+    assert any(volume.startswith(mount + ":") for volume in backend_mounts), \
+        "backend does not mount the artifact root"
+    # The API is the only writer, so its mount must not be read-only.
+    api_mount = next(volume for volume in backend_mounts if volume.startswith(mount + ":"))
+    assert not api_mount.rstrip().endswith(":ro"), "backend must own read-write artifact storage"
+    # Workers read the same path.
+    for worker in ("worker", "worker-b"):
+        assert any(volume.startswith(mount + ":") and volume.rstrip().endswith(":ro")
+                   for volume in services[worker]["volumes"]), f"{worker} mount changed"
+    assert "PROMPTCODE_INTERVIEW_WORKSPACE_ROOT" in prod_compose
+
+
 def test_prod_compose_defaults_database_ssl_to_false_for_bundled_postgres() -> None:
     compose_text = DOCKER_COMPOSE_PROD.read_text(encoding="utf-8")
 
@@ -1349,3 +1405,372 @@ def test_host_preflight_validates_host_side_of_private_ca_mount(tmp_path):
         "RCLONE_REMOTE=test:backup", "PROMPTCODE_GHCR_PUBLIC_IMAGES=true"])
     result = _run_validate_host_env(tmp_path, env)
     assert result.returncode == 0, result.stderr
+
+
+# --- Managed deployment (Vercel frontend + Modal backend + Supabase) --------------
+# Assertions only; the existing deployment-contract tests above are untouched.
+
+MODAL_APP = REPO_ROOT / "backend" / "modal_app.py"
+VERCEL_CONFIG = REPO_ROOT / "vercel.json"
+ENV_EXAMPLE = REPO_ROOT / ".env.example"
+REQUIREMENTS_TXT = REPO_ROOT / "backend" / "requirements.txt"
+MANAGED_DEPLOYMENT_DOC = REPO_ROOT / "docs" / "managed-deployment.md"
+FRONTEND_DIR = REPO_ROOT / "frontend"
+
+# Pretty URLs the FastAPI app serves from frontend/*.html (see app/main.py). The
+# static host must reproduce them, or deep links land on the SPA fallback instead.
+_EXPECTED_VERCEL_ROUTES = {
+    "/api/:path*": None,  # proxied to Modal, asserted separately
+    "/static/:path*": "/frontend/:path*",
+    "/challenges": "/frontend/interview-challenges.html",
+    "/challenges/:slug": "/frontend/interview-challenge.html",
+    "/session/:id/report": "/frontend/interview-report.html",
+    "/session/:id": "/frontend/interview-session.html",
+    "/dashboard": "/frontend/interview-dashboard.html",
+    "/onboarding": "/frontend/interview-onboarding.html",
+    "/privacy": "/frontend/interview-privacy.html",
+    "/settings": "/frontend/interview-settings.html",
+    "/progress": "/frontend/interview-progress.html",
+    "/grading": "/frontend/interview-grading.html",
+}
+
+_MANAGED_SETTINGS = [
+    "PROMPTCODE_EXECUTION_BACKEND",
+    "PROMPTCODE_MODAL_APP_NAME",
+    "PROMPTCODE_MODAL_ENVIRONMENT",
+    "PROMPTCODE_MODAL_SANDBOX_IMAGE_NODE",
+    "PROMPTCODE_MODAL_SANDBOX_IMAGE_PYTHON",
+    "PROMPTCODE_MODAL_SANDBOX_TIMEOUT_SECONDS",
+    "PROMPTCODE_MODAL_SANDBOX_CPU",
+    "PROMPTCODE_MODAL_SANDBOX_MEMORY_MB",
+    "PROMPTCODE_MODAL_SANDBOX_OUTPUT_LIMIT_BYTES",
+    "PROMPTCODE_MODAL_SANDBOX_PIDS_LIMIT",
+    "PROMPTCODE_MODAL_FUNCTION_TIMEOUT_SECONDS",
+    "PROMPTCODE_STORAGE_BACKEND",
+    "PROMPTCODE_SUPABASE_URL",
+    "PROMPTCODE_SUPABASE_SERVICE_ROLE_KEY",
+    "PROMPTCODE_SUPABASE_STORAGE_BUCKET",
+    "PROMPTCODE_SUPABASE_STORAGE_TIMEOUT_SECONDS",
+    "PROMPTCODE_SUPABASE_MAX_OBJECT_BYTES",
+    "PROMPTCODE_SUPABASE_KEEPALIVE_ENABLED",
+    "PROMPTCODE_SUPABASE_KEEPALIVE_INTERVAL_SECONDS",
+]
+
+_SECRET_MARKERS = ("service_role", "service-role", "sk-live", "sk-proj", "eyJhbGciOi", "postgresql+asyncpg://")
+
+
+def _load_vercel_config() -> dict:
+    import json
+
+    return json.loads(VERCEL_CONFIG.read_text(encoding="utf-8"))
+
+
+def _load_modal_app_with_stub(monkeypatch):
+    """Import backend/modal_app.py against a stubbed ``modal`` SDK."""
+    import importlib.util
+    import sys
+    import types
+
+    calls: dict = {"functions": [], "asgi": None, "requirements": [], "dirs": [],
+                   "dir_ignores": []}
+
+    class _FakeImage:
+        def pip_install_from_requirements(self, path):
+            calls["requirements"].append(str(path))
+            return self
+
+        def add_local_dir(self, local, remote_path=None, ignore=None, **_kwargs):
+            calls["dirs"].append((str(local), remote_path))
+            calls["dir_ignores"].append((remote_path, str(local), list(ignore or [])))
+            return self
+
+        def env(self, _env):
+            return self
+
+    def _fake_function(**kwargs):
+        def wrap(fn):
+            calls["functions"].append((fn.__name__, kwargs))
+            return fn
+
+        return wrap
+
+    class _FakeApp:
+        def __init__(self, name):
+            self.name = name
+
+        def function(self, **kwargs):
+            return _fake_function(**kwargs)
+
+    fake = types.ModuleType("modal")
+    fake.App = _FakeApp
+    fake.Image = types.SimpleNamespace(debian_slim=lambda **_kwargs: _FakeImage())
+    fake.Secret = types.SimpleNamespace(from_name=lambda name, **_kwargs: ("modal-secret", name))
+    fake.function = _fake_function
+    fake.Period = lambda **kwargs: ("period", kwargs)
+    fake.Cron = lambda expression, **kwargs: ("cron", expression)
+
+    def _fake_asgi_app(**_kwargs):
+        def wrap(fn):
+            calls["asgi"] = fn.__name__
+            return fn
+
+        return wrap
+
+    fake.asgi_app = _fake_asgi_app
+
+    monkeypatch.setitem(sys.modules, "modal", fake)
+    spec = importlib.util.spec_from_file_location("modal_app_under_test", MODAL_APP)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module, calls
+
+
+def test_modal_app_parses_as_python():
+    import ast
+
+    ast.parse(MODAL_APP.read_text(encoding="utf-8"))
+
+
+def test_modal_app_serves_the_existing_fastapi_app(monkeypatch):
+    module, calls = _load_modal_app_with_stub(monkeypatch)
+
+    assert module.app.name == "promptcode"
+    assert calls["asgi"] == "fastapi_app"
+    registered = dict(calls["functions"])
+    assert "fastapi_app" in registered
+    # The FastAPI app must be served, not re-implemented: the ASGI function imports
+    # app.main at container start.
+    assert "from app.main import app as application" in MODAL_APP.read_text(encoding="utf-8")
+
+
+def test_modal_app_ships_app_source_and_runtime_data(monkeypatch):
+    """The image must carry the runtime data the app resolves from the repo root.
+
+    ``app/services/interview/registry.py`` reads ``parents[4]/challenges`` (registry
+    plus every starter tree) and ``app/services/evaluation/weight_profile.py`` reads
+    ``backend/benchmarks``. Shipping only ``app/`` would deploy an image in which no
+    challenge can be started, so these are asserted as required image inputs.
+    """
+    _module, calls = _load_modal_app_with_stub(monkeypatch)
+
+    assert calls["requirements"] == [str(REQUIREMENTS_TXT)]
+    shipped = {remote: Path(local).name for local, remote in calls["dirs"]}
+    assert shipped == {
+        "/root/backend/app": "app",
+        "/root/challenges": "challenges",
+        "/root/backend/benchmarks": "benchmarks",
+    }
+
+    # node_modules accounts for ~608 MB of the 613 MB challenge tree, is skipped by
+    # the workspace starter copy, and belongs in the candidate sandbox image instead.
+    ignore = {remote: rules for remote, _local, rules in calls["dir_ignores"]}
+    assert any("node_modules" in rule for rule in ignore["/root/challenges"])
+
+
+def test_modal_app_runs_grading_as_a_spawnable_background_function(monkeypatch):
+    _module, calls = _load_modal_app_with_stub(monkeypatch)
+
+    registered = dict(calls["functions"])
+    grading = registered["grade_pending_jobs"]
+    assert grading["schedule"] == ("period", {"seconds": 60})
+    assert grading["max_containers"] == 2
+    # A background function, never a web endpoint: the 150 s HTTP cap cannot apply.
+    source = MODAL_APP.read_text(encoding="utf-8")
+    assert "process_one_grading_job" in source
+    assert "validate_production_startup" in source
+    # The ASGI function must not drain the queue: grading is never done inside a
+    # request, where Modal's 150 s cap and the CORS-incompatible 303 fallback apply.
+    asgi_body = source.split("def fastapi_app", 1)[1].split("@app.function", 1)[0]
+    assert "process_one_grading_job" not in asgi_body, asgi_body
+    # NOTE: no `.spawn()` call exists in this app. Grading latency is bounded by the
+    # schedule above (PROMPTCODE_MODAL_GRADING_POLL_SECONDS); an eager spawn from the
+    # API after enqueueing is a documented *option*, not wired code, so asserting
+    # ".spawn()" in source would only ever match the docstring.
+
+
+def test_modal_app_schedules_the_supabase_keepalive_with_a_cron(monkeypatch):
+    _module, calls = _load_modal_app_with_stub(monkeypatch)
+
+    registered = dict(calls["functions"])
+    assert registered["supabase_keepalive"]["schedule"] == ("cron", "0 */6 * * *")
+    source = MODAL_APP.read_text(encoding="utf-8")
+    assert "supabase_keepalive_enabled" in source
+    assert "SELECT 1" in source
+
+
+def test_modal_app_takes_runtime_secrets_from_a_modal_secret(monkeypatch):
+    module, _calls = _load_modal_app_with_stub(monkeypatch)
+
+    assert module.env_secret == ("modal-secret", "promptcode-env")
+    source = MODAL_APP.read_text(encoding="utf-8")
+    for marker in _SECRET_MARKERS + ("SUPABASE_SERVICE_ROLE_KEY=",):
+        assert marker not in source
+
+
+def test_vercel_config_hosts_static_frontend_without_a_build_step():
+    config = _load_vercel_config()
+
+    assert config["cleanUrls"] is False
+    assert config["trailingSlash"] is False
+    assert "buildCommand" not in config
+    assert "framework" not in config or config["framework"] is None
+    assert "rewrites" in config
+
+
+def test_vercel_config_preserves_every_pretty_route():
+    config = _load_vercel_config()
+    rewrites = {rule["source"]: rule["destination"] for rule in config["rewrites"]}
+
+    for source, destination in _EXPECTED_VERCEL_ROUTES.items():
+        assert source in rewrites, f"{source} is not routed by vercel.json"
+        if destination is not None:
+            assert rewrites[source] == destination
+
+    # Every rewrite target that is not a path pattern must be a real file. Vercel
+    # serves the repository root, so each target is prefixed with ``/frontend/``.
+    for source, destination in rewrites.items():
+        if not destination.startswith("/") or ":" in destination:
+            continue
+        assert destination.startswith("/frontend/"), (
+            f"{source} must target the deployed frontend/ tree, got {destination}"
+        )
+        assert (REPO_ROOT / destination.lstrip("/")).is_file(), (
+            f"{source} rewrites to missing file {destination}"
+        )
+
+    # The SPA fallback must be last so it cannot shadow a real route, and must not
+    # swallow API, static or frontend traffic.
+    catch_all = config["rewrites"][-1]
+    assert catch_all["destination"] == "/frontend/index.html"
+    assert "api" in catch_all["source"] and "static" in catch_all["source"]
+    assert "frontend/" in catch_all["source"]
+
+    # Routes the FastAPI app answers with a 307 to the matching .html file.
+    redirects = {rule["source"]: rule["destination"] for rule in config["redirects"]}
+    assert redirects == {
+        "/login": "/frontend/login.html",
+        "/signup": "/frontend/signup.html",
+        "/practice": "/dashboard",
+    }
+
+
+def test_vercel_deployment_excludes_everything_but_the_frontend():
+    """The Vercel project deploys the repository root, so the rest must be excluded.
+
+    Without `.vercelignore`, an existing static file wins over the SPA catch-all
+    rewrite and the whole repository is published — including the challenge answer
+    keys in ``challenges/<slug>/SOLUTION.md`` (deliberately blocked from the API by
+    ``app/services/interview/registry.py``), the backend source and docs.
+
+    ``/*`` is anchored to the repository root and does not match nested paths, so the
+    negations re-include the frontend and the config while nested files stay included.
+    """
+    ignore = REPO_ROOT / ".vercelignore"
+    assert ignore.is_file(), "a root .vercelignore is required to limit the deployment"
+
+    patterns = [
+        line.strip()
+        for line in ignore.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    assert patterns == ["/*", "!/frontend", "!/vercel.json"], patterns
+
+    # The answer keys must exist for this guard to be meaningful.
+    solution_keys = sorted((REPO_ROOT / "challenges").glob("*/SOLUTION.md"))
+    assert solution_keys, "expected challenge SOLUTION.md files to be present"
+
+
+def test_vercel_config_proxies_api_to_the_modal_backend():
+    config = _load_vercel_config()
+    api_rewrite = next(rule for rule in config["rewrites"] if rule["source"] == "/api/:path*")
+
+    destination = api_rewrite["destination"]
+    assert destination.startswith("https://")
+    assert destination.endswith(".modal.run/api/:path*")
+    assert "localhost" not in destination and "127.0.0.1" not in destination
+
+
+def test_vercel_config_sets_security_headers():
+    config = _load_vercel_config()
+    headers = {
+        header["key"]: header["value"]
+        for rule in config["headers"]
+        for header in rule["headers"]
+    }
+
+    assert headers["Strict-Transport-Security"].startswith("max-age=31536000")
+    assert "includeSubDomains" in headers["Strict-Transport-Security"]
+    assert headers["X-Content-Type-Options"] == "nosniff"
+    assert headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+    csp = headers["Content-Security-Policy"]
+    assert "default-src 'self'" in csp
+    assert "object-src 'none'" in csp
+    assert "frame-ancestors 'none'" in csp
+    assert "connect-src 'self'" in csp
+    assert "script-src 'self'" in csp
+    # The static HTML has no inline scripts, so the static host must not need
+    # 'unsafe-inline' (app/main.py enforces the same rule at runtime).
+    assert "'unsafe-inline'" not in csp.split("script-src")[1].split(";")[0]
+
+
+def test_vercel_config_contains_no_provider_or_database_secrets():
+    config_text = VERCEL_CONFIG.read_text(encoding="utf-8")
+
+    assert "SUPABASE_SERVICE_ROLE_KEY" not in config_text
+    assert "MODAL_TOKEN" not in config_text
+    assert "DEEPSEEK_API_KEY" not in config_text
+    assert "postgresql" not in config_text
+
+
+def test_frontend_never_carries_a_provider_or_database_secret():
+    forbidden = ("SUPABASE_SERVICE_ROLE_KEY", "MODAL_TOKEN_SECRET", "DEEPSEEK_API_KEY", "GRADING_SIGNING_KEY")
+    for path in [*FRONTEND_DIR.glob("*.html"), *FRONTEND_DIR.glob("*.js"), *FRONTEND_DIR.glob("js/**/*.js")]:
+        source = path.read_text(encoding="utf-8")
+        for marker in forbidden:
+            assert marker not in source, f"{path.name} references {marker}"
+
+
+def test_requirements_pin_modal_and_keep_docker_for_the_docker_backend():
+    requirements = REQUIREMENTS_TXT.read_text(encoding="utf-8")
+
+    pinned = [line for line in requirements.splitlines() if line.strip().startswith("modal==")]
+    assert len(pinned) == 1, "modal must be added exactly once, pinned to an exact version"
+    assert "docker==7.1.0" in requirements, "the docker backend still needs the docker SDK"
+    for existing in ("fastapi==0.142.2", "asyncpg==0.31.0", "alembic==1.18.4", "uvicorn[standard]==0.34.0"):
+        assert existing in requirements, f"{existing} pin was removed"
+
+
+def test_env_example_documents_every_managed_deployment_setting():
+    env_example = ENV_EXAMPLE.read_text(encoding="utf-8")
+    config_source = (REPO_ROOT / "backend" / "app" / "core" / "config.py").read_text(encoding="utf-8")
+
+    for name in _MANAGED_SETTINGS:
+        assert f"\n{name}=" in env_example, f"{name} is missing from .env.example"
+        field = name.removeprefix("PROMPTCODE_").lower()
+        assert f"{field}:" in config_source, f"{name} is not a Settings field"
+
+    # The three provider facts an operator must not miss.
+    assert "spend limit" in env_example.lower()
+    assert "prepared statement" in env_example.lower()
+    assert "hobby" in env_example.lower()
+
+
+def test_managed_deployment_doc_covers_required_operator_steps():
+    doc = MANAGED_DEPLOYMENT_DOC.read_text(encoding="utf-8")
+
+    for required in (
+        "$0",
+        "alembic upgrade head",
+        "alembic downgrade",
+        "150",
+        "prepared statement",
+        "vercel.json",
+        "modal deploy",
+        "spend limit",
+        "non-commercial",
+        "not verified",
+        "https://modal.com/docs/guide/webhook-timeouts",
+        "https://supabase.com/docs/guides/troubleshooting/disabling-prepared-statements-qL8lEL",
+        "https://vercel.com/docs/plans/hobby",
+    ):
+        assert required in doc, f"managed-deployment.md must mention {required!r}"

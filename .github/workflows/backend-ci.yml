@@ -289,7 +289,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           timeout: ${{ env.DEPLOY_SSH_TIMEOUT }}
-          source: "docker-compose.yml,docker-compose.prod.yml,docker/Caddyfile.prod,scripts/backup-db.sh,scripts/restore-db.sh,scripts/seed-prod-data.sh,scripts/check-prod-health.sh,scripts/cleanup-interview.sh,scripts/validate-host-env.sh,scripts/setup-ghcr-login.sh,scripts/validate-prod-host.sh"
+          source: "docker-compose.yml,docker-compose.prod.yml,docker/Caddyfile.prod,scripts/backup-db.sh,scripts/restore-db.sh,scripts/seed-prod-data.sh,scripts/check-prod-health.sh,scripts/cleanup-interview.sh,scripts/notify-alert.sh,scripts/validate-host-env.sh,scripts/setup-ghcr-login.sh,scripts/validate-prod-host.sh"
           target: "/opt/promptcode"
 
       - name: Deploy to production host
@@ -305,6 +305,13 @@ jobs:
             cd /opt/promptcode
             bash /opt/promptcode/scripts/validate-prod-host.sh
             bash /opt/promptcode/scripts/setup-ghcr-login.sh
+            # Migrations run on backend container start, so take a local restore
+            # point first. Refuse to deploy if the dump fails: a half-applied schema
+            # with only last night's backup is worse than a delayed deploy.
+            if ! bash /opt/promptcode/scripts/backup-db.sh --pre-migration; then
+              bash /opt/promptcode/scripts/notify-alert.sh critical "Deploy aborted: pre-migration backup failed" "${{ github.sha }}" || true
+              exit 1
+            fi
             docker pull ${{ env.IMAGE_NAME }}:${{ github.sha }}
             docker pull ${{ env.SANDBOX_IMAGE_NAME }}:${{ github.sha }}
             docker tag ${{ env.SANDBOX_IMAGE_NAME }}:${{ github.sha }} promptcode-sandbox:latest
