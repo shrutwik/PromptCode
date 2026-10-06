@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import contextlib
 import inspect
+import os
 import re
 import threading
 import time
@@ -213,17 +214,19 @@ def _upload_source(sandbox: Any, source_dir: Path) -> None:
     filesystem = sandbox.filesystem
     filesystem.make_directory(SOURCE_MOUNT)
     filesystem.make_directory(WORKSPACE_MOUNT)
-    for path in sorted(source_dir.rglob("*")):
-        relative = path.relative_to(source_dir)
-        if any(part in _IGNORED_TREE_NAMES for part in relative.parts):
-            continue
-        remote = f"{SOURCE_MOUNT}/{relative.as_posix()}"
-        if path.is_symlink():
-            continue
-        if path.is_dir():
-            filesystem.make_directory(remote)
-        elif path.is_file():
-            filesystem.write_bytes(path.read_bytes(), remote)
+    for directory, dirnames, filenames in os.walk(source_dir, followlinks=False):
+        root = Path(directory)
+        dirnames[:] = sorted(name for name in dirnames
+                             if name not in _IGNORED_TREE_NAMES and not (root / name).is_symlink())
+        for name in dirnames:
+            relative = (root / name).relative_to(source_dir)
+            filesystem.make_directory(f"{SOURCE_MOUNT}/{relative.as_posix()}")
+        for name in sorted(filenames):
+            path = root / name
+            if name in _IGNORED_TREE_NAMES or path.is_symlink() or not path.is_file():
+                continue
+            relative = path.relative_to(source_dir)
+            filesystem.write_bytes(path.read_bytes(), f"{SOURCE_MOUNT}/{relative.as_posix()}")
 
 
 def _create_kwargs(modal: Any, policy: SandboxPolicy, docker_image: str, argv: Sequence[str]):

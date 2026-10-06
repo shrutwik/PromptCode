@@ -183,6 +183,36 @@ def _source(tmp_path: Path) -> Path:
     return root
 
 
+def test_source_upload_prunes_dependencies_and_links_without_scanning_them(tmp_path, monkeypatch):
+    root = _source(tmp_path)
+    (root / "src" / "empty").mkdir(parents=True)
+    (root / "src" / "main.js").write_text("const value = 1;\n")
+    for name in modal_backend._IGNORED_TREE_NAMES:
+        (root / name / "deep").mkdir(parents=True)
+        (root / name / "deep" / "unused.js").write_text("not uploaded")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret").write_text("never uploaded")
+    (root / "linked-dir").symlink_to(outside, target_is_directory=True)
+    (root / "linked-file").symlink_to(outside / "secret")
+    original = modal_backend.os.scandir
+
+    def scan(path):
+        assert Path(path).name not in modal_backend._IGNORED_TREE_NAMES
+        assert Path(path) != outside
+        return original(path)
+
+    monkeypatch.setattr(modal_backend.os, "scandir", scan)
+    sandbox = types.SimpleNamespace(filesystem=_FakeFilesystem())
+    modal_backend._upload_source(sandbox, root)
+    assert sandbox.filesystem.files == {
+        "/source/app.js": b"export const value = 1;\n",
+        "/source/src/main.js": b"const value = 1;\n",
+    }
+    assert "/source/src/empty" in sandbox.filesystem.directories
+    assert not any("linked" in path for path in sandbox.filesystem.directories)
+
+
 # --- policy -----------------------------------------------------------------
 
 
