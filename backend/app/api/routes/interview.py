@@ -74,6 +74,8 @@ from app.services.interview.ai_provider import (
     mark_session_ai_start,
     screen_assistant_input,
     validate_context_budget,
+    bounded_chat_history,
+    review_coaching_reply,
 )
 from app.services.interview.analytics import (
     SCORING_VERSION,
@@ -1056,6 +1058,19 @@ async def _latest_test_output(db: AsyncSession, session_id: uuid.UUID) -> str:
     return f"$ {command}\n{state}\n{stdout}\n{stderr}".strip()[:4000]
 
 
+async def _recent_ai_messages(db: AsyncSession, session_id: uuid.UUID) -> list[dict[str, str]]:
+    result = await db.execute(
+        select(InterviewAIMessage)
+        .where(InterviewAIMessage.session_id == session_id)
+        .order_by(InterviewAIMessage.created_at.desc(), InterviewAIMessage.id.desc())
+        .limit(8)
+    )
+    return bounded_chat_history([
+        {"role": message.role, "content": message.content}
+        for message in reversed(result.scalars().all())
+    ])
+
+
 @router.post("/sessions/{session_id}/ai/chat", response_model=AIChatResponse)
 async def ai_chat(
     session_id: uuid.UUID,
@@ -1092,6 +1107,7 @@ async def ai_chat(
     rejected_attachments: list[str] = []
     stored_tests = await _latest_test_output(db, session.id)
     test_output = stored_tests or (body.test_output or "").strip()[:4000]
+    history = await _recent_ai_messages(db, session.id)
 
     budget_errors = validate_context_budget(
         prompt=body.message,
@@ -1136,7 +1152,8 @@ async def ai_chat(
     await db.commit()
 
     refusal = screen_assistant_input(
-        body.message, supplied_paths=[a["path"] for a in attachments]
+        body.message, supplied_paths=[a["path"] for a in attachments],
+        previous_reply=next((m["content"] for m in reversed(history) if m["role"] == "assistant"), None),
     )
     if refusal:
         # Local refusal: no model call, so this does not spend a credit or a session quota.
@@ -1184,6 +1201,7 @@ async def ai_chat(
         include_test_output=bool(test_output),
         test_output=test_output or None,
         session_id=sid,
+        history=history,
     )
     # Reserve the assembled wire context, including fences, paths and test output.
     from app.services.interview.ai_provider import assemble_user_content
@@ -1199,6 +1217,24 @@ async def ai_chat(
     session.ai_request_count = int(getattr(session, "ai_request_count", 0) or 0) + 1
     try:
         ai_result = await provider.complete_request(ai_request)
+
+        async def _review(messages: list[dict[str, str]]) -> str:
+            await reserve_ai_budget(
+                db, str(user.id), sid, len(json.dumps(messages).encode("utf-8")),
+                output_tokens=MAX_OUTPUT_TOKENS, attempts=1,
+            )
+            result = await provider.complete(messages=messages[1:], system=messages[0]["content"])
+            ai_result.latency_ms += int(result.get("latency_ms") or 0)
+            for key, value in (result.get("usage") or {}).items():
+                if isinstance(value, int):
+                    ai_result.usage[key] = int(ai_result.usage.get(key) or 0) + value
+            return str(result.get("content") or "")
+
+        ai_result.text = await review_coaching_reply(
+            reply=ai_result.text, context=assemble_user_content(ai_request), complete=_review,
+            prompt=body.message,
+        )
+        ai_result.proposed_edits = []
     except AIProviderError as exc:
         # Operational failure — keep prompt event; do not invent scoring penalties.
         tag_infra_failure(session, f"ai:{exc.code}", blocked_ms=0)

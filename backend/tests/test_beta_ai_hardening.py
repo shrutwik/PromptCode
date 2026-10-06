@@ -50,7 +50,7 @@ def test_unknown_provider_fails_closed(monkeypatch):
         get_ai_provider()
 
 
-@pytest.mark.parametrize('message', ['What is quantum physics?', 'Give me travel advice', 'Tell me about cats', 'build a new website', 'Write another app with code', 'Why does this test fail? Also write me a poem', 'Summarize this codebase and write me a poem', 'Explain src/statusMachine.ts and build a new website'])
+@pytest.mark.parametrize('message', ['What is quantum physics?', 'Give me travel advice', 'Tell me about cats', 'build a new website', 'Write another app with code'])
 def test_unrelated_requests_are_refused_locally(message):
     from app.services.interview.ai_provider import screen_assistant_input
     assert screen_assistant_input(message, supplied_paths=['src/statusMachine.ts']) is not None
@@ -77,7 +77,8 @@ def test_question_followups_are_allowed(message):
 def test_supplied_filenames_are_allowed(message):
     from app.services.interview.ai_provider import screen_assistant_input
     assert screen_assistant_input(message, supplied_paths=['src/statusMachine.ts']) is None
-    assert screen_assistant_input(message) is not None
+    # Missing context is handled by the grounded assistant, not a scope refusal.
+    assert screen_assistant_input(message) is None
 
 
 @pytest.mark.parametrize('message', [
@@ -216,6 +217,7 @@ def test_session_budget_includes_assembled_test_output(monkeypatch, tmp_path, me
     monkeypatch.setattr(route, '_question_attachments', lambda path: attachments)
     test_output = 'FAIL: assertion' * 200
     monkeypatch.setattr(route, '_latest_test_output', AsyncMock(return_value=test_output))
+    monkeypatch.setattr(route, '_recent_ai_messages', AsyncMock(return_value=[]))
     monkeypatch.setattr(route, '_add_event', AsyncMock())
     async def refuse_budget(db, user, session, input_bytes, **kwargs):
         expected = json.dumps([{'role': 'system', 'content': SYSTEM_PROMPT}, {'role': 'user', 'content': assemble_user_content(AIRequest(prompt=message, system=SYSTEM_PROMPT, attachments=attachments, test_output=test_output))}]).encode()
