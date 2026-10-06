@@ -1,6 +1,6 @@
 /* PromptCode shared components — the ONLY place generic UI is styled.
  * Load order on every page: fonts → pc-tokens.css → pc-components.css → page stylesheet.
- * Page stylesheets (interview.css, pc-landing-sequence.css, inline page blocks) may only add layout. */
+ * Page stylesheets (interview.css, pc-landing.css, inline page blocks) may only add layout. */
 
 /* ── Base ─────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }

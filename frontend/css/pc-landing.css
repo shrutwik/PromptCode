@@ -1,0 +1,458 @@
+/* PromptCode landing — layout, motion and the signature headline settle.
+ * Reuses pc-tokens.css / pc-components.css. No new colors, no new fonts.
+ *
+ * Progressive enhancement contract:
+ *   1. Base styles = the finished, readable page. Works with JS off.
+ *   2. `.re-js` (added by pc-landing.js) turns on motion-only initial states.
+ *   3. Everything animated lives in @media (prefers-reduced-motion: no-preference).
+ * Reduced motion or a JS failure therefore lands on the finished page, never
+ * stuck at opacity 0.
+ */
+
+.re {
+  --re-edge: 1px solid var(--pc-border);
+  --re-max: 1240px;
+  --re-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --re-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --re-ease-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --re-tap: rgba(var(--pc-ink), 0.04);
+  overscroll-behavior-y: none;
+}
+
+.re-wrap { width: 100%; max-width: var(--re-max); margin: 0 auto; padding: 0 24px; }
+
+/* ── Shared type ──────────────────────────────────────────────────── */
+/* These two sit on consecutive lines in the hero. `inline-flex` would let them
+   share a line and collide, so each is a block that shrinks to its content. */
+.re-eyebrow, .re-kicker {
+  display: flex; width: fit-content; align-items: center; gap: 9px;
+  font-family: var(--pc-font-mono); font-size: var(--pc-text-xs);
+  letter-spacing: 0.08em; color: var(--pc-muted);
+  margin: 0 0 12px;
+}
+.re-kicker { margin-bottom: 20px; }
+.re-section-title {
+  font-size: clamp(1.7rem, 3vw, 2.35rem); font-weight: 600;
+  letter-spacing: -0.03em; line-height: 1.12; margin: 0 0 14px;
+  text-wrap: balance;
+}
+.re-section-lead { color: var(--pc-muted); line-height: 1.7; margin: 0; max-width: 52ch; }
+.re-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.re-note {
+  margin: 18px 0 0; font-family: var(--pc-font-mono); font-size: var(--pc-text-xs);
+  color: var(--pc-faint); letter-spacing: 0.02em;
+}
+
+/* ── 1 · Hero ─────────────────────────────────────────────────────── */
+.re-hero {
+  position: relative;
+  padding: 72px 0 88px;
+  border-bottom: var(--re-edge);
+  overflow: clip;
+  --re-copy-top: 8%;   /* where the copy block starts, from the hero's top edge */
+  --re-copy-h: 84%;    /* how far it runs */
+  --re-gap: 6%;        /* soft fade, so the mask edge is never visible */
+}
+/* A faint ruled surface behind the copy, for depth. The earlier version ran
+   rules straight through the text — horizontals crossing between lines of copy
+   and a vertical splitting "engineering with" — which read as an uneven,
+   grubby background rather than texture.
+
+   There is now exactly one line set, horizontal, masked to exist only in the
+   hero's top and bottom margins. Nothing can sit behind or beside a line of
+   copy, because nothing is drawn in that band at all. */
+.re-grid-lines {
+  position: absolute; inset: -10% 0 -10%;
+  z-index: 0;
+  opacity: 0.5;
+  pointer-events: none;
+  background-image: linear-gradient(var(--pc-border) 1px, transparent 1px);
+  background-size: 100% 64px;
+  --re-rule-mask: linear-gradient(180deg,
+    #000 0,
+    #000 calc(var(--re-copy-top) - var(--re-gap)),
+    transparent var(--re-copy-top),
+    transparent calc(var(--re-copy-top) + var(--re-copy-h)),
+    #000 calc(var(--re-copy-top) + var(--re-copy-h) + var(--re-gap)),
+    #000 100%);
+  -webkit-mask-image: var(--re-rule-mask);
+  mask-image: var(--re-rule-mask);
+}
+.re-hero-grid {
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1.06fr) minmax(0, 0.94fr);
+  gap: 64px; align-items: center;
+}
+.re-hero-copy { min-width: 0; }
+.re-hero-visual { min-width: 0; }
+/* Parallax lives on a wrapper so it never competes with an entrance
+   transition for the same transform property. */
+.re-parallax { will-change: transform; }
+
+.re-h1 {
+  font-size: clamp(2.5rem, 5.1vw, 4.05rem);
+  font-weight: 600; letter-spacing: -0.042em; line-height: 1.02;
+  margin: 0 0 22px; text-wrap: balance;
+}
+.re-h1 em { font-style: italic; font-weight: 500; }
+/* Only while the physics owns the words. */
+.re-h1.is-dropping .re-word { display: inline-block; will-change: transform; }
+
+.re-sub {
+  font-size: 1.0625rem; line-height: 1.62; color: var(--pc-text-secondary);
+  max-width: 44ch; margin: 0 0 30px;
+}
+
+/* ── Static product visual (a picture, not a control) ─────────────── */
+.re-shot {
+  margin: 0;
+  background: var(--pc-bg-elevated);
+  border: 1px solid var(--pc-border-strong);
+  border-radius: var(--pc-radius-md);
+  box-shadow: var(--pc-shadow-lg);
+  overflow: hidden;
+}
+.re-shot-bar {
+  display: flex; align-items: center; gap: 7px;
+  padding: 10px 14px; border-bottom: var(--re-edge); background: var(--pc-surface-2);
+  font-family: var(--pc-font-mono); font-size: var(--pc-text-xs); color: var(--pc-muted);
+}
+.re-shot-bar i {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--pc-surface-3); box-shadow: inset 0 0 0 1px var(--pc-border-strong);
+}
+.re-shot-bar em { font-style: normal; color: var(--pc-text); margin-left: 6px; }
+.re-shot-bar span { margin-left: auto; color: var(--pc-faint); }
+.re-shot-body { padding: 22px 22px 24px; }
+.re-shot-meta { font-family: var(--pc-font-mono); font-size: var(--pc-text-xs); color: var(--pc-muted); margin: 0 0 12px; }
+.re-shot-title { font-size: 1.3rem; font-weight: 600; line-height: 1.22; letter-spacing: -0.025em; margin: 0 0 10px; }
+.re-shot-lead { color: var(--pc-muted); font-size: var(--pc-text-sm); line-height: 1.6; margin: 0 0 20px; }
+
+.re-checklist { list-style: none; margin: 0 0 22px; padding: 0; border-top: var(--re-edge); }
+.re-checklist li {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 0; border-bottom: var(--re-edge);
+  font-size: var(--pc-text-sm); color: var(--pc-text-secondary);
+}
+.re-checklist li span { font-family: var(--pc-font-mono); font-size: 10px; color: var(--pc-faint); }
+.re-checklist li b { margin-left: auto; font-weight: 500; color: var(--pc-text); }
+
+.re-shot-result {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px; align-items: center;
+  padding-top: 18px; border-top: 1px solid var(--pc-border-strong);
+}
+.re-shot-result > div { display: flex; flex-direction: column; gap: 3px; }
+.re-shot-result span { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--pc-faint); }
+.re-shot-result strong { font-size: 2.35rem; font-weight: 600; letter-spacing: -0.05em; line-height: 1; font-variant-numeric: tabular-nums; }
+.re-shot-result strong small { font-size: 0.9rem; font-weight: 400; color: var(--pc-faint); letter-spacing: -0.02em; }
+.re-shot-result p { margin: 0; font-size: var(--pc-text-sm); color: var(--pc-muted); line-height: 1.5; }
+
+/* ── 2 · Sequence ─────────────────────────────────────────────────── */
+.re-stage { padding: 8px 0 40px; }
+.re-act {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: 56px; align-items: center;
+  padding: 64px 0;
+  border-bottom: var(--re-edge);
+}
+.re-act:last-child { border-bottom: 0; }
+.re-act.is-flip .re-act-copy { order: 2; }
+.re-act.is-flip .re-screen { order: 1; }
+.re-act-copy { min-width: 0; }
+.re-act-num {
+  font-family: var(--pc-font-mono); font-size: var(--pc-text-xs);
+  color: var(--pc-faint); margin: 0 0 16px; letter-spacing: 0.1em;
+}
+.re-act-title {
+  font-size: clamp(1.6rem, 2.7vw, 2.3rem); font-weight: 600;
+  letter-spacing: -0.032em; line-height: 1.1; margin: 0 0 12px;
+  text-wrap: balance;
+}
+.re-act-sub { color: var(--pc-muted); line-height: 1.68; margin: 0; max-width: 40ch; font-size: var(--pc-text-body); }
+
+/* Static screens */
+.re-screen {
+  margin: 0; min-width: 0;
+  background: var(--pc-bg-elevated);
+  border: 1px solid var(--pc-border-strong);
+  border-radius: var(--pc-radius-md);
+  box-shadow: var(--pc-shadow-md);
+  overflow: hidden;
+}
+.re-screen-bar {
+  display: flex; align-items: center; gap: 7px;
+  padding: 9px 14px; border-bottom: var(--re-edge); background: var(--pc-surface-2);
+  font-family: var(--pc-font-mono); font-size: var(--pc-text-xs); color: var(--pc-muted);
+}
+.re-screen-bar i {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--pc-surface-3); box-shadow: inset 0 0 0 1px var(--pc-border-strong);
+}
+.re-screen-bar em { font-style: normal; color: var(--pc-text); margin-left: 6px; }
+.re-screen-bar span {
+  margin-left: auto; padding: 2px 8px; border-radius: var(--pc-radius-xs);
+  background: var(--pc-accent); color: var(--pc-accent-ink); font-weight: 500;
+}
+.re-screen-body { padding: 16px 18px 18px; background: var(--pc-bg); }
+
+.re-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.re-filters span {
+  padding: 3px 9px; border-radius: var(--pc-radius-xs);
+  border: var(--re-edge); font-size: 11px; color: var(--pc-muted);
+}
+.re-filters span.is-on { background: var(--pc-accent); color: var(--pc-accent-ink); border-color: var(--pc-accent); }
+
+.re-mini-table { width: 100%; border-collapse: collapse; font-size: var(--pc-text-sm); }
+.re-mini-table th {
+  text-align: left; padding: 0 10px 8px 0; border-bottom: var(--re-edge);
+  font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--pc-faint); font-weight: 400;
+}
+.re-mini-table td { padding: 9px 10px 9px 0; border-bottom: var(--re-edge); color: var(--pc-muted); }
+.re-mini-table td:first-child { color: var(--pc-text); font-weight: 500; white-space: nowrap; }
+.re-mini-table td:last-child { font-family: var(--pc-font-mono); font-size: 11px; white-space: nowrap; }
+.re-mini-table tr:last-child td { border-bottom: 0; }
+.re-mini-table tr.is-focus td { background: var(--pc-accent-dim); }
+.re-mini-table tr.is-focus td:first-child { box-shadow: inset 2px 0 0 var(--pc-accent); padding-left: 8px; }
+
+.re-ide { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 18px; }
+.re-ide-files { min-width: 0; }
+.re-dim { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--pc-faint); margin: 0 0 8px; text-transform: uppercase; }
+.re-file { font-family: var(--pc-font-mono); font-size: 11px; color: var(--pc-muted); margin: 0 0 4px; }
+.re-file.is-on { color: var(--pc-text); background: var(--pc-surface-2); border-radius: var(--pc-radius-xs); padding: 2px 6px; margin-left: -6px; }
+.re-ide-code { min-width: 0; }
+.re-ide-code pre, .re-diff {
+  margin: 0; font-family: var(--pc-font-mono); font-size: var(--pc-text-code);
+  line-height: 1.8; color: var(--pc-text-secondary); white-space: pre-wrap; word-break: break-word;
+}
+.re-fn { color: var(--pc-text); font-weight: 500; }
+.re-kw { color: var(--pc-text); }
+.re-key { color: var(--pc-ai); }
+.re-add { display: block; background: var(--pc-diff-add); border-left: 2px solid var(--pc-success); margin-left: -8px; padding-left: 8px; color: var(--pc-text); }
+.re-ai-actions { display: flex; gap: 8px; margin-top: 16px; }
+.re-ai-actions span {
+  padding: 4px 11px; border-radius: var(--pc-radius-xs);
+  border: var(--re-edge); font-size: var(--pc-text-xs); color: var(--pc-muted);
+}
+.re-ai-actions span.is-on { background: var(--pc-accent); color: var(--pc-accent-ink); border-color: var(--pc-accent); }
+
+.re-term p { margin: 0 0 4px; font-family: var(--pc-font-mono); font-size: var(--pc-text-code); }
+.re-term-row { display: flex; justify-content: space-between; gap: 16px; padding: 3px 6px; border-radius: var(--pc-radius-xs); color: var(--pc-success); }
+.re-term-row span:first-child { color: var(--pc-text-secondary); }
+.re-term-row.is-fail { color: var(--pc-danger); background: var(--pc-danger-dim); }
+.re-term-row.is-fail span:first-child { color: var(--pc-text); }
+.re-term-sum { margin-top: 8px !important; color: var(--pc-danger); }
+
+.re-report { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 26px; align-items: center; }
+.re-screen-report .re-screen-body { min-height: 172px; }
+/* Caption sits in normal flow below the ring. An absolutely-positioned caption
+   is taken out of flow, so it lands on the circle's edge and overflows the
+   panel's bottom padding — which is exactly what it did. */
+.re-ring-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.re-ring { width: 118px; height: 118px; display: block; }
+.re-ring circle { fill: none; stroke-width: 6; }
+.re-ring-track { stroke: var(--pc-surface-3); }
+.re-ring-fill {
+  stroke: var(--pc-accent); stroke-linecap: round;
+  /* Base state is the finished ring, so the static / reduced-motion page shows it. */
+  stroke-dasharray: var(--re-ring-len, 190) 264;
+  transform: rotate(-90deg); transform-origin: 50% 50%;
+}
+.re-ring-cap {
+  margin: 0;
+  font-family: var(--pc-font-mono); font-size: 10px;
+  letter-spacing: 0.06em; line-height: 1; color: var(--pc-faint);
+}
+.re-report-list { display: grid; gap: 10px; }
+.re-report-list p { display: grid; grid-template-columns: minmax(0, 1fr) 66px 28px; align-items: center; gap: 12px; margin: 0; font-size: var(--pc-text-sm); }
+.re-report-list i { display: block; height: 5px; border-radius: 3px; background: var(--pc-accent); width: var(--re-bar-w, 60%); }
+.re-report-list p:nth-child(5) i { background: var(--pc-ai); }
+.re-report-list b { font-family: var(--pc-font-mono); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── 3 · Stats ────────────────────────────────────────────────────── */
+.re-stats { padding: 72px 0; background: var(--pc-bg-elevated); border-block: var(--re-edge); }
+.re-stats-head {
+  margin: 0 0 26px; font-family: var(--pc-font-mono); font-size: var(--pc-text-xs);
+  font-weight: 400; letter-spacing: 0.09em; color: var(--pc-faint);
+}
+/* Each stat carries its own side gutter, so copy always sits 28px clear of the
+   divider. The grid's negative inline margin cancels the outer gutters, keeping
+   column 1 flush left and column 4 flush right with the heading above. Without
+   this, the copy ran straight into the rules. */
+.re-stat-grid {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--pc-border-strong);
+  margin-inline: -28px;
+}
+.re-stat { padding: 22px 28px 24px; border-right: var(--re-edge); }
+.re-stat:last-child { border-right: 0; }
+.re-stat-n {
+  margin: 0 0 12px; font-size: clamp(2rem, 3vw, 2.7rem); font-weight: 600;
+  letter-spacing: -0.05em; line-height: 1; font-variant-numeric: tabular-nums;
+}
+.re-stat-l { margin: 0 0 12px; font-size: var(--pc-text-sm); line-height: 1.55; color: var(--pc-text-secondary); }
+.re-src { font-size: 11px; line-height: 1.45; color: var(--pc-faint); text-decoration: underline; text-underline-offset: 2px; }
+.re-src:hover { color: var(--pc-text); }
+
+/* ── 4 · FAQ ──────────────────────────────────────────────────────── */
+.re-faq {
+  display: grid; grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+  gap: 64px; align-items: start; padding-block: 88px;
+}
+.re-faq-head { min-width: 0; }
+.re-faq-list { min-width: 0; }
+.re-faq-list details { border-bottom: var(--re-edge); }
+.re-faq-list details:first-child { border-top: 1px solid var(--pc-border-strong); }
+.re-faq-list summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 17px 0; cursor: pointer; list-style: none;
+  font-size: var(--pc-text-body); font-weight: 600;
+}
+.re-faq-list summary::-webkit-details-marker { display: none; }
+.re-faq-list summary::after { content: "+"; font-family: var(--pc-font-mono); font-weight: 400; color: var(--pc-faint); }
+.re-faq-list details[open] summary::after { content: "–"; }
+.re-faq-list summary:hover { color: var(--pc-muted); }
+.re-faq-list summary:focus-visible { outline: none; box-shadow: var(--pc-glow-focus); border-radius: var(--pc-radius-xs); }
+.re-faq-list p { margin: 0 0 14px; font-size: var(--pc-text-sm); line-height: 1.72; color: var(--pc-muted); max-width: 68ch; }
+
+/* ── 5 · Close ────────────────────────────────────────────────────── */
+.re-close { padding: 88px 0 104px; background: var(--pc-bg-elevated); border-top: var(--re-edge); }
+.re-close-grid { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; flex-wrap: wrap; }
+.re-close-title {
+  font-size: clamp(1.9rem, 3.4vw, 2.7rem); font-weight: 600;
+  letter-spacing: -0.035em; line-height: 1.08; margin: 0; text-wrap: balance;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────── */
+@media (max-width: 1000px) {
+  .re-hero-grid { grid-template-columns: minmax(0, 1fr); gap: 44px; }
+  .re-hero { padding: 48px 0 64px; }
+  .re-act { grid-template-columns: minmax(0, 1fr); gap: 28px; padding: 48px 0; }
+  .re-act.is-flip .re-act-copy, .re-act.is-flip .re-screen { order: initial; }
+  .re-faq { grid-template-columns: minmax(0, 1fr); gap: 36px; padding-block: 64px; }
+  /* 2 × 2: keep the inline gutters so copy never meets a rule. Only the right
+     half gives up its divider. */
+  .re-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .re-stat:nth-child(even) { border-right: 0; }
+  .re-stat:nth-child(-n+2) { border-bottom: var(--re-edge); }
+  .re-stat:nth-child(n+3) { padding-top: 24px; }
+}
+@media (max-width: 640px) {
+  .re-wrap { padding: 0 18px; }
+  .re-h1 { font-size: 2.15rem; letter-spacing: -0.03em; }
+  .re-actions .btn { width: 100%; }
+  /* Single column: no vertical rules and no side gutters to keep. */
+  .re-stat-grid { grid-template-columns: minmax(0, 1fr); margin-inline: 0; }
+  .re-stat, .re-stat:nth-child(even), .re-stat:nth-child(odd) {
+    border-right: 0; padding: 20px 0; border-bottom: var(--re-edge);
+  }
+  .re-stat:last-child { border-bottom: 0; }
+  .re-ide, .re-report { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .re-report-list p { grid-template-columns: minmax(0, 1fr) 46px 26px; }
+  .re-shot-result { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   MOTION LAYER
+   Every initial state below is scoped to `.re-js` + no-preference, so the
+   base page above is already the finished page.
+   ══════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: no-preference) {
+
+  /* Page-load sequence: copy settles, visual lifts, header arrives. */
+  .re-js .re-header { animation: re-fade 600ms var(--re-ease-out) both; }
+  .re-js .re-hero-copy [data-re-enter] {
+    animation: re-enter 820ms var(--re-ease-out) both;
+    animation-delay: calc(var(--i, 0) * 90ms + 60ms);
+  }
+  .re-js .re-shot { animation: re-lift 1100ms var(--re-ease-out) both; animation-delay: 260ms; overflow: clip; }
+  .re-js .re-shot > * { animation: re-unmask 900ms var(--re-ease-out) both; animation-delay: 360ms; }
+
+  /* Scroll entrances. Section-level only; body copy is never faded per line. */
+  .re-js [data-re-reveal] {
+    opacity: 0; transform: translate3d(0, 22px, 0);
+    transition: opacity 620ms var(--re-ease-out), transform 780ms var(--re-ease-out);
+  }
+  .re-js [data-re-reveal].is-in { opacity: 1; transform: none; }
+
+  .re-js [data-re-stagger] > * {
+    opacity: 0; transform: translate3d(0, 14px, 0);
+    transition: opacity 520ms var(--re-ease-out), transform 640ms var(--re-ease-out);
+    transition-delay: calc(var(--i, 0) * 90ms);
+  }
+  .re-js [data-re-stagger].is-in > * { opacity: 1; transform: none; }
+
+  /* The narration: number, headline and sub all arrive as one gesture,
+     with the headline unmasked on its own clip so type does the work. */
+  .re-js .re-act-num,
+  .re-js .re-act-sub {
+    opacity: 0; transform: translate3d(-14px, 0, 0);
+    transition: opacity 560ms var(--re-ease-out), transform 760ms var(--re-ease-out);
+  }
+  .re-js .re-act.is-in .re-act-num { opacity: 1; transform: none; }
+  .re-js .re-act.is-in .re-act-sub { opacity: 1; transform: none; transition-delay: 220ms; }
+
+  .re-js .re-act-title span {
+    display: block;
+    clip-path: inset(0 100% 0 0);
+    transform: translate3d(0, 0.5em, 0);
+    transition: clip-path 900ms var(--re-ease-quint), transform 900ms var(--re-ease-quint);
+  }
+  .re-js .re-act.is-in .re-act-title span { clip-path: inset(0 0 0 0); transform: none; }
+
+  /* Screens rise into place with a slight scale so they read as objects. */
+  .re-js [data-re-shot] {
+    opacity: 0; transform: translate3d(0, 34px, 0) scale(0.985);
+    transition: opacity 700ms var(--re-ease-out), transform 1000ms var(--re-ease-out);
+    transition-delay: 120ms;
+  }
+  .re-js [data-re-shot].is-in { opacity: 1; transform: none; }
+
+  .re-js .re-act.is-flip [data-re-shot] { transition-delay: 0ms; }
+  .re-js .re-act.is-flip .re-act-title span { transition-delay: 120ms; }
+
+  /* Test rows cascade once, on entry. No loop. */
+  .re-js [data-re-row] {
+    opacity: 0; transform: translate3d(10px, 0, 0);
+    transition: opacity 380ms var(--re-ease-out), transform 480ms var(--re-ease-out);
+  }
+  .re-js .re-term.is-in [data-re-row] {
+    opacity: 1; transform: none;
+    transition-delay: calc(var(--i, 0) * 80ms + 260ms);
+  }
+
+  /* The report draws itself: ring first, then the five bars. The empty start
+     state comes first so the `.is-in` target below out-cascades it. */
+  .re-js .re-ring-fill { stroke-dasharray: 0 264; }
+  .re-js .re-ring-fill { transition: stroke-dasharray 1200ms var(--re-ease-quint) 340ms; }
+  .re-js .re-report.is-in .re-ring-fill { stroke-dasharray: var(--re-ring-len, 190) 264; }
+
+  .re-js .re-report-list i {
+    transform: scaleX(0); transform-origin: left center;
+    transition: transform 900ms var(--re-ease-quint);
+    transition-delay: calc(var(--i, 0) * 110ms + 420ms);
+  }
+  .re-js .re-report.is-in .re-report-list i { transform: none; }
+
+  /* Hero words: the physics layer takes over, so no CSS transition here. */
+  .re-js .re-h1.is-dropping { animation: none; }
+
+  @keyframes re-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes re-enter {
+    from { opacity: 0; transform: translate3d(0, 18px, 0); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes re-lift {
+    from { opacity: 0; transform: translate3d(0, 46px, 0) scale(0.97); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes re-unmask {
+    from { clip-path: inset(14% 0 0 0); }
+    to { clip-path: inset(0 0 0 0); }
+  }
+}
+
+/* Even with motion allowed, a JS failure must not hide content. */
+.re:not(.re-js) [data-re-reveal],
+.re:not(.re-js) [data-re-shot] { opacity: 1; transform: none; }
