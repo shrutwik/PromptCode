@@ -389,7 +389,11 @@ class ModalSandboxBackend:
         with self._lock:
             self._live[run_id] = None
         try:
-            sandbox = modal.Sandbox.create(**_create_kwargs(modal, policy, image, argv))
+            # Runner images exit by default. Keep the main process alive while
+            # uploading source and executing commands; timeout/finally bound it.
+            sandbox = modal.Sandbox.create(
+                "sleep", "infinity", **_create_kwargs(modal, policy, image, argv)
+            )
             if not self._register(run_id, sandbox):
                 raise SandboxAborted("Sandbox run was cancelled")
             _upload_source(sandbox, source_dir)

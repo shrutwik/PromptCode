@@ -131,6 +131,7 @@ class _FakeModal(types.ModuleType):
         self.process: _FakeProcess | None = None
         self.exec_error: BaseException | None = None
         self.created: list[_FakeSandbox] = []
+        self.create_args: tuple[str, ...] = ()
         self.create_kwargs: dict[str, Any] = {}
         self.images: list[str] = []
         self.app_name = ""
@@ -149,6 +150,7 @@ class _FakeModal(types.ModuleType):
         return types.SimpleNamespace(reference=reference)
 
     def _create(self, *args: Any, **kwargs: Any) -> _FakeSandbox:
+        self.create_args = args
         self.create_kwargs = kwargs
         sandbox = _FakeSandbox(process=self.process, exec_error=self.exec_error)
         self.created.append(sandbox)
@@ -252,6 +254,9 @@ def test_modal_sandbox_blocks_network_and_honours_policy(modal_settings, fake_mo
     )
 
     assert outcome.exit_code == 0 and outcome.timed_out is False
+    # The image's default command exits immediately. Upload and exec need a
+    # live sandbox, independent of the candidate command executed later.
+    assert fake_modal.create_args == ("sleep", "infinity")
     kwargs = fake_modal.create_kwargs
     # Modal allows egress by default; the sandbox must always block it.
     assert kwargs["block_network"] is True
