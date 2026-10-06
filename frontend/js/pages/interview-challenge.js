@@ -20,7 +20,6 @@ async function load() {
   }
   const activeId = card && card.active_session_id;
   const startLabel = card && card.attempt_count ? "Start another attempt" : "Start session";
-  document.title = c.title + " — PromptCode";
   const main = document.getElementById("main");
   main.removeAttribute("aria-busy");
   main.innerHTML = `

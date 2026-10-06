@@ -420,7 +420,6 @@ func main() {
   function populateChallenge(c) {
     document.querySelector('.problem-title').textContent = c.title;
     document.querySelector('.challenge-crumb .name').textContent = c.title;
-    document.title = `PromptCode — ${c.title}`;
 
     const diffMap = { easy: 'success', medium: 'warn', hard: 'danger' };
     const badge = document.querySelector('.challenge-crumb .diff-badge');

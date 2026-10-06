@@ -159,7 +159,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Header placeholders from local user while API loads
   $('profileHandle').textContent = targetUsername;
-  document.title = targetUsername + ' \u2014 PromptCode';
 
   let profile;
   try {
@@ -180,7 +179,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const initials = ((user.first_name?.[0] || '') + (user.last_name?.[0] || '') || user.username?.substring(0, 2) || '??').toUpperCase();
   $('profileAvatar').textContent = initials;
   $('profileHandle').textContent = user.username || targetUsername;
-  document.title = (user.username || targetUsername) + ' \u2014 PromptCode';
 
   const nameParts = [user.first_name, user.last_name].filter(Boolean).join(' ');
   const joinDate = user.created_at
