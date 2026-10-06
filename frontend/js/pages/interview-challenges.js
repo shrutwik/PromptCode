@@ -1,7 +1,4 @@
 if (!InterviewAPI.requireAuth("/challenges")) throw new Error("auth");
-if (!sessionStorage.getItem("pc_onboarded") && !localStorage.getItem("pc_onboarded")) {
-  location.href = "/onboarding";
-}
 
 const esc = PCUI.esc;
 const params = new URLSearchParams(location.search);

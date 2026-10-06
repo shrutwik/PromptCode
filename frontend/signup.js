@@ -114,7 +114,7 @@ async function handleSignup(e) {
       last_name: lname,
       password,
     });
-    window.location.href = '/onboarding';
+    window.location.href = '/dashboard';
   } catch (err) {
     showFormError(err.message || 'Signup failed — try again.');
     btn.textContent = label;
