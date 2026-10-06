@@ -37,6 +37,8 @@
       "destination": "https://shrutwik2006--promptcode-fastapi-app.modal.run/api/:path*"
     },
     { "source": "/static/:path*", "destination": "/frontend/:path*" },
+    { "source": "/login.html", "destination": "/frontend/login.html" },
+    { "source": "/signup.html", "destination": "/frontend/signup.html" },
     { "source": "/challenges/:slug", "destination": "/frontend/interview-challenge.html" },
     { "source": "/challenges", "destination": "/frontend/interview-challenges.html" },
     { "source": "/session/:id/report", "destination": "/frontend/interview-report.html" },
