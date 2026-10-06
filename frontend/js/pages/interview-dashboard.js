@@ -34,7 +34,7 @@ function renderContinue(sessions) {
       <div>
         <span class="pc-eyebrow">Continue practice</span>
         <h2>${esc(active.challenge_title || active.challenge_slug)}</h2>
-        <p>Your workspace is saved. Pick up where you left off — the timer keeps running.</p>
+        <p>Your workspace is saved. Pick up where you left off — the timer pauses while you’re away.</p>
         <div class="dash-continue-meta">
           <span class="tag" data-tone="info"><span class="pc-dot"></span>In progress</span>
           <span class="tag">Attempt ${esc(active.attempt_number || 1)}</span>

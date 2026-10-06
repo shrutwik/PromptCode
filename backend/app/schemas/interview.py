@@ -59,6 +59,14 @@ class SessionResponse(BaseModel):
     started_at: datetime
     submitted_at: datetime | None = None
     expires_at: datetime | None = None
+    elapsed_ms: int = 0
+    timer_running: bool = False
+    timer_lease_ms: int = 0
+
+
+class SessionTimerRequest(BaseModel):
+    action: str = Field(pattern="^(resume|heartbeat|pause)$")
+    editor_token: str = Field(min_length=16, max_length=64)
 
 
 class SessionFeedbackRequest(BaseModel):
@@ -126,10 +134,12 @@ class FileEntry(BaseModel):
 class FileContentResponse(BaseModel):
     path: str
     content: str
+    revision: int = 0
 
 
 class SaveFileRequest(BaseModel):
     content: str
+    base_revision: int | None = Field(default=None, ge=0)
     source: str = "candidate"  # candidate | ai | mixed
     additions: int | None = None
     deletions: int | None = None

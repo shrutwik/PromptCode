@@ -18,6 +18,165 @@ let undoAi = [];
 let viewedOnce = new Set();
 let sessionReadOnly = false;
 
+let sessionTerminal = false;
+let currentSessionStatus = "active";
+let editorOwned = false;
+let workspaceFocused = document.hasFocus();
+let autosaveBlocked = false;
+let sessionReady = false;
+let endingSession = false;
+let allowNavigation = false;
+let runPending = false;
+let saveQueue = Promise.resolve();
+let timerQueue = Promise.resolve();
+const sessionClock = new InterviewSessionState.Clock();
+const editorToken = crypto.randomUUID();
+InterviewAPI.editorToken = editorToken;
+const draftUser = (() => {
+  try { return JSON.parse(InterviewAPI._get("pc_user") || "null")?.id || ""; }
+  catch (_) { return ""; }
+})();
+const drafts = draftUser ? new InterviewSessionState.Drafts(localStorage, draftUser, sessionId) : null;
+let draftWarningShown = false;
+
+function persistDraft(path) {
+  if (!drafts || !models[path] || sessionTerminal) return;
+  const item = models[path];
+  const value = Object.prototype.hasOwnProperty.call(previewBackup, path) ? previewBackup[path] : item.model.getValue();
+  try { drafts.write(path, value, item.saved, item.revision); }
+  catch (_) {
+    if (!draftWarningShown) PCUI.toast("Local draft storage is unavailable. Save or export your work before leaving.", { tone: "danger" });
+    draftWarningShown = true;
+  }
+}
+
+function setEditable(editable) {
+  editable = editable && !endingSession;
+  sessionReadOnly = !editable;
+  if (editor) editor.updateOptions({ readOnly: !editable });
+  ["saveBtn", "testBtn", "relevantBtn", "benchBtn", "submitBtn"].forEach((id) => {
+    const button = document.getElementById(id);
+    if (button) button.disabled = !editable || endingSession;
+  });
+  document.getElementById("chatInput").disabled = !editable || endingSession;
+}
+
+function syncSession(snapshot) {
+  currentSessionStatus = snapshot.status;
+  sessionTerminal = !["active", "created"].includes(snapshot.status);
+  sessionClock.sync(snapshot);
+  setEditable(editorOwned && !sessionTerminal && snapshot.timer_running && workspaceFocused && !document.hidden && navigator.onLine);
+  if (document.hidden || !workspaceFocused || !navigator.onLine) sessionClock.pause();
+  setSessionStatus(sessionTerminal ? "idle" : snapshot.timer_running ? "active" : "idle",
+    sessionTerminal ? snapshot.status : snapshot.timer_running ? "In progress" : "Paused");
+  document.getElementById("abandonBtn").hidden = sessionTerminal;
+  document.getElementById("pauseSessionBtn").hidden = sessionTerminal;
+  document.getElementById("resumeTimerBtn").hidden = sessionTerminal || !sessionReadOnly;
+}
+
+function timerAction(action, options = {}) {
+  timerQueue = timerQueue.catch(() => {}).then(async () => {
+    if (!sessionReady || sessionTerminal) return;
+    if (action !== "pause" && (document.hidden || !workspaceFocused || !navigator.onLine || (endingSession && action !== "heartbeat"))) return;
+    try {
+      const snapshot = await InterviewAPI.timer(sessionId, action, options);
+      editorOwned = action !== "pause" && snapshot.timer_running;
+      syncSession(snapshot);
+      return snapshot;
+    } catch (error) {
+      editorOwned = false;
+      sessionClock.pause();
+      setEditable(false);
+      document.getElementById("resumeTimerBtn").hidden = sessionTerminal;
+      setSessionStatus("idle", "Paused");
+      if (!options.quiet) PCUI.toast(error.message || "Connection lost. Your timer is paused.", { tone: "danger" });
+      if (options.requireSuccess) throw error;
+    }
+  });
+  return timerQueue;
+}
+
+function requestPause(unloading = false) {
+  editorOwned = false;
+  sessionClock.pause();
+  setEditable(false);
+  Object.keys(models).forEach(persistDraft);
+  if (!sessionReady || sessionTerminal) return;
+  if (unloading) {
+    // Authentication headers rule out sendBeacon; keepalive delivers the pause on navigation.
+    fetch(InterviewAPI.base + "/sessions/" + sessionId + "/timer", {
+      method: "POST", keepalive: true, credentials: "include",
+      headers: InterviewAPI.authHeaders(),
+      body: JSON.stringify({ action: "pause", editor_token: editorToken }),
+    }).catch(() => {});
+  } else {
+    timerAction("pause", { quiet: true, skipAuthRedirect: true });
+  }
+}
+
+function hasPendingWork() { return endingSession || runPending || InterviewAPI.pendingWorkspaceRequests > 0; }
+function requireEditing() {
+  if (sessionReadOnly || endingSession) throw new Error("Resume this session before editing.");
+}
+
+function enqueueSave(path, { finishing = false } = {}) {
+  const operation = saveQueue.catch(() => {}).then(async () => {
+    if (finishing) {
+      if (!endingSession || !editorOwned || sessionTerminal) throw new Error("Resume this session before saving.");
+    } else {
+      requireEditing();
+    }
+    const item = models[path];
+    if (!item || item.model.getValue() === item.saved) return;
+    const content = item.model.getValue();
+    const result = await InterviewAPI.saveFile(sessionId, path, content,
+      { source: "candidate", base_revision: item.revision });
+    autosaveBlocked = false;
+    item.saved = content;
+    item.revision = result.revision;
+    item.dirty = item.model.getValue() !== content;
+    persistDraft(path);
+    updateDirtyPill();
+    renderTabs();
+  });
+  saveQueue = operation;
+  return operation;
+}
+
+window.addEventListener("beforeunload", (event) => {
+  Object.keys(models).forEach(persistDraft);
+  if (!allowNavigation && !sessionTerminal && (hasPendingWork() || Object.values(models).some((item) => item.model.getValue() !== item.saved))) {
+    event.preventDefault(); event.returnValue = "";
+  }
+});
+window.addEventListener("pagehide", () => requestPause(true));
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) requestPause();
+  else timerAction("resume");
+});
+window.addEventListener("blur", () => { workspaceFocused = false; requestPause(); });
+window.addEventListener("focus", () => { workspaceFocused = true; timerAction("resume"); });
+window.addEventListener("offline", () => requestPause());
+window.addEventListener("online", () => { autosaveBlocked = false; timerAction("resume"); });
+window.addEventListener("pageshow", (event) => { if (event.persisted) timerAction("resume"); });
+document.getElementById("resumeTimerBtn").onclick = () => timerAction("resume");
+setInterval(() => {
+  document.getElementById("sessionTimer").textContent = formatElapsed(sessionClock.value());
+  if (sessionReady && !sessionTerminal && !sessionReadOnly && !sessionClock.running()) {
+    sessionClock.pause(); setEditable(false);
+    document.getElementById("resumeTimerBtn").hidden = false;
+    setSessionStatus("idle", "Paused");
+  }
+}, 1000);
+setInterval(() => {
+  if (workspaceFocused && !document.hidden && navigator.onLine && (!sessionReadOnly || (endingSession && editorOwned))) timerAction("heartbeat", { quiet: true });
+}, 10000);
+setInterval(() => {
+  if (!autosaveBlocked && !sessionReadOnly && !hasPendingWork() && !pendingEdits.length && workspaceFocused && navigator.onLine && !document.hidden) {
+    saveDirtyModels().catch((error) => { autosaveBlocked = true; PCUI.toast(error.message, { tone: "danger" }); });
+  }
+}, 5000);
+
 function langFor(path) {
   const ext = (path.split(".").pop() || "").toLowerCase();
   return EXT_LANG[ext] || "plaintext";
@@ -91,7 +250,7 @@ function renderReadme(el, text) {
   el.innerHTML = html || "<p>No task description.</p>";
 }
 function updateDirtyPill() {
-  const dirty = openTabs.some((p) => models[p] && models[p].dirty);
+  const dirty = Object.values(models).some((item) => item.dirty);
   document.getElementById("dirtyPill").classList.toggle("hidden", !dirty);
 }
 
@@ -233,11 +392,20 @@ async function openFile(path) {
     model.onDidChangeContent(() => {
       if (!models[path]) return;
       models[path].dirty = model.getValue() !== models[path].saved;
+      persistDraft(path);
       updateDirtyPill();
       renderTabs();
       renderTree(document.getElementById("fileSearch").value);
     });
-    models[path] = { model, saved: data.content, dirty: false };
+    models[path] = { model, saved: data.content, revision: data.revision, dirty: false };
+    const draft = drafts?.read(path);
+    if (!sessionTerminal && draft && typeof draft.value === "string" && draft.value !== data.content) {
+      const sameBase = draft.saved === data.content;
+      if (sameBase || window.confirm("This file has a local draft and a newer saved version. Restore the local draft for review? Saving it will replace the saved version.")) {
+        model.setValue(draft.value);
+        PCUI.toast("Recovered your unsaved draft for " + path, { tone: "info" });
+      }
+    }
     if (!viewedOnce.has(path)) viewedOnce.add(path);
   }
   if (!openTabs.includes(path)) openTabs.push(path);
@@ -265,15 +433,10 @@ function modelEntries() {
   }));
 }
 
-async function saveDirtyModels() {
+async function saveDirtyModels(options = {}) {
   const pad = window.InterviewPad;
   const paths = pad ? pad.dirtyPaths(modelEntries()) : Object.keys(models).filter((p) => models[p].dirty);
-  for (const path of paths) {
-    const content = models[path].model.getValue();
-    await InterviewAPI.saveFile(sessionId, path, content, { source: "candidate" });
-    models[path].saved = content;
-    models[path].dirty = false;
-  }
+  for (const path of paths) await enqueueSave(path, options);
   updateDirtyPill();
   renderTabs();
   renderTree(document.getElementById("fileSearch").value);
@@ -291,14 +454,10 @@ async function save() {
   if (window.InterviewPad && window.InterviewPad.pathUnsafe(currentPath)) {
     throw new Error("This file cannot be changed");
   }
-  const content = models[currentPath].model.getValue();
-  await InterviewAPI.saveFile(sessionId, currentPath, content, { source: "candidate" });
-  models[currentPath].saved = content;
-  models[currentPath].dirty = false;
-  updateDirtyPill();
-  renderTabs();
+  await enqueueSave(currentPath);
   renderTree(document.getElementById("fileSearch").value);
-  logTerm("Saved " + currentPath + " (file_changed on save)");
+  logTerm("Saved " + currentPath);
+
 }
 
 function revealTerminal() {
@@ -309,6 +468,14 @@ function revealTerminal() {
 }
 
 async function runCmd(commandId) {
+  requireEditing();
+  if (hasPendingWork()) throw new Error("Wait for the current action to finish.");
+  runPending = true;
+  try { await runCommand(commandId); }
+  finally { runPending = false; }
+}
+
+async function runCommand(commandId) {
   revealTerminal();
   setTermMeta("Saving open files…");
   const saved = await saveDirtyModels();
@@ -433,6 +600,7 @@ const submitDialog = bindDialog(document.getElementById("submitModal"), "confirm
 const abandonDialog = bindDialog(document.getElementById("abandonModal"), "confirmAbandon");
 
 async function submit() {
+  requireEditing();
   const dirtyCount = (window.InterviewPad ? window.InterviewPad.dirtyPaths(modelEntries()) : []).length;
   document.getElementById("submitDirtyLine").textContent =
     "Unsaved files: " + dirtyCount + (dirtyCount ? " (will be saved)" : "");
@@ -442,12 +610,33 @@ async function submit() {
   document.getElementById("closeSubmit").onclick = close;
   document.getElementById("cancelSubmit").onclick = close;
   document.getElementById("confirmSubmit").onclick = async () => {
+    if (hasPendingWork()) { PCUI.toast("Wait for the current action to finish.", { tone: "info" }); return; }
     close();
-    await saveDirtyModels();
-    logTerm("Submitting…");
-    setSessionStatus("busy", "Submitting");
-    await InterviewAPI.submit(sessionId);
-    location.href = "/session/" + sessionId + "/report";
+    try {
+      requireEditing();
+      endingSession = true;
+      setEditable(false);
+      await saveDirtyModels({ finishing: true });
+      logTerm("Submitting…");
+      setSessionStatus("busy", "Submitting");
+      await InterviewAPI.submit(sessionId);
+      // Successful saves already remove their drafts. Preserve any later local edits.
+      sessionTerminal = true;
+      sessionClock.pause();
+      location.href = "/session/" + sessionId + "/report";
+    } catch (error) {
+      endingSession = false;
+      // A lost response may hide an accepted submission. Ask the server before retrying.
+      try {
+        const snapshot = await InterviewAPI.getSession(sessionId);
+        syncSession(snapshot);
+        if (snapshot.status === "submitted") {
+          location.href = "/session/" + sessionId + "/report";
+          return;
+        }
+      } catch (_) { requestPause(); }
+      PCUI.toast(error.message, { tone: "danger" });
+    }
   };
   submitDialog.open(document.getElementById("submitBtn"));
 }
@@ -460,14 +649,53 @@ function openAbandon() {
   const close = () => abandonDialog.close();
   document.getElementById("closeAbandon").onclick = close;
   document.getElementById("cancelAbandon").onclick = close;
+  document.getElementById("pauseAndLeave").onclick = async () => {
+    if (hasPendingWork()) { PCUI.toast("Wait for the current action to finish.", { tone: "info" }); return; }
+    try {
+      requireEditing();
+      endingSession = true;
+      setEditable(false);
+      await saveDirtyModels({ finishing: true });
+      await timerAction("pause", { requireSuccess: true });
+      if (sessionClock.running()) throw new Error("Could not pause the session. Try again.");
+      allowNavigation = true;
+      location.href = "/dashboard";
+    } catch (error) {
+      endingSession = false;
+      await timerAction("resume");
+      PCUI.toast(error.message, { tone: "danger" });
+    }
+  };
   document.getElementById("confirmAbandon").onclick = async () => {
+    if (hasPendingWork()) { PCUI.toast("Wait for the current action to finish.", { tone: "info" }); return; }
     const btn = document.getElementById("confirmAbandon");
     btn.disabled = true;
     try {
+      endingSession = true;
+      setEditable(false);
       await InterviewAPI.abandon(sessionId, "");
+      sessionTerminal = true;
+      sessionClock.pause();
+      try { drafts?.clear(); } catch (_) {}
       abandonDialog.close();
       location.href = "/dashboard";
     } catch (err) {
+      endingSession = false;
+      try {
+        const snapshot = await InterviewAPI.getSession(sessionId);
+        if (snapshot.status === "abandoned") {
+          sessionTerminal = true;
+          try { drafts?.clear(); } catch (_) {}
+          location.href = "/dashboard";
+          return;
+        }
+        if (snapshot.status === "submitted") {
+          sessionTerminal = true;
+          location.href = "/session/" + sessionId + "/report";
+          return;
+        }
+      } catch (_) { /* Keep the recovery draft when state cannot be confirmed. */ }
+      await timerAction("resume");
       btn.disabled = false;
       PCUI.toast(err.message, { tone: "danger" });
     }
@@ -476,6 +704,9 @@ function openAbandon() {
 }
 
 function setSessionStatus(state, label) {
+  if (sessionReady && sessionReadOnly && !endingSession) {
+    state = "idle"; label = sessionTerminal ? currentSessionStatus : "Paused";
+  }
   const el = document.getElementById("sessionStatus");
   if (!el) return;
   el.dataset.state = state || "ok";
@@ -585,6 +816,7 @@ function configureModuleResolution() {
 function bindPadKeys(ed) {
   const pad = window.InterviewPad;
   ed.addCommand(monaco.KeyCode.Tab, () => {
+    if (sessionReadOnly || endingSession) return;
     const widget = document.querySelector("#monacoHost .suggest-widget");
     const open = widget && !widget.classList.contains("hidden") && widget.offsetHeight > 0;
     if (open) {
@@ -609,6 +841,7 @@ function bindPadKeys(ed) {
     ed.executeEdits("indent", [{ range: sel, text: unit, forceMoveMarkers: true }]);
   });
   ed.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Tab, () => {
+    if (sessionReadOnly || endingSession) return;
     ed.trigger("pc", "editor.action.outdentLines", null);
   });
 }
@@ -666,16 +899,8 @@ require(["vs/editor/editor.main"], async function () {
     return;
   }
   const s = await InterviewAPI.getSession(sessionId);
-  sessionReadOnly = s.status !== "active";
-  const leave = document.getElementById("abandonBtn");
-  if (leave) leave.hidden = !(s.status === "active" || s.status === "created");
+  syncSession(s);
   document.getElementById("slugLabel").textContent = s.challenge_slug;
-  const started = s.started_at ? parseUtc(s.started_at) : Date.now();
-  const tick = () => {
-    document.getElementById("sessionTimer").textContent = formatElapsed(Date.now() - started);
-  };
-  tick();
-  setInterval(tick, 1000);
   files = await InterviewAPI.listFiles(sessionId);
   renderTree();
   const ticketEl = document.getElementById("questionBody");
@@ -699,6 +924,14 @@ require(["vs/editor/editor.main"], async function () {
     }
     await openFile(readme.path);
   }
+  // Start only after the workspace is usable; draft recovery precedes autosaving.
+  if (!sessionTerminal) {
+    for (const path of drafts?.paths() || []) {
+      if (files.some((file) => file.path === path)) await openFile(path);
+    }
+  }
+  sessionReady = true;
+  if (!sessionTerminal) await timerAction("resume");
 
 });
 
@@ -870,7 +1103,8 @@ const palette = PCUI.createCommandPalette([
     if (a === "toggle-explorer") window.__pcTogglePanel("explorer");
     if (a === "toggle-ai") window.__pcTogglePanel("ai");
     if (a === "toggle-term") window.__pcTogglePanel("term");
-    if (a === "abandon") openAbandon();
+    if (a === "abandon" || a === "pause") openAbandon();
+    if (a === "export") exportWork().catch((e) => PCUI.toast(e.message, { tone: "danger" }));
   });
 })();
 
@@ -883,6 +1117,7 @@ document.getElementById("chatInput").addEventListener("keydown", (e) => {
 
 document.getElementById("chatForm").onsubmit = async (ev) => {
   ev.preventDefault();
+  if (sessionReadOnly || hasPendingWork()) return;
   const message = document.getElementById("chatInput").value.trim();
   if (!message) return;
   logChat("user", message);
@@ -944,6 +1179,7 @@ function renderApplyBar() {
 }
 
 async function previewProposal(path) {
+  requireEditing();
   const edit = (window.InterviewPad ? window.InterviewPad.proposalPlan(pendingEdits) : { usable: [] })
     .usable.find((item) => item.path === path);
   if (!edit) return;
@@ -958,6 +1194,7 @@ async function previewProposal(path) {
 }
 
 async function applyDisposition(disposition) {
+  requireEditing();
   const plan = window.InterviewPad
     ? window.InterviewPad.proposalPlan(pendingEdits)
     : { usable: [] };
@@ -1028,6 +1265,7 @@ async function applyDisposition(disposition) {
     if (!models[edit.path]) await openFile(edit.path);
     if (models[edit.path]) {
       replaceWhole(models[edit.path].model, next);
+      models[edit.path].revision = saved.revision;
       models[edit.path].saved = next;
       models[edit.path].dirty = false;
     }
@@ -1061,14 +1299,17 @@ function showUndo(paths) {
 }
 
 async function undoAccepted() {
+  requireEditing();
   const items = undoAi.slice();
   undoAi = [];
   for (const item of items) {
     if (window.InterviewPad && window.InterviewPad.pathUnsafe(item.path)) continue;
-    await InterviewAPI.saveFile(sessionId, item.path, item.before, { source: "candidate" });
+    const result = await InterviewAPI.saveFile(sessionId, item.path, item.before,
+      { source: "candidate", base_revision: models[item.path]?.revision });
     if (!models[item.path]) await openFile(item.path);
     if (models[item.path]) {
       replaceWhole(models[item.path].model, item.before);
+      models[item.path].revision = result.revision;
       models[item.path].saved = item.before;
       models[item.path].dirty = false;
     }
@@ -1078,4 +1319,18 @@ async function undoAccepted() {
   renderTree(document.getElementById("fileSearch").value);
   logTerm("Restored " + items.map((item) => item.path).join(", "));
   setTermMeta("Undo saved.");
+}
+
+
+async function exportWork() {
+  const contents = {};
+  for (const file of files) {
+    const local = drafts?.read(file.path);
+    contents[file.path] = models[file.path]?.model.getValue() ?? local?.value ??
+      (await InterviewAPI.getFile(sessionId, file.path)).content;
+  }
+  const url = URL.createObjectURL(new Blob([JSON.stringify(contents, null, 2)], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = url; link.download = "practice-" + sessionId + ".json"; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

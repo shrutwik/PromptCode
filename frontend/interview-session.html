@@ -24,7 +24,7 @@
     <div class="ide-meta">
       <span class="dirty-pill hidden" id="dirtyPill">unsaved</span>
       <span class="ide-status" id="sessionStatus" data-state="ok" role="status">Ready</span>
-      <span class="ide-timer" id="sessionTimer" title="Elapsed time" aria-label="Elapsed time">00:00</span>
+      <span class="ide-timer" id="sessionTimer" title="Elapsed time" aria-label="Elapsed time">00:00</span> <button type="button" class="btn btn-ghost btn-sm" id="resumeTimerBtn" hidden>Resume timer</button>
     </div>
     <span class="ide-divider" aria-hidden="true"></span>
     <button class="btn btn-secondary" id="testBtn" type="button" title="Run tests">Run tests</button>
@@ -45,7 +45,9 @@
   <button type="button" role="menuitem" data-action="toggle-ai">Toggle AI panel</button>
   <button type="button" role="menuitem" data-action="toggle-term">Toggle terminal</button>
   <div class="pc-menu-sep" role="separator"></div>
-  <button type="button" role="menuitem" data-action="abandon" id="abandonBtn">Leave session</button>
+  <button type="button" role="menuitem" data-action="pause" id="pauseSessionBtn">Save and return later</button>
+  <button type="button" role="menuitem" data-action="abandon" id="abandonBtn">Discard attempt</button>
+  <button type="button" role="menuitem" data-action="export">Export work</button>
 </div>
 
 <div class="workspace" id="workspace">
@@ -136,10 +138,11 @@
       <button class="btn btn-ghost btn-sm" id="closeAbandon" type="button">Close</button>
     </div>
     <div class="modal-body">
-      <p id="abandonSummary">This marks the session abandoned and returns you to Practice.</p>
+      <p id="abandonSummary">Save your work and pause to return later, or discard this attempt. Discarded attempts remain read-only in history; restarting opens fresh code with a timer at 00:00.</p>
       <div class="modal-actions">
         <button class="btn btn-ghost" type="button" id="cancelAbandon">Stay</button>
-        <button class="btn btn-primary" type="button" id="confirmAbandon">Leave session</button>
+        <button class="btn btn-primary" type="button" id="pauseAndLeave">Save and return later</button>
+        <button class="btn btn-ghost" type="button" id="confirmAbandon">Discard attempt</button>
       </div>
     </div>
   </div>
@@ -150,9 +153,10 @@
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/editor/editor.main.nls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/editor/editor.main.js"></script>
 <script src="/static/api.js"></script>
-<script src="/static/interview-api.js?v=20261002a"></script>
+<script src="/static/interview-api.js?v=20261006c"></script>
 <script src="/static/js/pc-ui.js?v=20261006a"></script>
 <script src="/static/js/pages/interview-pad.js?v=20261001f"></script>
-<script src="/static/js/pages/interview-session.js?v=20261002b"></script>
+<script src="/static/js/pages/interview-session-state.js?v=20261006a"></script>
+<script src="/static/js/pages/interview-session.js?v=20261006c"></script>
 </body>
 </html>

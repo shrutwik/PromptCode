@@ -2,6 +2,8 @@ const InterviewAPI = {
   base: window.location.origin + "/api/interview",
   authBase: window.location.origin + "/api/auth",
   _refreshPromise: null,
+  editorToken: null,
+  pendingWorkspaceRequests: 0,
 
   // Execution capacity and AI budgets answer with 429/503 plus Retry-After when
   // the system is saturated. Callers should wait that long rather than showing a
@@ -92,6 +94,7 @@ const InterviewAPI = {
 
   authHeaders() {
     const headers = { "Content-Type": "application/json" };
+    if (this.editorToken) headers["X-Editor-Token"] = this.editorToken;
     const access = this.getAccessToken();
     if (access) {
       headers["Authorization"] = "Bearer " + access;
@@ -128,6 +131,14 @@ const InterviewAPI = {
   },
 
   async request(path, options = {}, isRetry = false) {
+    const writing = options.method && options.method !== "GET" &&
+      /\/sessions\//.test(path) && !/\/(timer|events)$/.test(path);
+    if (writing) this.pendingWorkspaceRequests += 1;
+    try { return await this._request(path, options, isRetry); }
+    finally { if (writing) this.pendingWorkspaceRequests -= 1; }
+  },
+
+  async _request(path, options = {}, isRetry = false) {
     const resp = await fetch(this.base + path, {
       ...options,
       credentials: "include",
@@ -200,6 +211,13 @@ const InterviewAPI = {
     return this.request("/sessions/" + id);
   },
 
+  timer(id, action, options = {}) {
+    return this.request("/sessions/" + id + "/timer", {
+      method: "POST", ...options,
+      body: JSON.stringify({ action, editor_token: this.editorToken }),
+    });
+  },
+
   listFiles(id) {
     return this.request("/sessions/" + id + "/files");
   },
@@ -217,6 +235,7 @@ const InterviewAPI = {
         method: "PUT",
         body: JSON.stringify({
           content,
+          base_revision: meta.base_revision,
           source: meta.source || "candidate",
           additions: meta.additions,
           deletions: meta.deletions,

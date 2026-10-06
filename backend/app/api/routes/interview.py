@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import os
 import asyncio
 import json
+import os
 import secrets
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.client_ip import client_ip_from_request
@@ -29,10 +29,10 @@ from app.models.interview_session import (
 )
 from app.models.user import User
 from app.schemas.interview import (
+    AbandonSessionRequest,
     AIApplyRequest,
     AIChatRequest,
     AIChatResponse,
-    AbandonSessionRequest,
     ChallengeProgressCard,
     DashboardSessionItem,
     DashboardStatsResponse,
@@ -41,7 +41,6 @@ from app.schemas.interview import (
     DiffFileResponse,
     DiffSummaryResponse,
     EvaluationResponse,
-    LevelStepResponse,
     EventRequest,
     EventResponse,
     FileContentResponse,
@@ -49,16 +48,17 @@ from app.schemas.interview import (
     HumanReviewRequest,
     InterviewChallengeCard,
     InterviewChallengeDetail,
+    LevelStepResponse,
     SaveFileRequest,
     SessionFeedbackRequest,
     SessionFeedbackResponse,
     SessionResponse,
+    SessionTimerRequest,
     StartSessionRequest,
     TestRunRequest,
     TestRunResponse,
 )
 from app.services.interview.ai_budget import reserve_ai_budget
-from app.services.interview.execution_feedback import advisory_scoring, advisory_summary
 from app.services.interview.ai_provider import (
     MAX_AI_REPLY_CHARS,
     MAX_ATTACHMENT_BYTES_TOTAL,
@@ -66,13 +66,13 @@ from app.services.interview.ai_provider import (
     MAX_ATTACHMENTS,
     SYSTEM_PROMPT,
     AIProviderError,
-    apply_assistant_guardrails,
-    screen_assistant_input,
     AIRequest,
+    apply_assistant_guardrails,
     check_session_ai_rate_limit,
     get_ai_provider,
     mark_session_ai_end,
     mark_session_ai_start,
+    screen_assistant_input,
     validate_context_budget,
 )
 from app.services.interview.analytics import (
@@ -89,13 +89,17 @@ from app.services.interview.calibration import (
     disagreement_report,
     session_review_payload,
 )
+from app.services.interview.execution_feedback import advisory_scoring, advisory_summary
 from app.services.interview.levels import level_view
 from app.services.interview.lifecycle import (
     compute_expires_at,
     maybe_expire_session,
     next_attempt_number,
+    require_editor,
     require_mutable,
-    require_readable,
+    stop_timer,
+    timer_snapshot,
+    update_timer,
     utcnow,
 )
 from app.services.interview.registry import (
@@ -111,8 +115,8 @@ from app.services.interview.rubric import (
     candidate_defend_questions,
     parse_defend_questions,
     previous_attempt_for,
-    score_session_v3,
     sanitize_candidate_question,
+    score_session_v3,
     steps_summary,
 )
 from app.services.interview.runner import (
@@ -131,8 +135,8 @@ from app.services.interview.workspace import (
     question_context_paths,
     read_file,
     starter_snapshot_path,
-    unified_diff_for_file,
     storage_report,
+    unified_diff_for_file,
     workspace_root,
     write_file,
 )
@@ -160,7 +164,9 @@ def _duration_ms(start: datetime | None, end: datetime | None) -> int | None:
 
 
 def _session_to_response(session: InterviewSession) -> SessionResponse:
+    elapsed, lease = timer_snapshot(session)
     return SessionResponse(
+        elapsed_ms=elapsed, timer_running=lease > 0, timer_lease_ms=lease,
         id=session.id,
         challenge_slug=session.challenge_slug,
         status=session.status,
@@ -567,14 +573,28 @@ async def start_session(
     if meta is None:
         raise HTTPException(status_code=404, detail="Challenge not found")
 
+    # Match grading admission's transaction-scoped PostgreSQL locking pattern.
+    # A separate start lock avoids an owner/session lock-order cycle with submit.
+    if db.get_bind().dialect.name == "postgresql":
+        await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+                         {"key": "interview-start:" + str(user.id)})
+    existing = (await db.execute(select(InterviewSession).where(
+        InterviewSession.user_id == user.id,
+        InterviewSession.challenge_slug == body.challenge_slug,
+        InterviewSession.status.in_(("created", "active")),
+    ).order_by(InterviewSession.started_at.desc()).with_for_update())).scalars().all()
+    for candidate in existing:
+        maybe_expire_session(candidate)
+        if candidate.status in {"created", "active"}:
+            await db.commit()
+            return _session_to_response(candidate)
+
     session_id = uuid.uuid4()
     owner_token = secrets.token_urlsafe(24)
     attempt = await next_attempt_number(
         db, user_id=user.id, challenge_slug=body.challenge_slug
     )
-    # Workspace copies and storage scans must not block the API event loop or
-    # retain a pooled database connection while waiting for the filesystem lock.
-    await db.commit()
+    # Hold the start lock through creation so duplicate starts return this attempt.
     try:
         workspace = await asyncio.to_thread(create_workspace, str(session_id), body.challenge_slug)
         await asyncio.to_thread(assert_session_isolation, str(session_id), body.challenge_slug)
@@ -589,6 +609,7 @@ async def start_session(
         owner_token=owner_token,
         challenge_slug=body.challenge_slug,
         status="active",
+        timer_elapsed_ms=0,
         attempt_number=attempt,
         workspace_path=str(workspace),
         expires_at=compute_expires_at(now),
@@ -631,6 +652,22 @@ async def get_session(
         window_seconds=_WINDOW,
     )
     session = await _load_owned_session(db=db, session_id=session_id, user=user)
+    await db.commit()
+    return _session_to_response(session)
+
+
+@router.post("/sessions/{session_id}/timer", response_model=SessionResponse)
+async def session_timer(
+    session_id: uuid.UUID,
+    body: SessionTimerRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> SessionResponse:
+    session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
+    if session.status in {"created", "active"}:
+        update_timer(session, body.action, body.editor_token)
+    # Delayed heartbeats/pause requests cannot resurrect a terminal attempt.
+    await db.commit()
     return _session_to_response(session)
 
 
@@ -670,11 +707,13 @@ async def get_session_level(
 @router.post("/sessions/{session_id}/level/next", response_model=LevelStepResponse)
 async def advance_session_level(
     session_id: uuid.UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> LevelStepResponse:
-    session = await _load_owned_session(db=db, session_id=session_id, user=user)
+    session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
     require_mutable(session)
+    require_editor(session, request.headers.get("X-Editor-Token") if request else None)
     index, tests_on_step = await _level_progress(db, session)
     view = level_view(session.challenge_slug, index, tests_on_step=tests_on_step)
     if view is None:
@@ -718,7 +757,7 @@ async def get_session_file(
 ) -> FileContentResponse:
     if is_blocked_path(file_path):
         raise HTTPException(status_code=404, detail="File not found")
-    session = await _load_owned_session(db=db, session_id=session_id, user=user)
+    session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
     workspace = await ensure_workspace(db, session)
     try:
         content = await asyncio.to_thread(read_file, workspace, file_path)
@@ -731,8 +770,9 @@ async def get_session_file(
     await _add_event(
         db, session.id, "file_viewed", {"path": file_path}, dedupe_file_view=True
     )
+    revision = await _current_revision(db, session.id, file_path)
     await db.commit()
-    return FileContentResponse(path=file_path, content=content)
+    return FileContentResponse(path=file_path, content=content, revision=revision)
 
 
 @router.put("/sessions/{session_id}/files/{file_path:path}", response_model=FileContentResponse)
@@ -749,6 +789,8 @@ async def save_session_file(
         raise HTTPException(status_code=404, detail="File not found")
     session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
     require_mutable(session)
+    require_editor(session, request.headers.get("X-Editor-Token") if request else None)
+    current_revision = await _current_revision(db, session.id, file_path)
     workspace = await ensure_workspace(db, session)
     try:
         # Diff against previous content when present for event metadata
@@ -757,6 +799,12 @@ async def save_session_file(
             prev = await asyncio.to_thread(read_file, workspace, file_path)
         except FileNotFoundError:
             prev = ""
+        if body.base_revision is not None and body.base_revision != current_revision:
+            # A successful save whose response was lost can be retried safely.
+            if body.content == prev:
+                await db.commit()
+                return FileContentResponse(path=file_path, content=prev, revision=current_revision)
+            raise HTTPException(409, "This file changed in another tab or device. Reload before saving.")
         await asyncio.to_thread(write_file, workspace, file_path, body.content)
     except PermissionError:
         raise HTTPException(status_code=404, detail="File not found") from None
@@ -779,7 +827,7 @@ async def save_session_file(
                 additions += j2 - j1
                 deletions += i2 - i1
     source = body.source if body.source in {"candidate", "ai", "mixed"} else "candidate"
-    revision = await _current_revision(db, session.id, file_path) + 1
+    revision = current_revision + 1
     db.add(
         InterviewSessionFile(
             session_id=session.id,
@@ -801,7 +849,7 @@ async def save_session_file(
         },
     )
     await db.commit()
-    return FileContentResponse(path=file_path, content=body.content)
+    return FileContentResponse(path=file_path, content=body.content, revision=revision)
 
 
 @router.post("/sessions/{session_id}/events", response_model=EventResponse)
@@ -813,8 +861,9 @@ async def post_event(
     user: User = Depends(get_current_user),
     x_session_token: str | None = Header(None, alias="X-Session-Token"),
 ) -> EventResponse:
-    session = await _load_owned_session(db=db, session_id=session_id, user=user)
+    session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
     require_mutable(session)
+    require_editor(session, request.headers.get("X-Editor-Token") if request else None)
     # Browser activity cannot impersonate execution, assistant or submission evidence.
     if body.event_type != "file_searched":
         raise HTTPException(status_code=400, detail="This event is recorded by the server")
@@ -869,8 +918,9 @@ async def run_session_tests(
     user: User = Depends(get_current_user),
     x_session_token: str | None = Header(None, alias="X-Session-Token"),
 ) -> TestRunResponse:
-    session = await _load_owned_session(db=db, session_id=session_id, user=user)
+    session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
     require_mutable(session)
+    require_editor(session, request.headers.get("X-Editor-Token") if request else None)
     meta = get_challenge(session.challenge_slug)
     if meta is None:
         raise HTTPException(status_code=404, detail="Challenge missing")
@@ -1015,8 +1065,9 @@ async def ai_chat(
     user: User = Depends(get_current_user),
     x_session_token: str | None = Header(None, alias="X-Session-Token"),
 ) -> AIChatResponse:
-    session = await _load_owned_session(db=db, session_id=session_id, user=user)
+    session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
     require_mutable(session)
+    require_editor(session, request.headers.get("X-Editor-Token") if request else None)
 
     settings = get_settings()
     if int(getattr(session, "ai_request_count", 0) or 0) >= int(
@@ -1193,6 +1244,9 @@ async def ai_chat(
         proposed=proposed,
         attached_paths=[item["path"] for item in attachments],
     )
+    session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
+    require_mutable(session)
+    require_editor(session, request.headers.get("X-Editor-Token") if request else None)
     proposed = await _stamp_revisions(db, session.id, proposed)
     if proposed:
         await _add_event(
@@ -1254,8 +1308,9 @@ async def ai_apply_edit(
     x_session_token: str | None = Header(None, alias="X-Session-Token"),
 ) -> FileContentResponse:
     """Practical Apply workflow with candidate/ai/mixed attribution."""
-    session = await _load_owned_session(db=db, session_id=session_id, user=user)
+    session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
     require_mutable(session)
+    require_editor(session, request.headers.get("X-Editor-Token") if request else None)
     if is_blocked_path(body.path):
         raise HTTPException(status_code=404, detail="File not found")
     disposition = body.disposition if body.disposition in {
@@ -1326,7 +1381,7 @@ async def ai_apply_edit(
         },
     )
     await db.commit()
-    return FileContentResponse(path=body.path, content=body.content)
+    return FileContentResponse(path=body.path, content=body.content, revision=current + 1)
 
 
 @router.post("/sessions/{session_id}/submit", response_model=EvaluationResponse)
@@ -1358,6 +1413,7 @@ async def submit_session(
     if session.status not in {"created", "active"}:
         raise HTTPException(status_code=409, detail="Session cannot be submitted.")
 
+    require_editor(session, request.headers.get("X-Editor-Token") if request else None)
     meta = get_challenge(session.challenge_slug)
     if meta is None:
         raise HTTPException(status_code=404, detail="Challenge missing")
@@ -1426,13 +1482,14 @@ async def submit_session(
         events,
     )
 
+    stop_timer(session)
     session.status = "submitted"
     session.submitted_at = datetime.now(timezone.utc)
     wall = _duration_ms(session.started_at, session.submitted_at)
     if wall is not None:
         session.wall_duration_ms = wall
         blocked = int(session.infra_blocked_ms or 0)
-        session.active_duration_ms = max(0, wall - blocked)
+        session.active_duration_ms = max(0, int(session.timer_elapsed_ms or 0) - blocked)
     session.scoring_version = SCORING_VERSION
     if not session.challenge_version:
         session.challenge_version = challenge_version_for(session.challenge_slug)
@@ -1761,14 +1818,20 @@ async def submit_feedback(
 )
 async def abandon_session(
     session_id: uuid.UUID,
+    request: Request,
     body: AbandonSessionRequest,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> SessionFeedbackResponse:
     """Optional reason when returning to dashboard — not a blocking mid-interview modal."""
-    session = await _load_owned_session(db=db, session_id=session_id, user=user)
+    session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
+    if session.status == "abandoned":
+        return SessionFeedbackResponse(ok=True)
     if session.status not in {"created", "active"}:
         raise HTTPException(status_code=400, detail="Session is not active.")
+    require_editor(session, request.headers.get("X-Editor-Token") if request else None)
+    stop_timer(session)
+    session.status = "abandoned"
     session.abandon_reason = (body.reason or "")[:256] or None
     await track_event(
         db,

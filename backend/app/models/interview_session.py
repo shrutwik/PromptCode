@@ -25,6 +25,10 @@ class InterviewSession(Base):
     expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )
+    # A short editor lease bounds time after an unclean disconnect.
+    timer_elapsed_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    timer_last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    timer_editor_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
     failed_reason: Mapped[str | None] = mapped_column(String(256), nullable=True)
     ai_request_count: Mapped[int] = mapped_column(Integer, default=0)
     test_run_count: Mapped[int] = mapped_column(Integer, default=0)

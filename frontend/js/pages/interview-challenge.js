@@ -55,7 +55,7 @@ async function load() {
         <div class="pc-panel-body">
           <div class="brief-label">Rules</div>
           <ul class="brief-rules">
-            <li>${CHECK}<span>Timed interview simulation — the clock starts when you open the workspace.</span></li>
+            <li>${CHECK}<span>Timed interview simulation — the clock starts when the workspace is ready and pauses while you’re away.</span></li>
             <li>${CHECK}<span>AI assistant allowed. What you ask and accept is logged and scored.</span></li>
             <li>${CHECK}<span>The task opens one step at a time: the bug, then each feature level after you run the tests.</span></li>
             <li>${CHECK}<span>Visible tests run in the workspace; hidden tests run on submit.</span></li>
@@ -64,12 +64,28 @@ async function load() {
         </div>
         <div class="pc-panel-body">
           ${activeId
-            ? `<a class="btn btn-primary btn-lg btn-block" href="/session/${esc(activeId)}">Resume session</a>`
+            ? `<a class="btn btn-primary btn-lg btn-block" href="/session/${esc(activeId)}">Resume session</a><button class="btn btn-ghost btn-block" id="restartBtn" type="button">Discard and restart</button>`
             : `<button class="btn btn-primary btn-lg btn-block" id="startBtn" type="button">${startLabel}</button>`}
           <p class="brief-note">${activeId ? "An open session is already saved for this challenge." : "Desktop recommended."}</p>
         </div>
       </aside>
     </div>`;
+  const restart = document.getElementById("restartBtn");
+  if (restart) restart.onclick = async () => {
+    if (!window.confirm("Discard this unfinished attempt? Restarting opens fresh code with the timer at 00:00.")) return;
+    restart.disabled = true;
+    try {
+      try { await InterviewAPI.abandon(activeId, "restart"); }
+      catch (error) {
+        const snapshot = await InterviewAPI.getSession(activeId);
+        if (snapshot.status !== "abandoned") throw error;
+      }
+      await start();
+    } catch (error) {
+      restart.disabled = false;
+      PCUI.toast(error.message, { tone: "danger" });
+    }
+  };
   const btn = document.getElementById("startBtn");
   if (!btn) return;
   btn.addEventListener("click", () => {
