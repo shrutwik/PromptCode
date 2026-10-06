@@ -77,6 +77,7 @@ from app.services.interview.ai_provider import (
     bounded_chat_history,
     review_coaching_reply,
     focused_coaching_request,
+    coaching_mode,
 )
 from app.services.interview.analytics import (
     SCORING_VERSION,
@@ -1240,6 +1241,7 @@ async def ai_chat(
         ai_result.text = await review_coaching_reply(
             reply=ai_result.text, context=assemble_user_content(ai_request), complete=_review,
             prompt=body.message,
+            mode=coaching_mode(body.message),
         )
         ai_result.proposed_edits = []
     except AIProviderError as exc:

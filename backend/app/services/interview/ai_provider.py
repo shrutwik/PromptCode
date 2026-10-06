@@ -743,8 +743,13 @@ def coaching_fallback(context: str) -> str:
             "We can walk through the existing behavior one piece at a time. What part would you like to explore first?")
 
 
-def review_messages(context: str, reply: str) -> list[dict[str, str]]:
-    return [{"role": "system", "content": REVIEW_SYSTEM_PROMPT},
+def review_messages(context: str, reply: str, mode: str = "conversation") -> list[dict[str, str]]:
+    # This provenance is selected by the server, not taken from candidate data.
+    provenance = {
+        "overview": " The draft received public requirements and a file inventory, not source bodies. Approve stating public requirements, including keys or boundaries explicitly in the README; these alone are not a diagnosis or replacement instruction. A statement that source bodies were unavailable refers to generation context, even though this review has full reference data. Reject inferred implementation details or a prescribed solution.",
+        "explain": " The draft received current source without the separate task requirements or test output. Approve descriptions of current behavior without a requirements-versus-implementation diagnosis. Do not require a hypothesis or tracing question to allow an explanation.",
+    }.get(mode, "")
+    return [{"role": "system", "content": REVIEW_SYSTEM_PROMPT + provenance},
             {"role": "user", "content": json.dumps({"context": context, "draft": reply}, ensure_ascii=False)}]
 
 
@@ -752,12 +757,13 @@ async def review_coaching_reply(
     *, reply: str, context: str,
     complete: Callable[[list[dict[str, str]]], Awaitable[str]],
     prompt: str = "",
+    mode: str = "conversation",
 ) -> str:
     """An independent semantic check, with no unsafe draft returned on failure."""
     fallback = coaching_fallback(prompt or context)
     if not reply.strip() or len(reply.split()) > 150:
         return fallback
-    messages = review_messages(context, reply)
+    messages = review_messages(context, reply, mode)
     if sum(len(m["content"]) for m in messages) > MAX_CONTEXT_CHARS:
         return fallback
     try:

@@ -461,6 +461,7 @@ async def chat(
             reply = await review_coaching_reply(
                 reply=reply, context=review_context, complete=_review,
                 prompt=payload.messages[-1].content,
+                mode=mode,
             )
     except HTTPException:
         raise

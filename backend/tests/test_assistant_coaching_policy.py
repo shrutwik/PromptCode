@@ -218,5 +218,7 @@ def test_chat_route_uses_the_same_review_and_accounts_for_usage(monkeypatch, all
     reply = asyncio.run(route.chat(payload,user=SimpleNamespace(id=uuid.uuid4()),db=db))
     assert (reply.reply == draft) is allowed
     assert len(calls) == 2 and bills.await_count == 2
-    assert calls[1]['messages'][0]['content'] == REVIEW_SYSTEM_PROMPT
+    assert calls[1]['messages'][0]['content'].startswith(REVIEW_SYSTEM_PROMPT)
+    assert 'Public task' not in calls[0]['messages'][1]['content']
+    assert 'Public task' in calls[1]['messages'][1]['content']
     assert reply.usage == {'prompt_tokens':20,'completion_tokens':10,'total_tokens':30}
