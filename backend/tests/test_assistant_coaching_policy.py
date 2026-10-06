@@ -13,6 +13,7 @@ from app.services.interview.ai_provider import (
     AIRequest, AIResponse, SYSTEM_PROMPT, REVIEW_SYSTEM_PROMPT,
     assemble_user_content, bounded_chat_history, review_coaching_reply,
     screen_assistant_input, OFF_TOPIC_REPLIES,
+    focused_coaching_request,
 )
 
 
@@ -65,6 +66,40 @@ def test_history_is_bounded_fenced_data_and_never_system_instructions():
     assert content.count('</untrusted_history>') == 1
     assert '</ untrusted_history>' in content
     assert 'override' not in content
+
+
+@pytest.mark.parametrize('message', ['Explain this codebase', 'Where should I begin?', 'Clarify the requirements', '¿Por dónde empiezo?', 'mujhe kahan se shuru karna chahiye', 'どこから始めればいい？'])
+def test_overview_context_cannot_compare_implementation_with_requirements(message):
+    request = AIRequest(prompt=message, system=SYSTEM_PROMPT, attachments=[
+        {'path':'README.md','content':'PUBLIC_GOAL'},
+        {'path':'src/demo.py','content':'def merge(rows):\n    return IMPLEMENTATION_MARKER'},
+        {'path':'tests/test_demo.py','content':'def test_merge():\n    assert IMPLEMENTATION_MARKER'},
+    ])
+    focused = focused_coaching_request(request)
+    content = assemble_user_content(focused)
+    assert 'PUBLIC_GOAL' in content and 'merge' in content
+    assert 'IMPLEMENTATION_MARKER' not in content
+    assert 'IMPLEMENTATION_MARKER' in assemble_user_content(request)
+    assert focused is not request
+
+
+def test_file_explanation_preserves_source_without_suggesting_contract_comparison():
+    request = AIRequest(prompt='Explain src/demo.py',system=SYSTEM_PROMPT,test_output='FAIL',attachments=[
+        {'path':'README.md','content':'PUBLIC_GOAL'},
+        {'path':'src/demo.py','content':'CURRENT_IMPLEMENTATION'},
+        {'path':'tests/test_demo.py','content':'TEST_CASE'},
+    ])
+    focused = focused_coaching_request(request)
+    content = assemble_user_content(focused)
+    assert 'CURRENT_IMPLEMENTATION' in content
+    assert 'PUBLIC_GOAL' not in content and 'TEST_CASE' not in content and 'FAIL' not in content
+    assert 'PUBLIC_GOAL' in assemble_user_content(request)
+
+
+def test_investigation_and_followups_retain_the_full_context():
+    for message in ['Why does the test fail?', 'My hypothesis is the key is wrong', 'The second option']:
+        request = AIRequest(prompt=message,system=SYSTEM_PROMPT,attachments=[{'path':'src/demo.py','content':'CURRENT_CODE'}])
+        assert focused_coaching_request(request) is request
 
 
 @pytest.mark.parametrize('verdict', ['{"allowed": false}', '{"allowed": "true"}', 'ALLOW', '{}', 'null', '[]'])

@@ -76,6 +76,7 @@ from app.services.interview.ai_provider import (
     validate_context_budget,
     bounded_chat_history,
     review_coaching_reply,
+    focused_coaching_request,
 )
 from app.services.interview.analytics import (
     SCORING_VERSION,
@@ -1210,6 +1211,11 @@ async def ai_chat(
     from app.services.interview.ai_provider import MAX_CONTEXT_CHARS, MAX_OUTPUT_TOKENS
     if sum(len(m["content"]) for m in wire_messages) > MAX_CONTEXT_CHARS:
         raise HTTPException(400, "AI context exceeds 18,000 characters. Shorten the question or code and retry.")
+    provider_request = focused_coaching_request(ai_request)
+    wire_messages = [{"role": "system", "content": provider_request.system},
+                     {"role": "user", "content": assemble_user_content(provider_request)}]
+    if sum(len(m["content"]) for m in wire_messages) > MAX_CONTEXT_CHARS:
+        raise HTTPException(400, "AI context exceeds 18,000 characters. Shorten the question or code and retry.")
     await reserve_ai_budget(db, str(user.id), sid,
                             len(json.dumps(wire_messages).encode("utf-8")),
                             output_tokens=MAX_OUTPUT_TOKENS, attempts=1)
@@ -1217,7 +1223,7 @@ async def ai_chat(
     request_count = int(getattr(session, "ai_request_count", 0) or 0) + 1
     session.ai_request_count = request_count
     try:
-        ai_result = await provider.complete_request(ai_request)
+        ai_result = await provider.complete_request(provider_request)
 
         async def _review(messages: list[dict[str, str]]) -> str:
             await reserve_ai_budget(

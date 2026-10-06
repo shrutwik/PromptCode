@@ -201,7 +201,7 @@ def test_session_budget_includes_assembled_test_output(monkeypatch, tmp_path, me
     import uuid
     from app.api.routes import interview as route
     from app.schemas.interview import AIChatRequest
-    from app.services.interview.ai_provider import AIRequest, SYSTEM_PROMPT, assemble_user_content
+    from app.services.interview.ai_provider import AIRequest, SYSTEM_PROMPT, assemble_user_content, focused_coaching_request
     sid = uuid.uuid4()
     session = SimpleNamespace(id=sid, workspace_path=str(tmp_path), ai_request_count=0)
     monkeypatch.setattr(route, '_load_owned_session', AsyncMock(return_value=session))
@@ -220,7 +220,8 @@ def test_session_budget_includes_assembled_test_output(monkeypatch, tmp_path, me
     monkeypatch.setattr(route, '_recent_ai_messages', AsyncMock(return_value=[]))
     monkeypatch.setattr(route, '_add_event', AsyncMock())
     async def refuse_budget(db, user, session, input_bytes, **kwargs):
-        expected = json.dumps([{'role': 'system', 'content': SYSTEM_PROMPT}, {'role': 'user', 'content': assemble_user_content(AIRequest(prompt=message, system=SYSTEM_PROMPT, attachments=attachments, test_output=test_output))}]).encode()
+        request = focused_coaching_request(AIRequest(prompt=message, system=SYSTEM_PROMPT, attachments=attachments, test_output=test_output))
+        expected = json.dumps([{'role': 'system', 'content': request.system}, {'role': 'user', 'content': assemble_user_content(request)}]).encode()
         assert input_bytes == len(expected)
         raise HTTPException(429, 'AI budget exhausted')
     monkeypatch.setattr(route, 'reserve_ai_budget', refuse_budget)

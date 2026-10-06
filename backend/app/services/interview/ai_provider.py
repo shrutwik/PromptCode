@@ -11,7 +11,7 @@ import json
 import time
 from collections.abc import Awaitable, Callable
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 from urllib.parse import urlparse
 
@@ -446,6 +446,43 @@ def bounded_chat_history(messages: list[dict[str, str]]) -> list[dict[str, str]]
         kept.append({"role": message["role"], "content": content})
         remaining -= len(content)
     return list(reversed(kept))
+
+
+def coaching_mode(message: str) -> str:
+    """Select presentation context, never grant permission to solve the task."""
+    if re.search(r"(?i)\b(hypothesis|hint|investigat\w*|fix|bug|fail\w*|assert\w*)\b|what.{0,20}change", message):
+        return "investigate"
+    if re.search(r"(?i)\b(codebase|repo(?:sitory)?|overview|summar\w*|requirements|question|task|empiez\w*|empezar|resumen|requisitos)\b|where.{0,20}(start|begin)|approach.{0,20}problem|kahan.{0,30}shuru|どこ.*始", message):
+        return "overview"
+    if re.search(r"(?i)\b(explain|what does|tell me about|explic\w*|explíc\w*)\b|説明", message):
+        return "explain"
+    return "conversation"
+
+
+def focused_coaching_request(request: AIRequest) -> AIRequest:
+    """Avoid feeding defect comparisons into ordinary learning responses.
+
+    Output review still sees the original context. Follow-ups and investigations
+    retain full context; this only focuses explicit overview/file explanations.
+    """
+    mode = coaching_mode(request.prompt)
+    if mode == "overview":
+        files = []
+        for item in request.attachments:
+            content = item.get("content") or ""
+            if (item.get("path") or "").rsplit("/", 1)[-1].lower() != "readme.md":
+                names = re.findall(r"\b(?:def|function|class)\s+(\w+)|\b(?:const|let)\s+(\w+)\s*=", content)
+                content = "File inventory only. Declared names: " + ", ".join(a or b for a,b in names)
+            files.append({"path": item["path"], "content": content})
+        return replace(request, attachments=files, system=request.system +
+                       " Give a file map, public requirements and reading order from this inventory. Do not infer implementation details from names.")
+    if mode == "explain":
+        sources = [a for a in request.attachments if not re.search(r"(?i)(^|/)(readme\.md|tests?(/|_))|[._]test\.", a.get("path") or "")]
+        mentioned = [a for a in request.attachments if a["path"] in request.prompt or a["path"].rsplit("/",1)[-1] in request.prompt]
+        return replace(request, attachments=mentioned or sources or request.attachments,
+                       test_output=None, system=request.system +
+                       " Explain only the current behavior of these supplied files. Do not infer or compare intended requirements, diagnose a defect, or propose a replacement.")
+    return request
 
 
 def validate_context_budget(
