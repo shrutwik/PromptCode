@@ -1,13 +1,17 @@
 """Pause/recovery, abandonment and retry rules for practice sessions."""
+import asyncio
 import importlib.util
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from app.models.interview_session import InterviewSession
+from app.models.interview_session import InterviewEvaluation, InterviewSession
+from app.models.user import User
 from app.services.interview import lifecycle
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy import event, select
+from sqlalchemy.ext.asyncio import async_sessionmaker
 from test_interview_multidevice import _build_test_app, _cleanup, _signup
 
 
@@ -116,6 +120,59 @@ def test_start_retry_abandon_and_fresh_restart(api, clock):
     cards = client.get("/api/interview/challenges/progress", headers=headers).json()
     card = next(item for item in cards if item["slug"] == slug)
     assert card["active_session_id"] == second["id"]
+
+
+def test_challenge_progress_batches_evaluations_and_preserves_history(tmp_path, monkeypatch):
+    app, engine = _build_test_app(tmp_path, monkeypatch)
+    try:
+        with TestClient(app) as client:
+            owner = _signup(client, email="progress@example.com", username="progress_user")
+            headers = {"Authorization": "Bearer " + owner["access_token"]}
+            slug = client.get("/api/interview/challenges").json()[0]["slug"]
+
+            async def seed():
+                factory = async_sessionmaker(engine, expire_on_commit=False)
+                async with factory() as db:
+                    user = (await db.execute(select(User).where(User.username == "progress_user"))).scalar_one()
+                    now = datetime.now(timezone.utc)
+                    attempts = [InterviewSession(
+                        user_id=user.id, owner_token="test", challenge_slug=slug,
+                        status="submitted", workspace_path="/unused",
+                        started_at=now - timedelta(days=1, minutes=i),
+                    ) for i in range(24)]
+                    active = InterviewSession(
+                        user_id=user.id, owner_token="test", challenge_slug=slug,
+                        status="active", workspace_path="/unused", started_at=now,
+                        expires_at=now + timedelta(days=1),
+                    )
+                    db.add_all([*attempts, active])
+                    await db.flush()
+                    db.add_all([InterviewEvaluation(session_id=s.id, total_score=99)
+                                for s in attempts[:12]])
+                    await db.commit()
+                    return str(active.id)
+
+            active_id = asyncio.run(seed())
+            queries = []
+
+            def record(_conn, _cursor, statement, _parameters, _context, _many):
+                if statement.lstrip().upper().startswith("SELECT") and "interview_evaluations" in statement:
+                    queries.append(statement)
+
+            event.listen(engine.sync_engine, "before_cursor_execute", record)
+            response = client.get("/api/interview/challenges/progress", headers=headers)
+            assert response.status_code == 200, response.text
+            card = next(item for item in response.json() if item["slug"] == slug)
+            assert card["attempt_count"] == 25
+            assert card["progress"] == "in_progress"
+            assert card["active_session_id"] == card["latest_session_id"] == active_id
+            assert card["best_score"] == 0.0
+            assert len(queries) == 1
+            untouched = next(item for item in response.json() if item["slug"] != slug)
+            assert untouched["best_score"] is None
+            assert untouched["progress"] == "not_started"
+    finally:
+        _cleanup(app, engine)
 
 
 def test_editor_conflicts_and_saved_revision_recovery(api, clock):

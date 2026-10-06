@@ -480,6 +480,18 @@ async def challenges_with_progress(
         by_slug.setdefault(s.challenge_slug, []).append(s)
     await db.commit()
 
+    submitted_ids = [
+        s.id for c in cards for s in by_slug.get(c["slug"], [])
+        if s.status == "submitted"
+    ]
+    evaluated_ids = set()
+    if submitted_ids:
+        evaluated_ids = set((await db.execute(
+            select(InterviewEvaluation.session_id).where(
+                InterviewEvaluation.session_id.in_(submitted_ids)
+            )
+        )).scalars().all())
+
     out: list[ChallengeProgressCard] = []
     for c in cards:
         sess = by_slug.get(c["slug"], [])
@@ -496,18 +508,8 @@ async def challenges_with_progress(
                 active_id = max(active, key=lambda s: s.started_at).id
             if any(s.status == "submitted" for s in sess):
                 progress = "completed" if progress != "in_progress" else "in_progress"
-            for s in sess:
-                if s.status != "submitted":
-                    continue
-                ev = (
-                    await db.execute(
-                        select(InterviewEvaluation).where(
-                            InterviewEvaluation.session_id == s.id
-                        )
-                    )
-                ).scalar_one_or_none()
-                if ev is not None:
-                    best = max(best or 0.0, 0.0)
+            if any(s.id in evaluated_ids for s in sess):
+                best = 0.0
         out.append(
             ChallengeProgressCard(
                 slug=c["slug"],
