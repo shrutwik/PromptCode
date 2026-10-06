@@ -64,13 +64,11 @@ class _FakeStream:
     def __init__(self, data: bytes) -> None:
         self._data = bytearray(data)
 
-    def read(self, size: int = -1) -> bytes:
-        if not self._data:
-            return b""
-        take = len(self._data) if size is None or size < 0 else size
-        chunk = bytes(self._data[:take])
-        del self._data[:take]
-        return chunk
+    def __iter__(self):
+        while self._data:
+            chunk = bytes(self._data[:256])
+            del self._data[:256]
+            yield chunk
 
 
 class _FakeProcess:
@@ -276,6 +274,7 @@ def test_modal_sandbox_blocks_network_and_honours_policy(modal_settings, fake_mo
     assert fake_modal.created[0].filesystem.files["/source/app.js"] == b"export const value = 1;\n"
     assert "/workspace" in fake_modal.created[0].filesystem.directories
     assert fake_modal.created[0].exec_argv == ("npm", "test")
+    assert fake_modal.created[0].exec_kwargs["text"] is False
 
 
 def test_secret_environment_cannot_reach_a_sandbox(modal_settings, fake_modal, tmp_path, monkeypatch):
@@ -434,6 +433,7 @@ def test_output_is_truncated_to_the_policy_limit(modal_settings, fake_modal, tmp
     assert exit_code == 0
     assert len(raw) == 1024
     assert raw == payload[-1024:]
+    assert not fake_modal.process.stdout._data
 
     fake_modal.process = _FakeProcess(stdout=payload, stderr=payload, exit_code=0)
     outcome = ModalSandboxBackend().run_challenge(

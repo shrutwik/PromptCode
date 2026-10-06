@@ -48,10 +48,6 @@ from .policy import (
 # slugs are accepted.
 _SAFE_SLUG = re.compile(r"[a-z0-9][a-z0-9-]*")
 
-# Read at most this much per stream call; the retained buffer never exceeds the
-# policy output bound (the tail is kept, matching the Docker path's _clip).
-_CHUNK_BYTES = 64 * 1024
-
 # Dependency trees are supplied by the reviewed sandbox image, never by
 # candidate-submitted files, so they are not uploaded.
 _IGNORED_TREE_NAMES = frozenset({"node_modules", ".venv", "venv", "__pycache__", ".git"})
@@ -197,11 +193,10 @@ def _read_capped(stream: Any, limit: int) -> bytes:
     the tail is retained to match the Docker path's ``_clip`` behaviour.
     """
     buffer = bytearray()
-    while True:
-        chunk = stream.read(_CHUNK_BYTES)
-        if not chunk:
-            break
-        buffer.extend(chunk)
+    # Modal streams expose chunk iteration; read() takes no size and buffers
+    # the entire output. Keep only the bounded tail while draining every chunk.
+    for chunk in stream:
+        buffer.extend(chunk[-limit:])
         if len(buffer) > limit:
             del buffer[: len(buffer) - limit]
     return bytes(buffer)
@@ -399,7 +394,8 @@ class ModalSandboxBackend:
             _upload_source(sandbox, source_dir)
             try:
                 process = sandbox.exec(
-                    *argv, timeout=policy.timeout_seconds, workdir=WORKSPACE_MOUNT
+                    *argv, timeout=policy.timeout_seconds, workdir=WORKSPACE_MOUNT,
+                    text=False,
                 )
                 stdout = _read_capped(process.stdout, policy.output_limit_bytes)
                 stderr = _read_capped(process.stderr, policy.output_limit_bytes)
