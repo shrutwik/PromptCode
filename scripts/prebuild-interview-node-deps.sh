@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 # Prebuild Node deps for interview runners.
-# Installs challenges/<slug>/node_modules for _ensure_prebuilt_deps to copy.
+# Installs reviewed challenge dependencies during image builds.
 # The runner never runs npm install or pip install during a candidate run.
-# docker/Dockerfile.interview-node has the Node toolchain only, no challenge deps.
+# docker/Dockerfile.interview-node bakes these into an offline dependency cache.
 # Candidate containers must not npm install at run time (network stays off).
 # This script is the only place network is allowed for those packages.
 # Idempotent: npm ci from package-lock.json, else npm install. Safe to re-run.

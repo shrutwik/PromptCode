@@ -1,3 +1,8 @@
+/**
+ * Typeahead over an in-memory product list.
+ * suggest lowercases the query, scores each product, sorts with compareRank, and returns at most limit (default 10).
+ * globalCounter records work via recordScan. The catalog argument is the full list for this call.
+ */
 import type { Product } from './catalog.js';
 import { scoreProduct, compareRank } from './rank.js';
 import { globalCounter } from './queryCounter.js';

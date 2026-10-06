@@ -1,5 +1,16 @@
 # Interview Node/TS runner — deps tooling preinstalled; no network during candidate runs.
 # Build: docker build -f docker/Dockerfile.interview-node -t promptcode-runner-node:latest .
+FROM node:20.19-bookworm-slim AS challenge-deps
+WORKDIR /src
+COPY challenges/ /src/challenges/
+COPY scripts/prebuild-interview-node-deps.sh /src/scripts/prebuild-interview-node-deps.sh
+RUN sh /src/scripts/prebuild-interview-node-deps.sh \
+  && mkdir -p /deps \
+  && for dir in /src/challenges/*/node_modules; do \
+       slug=$(basename "$(dirname "$dir")"); \
+       mkdir -p "/deps/$slug"; cp -a "$dir" "/deps/$slug/node_modules"; \
+     done
+
 FROM node:20.19-bookworm-slim
 
 RUN apt-get update \
@@ -13,6 +24,9 @@ ENV npm_config_update_notifier=false \
     npm_config_audit=false \
     HOME=/tmp \
     npm_config_cache=/tmp/npm-cache
+
+COPY --from=challenge-deps /deps/ /opt/promptcode-deps/
+COPY backend/app/services/interview/reporters/ /opt/promptcode-reporters/
 
 WORKDIR /workspace
 USER runner

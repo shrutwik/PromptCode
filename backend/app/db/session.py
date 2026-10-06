@@ -34,7 +34,9 @@ else:
         settings.database_url,
         echo=settings.database_echo,
         pool_size=20,
-        pool_timeout=5,
+        # A simultaneous save burst waits behind the shared storage quota lock.
+        # Keep connection counts bounded, but allow those transactions to finish.
+        pool_timeout=15,
         max_overflow=10,
         pool_pre_ping=True,
         pool_recycle=1800,  # recycle connections every 30 min; prevents silent drops by pgbouncer

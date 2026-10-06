@@ -12,8 +12,9 @@ let openTabs = [];
 let currentPath = null;
 let collapsed = new Set();
 let lastTestOutput = "";
-let lastProposed = null;
 let pendingEdits = [];
+let previewBackup = {};
+let undoAi = [];
 let viewedOnce = new Set();
 let sessionReadOnly = false;
 
@@ -146,12 +147,10 @@ function renderTree(filter = "") {
       }
       if (entry.__file) {
         const btn = document.createElement("button");
-        const locked = entry.__file.writable === false;
         btn.className = "file-item" + (currentPath === path ? " active" : "");
         btn.style.paddingLeft = 24 + depth * 12 + "px";
         const mod = models[path] && models[path].dirty ? " ●" : "";
-        btn.textContent = name + (locked ? " · read-only" : "") + mod;
-        if (locked) btn.title = "This file is read-only.";
+        btn.textContent = name + mod;
         btn.onclick = () => openFile(path);
         treeEl.appendChild(btn);
       }
@@ -162,16 +161,54 @@ function renderTree(filter = "") {
 
 function renderTabs() {
   const tabs = document.getElementById("tabs");
-  tabs.innerHTML = "";
+  tabs.replaceChildren();
   for (const path of openTabs) {
-    const t = document.createElement("button");
-    t.className = "tab" + (path === currentPath ? " active" : "");
-    t.type = "button";
     const name = path.split("/").pop();
-    t.textContent = name + (models[path] && models[path].dirty ? " ●" : "");
-    t.onclick = () => openFile(path);
-    tabs.appendChild(t);
+    const tab = document.createElement("div");
+    tab.className = "tab" + (path === currentPath ? " active" : "");
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-selected", path === currentPath ? "true" : "false");
+    const label = document.createElement("button");
+    label.type = "button";
+    label.className = "tab-label";
+    label.title = path;
+    label.textContent = name + (models[path] && models[path].dirty ? " ●" : "");
+    label.onclick = () => openFile(path);
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "tab-close";
+    close.setAttribute("aria-label", "Close " + name);
+    close.textContent = "×";
+    close.onclick = (ev) => {
+      ev.stopPropagation();
+      closeTab(path);
+    };
+    tab.appendChild(label);
+    tab.appendChild(close);
+    tabs.appendChild(tab);
   }
+}
+
+function closeTab(path) {
+  const idx = openTabs.indexOf(path);
+  if (idx < 0) return;
+  openTabs.splice(idx, 1);
+  if (currentPath !== path) {
+    renderTabs();
+    return;
+  }
+  const next = openTabs[Math.min(idx, openTabs.length - 1)];
+  if (next) {
+    openFile(next);
+    return;
+  }
+  currentPath = null;
+  if (editor) editor.setModel(null);
+  document.getElementById("pathLabel").textContent = "Select a file";
+  document.getElementById("langLabel").textContent = "";
+  renderTabs();
+  renderTree(document.getElementById("fileSearch").value);
+  updateDirtyPill();
 }
 
 async function openFile(path) {
@@ -182,7 +219,17 @@ async function openFile(path) {
   }
   if (!models[path]) {
     const data = await InterviewAPI.getFile(sessionId, path);
-    const model = monaco.editor.createModel(data.content, langFor(path));
+    const uri = monaco.Uri.parse(
+      "file:///" + path.split("/").map(encodeURIComponent).join("/")
+    );
+    const model = monaco.editor.createModel(data.content, langFor(path), uri);
+    const detected = (window.InterviewPad || { detectIndent: () => ({ insertSpaces: true, tabSize: 4 }) })
+      .detectIndent(data.content);
+    model.updateOptions({
+      tabSize: detected.tabSize,
+      indentSize: detected.tabSize,
+      insertSpaces: detected.insertSpaces,
+    });
     model.onDidChangeContent(() => {
       if (!models[path]) return;
       models[path].dirty = model.getValue() !== models[path].saved;
@@ -196,23 +243,54 @@ async function openFile(path) {
   if (!openTabs.includes(path)) openTabs.push(path);
   currentPath = path;
   editor.setModel(models[path].model);
-  const locked = fileLocked(path);
-  editor.updateOptions({ readOnly: sessionReadOnly || locked });
-  document.getElementById("pathLabel").textContent = path + (locked ? " · read-only" : "");
+  const indent = models[path].model.getOptions();
+  editor.updateOptions({
+    readOnly: sessionReadOnly,
+    tabSize: indent.tabSize,
+    indentSize: indent.indentSize || indent.tabSize,
+    insertSpaces: indent.insertSpaces,
+  });
+  document.getElementById("pathLabel").textContent = path;
   document.getElementById("langLabel").textContent = langFor(path);
   renderTabs();
   renderTree(document.getElementById("fileSearch").value);
   updateDirtyPill();
 }
 
-function fileLocked(path) {
-  const meta = files.find((f) => f.path === path);
-  return !!(meta && meta.writable === false);
+function modelEntries() {
+  return Object.keys(models).map((path) => ({
+    path,
+    value: models[path].model.getValue(),
+    saved: models[path].saved,
+  }));
+}
+
+async function saveDirtyModels() {
+  const pad = window.InterviewPad;
+  const paths = pad ? pad.dirtyPaths(modelEntries()) : Object.keys(models).filter((p) => models[p].dirty);
+  for (const path of paths) {
+    const content = models[path].model.getValue();
+    await InterviewAPI.saveFile(sessionId, path, content, { source: "candidate" });
+    models[path].saved = content;
+    models[path].dirty = false;
+  }
+  updateDirtyPill();
+  renderTabs();
+  renderTree(document.getElementById("fileSearch").value);
+  return paths;
+}
+
+function replaceWhole(model, next) {
+  if (model.getValue() === next) return;
+  const range = model.getFullModelRange();
+  model.pushEditOperations([], [{ range, text: next }], () => null);
 }
 
 async function save() {
   if (!currentPath || !models[currentPath]) throw new Error("No file selected");
-  if (fileLocked(currentPath)) throw new Error("This file is read-only.");
+  if (window.InterviewPad && window.InterviewPad.pathUnsafe(currentPath)) {
+    throw new Error("This file cannot be changed");
+  }
   const content = models[currentPath].model.getValue();
   await InterviewAPI.saveFile(sessionId, currentPath, content, { source: "candidate" });
   models[currentPath].saved = content;
@@ -223,37 +301,26 @@ async function save() {
   logTerm("Saved " + currentPath + " (file_changed on save)");
 }
 
-function formatTestRun(r) {
-  const cases = Array.isArray(r.tests) ? r.tests : [];
-  const rows = cases.map((item) => {
-    const outcome = String(item.outcome || "unknown").toUpperCase();
-    const duration = item.duration_ms == null ? "" : ` ${item.duration_ms}ms`;
-    const output = item.output ? `\n  ${item.output}` : "";
-    return `${outcome} ${item.id}${duration}${output}`;
-  });
-  return [
-    "Advisory practice feedback. Not an official score.",
-    `$ ${r.command}`,
-    `exit ${r.exit_code} · ${r.duration_ms || 0}ms · isolation=${r.isolation}`,
-    `counts ${JSON.stringify(r.counts || {})}`,
-    rows.join("\n"),
-    r.stdout || "",
-    r.stderr || "",
-    r.notice || "",
-  ].filter((part) => part).join("\n\n");
+function revealTerminal() {
+  const term = document.getElementById("termPanel");
+  if (term && term.style.display === "none" && window.__pcTogglePanel) {
+    window.__pcTogglePanel("term");
+  }
 }
 
 async function runCmd(commandId) {
-  setTermMeta(`Running <code>${commandId}</code>…`);
-  logTerm("Running tests…");
+  revealTerminal();
+  setTermMeta("Saving open files…");
+  const saved = await saveDirtyModels();
+  setTermMeta(`Running <code>${esc(commandId)}</code>…`);
+  logTerm(saved.length ? "Saved " + saved.join(", ") : "…");
   const r = await InterviewAPI.runTests(sessionId, commandId);
-  lastTestOutput = formatTestRun(r);
-  const label = r.timed_out ? "ADVISORY TIMEOUT" : (r.ok ? "ADVISORY PASS" : "ADVISORY FAIL");
+  lastTestOutput = `$ ${r.command}\nexit ${r.exit_code} · ${r.duration_ms || 0}ms · isolation=${r.isolation}\n` +
+    `counts ${JSON.stringify(r.counts || {})}\n\n${r.stdout}\n${r.stderr}`;
   setTermMeta(
-    `<span class="${r.ok ? "ok" : "fail"}">${label}</span> · ` +
+    `<span class="${r.ok ? "ok" : "fail"}">${r.ok ? "ADVISORY PASS" : "ADVISORY FAIL"}</span> · ` +
     `<code>${esc(r.command)}</code> · ${r.duration_ms || 0}ms · ` +
-    `${(r.counts && r.counts.passed) || 0} passed / ${(r.counts && r.counts.failed) || 0} failed` +
-    (r.notice ? ` · ${esc(r.notice)}` : "")
+    `${(r.counts && r.counts.passed) || 0} passed / ${(r.counts && r.counts.failed) || 0} failed`
   );
   logTerm(lastTestOutput);
   try {
@@ -344,7 +411,7 @@ const submitDialog = bindDialog(document.getElementById("submitModal"), "confirm
 const abandonDialog = bindDialog(document.getElementById("abandonModal"), "confirmAbandon");
 
 async function submit() {
-  const dirtyCount = openTabs.filter((p) => models[p] && models[p].dirty).length;
+  const dirtyCount = (window.InterviewPad ? window.InterviewPad.dirtyPaths(modelEntries()) : []).length;
   document.getElementById("submitDirtyLine").textContent =
     "Unsaved files: " + dirtyCount + (dirtyCount ? " (will be saved)" : "");
   document.getElementById("submitSummary").textContent =
@@ -354,13 +421,7 @@ async function submit() {
   document.getElementById("cancelSubmit").onclick = close;
   document.getElementById("confirmSubmit").onclick = async () => {
     close();
-    for (const p of openTabs) {
-      if (models[p] && models[p].dirty) {
-        await InterviewAPI.saveFile(sessionId, p, models[p].model.getValue(), { source: "candidate" });
-        models[p].saved = models[p].model.getValue();
-        models[p].dirty = false;
-      }
-    }
+    await saveDirtyModels();
     logTerm("Submitting…");
     setSessionStatus("busy", "Submitting");
     await InterviewAPI.submit(sessionId);
@@ -467,35 +528,67 @@ try {
 
 function renderLevel(level) {
   const ticketEl = document.getElementById("questionBody");
-  const stepNo = level.index + 1;
-  const earlier = (level.earlier || []).map((step) => `<div class="step-card is-earlier">
-    <p class="step-kicker">Step ${step.index + 1} of ${level.total} · ${esc(step.kind)}</p>
-    <h3>${esc(step.title)}</h3>
-    <p>${esc(step.body)}</p>
-  </div>`).join("");
-  const next = level.is_last
-    ? `<p class="step-note">Last step. Submit when the tests pass.</p>`
-    : `<button class="btn btn-secondary btn-sm" type="button" id="nextLevel"${level.can_advance ? "" : " disabled"}>Next step</button>
-       <p class="step-note">${level.can_advance ? "Tests ran. You can open the next step." : "Run the tests for this step to unlock the next one."}</p>`;
-  ticketEl.innerHTML = `<p class="step-problem">${esc(level.problem)}</p>${earlier}<div class="step-card">
-    <p class="step-kicker">Step ${stepNo} of ${level.total} · ${esc(level.kind)}</p>
+  ticketEl.classList.add("is-brief");
+  ticketEl.classList.remove("is-readme");
+  const guide = (level.guide || []).map((line) => `<li>${esc(line)}</li>`).join("");
+  ticketEl.innerHTML = `<article class="brief">
+    <p class="step-kicker">${esc(level.kind)}</p>
     <h3>${esc(level.title)}</h3>
+    <p class="step-problem">${esc(level.problem)}</p>
+    <h4 class="brief-label">The work</h4>
     <p>${esc(level.body)}</p>
-    <p class="step-note">The assistant can be wrong.</p>
-    ${next}
-  </div>`;
-  const btn = document.getElementById("nextLevel");
-  if (btn) {
-    btn.onclick = async () => {
-      btn.disabled = true;
-      try {
-        renderLevel(await InterviewAPI.nextLevel(sessionId));
-      } catch (e) {
-        btn.disabled = false;
-        PCUI.toast(e.message, { tone: "danger" });
-      }
-    };
-  }
+    <h4 class="brief-label">How to work</h4>
+    <ol class="brief-guide">${guide}</ol>
+    <p class="step-note">The assistant can be wrong. Check it against the code, then submit when the tests pass.</p>
+  </article>`;
+}
+
+function configureModuleResolution() {
+  const ts = monaco.languages && monaco.languages.typescript;
+  if (!ts) return;
+  const options = {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeJs,
+    allowJs: true,
+    allowNonTsExtensions: true,
+    esModuleInterop: true,
+  };
+  ts.typescriptDefaults.setCompilerOptions(options);
+  ts.javascriptDefaults.setCompilerOptions(options);
+  ts.typescriptDefaults.setEagerModelSync(true);
+  ts.javascriptDefaults.setEagerModelSync(true);
+}
+
+function bindPadKeys(ed) {
+  const pad = window.InterviewPad;
+  ed.addCommand(monaco.KeyCode.Tab, () => {
+    const widget = document.querySelector("#monacoHost .suggest-widget");
+    const open = widget && !widget.classList.contains("hidden") && widget.offsetHeight > 0;
+    if (open) {
+      ed.trigger("pc", "acceptSelectedSuggestion", null);
+      return;
+    }
+    const model = ed.getModel();
+    const sel = ed.getSelection();
+    if (!model || !sel) return;
+    const line = model.getLineContent(sel.startLineNumber);
+    const action = pad
+      ? pad.tabAction(line, sel.startColumn, sel.isEmpty(), sel.startLineNumber === sel.endLineNumber)
+      : "indent";
+    if (action === "indent") {
+      ed.trigger("pc", "editor.action.indentLines", null);
+      return;
+    }
+    const opts = model.getOptions();
+    const unit = pad
+      ? pad.indentUnit({ insertSpaces: opts.insertSpaces, tabSize: opts.tabSize })
+      : "    ";
+    ed.executeEdits("indent", [{ range: sel, text: unit, forceMoveMarkers: true }]);
+  });
+  ed.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Tab, () => {
+    ed.trigger("pc", "editor.action.outdentLines", null);
+  });
 }
 
 require(["vs/editor/editor.main"], async function () {
@@ -506,7 +599,9 @@ require(["vs/editor/editor.main"], async function () {
     colors: {
       "editor.background": "#0a0a0a",
       "editorLineNumber.foreground": "#6b675e",
-      "editor.selectionBackground": "#f3f1ea33",
+      "editor.selectionBackground": "#3d5a80",
+      "editor.selectionForeground": "#ffffff",
+      "editor.inactiveSelectionBackground": "#2c415c",
       "editorCursor.foreground": "#f3f1ea",
       "focusBorder": "#11110f66",
     },
@@ -522,8 +617,24 @@ require(["vs/editor/editor.main"], async function () {
     lineNumbers: "on",
     scrollBeyondLastLine: false,
     wordWrap: "on",
+    wrappingIndent: "same",
     padding: { top: 8 },
+    tabSize: 4,
+    indentSize: 4,
+    insertSpaces: true,
+    detectIndentation: true,
+    autoIndent: "full",
+    trimAutoWhitespace: false,
+    useTabStops: true,
+    stickyTabStops: true,
+    tabCompletion: "off",
+    fontLigatures: false,
+    renderWhitespace: "selection",
+    autoClosingBrackets: "languageDefined",
+    autoClosingQuotes: "languageDefined",
   });
+  configureModuleResolution();
+  bindPadKeys(editor);
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
     save().catch((e) => PCUI.toast(e.message, { tone: "danger" }));
   });
@@ -556,11 +667,11 @@ require(["vs/editor/editor.main"], async function () {
     try {
       const file = await InterviewAPI.getFile(sessionId, readme.path);
       const text = typeof file === "string" ? file : (file.content || file.text || "");
-      if (!ticketEl.querySelector(".step-card")) {
+      if (!ticketEl.querySelector(".brief")) {
         renderReadme(ticketEl, text.slice(0, 4000) || "No task description.");
       }
     } catch {
-      if (!ticketEl.querySelector(".step-card")) {
+      if (!ticketEl.querySelector(".brief")) {
         ticketEl.textContent = "Open the code view for the full task.";
       }
     }
@@ -568,26 +679,6 @@ require(["vs/editor/editor.main"], async function () {
   }
 
 });
-
-document.querySelectorAll(".phase-bar button").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".phase-bar button").forEach((b) => {
-      b.classList.toggle("is-active", b === btn);
-      b.setAttribute("aria-pressed", b === btn ? "true" : "false");
-    });
-  });
-});
-
-function syncCtxChips() {
-  document.querySelectorAll("#ctxChips .ctx-chip").forEach((chip) => {
-    const input = chip.querySelector("input");
-    chip.dataset.on = input && input.checked ? "true" : "false";
-  });
-}
-document.querySelectorAll("#ctxChips input").forEach((input) => {
-  input.addEventListener("change", syncCtxChips);
-});
-syncCtxChips();
 
 document.getElementById("saveBtn").onclick = () =>
   save().then(() => PCUI.toast("Saved", { tone: "success", timeout: 1600 })).catch((e) => PCUI.toast(e.message, { tone: "danger" }));
@@ -685,7 +776,8 @@ const palette = PCUI.createCommandPalette([
   { group: "Panels", label: "Toggle terminal", keywords: "output", run: () => window.__pcTogglePanel("term") },
   { group: "Session", label: "Review changes", keywords: "diff", run: () => openDiff() },
   { group: "Session", label: "Submit session", keywords: "finish", run: () => submit() },
-  { group: "Navigation", label: "Open dashboard", keywords: "home", run: () => { location.href = "/dashboard"; } },
+  { group: "Navigation", label: "Practice", keywords: "home dashboard", run: () => { location.href = "/dashboard"; } },
+  { group: "Navigation", label: "Progress", keywords: "scores skills trends", run: () => { location.href = "/progress"; } },
   { group: "Navigation", label: "Challenge library", keywords: "browse", run: () => { location.href = "/challenges"; } },
 ]);
 
@@ -771,13 +863,6 @@ document.getElementById("chatForm").onsubmit = async (ev) => {
   ev.preventDefault();
   const message = document.getElementById("chatInput").value.trim();
   if (!message) return;
-  const attached = [];
-  if (document.getElementById("attachCurrent").checked && currentPath) attached.push(currentPath);
-  let selected = null;
-  if (document.getElementById("attachSelection").checked && editor) {
-    const sel = editor.getModel().getValueInRange(editor.getSelection());
-    if (sel) selected = sel;
-  }
   logChat("user", message);
   document.getElementById("chatInput").value = "";
   const working = document.createElement("div");
@@ -787,46 +872,42 @@ document.getElementById("chatForm").onsubmit = async (ev) => {
   document.getElementById("chatLog").appendChild(working);
   document.getElementById("chatLog").scrollTop = document.getElementById("chatLog").scrollHeight;
   try {
-    const r = await InterviewAPI.chat(sessionId, message, attached, {
-      include_test_output: document.getElementById("attachTests").checked,
-      selected_text: selected,
+    const r = await InterviewAPI.chat(sessionId, message, [], {
+      test_output: lastTestOutput || null,
     });
     working.remove();
     logChat("ai", r.reply, true);
-    renderProposals(r.proposed_edits || [], r.refused_edits || []);
+    pendingEdits = r.proposed_edits || [];
+    previewBackup = {};
+    renderApplyBar();
   } catch (e) {
     document.getElementById("aiWorking")?.remove();
-    const message = e.name === "AbortError"
-      ? "The assistant timed out. Nothing was changed. Try again."
-      : e.message;
-    logChat("ai", "Error: " + message);
+    logChat("ai", "Error: " + e.message);
   }
 };
 
-function renderProposals(edits, refused) {
-  pendingEdits = edits;
-  lastProposed = edits[0] || null;
+function renderApplyBar() {
   const bar = document.getElementById("applyBar");
+  const plan = window.InterviewPad
+    ? window.InterviewPad.proposalPlan(pendingEdits)
+    : { usable: [], skipped: [] };
   bar.replaceChildren();
-  if (!edits.length && !refused.length) {
+  if (!plan.usable.length) {
     bar.classList.add("hidden");
     return;
   }
   bar.classList.remove("hidden");
-  for (const edit of edits) {
-    const path = document.createElement("p");
-    path.textContent = edit.path;
-    const pre = document.createElement("pre");
-    pre.className = "diff-view";
-    pre.textContent = edit.unified || "(no diff)";
-    bar.append(path, pre);
+  const note = document.createElement("span");
+  note.textContent = "Nothing is written until you accept. Click a file to preview.";
+  bar.appendChild(note);
+  for (const edit of plan.usable) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn-ghost btn-sm";
+    button.textContent = edit.path;
+    button.onclick = () => previewProposal(edit.path).catch((e) => PCUI.toast(e.message, { tone: "danger" }));
+    bar.appendChild(button);
   }
-  for (const item of refused) {
-    const note = document.createElement("p");
-    note.textContent = "Refused " + item.path + " — " + item.reason;
-    bar.append(note);
-  }
-  if (!edits.length) return;
   const accept = document.createElement("button");
   accept.type = "button";
   accept.className = "btn btn-secondary btn-sm";
@@ -840,49 +921,139 @@ function renderProposals(edits, refused) {
   bar.append(accept, reject);
 }
 
+async function previewProposal(path) {
+  const edit = (window.InterviewPad ? window.InterviewPad.proposalPlan(pendingEdits) : { usable: [] })
+    .usable.find((item) => item.path === path);
+  if (!edit) return;
+  if (!models[path]) await openFile(path);
+  else await openFile(path);
+  if (!(path in previewBackup)) previewBackup[path] = models[path].model.getValue();
+  replaceWhole(models[path].model, edit.content);
+  models[path].dirty = models[path].model.getValue() !== models[path].saved;
+  updateDirtyPill();
+  renderTabs();
+  logTerm("Preview only — " + path + " is not saved. Accept to keep it, Reject to restore.");
+}
+
 async function applyDisposition(disposition) {
-  if (!pendingEdits.length) return;
-  const applied = [];
-  for (const edit of pendingEdits) {
-    let content = edit.content;
-    if (disposition === "modified" && currentPath === edit.path && models[edit.path]) {
-      content = models[edit.path].model.getValue();
+  const plan = window.InterviewPad
+    ? window.InterviewPad.proposalPlan(pendingEdits)
+    : { usable: [] };
+  if (!plan.usable.length) return;
+  if (disposition === "rejected") {
+    for (const edit of plan.usable) {
+      if (models[edit.path] && Object.prototype.hasOwnProperty.call(previewBackup, edit.path)) {
+        replaceWhole(models[edit.path].model, previewBackup[edit.path]);
+        models[edit.path].dirty = models[edit.path].model.getValue() !== models[edit.path].saved;
+      }
+      try {
+        await InterviewAPI.applyAiEdit(sessionId, {
+          path: edit.path,
+          content: models[edit.path] ? models[edit.path].saved : "",
+          disposition: "rejected",
+          proposed_content: edit.content,
+          base_revision: edit.base_revision,
+        });
+      } catch (e) {
+        PCUI.toast(e.message, { tone: "danger" });
+      }
     }
-    if (disposition === "rejected") content = models[edit.path] ? models[edit.path].saved : (edit.before || "");
+    previewBackup = {};
+    pendingEdits = [];
+    renderApplyBar();
+    updateDirtyPill();
+    logTerm("AI edit rejected. Files were not changed.");
+    return;
+  }
+  const applied = [];
+  for (const edit of plan.usable) {
+    let before = Object.prototype.hasOwnProperty.call(previewBackup, edit.path)
+      ? previewBackup[edit.path]
+      : null;
+    if (before == null && models[edit.path]) before = models[edit.path].saved;
+    if (before == null) {
+      try {
+        const existing = await InterviewAPI.getFile(sessionId, edit.path);
+        before = typeof existing === "string" ? existing : (existing.content || "");
+      } catch {
+        before = "";
+      }
+    }
+    let content = edit.content;
+    let disp = "accepted";
+    if (models[edit.path] && models[edit.path].model.getValue() !== edit.content) {
+      content = models[edit.path].model.getValue();
+      disp = "modified";
+    }
     let saved;
     try {
       saved = await InterviewAPI.applyAiEdit(sessionId, {
         path: edit.path,
         content,
-        disposition,
+        disposition: disp,
         proposed_content: edit.content,
         base_revision: edit.base_revision,
       });
     } catch (e) {
       PCUI.toast(e.message, { tone: "danger" });
+      pendingEdits = plan.usable.slice(plan.usable.indexOf(edit));
+      undoAi = applied;
+      renderApplyBar();
+      if (applied.length) showUndo(applied.map((item) => item.path));
       return;
     }
-    if (disposition !== "rejected") {
-      const next = (saved && saved.content) || content;
-      if (!models[edit.path]) await openFile(edit.path);
-      if (models[edit.path]) {
-        const model = models[edit.path].model;
-        if (model.getValue() !== next) model.setValue(next);
-        models[edit.path].saved = next;
-        models[edit.path].dirty = false;
-      }
-      applied.push(edit.path);
+    const next = (saved && saved.content) || content;
+    if (!models[edit.path]) await openFile(edit.path);
+    if (models[edit.path]) {
+      replaceWhole(models[edit.path].model, next);
+      models[edit.path].saved = next;
+      models[edit.path].dirty = false;
     }
+    applied.push({ path: edit.path, before });
   }
-  document.getElementById("applyBar").classList.add("hidden");
+  undoAi = applied;
+  previewBackup = {};
   pendingEdits = [];
-  lastProposed = null;
+  renderApplyBar();
+  try {
+    files = await InterviewAPI.listFiles(sessionId);
+  } catch {
+    /* tree refresh is optional */
+  }
   renderTree(document.getElementById("fileSearch").value);
   updateDirtyPill();
   renderTabs();
-  logTerm(
-    disposition === "rejected"
-      ? "Assistant edits rejected. Files were not changed."
-      : "Assistant edits applied for " + applied.join(", ")
-  );
+  showUndo(applied.map((item) => item.path));
+}
+
+function showUndo(paths) {
+  logTerm("Accepted AI edits for " + paths.join(", ") + ". Undo restores the previous text and saves it.");
+  const meta = document.getElementById("termMeta");
+  meta.textContent = "AI edits applied. ";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn btn-ghost btn-sm";
+  button.textContent = "Undo AI edits";
+  button.onclick = () => undoAccepted().catch((e) => PCUI.toast(e.message, { tone: "danger" }));
+  meta.appendChild(button);
+}
+
+async function undoAccepted() {
+  const items = undoAi.slice();
+  undoAi = [];
+  for (const item of items) {
+    if (window.InterviewPad && window.InterviewPad.pathUnsafe(item.path)) continue;
+    await InterviewAPI.saveFile(sessionId, item.path, item.before, { source: "candidate" });
+    if (!models[item.path]) await openFile(item.path);
+    if (models[item.path]) {
+      replaceWhole(models[item.path].model, item.before);
+      models[item.path].saved = item.before;
+      models[item.path].dirty = false;
+    }
+  }
+  updateDirtyPill();
+  renderTabs();
+  renderTree(document.getElementById("fileSearch").value);
+  logTerm("Restored " + items.map((item) => item.path).join(", "));
+  setTermMeta("Undo saved.");
 }

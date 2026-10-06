@@ -1,3 +1,7 @@
+/**
+ * Counts rows a suggest pass reports via recordScan.
+ * totalScans is what tests read. reset() zeroes it. globalCounter is the shared instance.
+ */
 export class QueryCounter {
   private scans = 0;
   reset(): void { this.scans = 0; }

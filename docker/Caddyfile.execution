@@ -1,0 +1,7 @@
+{$BROKER_DOMAIN} {
+    tls /etc/broker-tls/server.crt /etc/broker-tls/server.key
+    request_body {
+        max_size 30MB
+    }
+    reverse_proxy broker:8090
+}

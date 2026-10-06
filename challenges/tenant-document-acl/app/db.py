@@ -1,3 +1,4 @@
+"""In-memory documents keyed by id. list_for_tenant keeps rows whose tenant_id matches. get_by_id returns one row or None."""
 from typing import Optional
 from .models import Document
 _DOCS: dict[str, Document] = {}

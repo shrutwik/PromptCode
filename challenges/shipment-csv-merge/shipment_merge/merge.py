@@ -1,12 +1,14 @@
+"""Fold CSV batches into one event list and remember quantity deltas.
+
+A batch is one file: a list of ShipmentEvent. merge_events takes every batch.
+total_quantity reads the per-shipment totals stored on the last merge_events call.
+"""
 from __future__ import annotations
 from collections import defaultdict
 from .models import ShipmentEvent
 
 def merge_events(batches: list[list[ShipmentEvent]]) -> list[ShipmentEvent]:
-    """Merge batches. BUG: dedupes by (shipment_id, status) and still adds qty for skipped rows,
-    so duplicate event_ids double-count and repeated status labels drop later events.
-    Ordering by timestamp is OK so unique-status happy paths pass.
-    """
+    """Combine batches into the list summarize turns into a timeline."""
     combined: list[ShipmentEvent] = []
     for batch in batches:
         combined.extend(batch)
@@ -17,7 +19,7 @@ def merge_events(batches: list[list[ShipmentEvent]]) -> list[ShipmentEvent]:
     for event in combined:
         key = (event.shipment_id, event.status)
         if key in seen_status:
-            qty[event.shipment_id] += event.quantity_delta  # double-count risk
+            qty[event.shipment_id] += event.quantity_delta
             continue
         seen_status.add(key)
         out.append(event)

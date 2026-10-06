@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from app.core.config import get_settings
-from app.core.model_policy import OPENAI_CHAT_MODELS, resolve_allowed_model
+from app.core.model_policy import CHAT_MODELS, resolve_allowed_model
 from app.services.evaluation.constants import SCORE_WEIGHTS
 from app.services.evaluation.helpers import (
     _detect_metric_gaming,
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 def _default_counterfactual_model() -> str:
     raw_model = str(get_settings().openai_model or "").strip()
-    canonical_model = resolve_allowed_model(raw_model, OPENAI_CHAT_MODELS)
+    canonical_model = resolve_allowed_model(raw_model, CHAT_MODELS)
     return canonical_model or "gpt-4o"
 
 

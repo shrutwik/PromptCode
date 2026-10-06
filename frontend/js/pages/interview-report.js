@@ -1,7 +1,6 @@
 const parts = location.pathname.split("/").filter(Boolean);
 const sessionId = parts[1];
 let activeTab = "overview";
-let ringAnimated = false;
 const reducedMotion = () => !!(window.PCUI && PCUI.reducedMotion && PCUI.reducedMotion());
 
 /* Event type names unchanged — calibration depends on these strings */
@@ -127,15 +126,17 @@ async function load() {
   } catch (_) {}
 
   const events = r.timeline || [];
-  const toneFor = (pct) => (pct >= 70 ? "success" : pct >= 40 ? "warn" : "danger");
-  const rubricHtml = Object.entries(r.rubric || {}).map(([k, v], i) => {
-    const pct = v.max ? (Number(v.score) / Number(v.max)) * 100 : 0;
-    const label = k.replace(/^[A-Z]_/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()).replace(/\bAi\b/, "AI");
+  const reviewed = r.assessment?.status === "reviewed_practice" && Number.isFinite(r.assessment?.total_score);
+  const gradeLabel = reviewed ? `${r.assessment.total_score} / 100` : "Not assessed";
+  const categories = r.assessment?.dimensions || r.rubric || {};
+  const rubricHtml = Object.entries(categories).map(([k, v]) => {
+    const label = v.label || k.replace(/^[A-Z]_/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()).replace(/\bAi\b/, "AI");
+    const categoryStatus = v.status === "not_applicable" ? "Not applicable"
+      : reviewed && Number.isInteger(v.rating) ? `${v.rating} / 4` : "Not assessed";
     return `<div class="rubric-row"><div><div class="name">${esc(label)}</div>
-      <div class="evidence">${esc(v.evidence || "")}</div></div>
-      ${PCUI.bar(pct, toneFor(pct), 200 + i * 70)}
-      <div class="v">${esc(v.score)}/${esc(v.max)}</div></div>`;
-  }).join("") || `<div class="pc-panel-body muted">No rubric scores</div>`;
+      <div class="evidence">${esc(v.status === "not_applicable" ? "AI assistance was not available for this attempt." : reviewed ? v.rationale : "Evidence requires review before a rating can be given.")}</div></div>
+      <div class="v">${categoryStatus}</div></div>`;
+  }).join("") || `<div class="pc-panel-body muted">No assessment yet</div>`;
 
   const grouped = groupTimeline(events);
   const phases = Object.keys(GROUPS);
@@ -212,19 +213,19 @@ async function load() {
   const slug = r.challenge_slug || sessionMeta?.challenge_slug || "";
   const challengeTitle = r.challenge_title || (slug ? slug.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase()) : "Session");
 
-  const target = Math.max(0, Math.min(100, Number(r.total_score) || 0));
-  const ringTone = target >= 70 ? "var(--pc-success)" : target >= 40 ? "var(--pc-warn)" : "var(--pc-danger)";
   const testsOk = !!r.test_summary?.ok;
-  const steps = r.steps || (r.metrics && r.metrics.steps) || null;
+  const executionStatus = r.assessment?.execution_status;
+  const executionLabel = executionStatus === "completed" || reviewed ? "Evaluation completed"
+    : executionStatus === "failed" ? "Evaluation unavailable"
+    : executionStatus ? `Evaluation ${executionStatus}` : `Advisory tests ${testsOk ? "passed" : "failed"}`;
   const prev = r.previous_attempt || null;
   const rubricLabel = (k) => k.replace(/^[A-Z]_/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()).replace(/\bAi\b/, "AI");
-  const scoreCell = (field) => (field && field.score != null ? `${field.score}/${field.max}` : "—");
-  const compareRows = Object.keys(r.rubric || {}).map((k) => {
-    const cur = r.rubric[k] || {};
+  const scoreCell = (field, available) => available && Number.isInteger(field?.rating) ? `${field.rating} / 4` : "Not assessed";
+  const compareRows = Object.keys(categories).map((k) => {
+    const cur = categories[k] || {};
     const old = (prev && prev.rubric && prev.rubric[k]) || {};
-    return `<tr><td>${esc(rubricLabel(k))}</td><td>${esc(scoreCell(cur))}</td><td>${prev ? esc(scoreCell(old)) : "—"}</td></tr>`;
+    return `<tr><td>${esc(rubricLabel(k))}</td><td>${esc(scoreCell(cur, reviewed))}</td><td>${prev ? esc(scoreCell(old, false)) : "—"}</td></tr>`;
   }).join("");
-  const stepCell = (value) => (value && value.opened != null ? `${value.opened} of ${value.total}` : "—");
   const compareHtml = `<section class="pc-panel" aria-labelledby="compareTitle">
     <div class="pc-panel-head"><h2 id="compareTitle">This attempt and the previous one</h2></div>
     <div class="pc-panel-body">
@@ -232,9 +233,8 @@ async function load() {
       <table class="compare-table">
         <thead><tr><th>Field</th><th>This attempt</th><th>Previous</th></tr></thead>
         <tbody>
-          <tr><td>Steps</td><td>${esc(stepCell(steps))}</td><td>${prev ? esc(stepCell(prev.steps)) : "—"}</td></tr>
           ${compareRows}
-          <tr><td>Total</td><td>${esc(r.total_score)}</td><td>${prev ? esc(prev.total_score) : "—"}</td></tr>
+          <tr><td>Total</td><td>${esc(gradeLabel)}</td><td>${prev ? "Not assessed" : "—"}</td></tr>
         </tbody>
       </table>
     </div>
@@ -249,20 +249,18 @@ async function load() {
   main.removeAttribute("aria-busy");
   main.innerHTML = `
     <a class="page-back" href="/session/${sessionId}">← Workspace</a>
-    <section class="pc-panel report-hero" aria-label="Score summary">
-      <div class="pc-score-ring" id="scoreRing" style="--pc-score:${target};--pc-ring-color:${ringTone}" role="img" aria-label="Score ${Math.round(target)} out of 100">${reducedMotion() ? Math.round(target) : 0}</div>
+    <section class="pc-panel report-hero" aria-label="Assessment status">
       <div>
         <span class="pc-eyebrow">Session report</span>
         <h1 class="page-title">${esc(challengeTitle)}</h1>
         <div class="report-hero-meta">
-          <span class="tag">${Math.round(target)} / 100</span>
+          <span class="tag">${esc(gradeLabel)}</span>
           <span class="tag">${esc(fmtDuration(durationMs))}</span>
           <span class="tag" data-tone="${status === "submitted" ? "success" : "idle"}">${esc(status)}</span>
-          <span class="tag" data-tone="${testsOk ? "success" : "danger"}">advisory tests ${testsOk ? "passed" : "failed"}</span>
-          ${steps ? `<span class="tag">Steps ${esc(steps.opened)} of ${esc(steps.total)}</span>` : ""}
+          <span class="tag">${esc(executionLabel)}</span>
           <span class="tag">hidden tests not leaked</span>
         </div>
-        <p class="report-hero-note">Advisory practice feedback only. Execution results do not establish correctness or an authoritative score. ${events.length} logged events across ${phases.filter((p) => (grouped[p] || []).length).length} workflow categories.</p>
+        <p class="report-hero-note">${reviewed ? "Human-reviewed practice rating based on submitted evidence. This is not a validated hiring assessment." : "Practice evidence is awaiting evaluation or review; no grade has been issued."} ${events.length} logged events across ${phases.filter((p) => (grouped[p] || []).length).length} workflow categories.</p>
       </div>
     </section>
 
@@ -271,9 +269,14 @@ async function load() {
     <div ${panelAttrs("overview")}>
       ${compareHtml}
       <section class="pc-panel" aria-labelledby="rubricTitle">
-        <div class="pc-panel-head"><h2 id="rubricTitle">Category scores</h2></div>
+        <div class="pc-panel-head"><h2 id="rubricTitle">Assessment criteria</h2></div>
         ${rubricHtml}
       </section>
+      <section class="pc-panel"><div class="pc-panel-head"><h2>Review or appeal</h2></div><div class="pc-panel-body">
+        <p id="appealStatus" role="status"></p>
+        ${reviewed && r.assessment.review_id ? `<form id="appealForm"><label for="appealReason">Explain which evidence or rating should be reconsidered.</label><textarea id="appealReason" required minlength="20" maxlength="4000"></textarea><button class="btn" type="submit">Request an independent review</button></form>` : "<p>Appeals become available when a reviewed rating is published.</p>"}
+        <div id="appealHistory"></div>
+      </div></section>
       <div class="report-grid">
         <section class="pc-panel"><div class="pc-panel-head"><h3>Strengths</h3></div><div class="pc-panel-body">${listOr(r.went_well, "None noted")}</div></section>
         <section class="pc-panel"><div class="pc-panel-head"><h3>Improvements</h3></div><div class="pc-panel-body">${listOr(r.improve, "None noted")}</div></section>
@@ -320,7 +323,7 @@ async function load() {
         ${diffHtml}
       </section>
       <section class="pc-panel" aria-labelledby="correctTitle">
-        <div class="pc-panel-head"><h2 id="correctTitle">Advisory execution feedback</h2><span class="tag" data-tone="${testsOk ? "success" : "danger"}">${testsOk ? "passing" : "failing"}</span></div>
+        <div class="pc-panel-head"><h2 id="correctTitle">Execution status</h2><span class="tag">${esc(executionLabel)}</span></div>
         <pre class="report-pre">${esc(JSON.stringify({
           visible_ok: r.test_summary?.ok,
           command: r.test_summary?.command,
@@ -367,20 +370,26 @@ async function load() {
 
   if (window.PCUI) PCUI.mountAppNav({ active: "practice" });
 
-  const ring = document.getElementById("scoreRing");
   const reduced = reducedMotion();
-  if (!reduced && !ringAnimated) {
-    ringAnimated = true;
-    const start = performance.now();
-    const dur = 720;
-    const tick = (now) => {
-      const p = Math.min(1, (now - start) / dur);
-      ring.textContent = String(Math.round(target * (1 - Math.pow(1 - p, 3))));
-      if (p < 1) requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  } else {
-    ring.textContent = String(Math.round(target));
+  const appealForm = document.getElementById("appealForm");
+  if (appealForm) appealForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = appealForm.querySelector("button");
+    button.disabled = true;
+    try {
+      await InterviewAPI.request(`/grading/sessions/${sessionId}/appeals`, { method: "POST",
+        body: JSON.stringify({ review_id: r.assessment.review_id, reason: document.getElementById("appealReason").value }) });
+      await load();
+    } catch (error) {
+      document.getElementById("appealStatus").textContent = error.message || "Could not send appeal";
+      button.disabled = false;
+    }
+  });
+  if (typeof InterviewAPI.request === "function") {
+    InterviewAPI.request(`/grading/sessions/${sessionId}/appeals`).then((data) => {
+      document.getElementById("appealHistory").innerHTML = (data.appeals || []).map((appeal) =>
+        `<p>${esc(appeal.status)} — ${esc(appeal.reason)}${appeal.decision ? `<br>${esc(appeal.decision.reason)}` : ""}</p>`).join("");
+    }).catch(() => {});
   }
 
   /* —— Timeline scrubber —— */

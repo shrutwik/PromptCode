@@ -1,3 +1,8 @@
+/**
+ * Pricing rules. percent_off and surcharge_percent carry pct (a number, not a fraction).
+ * amount_off carries cents. Every rule has a code string.
+ * sortRulesForApply orders percent_off, then amount_off, then surcharge_percent, then code.
+ */
 export type Rule =
   | { type: 'percent_off'; pct: number; code: string }
   | { type: 'amount_off'; cents: number; code: string }

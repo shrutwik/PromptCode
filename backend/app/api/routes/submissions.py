@@ -81,6 +81,8 @@ async def _guard_submission_capacity(
     user_id: uuid.UUID,
 ) -> None:
     limit = int(get_settings().submission_max_outstanding_jobs_per_user)
+    from app.services.interview.grading_admission import require_global_grading_capacity
+    await require_global_grading_capacity(db)
     await db.execute(
         select(User.id)
         .where(User.id == user_id)

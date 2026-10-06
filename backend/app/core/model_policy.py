@@ -8,6 +8,8 @@ OPENAI_CHAT_MODELS: tuple[str, ...] = (
     "gpt-4-turbo",
     "gpt-3.5-turbo",
 )
+CHAT_MODELS = (*OPENAI_CHAT_MODELS, "deepseek-flash")
+
 _MODEL_PREFIX_SEPARATORS: tuple[str, ...] = ("/", ":", ".")
 
 

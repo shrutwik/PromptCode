@@ -13,7 +13,7 @@ Short actionable gate before inviting users. Product UI is freeze-candidate.
 - [x] Chartreuse brand + cool AI blue + semantic success green distinct
 
 ## Configure before invites
-- [ ] Set `PROMPTCODE_AI_PROVIDER=openai` (or production provider) **and** real `PROMPTCODE_OPENAI_API_KEY` if you want live AI (local QA used **mock**)
+- [ ] Put a real key in `PROMPTCODE_OPENAI_API_KEY`. The interview assistant then uses `gpt-4o-mini` (`PROMPTCODE_AI_MODEL`). Set `PROMPTCODE_AI_PROVIDER=mock` only if you want scripted replies. Clear `PROMPTCODE_OPENAI_BASE_URL` when the key is a normal OpenAI key.
 - [ ] Build runner images if using Docker:
   - `docker/Dockerfile.interview-node` → `promptcode-runner-node:latest`
   - `docker/Dockerfile.interview-python` → `promptcode-runner-python:latest`

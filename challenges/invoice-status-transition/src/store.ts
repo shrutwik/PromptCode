@@ -1,3 +1,8 @@
+/**
+ * In-memory invoice rows, keyed by id.
+ * getInvoice and saveInvoice return copies so callers cannot mutate the map by accident.
+ * resetStore and seedInvoice exist so tests start from a known set.
+ */
 import type { Invoice } from './types.js';
 const invoices = new Map<string, Invoice>();
 export function resetStore(): void { invoices.clear(); }

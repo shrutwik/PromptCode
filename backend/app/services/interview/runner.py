@@ -15,12 +15,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
-from app.services.interview.execution_feedback import (
-    candidate_case_rows,
-    complete_report,
-    practice_notice,
-    read_report,
-)
+from app.services.interview.execution_feedback import complete_report, read_report
 
 logger = logging.getLogger(__name__)
 
@@ -343,15 +338,12 @@ class LocalDevelopmentRunner(ChallengeRunner):
                     command_id=command_id,
                     runner="local",
                 )
-            stdout, out_trunc = _clip(stdout_b.decode("utf-8", errors="replace"), output_limit)
-            stderr, err_trunc = _clip(stderr_b.decode("utf-8", errors="replace"), output_limit)
+            stdout = _clip(stdout_b.decode("utf-8", errors="replace"), output_limit)
+            stderr = _clip(stderr_b.decode("utf-8", errors="replace"), output_limit)
             counts = _parse_test_counts(stdout + "\n" + stderr)
-            exit_code = proc.returncode or 0
-            from app.services.interview.execution_feedback import practice_notice
-
             return _result(
                 ok=False,
-                exit_code=exit_code,
+                exit_code=proc.returncode or 0,
                 stdout=stdout,
                 stderr=stderr,
                 command=shlex.join(argv),
@@ -361,16 +353,6 @@ class LocalDevelopmentRunner(ChallengeRunner):
                 isolation="host",
                 command_id=command_id,
                 runner="local",
-                truncated=out_trunc or err_trunc,
-                notice=practice_notice(
-                    report=None,
-                    expected_ids=[],
-                    exit_code=exit_code,
-                    timed_out=False,
-                    truncated=out_trunc or err_trunc,
-                    report_ok=False,
-                    is_python=argv[0] in {"pytest", "python"},
-                ),
             )
         except FileNotFoundError as exc:
             return _result(
@@ -400,7 +382,7 @@ def reap_expired_runners() -> int:
     removed = 0
     try:
         containers = client.containers.list(all=True, filters={"label": [
-            "promptcode.role=interview-runner", "promptcode.component=interview",
+            "promptcode.role=interview-runner",
             "promptcode.expires_at",
         ]})
         for container in containers:
@@ -465,8 +447,46 @@ class IsolatedRunner(ChallengeRunner):
         cfg = runner_config or {}
         timeout = int(cfg.get("timeoutSeconds") or timeout_seconds or DEFAULT_TIMEOUT_SECONDS)
         timeout = max(5, min(timeout, 120))
-        sem = _get_runner_semaphore()
         from app.core.config import get_settings
+        settings = get_settings()
+        if getattr(settings, "execution_broker_url", ""):
+            import httpx
+            from .execution_transfer import bundle_source
+            slug = cfg.get("challengeSlug")
+            if not slug:
+                raise ValueError("Registered challenge identity is required")
+            bundle = await asyncio.to_thread(bundle_source, workspace)
+            from app.core.execution_transport import broker_tls_context, broker_json_async
+            async with httpx.AsyncClient(timeout=timeout + 15, trust_env=False, verify=broker_tls_context(settings)) as client:
+                try:
+                    result = await broker_json_async(client, "POST", settings.execution_broker_url.rstrip("/") + "/v1/interview/run",
+                        max_bytes=128 * 1024,
+                        headers={"Authorization": "Bearer " + settings.sandbox_executor_token},
+                        json={"challenge_slug": slug, "command_id": command_id, "source": bundle.model_dump()})
+                except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code == 503:
+                        return self._busy_result(command, command_id)
+                    raise
+            if not isinstance(result, dict) or not {"ok", "exit_code", "stdout", "stderr", "command"} <= result.keys():
+                raise RuntimeError("Invalid interview execution response")
+            return result
+        if settings.sandbox_executor_url:
+            import httpx
+            # Send only the server-owned session id and allowlisted command id.
+            # The executor resolves its path, image and command from the database.
+            async with httpx.AsyncClient(timeout=timeout + 15) as client:
+                response = await client.post(
+                    settings.sandbox_executor_url.rstrip("/") + "/v1/interview/run",
+                    headers={"Authorization": "Bearer " + settings.sandbox_executor_token},
+                    json={"session_id": str(uuid.UUID(workspace.name)), "command_id": command_id},
+                )
+            if response.status_code != 200:
+                raise RuntimeError("Interview executor unavailable")
+            result = response.json()
+            if not isinstance(result, dict) or not {"ok", "exit_code", "stdout", "stderr", "command"} <= result.keys():
+                raise RuntimeError("Invalid interview executor response")
+            return result
+        sem = _get_runner_semaphore()
 
         acquire_timeout = max(1, int(get_settings().max_runners_acquire_timeout_seconds))
         global _runner_waiters
@@ -622,10 +642,10 @@ class IsolatedRunner(ChallengeRunner):
             "working_dir": WORKSPACE_MOUNT,
             "volumes": {
                 str(workspace): {"bind": "/source", "mode": "ro"},
-                str(Path(__file__).parent / "reporters"): {"bind": "/opt/promptcode-reporters", "mode": "ro"},
             },
             "environment": {
                 "HOME": "/tmp",
+                "PC_CHALLENGE_SLUG": str(runner_config.get("challengeSlug") or ""),
                 "npm_config_cache": "/tmp/npm-cache",
                 "PIP_DISABLE_PIP_VERSION_CHECK": "1",
                 "PYTHONDONTWRITEBYTECODE": "1",
@@ -638,7 +658,8 @@ class IsolatedRunner(ChallengeRunner):
             "mem_limit": f"{memory_mb}m",
             "nano_cpus": int(cpu * 1e9),
             # Each candidate has only loopback; no host, database, or peer route.
-            "network_disabled": True,
+            "network_mode": "none",
+            "extra_hosts": {"localhost": "127.0.0.1"},
             "read_only": True,
             "tmpfs": {
                 "/tmp": "rw,noexec,nosuid,size=64m",
@@ -669,8 +690,6 @@ class IsolatedRunner(ChallengeRunner):
         stdout = ""
         stderr = ""
         report_ok = False
-        report = None
-        truncated = False
         try:
             container = client.containers.run(**run_kwargs)
             try:
@@ -685,12 +704,10 @@ class IsolatedRunner(ChallengeRunner):
                 exit_code = -1
                 stderr = f"Timed out after {timeout_seconds}s"
 
-            if not timed_out and is_python:
+            if not timed_out and exit_code == 0 and is_python:
                 try:
-                    report = read_report(container)
-                    report_ok = exit_code == 0 and complete_report(report, expected_ids)
+                    report_ok = complete_report(read_report(container), expected_ids)
                 except Exception:
-                    report = None
                     report_ok = False
             try:
                 logs = container.logs(stdout=True, stderr=True)
@@ -700,10 +717,10 @@ class IsolatedRunner(ChallengeRunner):
             cleaned = _scrub_host_paths(raw, workspace)
             if timed_out:
                 stdout = ""
-                stderr, truncated = _clip(stderr + ("\n" + cleaned if cleaned else ""), output_limit)
+                stderr = _clip(stderr + ("\n" + cleaned if cleaned else ""), output_limit)
             else:
                 # docker combines streams; split best-effort into stdout
-                stdout, truncated = _clip(cleaned, output_limit)
+                stdout = _clip(cleaned, output_limit)
                 stderr = ""
         except ImageNotFound:
             stderr = f"Runner image not found: {image}. Build interview runner images before enabling docker mode."
@@ -727,16 +744,6 @@ class IsolatedRunner(ChallengeRunner):
                         logger.warning("Failed to remove interview container %s", name)
 
         counts = _parse_test_counts(stdout + "\n" + stderr)
-        cases = candidate_case_rows((report or {}).get("records") if isinstance(report, dict) else [])
-        notice = practice_notice(
-            report=report,
-            expected_ids=expected_ids,
-            exit_code=exit_code,
-            timed_out=timed_out,
-            truncated=truncated,
-            report_ok=report_ok,
-            is_python=is_python,
-        )
         return _result(
             ok=(not timed_out) and exit_code == 0 and report_ok,
             exit_code=exit_code,
@@ -751,9 +758,6 @@ class IsolatedRunner(ChallengeRunner):
             timed_out=timed_out,
             command_id=command_id,
             runner="docker",
-            tests=cases,
-            notice=notice,
-            truncated=truncated,
         )
 
 
@@ -953,12 +957,10 @@ def _install_linux_node_modules(workspace: Path, image: str) -> None:
         logger.warning("Offline dependencies unavailable in reviewed runner image/cache")
 
 
-def _clip(text: str, limit: int) -> tuple[str, bool]:
+def _clip(text: str, limit: int) -> str:
     if len(text) <= limit:
-        return text, False
-    note = "\n[Output truncated. The run produced more text than the limit.]"
-    keep = max(0, limit - len(note))
-    return text[-keep:] + note, True
+        return text
+    return text[-limit:]
 
 
 def _scrub_host_paths(text: str, workspace: Path) -> str:
@@ -986,9 +988,6 @@ def _result(
     command_id: str | None = None,
     runner: str | None = None,
     error_code: str | None = None,
-    tests: list[dict] | None = None,
-    notice: str | None = None,
-    truncated: bool = False,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "ok": ok,
@@ -1007,32 +1006,24 @@ def _result(
         "timed_out": timed_out,
         "command_id": command_id or "run_tests",
         "runner": runner or ("docker" if isolation == "docker" else "local"),
-        "tests": tests or [],
-        "truncated": bool(truncated),
     }
     if error_code:
         payload["error_code"] = error_code
-    if notice:
-        payload["notice"] = notice
     return payload
 
 
 def _parse_test_counts(output: str) -> dict[str, int]:
     """Best-effort structured counts from vitest/pytest output (not a scraper grade)."""
-    summary = ""
-    for line in output.splitlines():
-        if re.search(r"\d+\s+(?:passed|failed)\b", line, re.I):
-            summary = line
-    text = summary or output
-
-    def _count(label: str) -> int:
-        match = re.search(rf"(\d+)\s+{label}\b", text, re.I)
-        return int(match.group(1)) if match else 0
-
-    if re.search(r"\d+\s+(?:passed|failed)\b", text, re.I):
-        passed = _count("passed")
-        failed = _count("failed")
-        skipped = _count("skipped")
+    # pytest: "3 passed, 1 failed, 2 skipped"
+    m = re.search(
+        r"(\d+)\s+passed(?:,\s*(\d+)\s+failed)?(?:,\s*(\d+)\s+skipped)?",
+        output,
+        re.I,
+    )
+    if m:
+        passed = int(m.group(1))
+        failed = int(m.group(2) or 0)
+        skipped = int(m.group(3) or 0)
         return {
             "passed": passed,
             "failed": failed,

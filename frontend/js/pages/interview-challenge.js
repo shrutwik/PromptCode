@@ -11,6 +11,15 @@ async function start() {
 
 async function load() {
   const c = await InterviewAPI.getChallenge(slug);
+  let card = null;
+  try {
+    const cards = await InterviewAPI.listChallengesProgress({});
+    card = (cards || []).find((item) => item.slug === slug) || null;
+  } catch (_) {
+    card = null;
+  }
+  const activeId = card && card.active_session_id;
+  const startLabel = card && card.attempt_count ? "Start another attempt" : "Start session";
   document.title = c.title + " — PromptCode";
   const main = document.getElementById("main");
   main.removeAttribute("aria-busy");
@@ -54,12 +63,15 @@ async function load() {
           </ul>
         </div>
         <div class="pc-panel-body">
-          <button class="btn btn-primary btn-lg btn-block" id="startBtn" type="button">Start session</button>
-          <p class="brief-note">Opens in the Plan phase. Desktop recommended.</p>
+          ${activeId
+            ? `<a class="btn btn-primary btn-lg btn-block" href="/session/${esc(activeId)}">Resume session</a>`
+            : `<button class="btn btn-primary btn-lg btn-block" id="startBtn" type="button">${startLabel}</button>`}
+          <p class="brief-note">${activeId ? "An open session is already saved for this challenge." : "Desktop recommended."}</p>
         </div>
       </aside>
     </div>`;
   const btn = document.getElementById("startBtn");
+  if (!btn) return;
   btn.addEventListener("click", () => {
     btn.disabled = true;
     btn.classList.add("is-loading");
@@ -67,7 +79,7 @@ async function load() {
     start().catch((e) => {
       btn.disabled = false;
       btn.classList.remove("is-loading");
-      btn.textContent = "Start session";
+      btn.textContent = startLabel;
       PCUI.toast(e.message || String(e), { tone: "danger" });
     });
   });

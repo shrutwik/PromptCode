@@ -8,7 +8,7 @@ Eval platform (`challenge.json`, sandbox workers) is untouched.
 1. Library → `GET /api/interview/challenges`
 2. Detail → `GET /api/interview/challenges/{slug}` (README only; no SOLUTION / interviewer metadata)
 3. Start → `POST /api/interview/sessions` copies challenge → per-session workspace + `.starter` snapshot
-4. Workspace UI loads Monaco, nested explorer, AI chat, tests via `command_id`
+4. Workspace UI loads Monaco, the full ticket on the left (situation, the work, how to work), AI chat, tests via `command_id`
 5. Diff → `GET .../diff` (optional `record=true` emits `final_diff_viewed`)
 6. Submit → allowlisted tests + rubric + signals; defend questions stripped of guides
 7. Defend → `GET/POST .../defend` (4 questions, one-at-a-time client UX)

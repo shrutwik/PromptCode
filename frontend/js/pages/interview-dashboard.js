@@ -2,10 +2,6 @@ if (!InterviewAPI.requireAuth("/dashboard")) throw new Error("auth");
 
 const esc = PCUI.esc;
 document.getElementById("listSkel").innerHTML = PCUI.skeletonRows(4);
-document.getElementById("stats").innerHTML = Array.from({ length: 6 }, () =>
-  '<div class="stat"><span class="pc-skeleton pc-skeleton-text" style="--w:40%;height:20px"></span><span class="pc-skeleton pc-skeleton-text" style="--w:70%"></span></div>'
-).join("");
-document.getElementById("skills").innerHTML = Array.from({ length: 4 }, () => '<span class="pc-skeleton pc-skeleton-text"></span>').join("");
 
 function parseUtc(v) {
   if (!v) return NaN;
@@ -24,15 +20,6 @@ function when(v) {
 }
 
 const STATUS_TONE = { submitted: "success", active: "info", abandoned: "idle" };
-
-function scrollToProgress() {
-  if (location.hash !== "#progress") return;
-  const el = document.getElementById("progress");
-  if (!el) return;
-  el.scrollIntoView({ block: "start", behavior: PCUI.reducedMotion() ? "auto" : "smooth" });
-  el.focus({ preventScroll: true });
-}
-window.addEventListener("hashchange", scrollToProgress);
 
 function ownedSessionHref(id, report) {
   // Logged-in resume uses the bearer token. The owner token is not required.
@@ -65,52 +52,6 @@ function renderContinue(sessions) {
       </div>
       <div class="dash-continue-actions"><a class="btn btn-primary" href="/challenges">Find a challenge</a></div>
     </div>`;
-  }
-}
-
-function renderProgress(data) {
-  const stats = document.getElementById("stats");
-  /* Category averages are raw rubric points; maxima mirror backend rubric (A 25, B 15, D 15, E 10). */
-  const cells = [
-    ["Completed", data.completed ?? 0, ""],
-    ["Avg score", data.avg_score ?? "—", "/100"],
-    ["Correctness", data.avg_correctness ?? "—", "/25"],
-    ["Exploration", data.avg_exploration ?? "—", "/15"],
-    ["AI judgment", data.avg_ai_judgment ?? "—", "/15"],
-    ["Verification", data.avg_verification ?? "—", "/10"],
-  ];
-  stats.innerHTML = cells.map(([l, v, max]) =>
-    `<div class="stat"><div class="n">${esc(v)}${max && v !== "—" ? `<span class="stat-max">${max}</span>` : ""}</div><div class="l">${esc(l)}</div></div>`
-  ).join("");
-
-  const skills = [
-    ["Correctness", data.avg_correctness, 25],
-    ["Exploration", data.avg_exploration, 15],
-    ["AI judgment", data.avg_ai_judgment, 15],
-    ["Verification", data.avg_verification, 10],
-  ].map(([l, v, max]) => [l, v == null || v === "—" ? null : Number(v), max]);
-  const skillRoot = document.getElementById("skills");
-  if (skills.some(([, v]) => v > 0)) {
-    skillRoot.innerHTML = skills.map(([l, v, max], i) => {
-      const pct = v == null ? 0 : (v / max) * 100;
-      const tone = pct >= 70 ? "success" : pct >= 40 ? "warn" : "danger";
-      return `<div class="skill-row"><span>${esc(l)}</span>${PCUI.bar(pct, v == null ? "" : tone, 120 + i * 80)}<span class="v">${v == null ? "—" : `${esc(v)}<span class="stat-max">/${max}</span>`}</span></div>`;
-    }).join("");
-  } else {
-    skillRoot.innerHTML = `<p class="muted" style="font-size:var(--pc-text-sm)">Complete a session to see your skill mix.</p>`;
-  }
-
-  const note = document.getElementById("trendsNote");
-  const trendsEl = document.getElementById("trends");
-  const trends = data.trends || [];
-  note.textContent = data.trends_note || "";
-  if (trends.length && (data.completed || 0) >= 3) {
-    trendsEl.innerHTML = trends.map((t) => `<li>${esc(t)}</li>`).join("");
-  } else {
-    trendsEl.innerHTML = "";
-    if (!data.trends_note) {
-      note.textContent = (data.completed || 0) < 3 ? "Trends appear after a few completed sessions — no fake charts." : "";
-    }
   }
 }
 
@@ -161,13 +102,9 @@ async function load() {
   const sessions = data.sessions || data || [];
   renderContinue(sessions);
   renderSessions(sessions);
-  renderProgress(data);
-  requestAnimationFrame(scrollToProgress);
 }
 
 load().catch((e) => {
   document.getElementById("continue").innerHTML = "";
   document.getElementById("list").innerHTML = `<div class="pc-error" role="alert"><strong>Could not load practice home</strong><div class="pc-error-safe">Your sessions are safe on the server.</div><button class="btn btn-ghost btn-sm" type="button" data-pc-reload>Retry</button><div class="muted" style="margin-top:8px">${esc(e.message)}</div></div>`;
-  document.getElementById("stats").innerHTML = "";
-  document.getElementById("skills").innerHTML = "";
 });

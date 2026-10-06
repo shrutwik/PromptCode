@@ -1,3 +1,8 @@
+/**
+ * Ranking contract for suggest.
+ * scoreProduct adds 10 when a query token is in product.tokens and 5 when it equals product.category.
+ * compareRank orders higher score first, then higher popularity, then id ascending.
+ */
 import type { Product } from './catalog.js';
 export function scoreProduct(queryTokens: string[], product: Product): number {
   let score = 0;

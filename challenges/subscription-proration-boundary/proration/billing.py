@@ -1,3 +1,9 @@
+"""Subscription credit at cancel time.
+
+proration_credit returns 0 when the cancel instant is outside the period.
+Otherwise it is monthly_cents times remaining whole days over days_in_period, as an int.
+describe_cancel formats the instant for humans and appends the credit. The formatted string is not an input to the math.
+"""
 from __future__ import annotations
 from dataclasses import dataclass
 from .period import Period, contains, days_in_period

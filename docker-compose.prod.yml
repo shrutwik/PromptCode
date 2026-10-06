@@ -10,13 +10,14 @@
 #   PROMPTCODE_DB_PASSWORD            — Postgres password
 #   PROMPTCODE_JWT_SECRET             — JWT signing secret (min 32 chars)
 #   PROMPTCODE_SANDBOX_EXECUTOR_TOKEN — Shared secret between backend and executor
-#   PROMPTCODE_OPENAI_API_KEY         — OpenAI key for evaluation
+#   DEEPSEEK_API_KEY                 — DeepSeek key for assistant and evaluation
 #   DOMAIN                            — Public hostname for Caddy TLS (e.g. api.example.com)
 #
 # Optional (production defaults shown):
 #   PROMPTCODE_METRICS_TOKEN          — Bearer token for /metrics scraping
 #   PROMPTCODE_SENTRY_DSN             — Sentry DSN for error tracking
-#   PROMPTCODE_DATABASE_SSL_REQUIRE   — true (set false only on trusted VPCs)
+#   PROMPTCODE_DATABASE_SSL_REQUIRE   — false for the bundled Postgres (no TLS).
+#                                     Set true only for a hosted database that requires SSL.
 #
 # GHCR package visibility:
 #   The sandbox executor spawns containers using promptcode-sandbox:latest (tagged at deploy time).
@@ -33,6 +34,34 @@ x-image: &backend-image
   image: ghcr.io/shrutwik/promptcode/backend:${IMAGE_TAG:-latest}
   pull_policy: missing  # CI pre-pulls before `up -d`; missing allows rollback from cached images
 
+x-ai-env: &ai-env
+  PROMPTCODE_EXECUTION_BROKER_URL: ${PROMPTCODE_EXECUTION_BROKER_URL:?set private HTTPS execution broker URL}
+  PROMPTCODE_SANDBOX_EXECUTOR_URL: ""
+  PROMPTCODE_EXECUTION_BROKER_CA_FILE: ${PROMPTCODE_EXECUTION_BROKER_CA_FILE:-}
+  DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+  PROMPTCODE_OPENAI_BASE_URL: https://api.deepseek.com
+  PROMPTCODE_OPENAI_MODEL: deepseek-flash
+  PROMPTCODE_PROMPT_JUDGE_MODEL: deepseek-flash
+  PROMPTCODE_PROMPT_JUDGE_FALLBACK_MODEL: deepseek-flash
+  PROMPTCODE_AI_PROVIDER: deepseek
+  PROMPTCODE_AI_BASE_URL: https://api.deepseek.com
+  PROMPTCODE_AI_MODEL: deepseek-flash
+  PROMPTCODE_AI_QUESTION_ONLY: "true"
+  PROMPTCODE_AI_KILL_SWITCH: ${PROMPTCODE_AI_KILL_SWITCH:-false}
+  PROMPTCODE_AI_MAX_MICROS_PER_TOKEN: ${PROMPTCODE_AI_MAX_MICROS_PER_TOKEN:-2}
+  PROMPTCODE_AI_TRIAL_REQUESTS: ${PROMPTCODE_AI_TRIAL_REQUESTS:-1000000}
+  PROMPTCODE_AI_TRIAL_TOKENS: ${PROMPTCODE_AI_TRIAL_TOKENS:-1000000000}
+  PROMPTCODE_AI_TRIAL_COST_MICROS: ${PROMPTCODE_AI_TRIAL_COST_MICROS:-5000000}
+  PROMPTCODE_AI_GLOBAL_REQUESTS: ${PROMPTCODE_AI_GLOBAL_REQUESTS:-200}
+  PROMPTCODE_AI_GLOBAL_TOKENS: ${PROMPTCODE_AI_GLOBAL_TOKENS:-500000}
+  PROMPTCODE_AI_GLOBAL_COST_MICROS: ${PROMPTCODE_AI_GLOBAL_COST_MICROS:-1000000}
+  PROMPTCODE_AI_USER_REQUESTS: ${PROMPTCODE_AI_USER_REQUESTS:-20}
+  PROMPTCODE_AI_USER_TOKENS: ${PROMPTCODE_AI_USER_TOKENS:-500000}
+  PROMPTCODE_AI_USER_COST_MICROS: ${PROMPTCODE_AI_USER_COST_MICROS:-1000000}
+  PROMPTCODE_AI_SESSION_REQUESTS: ${PROMPTCODE_AI_SESSION_REQUESTS:-10}
+  PROMPTCODE_AI_SESSION_TOKENS: ${PROMPTCODE_AI_SESSION_TOKENS:-250000}
+  PROMPTCODE_AI_SESSION_COST_MICROS: ${PROMPTCODE_AI_SESSION_COST_MICROS:-500000}
+
 services:
   db:
     # No changes — keep postgres-16-alpine with pgdata volume
@@ -41,29 +70,41 @@ services:
   sandbox:
     build: !reset null
 
-  sandbox-executor:
-    <<: *backend-image
+  interview-runner-node:
     build: !reset null
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-          cpus: "1.0"
+
+  interview-runner-python:
+    build: !reset null
+
+  # The legacy credential-bearing executor is development-only. Production
+  # execution is provided by docker-compose.execution.yml on a different host.
+  sandbox-executor:
+    profiles: ["development-executor"]
+    build: !reset null
 
   backend:
     <<: *backend-image
     build: !reset null
+    volumes:
+      - ${BROKER_CA_DIR:-./docker/broker-ca}:/etc/promptcode/broker-ca:ro
     ports: !reset []  # do not expose port 8000 externally; Caddy routes internally via backend:8000
+    depends_on: !override
+      db:
+        condition: service_healthy
     deploy:
       resources:
         limits:
           memory: 512m
           cpus: "1.0"
     environment:
+      <<: *ai-env
       PROMPTCODE_ENVIRONMENT: production
       PROMPTCODE_DEBUG: "false"
-      PROMPTCODE_DATABASE_SSL_REQUIRE: ${PROMPTCODE_DATABASE_SSL_REQUIRE:-true}
+      # Private beta: question-scoped Flash assistant, bounded spend, open signup.
+      PROMPTCODE_BETA_INVITE_REQUIRED: "false"
       PROMPTCODE_RUNNER: docker
+      PROMPTCODE_INTERVIEW_WORKSPACE_ROOT: ${PROMPTCODE_INTERVIEW_HOST_WORKDIR:-/var/promptcode/interview_workspaces}
+      PROMPTCODE_DATABASE_SSL_REQUIRE: ${PROMPTCODE_DATABASE_SSL_REQUIRE:-false}
       PROMPTCODE_METRICS_TOKEN: ${PROMPTCODE_METRICS_TOKEN:-}
       # Caddy reaches the backend over Docker's private bridge network.
       # Override this if your deployment uses a custom proxy subnet.
@@ -76,8 +117,11 @@ services:
   worker:
     <<: *backend-image
     build: !reset null
+    volumes:
+      - ${PROMPTCODE_INTERVIEW_HOST_WORKDIR:-/var/promptcode/interview_workspaces}:${PROMPTCODE_INTERVIEW_HOST_WORKDIR:-/var/promptcode/interview_workspaces}:ro
+      - ${BROKER_CA_DIR:-./docker/broker-ca}:/etc/promptcode/broker-ca:ro
     command: ["python", "-m", "scripts.run_queue_worker"]  # backend owns migrations; skip wrapper
-    depends_on:
+    depends_on: !override
       backend:
         condition: service_healthy
     deploy:
@@ -86,14 +130,18 @@ services:
           memory: 768m
           cpus: "2.0"
     environment:
+      <<: *ai-env
       PROMPTCODE_ENVIRONMENT: production
       PROMPTCODE_DEBUG: "false"
 
   worker-b:
     <<: *backend-image
     build: !reset null
+    volumes:
+      - ${PROMPTCODE_INTERVIEW_HOST_WORKDIR:-/var/promptcode/interview_workspaces}:${PROMPTCODE_INTERVIEW_HOST_WORKDIR:-/var/promptcode/interview_workspaces}:ro
+      - ${BROKER_CA_DIR:-./docker/broker-ca}:/etc/promptcode/broker-ca:ro
     command: ["python", "-m", "scripts.run_queue_worker"]  # backend owns migrations; skip wrapper
-    depends_on:
+    depends_on: !override
       backend:
         condition: service_healthy
     deploy:
@@ -102,6 +150,7 @@ services:
           memory: 768m
           cpus: "2.0"
     environment:
+      <<: *ai-env
       PROMPTCODE_ENVIRONMENT: production
       PROMPTCODE_DEBUG: "false"
 
@@ -127,6 +176,6 @@ services:
       - ./docker/Caddyfile.prod:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-    depends_on:
+    depends_on: !override
       backend:
         condition: service_healthy

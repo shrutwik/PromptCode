@@ -1,0 +1,2987 @@
+{
+  "schema_version": 1,
+  "namespace": "local_95fce2e138",
+  "target": "http://127.0.0.1:55007",
+  "challenge": "subscription-proration-boundary",
+  "execution_exercised": true,
+  "paid_ai_exercised": false,
+  "client_host": "Shrutwiks-MacBook-Pro.local",
+  "host_telemetry_scope": "load-client host; selected PIDs only",
+  "poll_interval_seconds": 2,
+  "queue_wait_scope": "first observed running state; polling upper bound, fast jobs may be missed",
+  "requested_stages": [
+    50,
+    100
+  ],
+  "stages": [
+    {
+      "requests": 1200,
+      "unexpected_errors": 0,
+      "throttles": 170,
+      "stop_threshold_reached": false,
+      "flows": {
+        "completed": 50
+      },
+      "flow_failures": {},
+      "steps": {
+        "identity": {
+          "statuses": {
+            "200": 50
+          },
+          "latency_ms": {
+            "samples": 50,
+            "p50": 302.62,
+            "p95": 351.88,
+            "p99": 366.66,
+            "max": 366.66
+          }
+        },
+        "challenge": {
+          "statuses": {
+            "200": 50
+          },
+          "latency_ms": {
+            "samples": 50,
+            "p50": 318.99,
+            "p95": 842.58,
+            "p99": 909.32,
+            "max": 909.32
+          }
+        },
+        "start": {
+          "statuses": {
+            "200": 50
+          },
+          "latency_ms": {
+            "samples": 50,
+            "p50": 8595.05,
+            "p95": 10957.33,
+            "p99": 10980.94,
+            "max": 10980.94
+          }
+        },
+        "files": {
+          "statuses": {
+            "200": 50
+          },
+          "latency_ms": {
+            "samples": 50,
+            "p50": 188.92,
+            "p95": 351.44,
+            "p99": 379.32,
+            "max": 379.32
+          }
+        },
+        "read": {
+          "statuses": {
+            "200": 50
+          },
+          "latency_ms": {
+            "samples": 50,
+            "p50": 191.09,
+            "p95": 334.74,
+            "p99": 345.72,
+            "max": 345.72
+          }
+        },
+        "save": {
+          "statuses": {
+            "200": 50
+          },
+          "latency_ms": {
+            "samples": 50,
+            "p50": 2424.08,
+            "p95": 3467.88,
+            "p99": 3891.53,
+            "max": 3891.53
+          }
+        },
+        "advisory_run": {
+          "statuses": {
+            "503": 170,
+            "200": 50
+          },
+          "latency_ms": {
+            "samples": 220,
+            "p50": 80.51,
+            "p95": 1187.65,
+            "p99": 1719.27,
+            "max": 1767.29
+          }
+        },
+        "submit": {
+          "statuses": {
+            "200": 50
+          },
+          "latency_ms": {
+            "samples": 50,
+            "p50": 149.49,
+            "p95": 502.35,
+            "p99": 589.95,
+            "max": 589.95
+          }
+        },
+        "defend": {
+          "statuses": {
+            "200": 50
+          },
+          "latency_ms": {
+            "samples": 50,
+            "p50": 23.9,
+            "p95": 57.06,
+            "p99": 67.12,
+            "max": 67.12
+          }
+        },
+        "defend_answer": {
+          "statuses": {
+            "200": 50
+          },
+          "latency_ms": {
+            "samples": 50,
+            "p50": 26.14,
+            "p95": 59.45,
+            "p99": 81.68,
+            "max": 81.68
+          }
+        },
+        "report": {
+          "statuses": {
+            "200": 480
+          },
+          "latency_ms": {
+            "samples": 480,
+            "p50": 35.92,
+            "p95": 86.61,
+            "p99": 197.49,
+            "max": 316.34
+          }
+        },
+        "dashboard": {
+          "statuses": {
+            "200": 50
+          },
+          "latency_ms": {
+            "samples": 50,
+            "p50": 25.66,
+            "p95": 57.08,
+            "p99": 157.16,
+            "max": 157.16
+          }
+        }
+      },
+      "advisory_execution_duration_ms": {
+        "samples": 50,
+        "p50": 1029.0,
+        "p95": 1235.0,
+        "p99": 1415.0,
+        "max": 1415.0
+      },
+      "observed_queue_wait_ms": {
+        "samples": 36,
+        "p50": 16554.01,
+        "p95": 20534.07,
+        "p99": 20600.48,
+        "max": 20600.48
+      },
+      "observed_job_completion_ms": {
+        "samples": 50,
+        "p50": 18651.16,
+        "p95": 22581.98,
+        "p99": 22690.58,
+        "max": 22690.58
+      },
+      "concurrency": 50,
+      "duration_seconds": 60.69,
+      "session_ids": [
+        "891df9d7-7ef0-4d45-a006-6e6f2d4bb1ee",
+        "fd48fa68-2b0a-469b-9dc1-5e83d97c5d0d",
+        "54d48735-5a72-4939-9d55-d8e09030e473",
+        "32bd3541-30b6-441b-926c-ca89fe09730f",
+        "bcc7f5a3-ff67-4224-a10f-d6fa51500135",
+        "33ec8d0f-96c3-47d8-998f-65de335a1fd2",
+        "ddb90558-7f88-4e35-b3a4-6da796e28672",
+        "f86b8e1d-124e-4991-9467-a5878ba8ee5c",
+        "a66ca01e-92b8-4530-8219-4e298486bca6",
+        "e8f6e6c1-2de7-480f-a61d-3299a2421466",
+        "990dd488-347d-46d5-ba15-772f8ebbeebe",
+        "53f28e67-005b-4936-9530-ecba4c5b7bbc",
+        "21394889-e019-435d-97b0-92b4864fd7ef",
+        "e839a130-5bb5-411d-921c-6a770c2705d9",
+        "36d3d025-663c-48f9-8689-215c53df3ff3",
+        "d4cf7c2d-8cd3-4337-9c60-8d92667fafb6",
+        "b65a9d18-576e-46a2-be26-5562c5aeb088",
+        "064b8f36-32b7-4da0-ba52-d8932e8d07b4",
+        "0b1e1ab5-3601-4bc8-844a-bcbdf087967b",
+        "7e6c4ffd-23cf-4d19-becc-9e7130ba7a12",
+        "81038feb-4921-4bc9-84a0-8007c17e4065",
+        "f50def4c-b9b8-40d7-9d49-e7bbd96567ed",
+        "b26692df-ae70-43a6-8dd2-faaa14c6e405",
+        "f7d4b926-0f29-47f3-b276-5d123bda4988",
+        "9c7e8b28-233d-4433-92fc-9838c749e2c3",
+        "c07e63ca-1807-45f1-94b6-afa180052b98",
+        "5ea9f7d3-e937-4ff0-82f2-56cd5f21cff6",
+        "d9de4b84-9e25-4b79-ad6e-b8aefd6794bd",
+        "4a40b4e0-778f-46de-83a9-e9ee085904cc",
+        "add93368-2af8-41e5-8141-21efaed87158",
+        "5787b8df-0520-4dca-9576-58c9982a4d68",
+        "de6681a5-c0ce-4e2a-b1e6-2d38526ae082",
+        "4cdb1def-50c5-4366-ba21-6229efb9d36b",
+        "11f2c67b-eba7-45ce-a86d-d6fae3c04086",
+        "11dcee87-aeea-48f0-9ca6-ef40b31bd7e2",
+        "6b0e354d-86f9-4963-a551-f9b1b7b4bb0d",
+        "432b9d40-a075-4e4b-80e7-de2e07d9f899",
+        "12e720c5-b3db-4a79-a131-23eb3b72a842",
+        "2c4b033e-131e-4be5-822c-0c14bc785acb",
+        "54cc934b-fedd-411e-9be1-5fe7ae66e0d6",
+        "11eaa640-85ee-4084-9699-42d789929495",
+        "1a26c55c-e929-447b-be80-d98957044997",
+        "a0e40dd1-c59a-4f9c-948d-dddbc728a73c",
+        "6f05efb1-f4ac-4fd9-ae66-25556fee73ab",
+        "5eee8c84-202e-4c2a-bfe8-d53758eb52bf",
+        "f6c5591c-a174-4ad3-8ff6-eb984543f66d",
+        "35ce4ab6-7a7e-4841-bc7f-650e6c46d47d",
+        "8c77046a-7de2-4729-afb1-80053deea3cb",
+        "be04fd52-494b-4ee9-80d3-ab59ed8de413",
+        "d5487013-f325-448c-9d0f-665cafb900db"
+      ],
+      "durable_jobs": {
+        "statuses": {
+          "completed": 50
+        },
+        "queue_wait_ms": {
+          "samples": 50,
+          "p50": 16931.38,
+          "p95": 20529.89,
+          "p99": 20562.92,
+          "max": 20562.92
+        },
+        "execution_duration_ms": {
+          "samples": 50,
+          "p50": 1373.82,
+          "p95": 2557.54,
+          "p99": 5447.17,
+          "max": 5447.17
+        },
+        "retry_attempts": 0,
+        "timing_scope": "latest claim per job; retries include backoff in queue wait"
+      },
+      "readiness_gates": {
+        "unexpected_http_error_rate": 0.0,
+        "unexpected_http_errors_absent": true,
+        "advisory_shed_rate": 0.7727272727272727,
+        "advisory_shed_rate_at_most_25_percent": false,
+        "latency_acceptance": "unassessed: no product latency target specified",
+        "production_headroom": "unassessed: deployment resource acceptance is outside this workload report"
+      }
+    },
+    {
+      "requests": 3363,
+      "unexpected_errors": 2,
+      "throttles": 514,
+      "stop_threshold_reached": false,
+      "flows": {
+        "incomplete": 2,
+        "completed": 98
+      },
+      "flow_failures": {
+        "save: http_500": 2
+      },
+      "steps": {
+        "identity": {
+          "statuses": {
+            "200": 100
+          },
+          "latency_ms": {
+            "samples": 100,
+            "p50": 417.16,
+            "p95": 594.93,
+            "p99": 601.88,
+            "max": 605.72
+          }
+        },
+        "challenge": {
+          "statuses": {
+            "200": 100
+          },
+          "latency_ms": {
+            "samples": 100,
+            "p50": 996.94,
+            "p95": 1496.58,
+            "p99": 1632.53,
+            "max": 1681.53
+          }
+        },
+        "start": {
+          "statuses": {
+            "200": 100
+          },
+          "latency_ms": {
+            "samples": 100,
+            "p50": 22229.51,
+            "p95": 27364.42,
+            "p99": 29484.77,
+            "max": 29494.0
+          }
+        },
+        "files": {
+          "statuses": {
+            "200": 100
+          },
+          "latency_ms": {
+            "samples": 100,
+            "p50": 239.86,
+            "p95": 3573.29,
+            "p99": 4168.58,
+            "max": 4382.46
+          }
+        },
+        "read": {
+          "statuses": {
+            "200": 100
+          },
+          "latency_ms": {
+            "samples": 100,
+            "p50": 671.93,
+            "p95": 4209.41,
+            "p99": 4470.99,
+            "max": 4471.34
+          }
+        },
+        "save": {
+          "statuses": {
+            "200": 98,
+            "500": 2
+          },
+          "latency_ms": {
+            "samples": 100,
+            "p50": 4935.57,
+            "p95": 5861.93,
+            "p99": 7213.13,
+            "max": 8010.2
+          }
+        },
+        "advisory_run": {
+          "statuses": {
+            "503": 514,
+            "200": 98
+          },
+          "latency_ms": {
+            "samples": 612,
+            "p50": 164.39,
+            "p95": 2969.79,
+            "p99": 4690.93,
+            "max": 5477.89
+          }
+        },
+        "submit": {
+          "statuses": {
+            "200": 98
+          },
+          "latency_ms": {
+            "samples": 98,
+            "p50": 6168.38,
+            "p95": 7551.03,
+            "p99": 7752.07,
+            "max": 7812.32
+          }
+        },
+        "defend": {
+          "statuses": {
+            "200": 98
+          },
+          "latency_ms": {
+            "samples": 98,
+            "p50": 30.85,
+            "p95": 131.65,
+            "p99": 212.54,
+            "max": 242.36
+          }
+        },
+        "defend_answer": {
+          "statuses": {
+            "200": 98
+          },
+          "latency_ms": {
+            "samples": 98,
+            "p50": 33.89,
+            "p95": 107.53,
+            "p99": 204.49,
+            "max": 403.03
+          }
+        },
+        "report": {
+          "statuses": {
+            "200": 1759
+          },
+          "latency_ms": {
+            "samples": 1759,
+            "p50": 48.63,
+            "p95": 165.59,
+            "p99": 381.17,
+            "max": 548.14
+          }
+        },
+        "dashboard": {
+          "statuses": {
+            "200": 98
+          },
+          "latency_ms": {
+            "samples": 98,
+            "p50": 33.38,
+            "p95": 136.98,
+            "p99": 278.59,
+            "max": 425.89
+          }
+        }
+      },
+      "advisory_execution_duration_ms": {
+        "samples": 98,
+        "p50": 1029.0,
+        "p95": 1405.0,
+        "p99": 1691.0,
+        "max": 1847.0
+      },
+      "observed_queue_wait_ms": {
+        "samples": 76,
+        "p50": 33105.51,
+        "p95": 51642.53,
+        "p99": 52007.68,
+        "max": 53661.94
+      },
+      "observed_job_completion_ms": {
+        "samples": 98,
+        "p50": 37038.3,
+        "p95": 53674.7,
+        "p99": 54048.24,
+        "max": 55689.6
+      },
+      "concurrency": 100,
+      "duration_seconds": 130.27,
+      "session_ids": [
+        "0a043efe-384f-4c73-ab90-ae225486e60e",
+        "a3c2efc9-fa08-46d7-8e65-bf19cbc4ccb5",
+        "080ac54b-7c14-4b58-998a-e3591049af86",
+        "3c6c5532-e8ed-4dc3-aaf5-2034e6da0f4d",
+        "f1fcf5fc-69e2-4461-8230-80779397b95d",
+        "f9b1fe81-7432-45cb-973a-6746008c2474",
+        "44396378-c085-48db-85f4-e881769f2d37",
+        "3444c95d-4f0c-415e-98da-5347eeb740c9",
+        "86c9c89b-06e8-4d6b-85b0-6bf7e77e0fd3",
+        "e30ca5bb-5536-47cd-9190-f52cecadbe4c",
+        "bc0bc5d0-d53b-453c-b4e8-1a0c80724d26",
+        "4707bb61-166d-4c90-90cf-c48008580819",
+        "27eb02e5-17d3-4f87-be9c-e992051d19f6",
+        "79e6c1ca-90aa-490a-9a4d-e9555bef8478",
+        "35bbeba8-8e54-4597-9e64-0f2220d8e747",
+        "e5196311-d441-4561-aeb4-15bd5006bd57",
+        "e908d7ea-6741-426c-ae57-0063ec348dfb",
+        "9f49e385-3c4f-4ce0-a21d-d9c2917eaeed",
+        "a64ea37f-f57f-4e6b-9cd5-506a90febb8d",
+        "d7b5b2a7-33a0-4dc1-9b3c-50a4fb5804e7",
+        "1ea06543-7ca8-45e3-a0b9-0d03d0ec1707",
+        "1ab60292-c249-439b-9e42-aef0ebfbe127",
+        "93b92684-0378-440d-8faf-d45976d1d44f",
+        "d3b3dfdf-cbf5-43fe-b320-833776fcfd33",
+        "5caf98d3-99b6-4d7c-8347-13946eaff4c2",
+        "94fedbdb-85a8-4697-8cb4-778ed920922c",
+        "d1bb010a-2640-495c-aeec-01b0ada252a9",
+        "c9f87c28-7adc-4afb-820d-b9740c238588",
+        "08fc6664-a363-4a1e-9e8e-2505013cf393",
+        "a52173fb-8155-44bb-8c74-a333ddc7db13",
+        "90ec1941-66ca-47a9-aab0-7f7f48100927",
+        "8d2796a4-7e9a-4202-9c5c-d507bcb85f56",
+        "af67fd6b-74d4-4051-93d2-2f0521f51f68",
+        "dba0e7da-802e-4302-ae33-ea560f1068c9",
+        "5daeb56e-db54-4ec4-9e39-ccbd8beb4b73",
+        "3dd93162-dbd8-4511-a5a9-a6d23421b424",
+        "1907068c-6135-477c-8a6c-81cae4bdcb1f",
+        "f6fa77a5-74e2-4712-b9f7-9d62195c1d10",
+        "ed604866-6240-4eea-b7a9-6dafed95c761",
+        "dd6ea030-7450-48e6-8436-25f491af26db",
+        "6988ef73-22cc-488c-bc0c-14d0b7426ecd",
+        "3789edd2-8816-43e8-be1d-36d1e2985cfc",
+        "b822f32b-187b-4e1a-b61b-cb4cef6762b6",
+        "a7228f81-4f7d-4116-b21b-bee51f8d3869",
+        "6cf23d36-7ac0-4bd5-89c5-799e5f88836b",
+        "2e338b86-56c3-4cd4-8f53-78b81c5120fd",
+        "24927b54-45b5-4ebf-85f5-c37b2c2aa485",
+        "eb5c5612-bf16-4968-90b5-e1e80763884a",
+        "a2c02d63-6a94-414a-a2b8-85a7d1bf1d6c",
+        "ab350c66-5a37-4462-963b-63cbc3217a56",
+        "60a74ddc-b4dd-47cf-b0a1-a4f091c3c2cc",
+        "e52f2c8a-159f-4442-83a8-417f7bf8a4ad",
+        "a8c3f5f6-8b15-42fc-a5c9-2b72c9c37188",
+        "6a068d0e-07ad-4cad-8a19-028839621d29",
+        "12751d88-a098-4d21-828f-7beb49313706",
+        "6b74e9f0-0429-426e-9233-94c6f3310e11",
+        "94eacd6b-f7ac-491a-974f-c7220faf4ec6",
+        "77393bb9-9f01-4f38-a1ea-d923129934d1",
+        "6160d74b-17bc-4a8a-aa7e-a2a3a09d1007",
+        "322a83ea-df8e-4fbe-97a1-0591d33120bb",
+        "a3b066fc-7446-4148-b8f6-5d2dd519cf8f",
+        "9329ccec-6ddb-449e-a248-e786074911b8",
+        "6a9552df-d722-444d-a26b-ac55a3ad5b88",
+        "cb609789-ec94-483c-8bb1-d707a1e247f2",
+        "587a4714-cdfd-4794-b9aa-26fcdb81ce5e",
+        "0763acba-ac19-4086-bf9f-ef2843c9b520",
+        "1cd5a723-95cc-41ef-95a8-d2c18b5ba6ea",
+        "c7fbbff9-7a5f-4956-bbde-caf04119bba3",
+        "ec3e85bd-2934-4bd7-ab6f-97f54af81884",
+        "ecbb910c-3765-4a89-99e9-bbfa66cca8fe",
+        "f30b5ace-8aaf-46b1-986b-66d1566773c9",
+        "b1772bf6-4b71-41c6-8a41-3458e7363a27",
+        "7c1fa8a9-e45a-4b03-814c-bccfcb6e368d",
+        "49613d4d-81be-46ec-b1dd-3d6bbb1ff6cf",
+        "5e7d2426-c52b-4080-bd9c-324cf050d48d",
+        "659e0659-7201-49ef-84e7-98dffa68536b",
+        "bbc0e6c3-8d85-4236-92ca-a82fffdfe676",
+        "2d3097d8-557c-46e6-9137-21ab32be6a71",
+        "f02f27ea-d21a-4c5d-a1d1-025b1981934b",
+        "6b0d04c4-a5c2-4557-840e-39cd72e0f071",
+        "5855c941-65f7-45ca-b98f-52fa31656b26",
+        "d5654dd7-26d2-48ff-bae2-55b2ae4be173",
+        "bb08f522-85c2-4565-a47c-5beaa8c43dcd",
+        "3bca48cf-519c-4760-9715-290ee53d2903",
+        "b1a176c5-c616-4161-9c93-84192e8cb076",
+        "de884f7a-ea56-495a-9f8a-f67a8194590d",
+        "b1c8b99a-b4b1-4ffc-8243-73fccef409a2",
+        "5b231d92-e2dc-4405-9534-1cfdc40308b9",
+        "b899faa7-f00a-4efe-931b-d4b129b30600",
+        "1a2b66e8-db9a-400d-9931-818a0706b054",
+        "62475935-c42f-42e7-af9b-e5c10903147b",
+        "26727ce5-012b-44e6-ad13-5b73530d4556",
+        "61527226-a36a-4c0e-a409-b16393579948",
+        "ec230125-0bc1-45ec-a03d-d6146db23053",
+        "95a09e84-4405-4c18-8e34-3f7ca441c225",
+        "7945ba7a-24fc-468a-9435-c3c1fcca54ab",
+        "d7fae09b-c4f4-4819-9df5-80d989120911",
+        "70e63206-e9a7-4e3c-83c1-b2437e966aae",
+        "655c39bb-ba28-4cdd-b3ab-96f5c16fc5ac",
+        "00edc764-2a14-4b50-bbca-18f79bf91676"
+      ],
+      "durable_jobs": {
+        "statuses": {
+          "completed": 98
+        },
+        "queue_wait_ms": {
+          "samples": 98,
+          "p50": 40894.69,
+          "p95": 52919.34,
+          "p99": 54129.92,
+          "max": 54174.38
+        },
+        "execution_duration_ms": {
+          "samples": 98,
+          "p50": 1387.99,
+          "p95": 3106.35,
+          "p99": 6077.92,
+          "max": 8667.74
+        },
+        "retry_attempts": 0,
+        "timing_scope": "latest claim per job; retries include backoff in queue wait"
+      },
+      "readiness_gates": {
+        "unexpected_http_error_rate": 0.0005947071067499256,
+        "unexpected_http_errors_absent": false,
+        "advisory_shed_rate": 0.8398692810457516,
+        "advisory_shed_rate_at_most_25_percent": false,
+        "latency_acceptance": "unassessed: no product latency target specified",
+        "production_headroom": "unassessed: deployment resource acceptance is outside this workload report"
+      }
+    }
+  ],
+  "host_samples": [
+    {
+      "elapsed": 490084.858366375,
+      "load_average": [
+        5.91259765625,
+        7.255859375,
+        8.69970703125
+      ],
+      "disk_free_bytes": 21743714304,
+      "host_memory_active_wired_compressed_bytes": 15611838464,
+      "host_process_cpu_percent_sum": 299.5,
+      "selected_process_cpu_percent": 58.1,
+      "selected_process_rss_bytes": 388562944
+    },
+    {
+      "elapsed": 490085.911288541,
+      "load_average": [
+        5.91259765625,
+        7.255859375,
+        8.69970703125
+      ],
+      "disk_free_bytes": 21743702016,
+      "host_memory_active_wired_compressed_bytes": 15394308096,
+      "host_process_cpu_percent_sum": 1032.1,
+      "selected_process_cpu_percent": 2.1,
+      "selected_process_rss_bytes": 371474432
+    },
+    {
+      "elapsed": 490086.963414791,
+      "load_average": [
+        5.91259765625,
+        7.255859375,
+        8.69970703125
+      ],
+      "disk_free_bytes": 21743652864,
+      "host_memory_active_wired_compressed_bytes": 15424536576,
+      "host_process_cpu_percent_sum": 1069.7,
+      "selected_process_cpu_percent": 0.6,
+      "selected_process_rss_bytes": 361332736
+    },
+    {
+      "elapsed": 490088.021486,
+      "load_average": [
+        5.91259765625,
+        7.255859375,
+        8.69970703125
+      ],
+      "disk_free_bytes": 21743640576,
+      "host_memory_active_wired_compressed_bytes": 15316500480,
+      "host_process_cpu_percent_sum": 683.1,
+      "selected_process_cpu_percent": 67.9,
+      "selected_process_rss_bytes": 329334784
+    },
+    {
+      "elapsed": 490089.057359666,
+      "load_average": [
+        5.91259765625,
+        7.255859375,
+        8.69970703125
+      ],
+      "disk_free_bytes": 21746229248,
+      "host_memory_active_wired_compressed_bytes": 15367962624,
+      "host_process_cpu_percent_sum": 420.8,
+      "selected_process_cpu_percent": 151.5,
+      "selected_process_rss_bytes": 331464704
+    },
+    {
+      "elapsed": 490090.097814333,
+      "load_average": [
+        5.51904296875,
+        7.15185546875,
+        8.654296875
+      ],
+      "disk_free_bytes": 21746163712,
+      "host_memory_active_wired_compressed_bytes": 15236349952,
+      "host_process_cpu_percent_sum": 323.4,
+      "selected_process_cpu_percent": 111.2,
+      "selected_process_rss_bytes": 332152832
+    },
+    {
+      "elapsed": 490091.131652916,
+      "load_average": [
+        5.51904296875,
+        7.15185546875,
+        8.654296875
+      ],
+      "disk_free_bytes": 21736341504,
+      "host_memory_active_wired_compressed_bytes": 15484420096,
+      "host_process_cpu_percent_sum": 433.1,
+      "selected_process_cpu_percent": 103.8,
+      "selected_process_rss_bytes": 330743808
+    },
+    {
+      "elapsed": 490092.172545541,
+      "load_average": [
+        5.51904296875,
+        7.15185546875,
+        8.654296875
+      ],
+      "disk_free_bytes": 21744054272,
+      "host_memory_active_wired_compressed_bytes": 15534473216,
+      "host_process_cpu_percent_sum": 546.8,
+      "selected_process_cpu_percent": 65.6,
+      "selected_process_rss_bytes": 175456256
+    },
+    {
+      "elapsed": 490093.203366708,
+      "load_average": [
+        5.51904296875,
+        7.15185546875,
+        8.654296875
+      ],
+      "disk_free_bytes": 21771620352,
+      "host_memory_active_wired_compressed_bytes": 15450816512,
+      "host_process_cpu_percent_sum": 416.5,
+      "selected_process_cpu_percent": 106.6,
+      "selected_process_rss_bytes": 163545088
+    },
+    {
+      "elapsed": 490094.238896708,
+      "load_average": [
+        5.51904296875,
+        7.15185546875,
+        8.654296875
+      ],
+      "disk_free_bytes": 21786710016,
+      "host_memory_active_wired_compressed_bytes": 15363063808,
+      "host_process_cpu_percent_sum": 263.5,
+      "selected_process_cpu_percent": 104.1,
+      "selected_process_rss_bytes": 164380672
+    },
+    {
+      "elapsed": 490095.26886025,
+      "load_average": [
+        5.23681640625,
+        7.06591796875,
+        8.615234375
+      ],
+      "disk_free_bytes": 21786173440,
+      "host_memory_active_wired_compressed_bytes": 15507587072,
+      "host_process_cpu_percent_sum": 364.4,
+      "selected_process_cpu_percent": 105.0,
+      "selected_process_rss_bytes": 159154176
+    },
+    {
+      "elapsed": 490096.3019695,
+      "load_average": [
+        5.23681640625,
+        7.06591796875,
+        8.615234375
+      ],
+      "disk_free_bytes": 21785640960,
+      "host_memory_active_wired_compressed_bytes": 15359295488,
+      "host_process_cpu_percent_sum": 280.4,
+      "selected_process_cpu_percent": 105.6,
+      "selected_process_rss_bytes": 159596544
+    },
+    {
+      "elapsed": 490097.335212708,
+      "load_average": [
+        5.23681640625,
+        7.06591796875,
+        8.615234375
+      ],
+      "disk_free_bytes": 21785346048,
+      "host_memory_active_wired_compressed_bytes": 15558361088,
+      "host_process_cpu_percent_sum": 361.8,
+      "selected_process_cpu_percent": 108.8,
+      "selected_process_rss_bytes": 240353280
+    },
+    {
+      "elapsed": 490098.368389041,
+      "load_average": [
+        5.23681640625,
+        7.06591796875,
+        8.615234375
+      ],
+      "disk_free_bytes": 21784743936,
+      "host_memory_active_wired_compressed_bytes": 15548743680,
+      "host_process_cpu_percent_sum": 264.7,
+      "selected_process_cpu_percent": 97.8,
+      "selected_process_rss_bytes": 240500736
+    },
+    {
+      "elapsed": 490099.401123291,
+      "load_average": [
+        5.23681640625,
+        7.06591796875,
+        8.615234375
+      ],
+      "disk_free_bytes": 21783085056,
+      "host_memory_active_wired_compressed_bytes": 15486189568,
+      "host_process_cpu_percent_sum": 313.5,
+      "selected_process_cpu_percent": 99.39999999999999,
+      "selected_process_rss_bytes": 241385472
+    },
+    {
+      "elapsed": 490100.431939291,
+      "load_average": [
+        5.2177734375,
+        7.03125,
+        8.59375
+      ],
+      "disk_free_bytes": 21782188032,
+      "host_memory_active_wired_compressed_bytes": 15355314176,
+      "host_process_cpu_percent_sum": 844.9,
+      "selected_process_cpu_percent": 123.8,
+      "selected_process_rss_bytes": 283623424
+    },
+    {
+      "elapsed": 490101.504785541,
+      "load_average": [
+        5.2177734375,
+        7.03125,
+        8.59375
+      ],
+      "disk_free_bytes": 21781016576,
+      "host_memory_active_wired_compressed_bytes": 15385051136,
+      "host_process_cpu_percent_sum": 919.9000000000001,
+      "selected_process_cpu_percent": 110.39999999999999,
+      "selected_process_rss_bytes": 281968640
+    },
+    {
+      "elapsed": 490102.560757583,
+      "load_average": [
+        5.2177734375,
+        7.03125,
+        8.59375
+      ],
+      "disk_free_bytes": 21780004864,
+      "host_memory_active_wired_compressed_bytes": 15530917888,
+      "host_process_cpu_percent_sum": 928.2,
+      "selected_process_cpu_percent": 104.89999999999999,
+      "selected_process_rss_bytes": 292454400
+    },
+    {
+      "elapsed": 490103.614901875,
+      "load_average": [
+        5.2177734375,
+        7.03125,
+        8.59375
+      ],
+      "disk_free_bytes": 21779460096,
+      "host_memory_active_wired_compressed_bytes": 15476441088,
+      "host_process_cpu_percent_sum": 917.5,
+      "selected_process_cpu_percent": 118.0,
+      "selected_process_rss_bytes": 333332480
+    },
+    {
+      "elapsed": 490104.67474425,
+      "load_average": [
+        5.2177734375,
+        7.03125,
+        8.59375
+      ],
+      "disk_free_bytes": 21779075072,
+      "host_memory_active_wired_compressed_bytes": 15593422848,
+      "host_process_cpu_percent_sum": 905.0,
+      "selected_process_cpu_percent": 57.8,
+      "selected_process_rss_bytes": 351436800
+    },
+    {
+      "elapsed": 490105.732252083,
+      "load_average": [
+        6.3212890625,
+        7.2294921875,
+        8.654296875
+      ],
+      "disk_free_bytes": 21776945152,
+      "host_memory_active_wired_compressed_bytes": 15582969856,
+      "host_process_cpu_percent_sum": 936.9000000000001,
+      "selected_process_cpu_percent": 103.6,
+      "selected_process_rss_bytes": 328417280
+    },
+    {
+      "elapsed": 490106.771306791,
+      "load_average": [
+        6.3212890625,
+        7.2294921875,
+        8.654296875
+      ],
+      "disk_free_bytes": 21776273408,
+      "host_memory_active_wired_compressed_bytes": 15606071296,
+      "host_process_cpu_percent_sum": 939.6999999999999,
+      "selected_process_cpu_percent": 76.0,
+      "selected_process_rss_bytes": 311721984
+    },
+    {
+      "elapsed": 490107.812433708,
+      "load_average": [
+        6.3212890625,
+        7.2294921875,
+        8.654296875
+      ],
+      "disk_free_bytes": 21777657856,
+      "host_memory_active_wired_compressed_bytes": 15421915136,
+      "host_process_cpu_percent_sum": 946.3,
+      "selected_process_cpu_percent": 66.0,
+      "selected_process_rss_bytes": 325828608
+    },
+    {
+      "elapsed": 490108.860621833,
+      "load_average": [
+        6.3212890625,
+        7.2294921875,
+        8.654296875
+      ],
+      "disk_free_bytes": 21776461824,
+      "host_memory_active_wired_compressed_bytes": 15452946432,
+      "host_process_cpu_percent_sum": 943.3,
+      "selected_process_cpu_percent": 67.5,
+      "selected_process_rss_bytes": 324501504
+    },
+    {
+      "elapsed": 490109.904172625,
+      "load_average": [
+        7.57666015625,
+        7.474609375,
+        8.732421875
+      ],
+      "disk_free_bytes": 21775675392,
+      "host_memory_active_wired_compressed_bytes": 15375433728,
+      "host_process_cpu_percent_sum": 927.8,
+      "selected_process_cpu_percent": 62.2,
+      "selected_process_rss_bytes": 329121792
+    },
+    {
+      "elapsed": 490110.945590875,
+      "load_average": [
+        7.57666015625,
+        7.474609375,
+        8.732421875
+      ],
+      "disk_free_bytes": 21776068608,
+      "host_memory_active_wired_compressed_bytes": 15604416512,
+      "host_process_cpu_percent_sum": 875.0,
+      "selected_process_cpu_percent": 58.3,
+      "selected_process_rss_bytes": 281559040
+    },
+    {
+      "elapsed": 490111.988677416,
+      "load_average": [
+        7.57666015625,
+        7.474609375,
+        8.732421875
+      ],
+      "disk_free_bytes": 21776211968,
+      "host_memory_active_wired_compressed_bytes": 15614377984,
+      "host_process_cpu_percent_sum": 864.3000000000001,
+      "selected_process_cpu_percent": 38.8,
+      "selected_process_rss_bytes": 273367040
+    },
+    {
+      "elapsed": 490113.037188875,
+      "load_average": [
+        7.57666015625,
+        7.474609375,
+        8.732421875
+      ],
+      "disk_free_bytes": 21776269312,
+      "host_memory_active_wired_compressed_bytes": 15602155520,
+      "host_process_cpu_percent_sum": 891.0,
+      "selected_process_cpu_percent": 51.6,
+      "selected_process_rss_bytes": 272547840
+    },
+    {
+      "elapsed": 490114.087624416,
+      "load_average": [
+        7.57666015625,
+        7.474609375,
+        8.732421875
+      ],
+      "disk_free_bytes": 21776400384,
+      "host_memory_active_wired_compressed_bytes": 15479767040,
+      "host_process_cpu_percent_sum": 959.4,
+      "selected_process_cpu_percent": 67.2,
+      "selected_process_rss_bytes": 275415040
+    },
+    {
+      "elapsed": 490115.163229375,
+      "load_average": [
+        9.1318359375,
+        7.79833984375,
+        8.83935546875
+      ],
+      "disk_free_bytes": 21775769600,
+      "host_memory_active_wired_compressed_bytes": 15617490944,
+      "host_process_cpu_percent_sum": 916.4,
+      "selected_process_cpu_percent": 31.6,
+      "selected_process_rss_bytes": 244498432
+    },
+    {
+      "elapsed": 490116.298614125,
+      "load_average": [
+        9.1318359375,
+        7.79833984375,
+        8.83935546875
+      ],
+      "disk_free_bytes": 21774786560,
+      "host_memory_active_wired_compressed_bytes": 15287205888,
+      "host_process_cpu_percent_sum": 995.1,
+      "selected_process_cpu_percent": 57.0,
+      "selected_process_rss_bytes": 254918656
+    },
+    {
+      "elapsed": 490117.347968125,
+      "load_average": [
+        9.1318359375,
+        7.79833984375,
+        8.83935546875
+      ],
+      "disk_free_bytes": 21773844480,
+      "host_memory_active_wired_compressed_bytes": 15673524224,
+      "host_process_cpu_percent_sum": 940.0,
+      "selected_process_cpu_percent": 40.2,
+      "selected_process_rss_bytes": 245792768
+    },
+    {
+      "elapsed": 490118.411707041,
+      "load_average": [
+        9.1318359375,
+        7.79833984375,
+        8.83935546875
+      ],
+      "disk_free_bytes": 21772976128,
+      "host_memory_active_wired_compressed_bytes": 15497707520,
+      "host_process_cpu_percent_sum": 925.3,
+      "selected_process_cpu_percent": 46.2,
+      "selected_process_rss_bytes": 270188544
+    },
+    {
+      "elapsed": 490119.456583666,
+      "load_average": [
+        9.1318359375,
+        7.79833984375,
+        8.83935546875
+      ],
+      "disk_free_bytes": 21772419072,
+      "host_memory_active_wired_compressed_bytes": 15423225856,
+      "host_process_cpu_percent_sum": 762.1999999999999,
+      "selected_process_cpu_percent": 33.4,
+      "selected_process_rss_bytes": 272400384
+    },
+    {
+      "elapsed": 490120.502454416,
+      "load_average": [
+        9.201171875,
+        7.83447265625,
+        8.845703125
+      ],
+      "disk_free_bytes": 21772517376,
+      "host_memory_active_wired_compressed_bytes": 15492481024,
+      "host_process_cpu_percent_sum": 909.6,
+      "selected_process_cpu_percent": 68.60000000000001,
+      "selected_process_rss_bytes": 275759104
+    },
+    {
+      "elapsed": 490121.560106416,
+      "load_average": [
+        9.201171875,
+        7.83447265625,
+        8.845703125
+      ],
+      "disk_free_bytes": 21773824000,
+      "host_memory_active_wired_compressed_bytes": 15467184128,
+      "host_process_cpu_percent_sum": 895.0,
+      "selected_process_cpu_percent": 29.5,
+      "selected_process_rss_bytes": 276037632
+    },
+    {
+      "elapsed": 490122.600791875,
+      "load_average": [
+        9.201171875,
+        7.83447265625,
+        8.845703125
+      ],
+      "disk_free_bytes": 21773967360,
+      "host_memory_active_wired_compressed_bytes": 15357329408,
+      "host_process_cpu_percent_sum": 974.5,
+      "selected_process_cpu_percent": 48.9,
+      "selected_process_rss_bytes": 276758528
+    },
+    {
+      "elapsed": 490123.6454495,
+      "load_average": [
+        9.201171875,
+        7.83447265625,
+        8.845703125
+      ],
+      "disk_free_bytes": 21768998912,
+      "host_memory_active_wired_compressed_bytes": 15458516992,
+      "host_process_cpu_percent_sum": 857.2,
+      "selected_process_cpu_percent": 37.4,
+      "selected_process_rss_bytes": 277413888
+    },
+    {
+      "elapsed": 490124.697599875,
+      "load_average": [
+        9.201171875,
+        7.83447265625,
+        8.845703125
+      ],
+      "disk_free_bytes": 21756162048,
+      "host_memory_active_wired_compressed_bytes": 15420375040,
+      "host_process_cpu_percent_sum": 848.0,
+      "selected_process_cpu_percent": 40.0,
+      "selected_process_rss_bytes": 277528576
+    },
+    {
+      "elapsed": 490125.741567541,
+      "load_average": [
+        9.58544921875,
+        7.9365234375,
+        8.87548828125
+      ],
+      "disk_free_bytes": 21755621376,
+      "host_memory_active_wired_compressed_bytes": 15456256000,
+      "host_process_cpu_percent_sum": 772.8,
+      "selected_process_cpu_percent": 39.3,
+      "selected_process_rss_bytes": 275365888
+    },
+    {
+      "elapsed": 490126.778610208,
+      "load_average": [
+        9.58544921875,
+        7.9365234375,
+        8.87548828125
+      ],
+      "disk_free_bytes": 21754744832,
+      "host_memory_active_wired_compressed_bytes": 15464415232,
+      "host_process_cpu_percent_sum": 730.4,
+      "selected_process_cpu_percent": 29.7,
+      "selected_process_rss_bytes": 316424192
+    },
+    {
+      "elapsed": 490127.843782875,
+      "load_average": [
+        9.58544921875,
+        7.9365234375,
+        8.87548828125
+      ],
+      "disk_free_bytes": 21753860096,
+      "host_memory_active_wired_compressed_bytes": 15309324288,
+      "host_process_cpu_percent_sum": 798.8,
+      "selected_process_cpu_percent": 31.599999999999998,
+      "selected_process_rss_bytes": 316669952
+    },
+    {
+      "elapsed": 490128.878533375,
+      "load_average": [
+        9.58544921875,
+        7.9365234375,
+        8.87548828125
+      ],
+      "disk_free_bytes": 21759348736,
+      "host_memory_active_wired_compressed_bytes": 15701458944,
+      "host_process_cpu_percent_sum": 714.7,
+      "selected_process_cpu_percent": 23.9,
+      "selected_process_rss_bytes": 305414144
+    },
+    {
+      "elapsed": 490129.918776666,
+      "load_average": [
+        10.0185546875,
+        8.0537109375,
+        8.9111328125
+      ],
+      "disk_free_bytes": 21759016960,
+      "host_memory_active_wired_compressed_bytes": 15503458304,
+      "host_process_cpu_percent_sum": 827.4000000000001,
+      "selected_process_cpu_percent": 22.7,
+      "selected_process_rss_bytes": 303202304
+    },
+    {
+      "elapsed": 490130.984651666,
+      "load_average": [
+        10.0185546875,
+        8.0537109375,
+        8.9111328125
+      ],
+      "disk_free_bytes": 21757919232,
+      "host_memory_active_wired_compressed_bytes": 15536652288,
+      "host_process_cpu_percent_sum": 730.7,
+      "selected_process_cpu_percent": 33.9,
+      "selected_process_rss_bytes": 255655936
+    },
+    {
+      "elapsed": 490132.038944416,
+      "load_average": [
+        10.0185546875,
+        8.0537109375,
+        8.9111328125
+      ],
+      "disk_free_bytes": 21759488000,
+      "host_memory_active_wired_compressed_bytes": 15529164800,
+      "host_process_cpu_percent_sum": 778.7,
+      "selected_process_cpu_percent": 12.5,
+      "selected_process_rss_bytes": 246333440
+    },
+    {
+      "elapsed": 490133.165737083,
+      "load_average": [
+        10.0185546875,
+        8.0537109375,
+        8.9111328125
+      ],
+      "disk_free_bytes": 21759406080,
+      "host_memory_active_wired_compressed_bytes": 15404269568,
+      "host_process_cpu_percent_sum": 753.4,
+      "selected_process_cpu_percent": 34.7,
+      "selected_process_rss_bytes": 247087104
+    },
+    {
+      "elapsed": 490134.200371583,
+      "load_average": [
+        10.0185546875,
+        8.0537109375,
+        8.9111328125
+      ],
+      "disk_free_bytes": 21758750720,
+      "host_memory_active_wired_compressed_bytes": 15298543616,
+      "host_process_cpu_percent_sum": 739.6999999999999,
+      "selected_process_cpu_percent": 22.7,
+      "selected_process_rss_bytes": 251822080
+    },
+    {
+      "elapsed": 490135.259512,
+      "load_average": [
+        10.4970703125,
+        8.185546875,
+        8.95263671875
+      ],
+      "disk_free_bytes": 21759086592,
+      "host_memory_active_wired_compressed_bytes": 15406874624,
+      "host_process_cpu_percent_sum": 837.2,
+      "selected_process_cpu_percent": 31.000000000000004,
+      "selected_process_rss_bytes": 250413056
+    },
+    {
+      "elapsed": 490136.305109083,
+      "load_average": [
+        10.4970703125,
+        8.185546875,
+        8.95263671875
+      ],
+      "disk_free_bytes": 21758623744,
+      "host_memory_active_wired_compressed_bytes": 15274819584,
+      "host_process_cpu_percent_sum": 730.9,
+      "selected_process_cpu_percent": 18.2,
+      "selected_process_rss_bytes": 254967808
+    },
+    {
+      "elapsed": 490137.350164875,
+      "load_average": [
+        10.4970703125,
+        8.185546875,
+        8.95263671875
+      ],
+      "disk_free_bytes": 21758746624,
+      "host_memory_active_wired_compressed_bytes": 15445180416,
+      "host_process_cpu_percent_sum": 775.5,
+      "selected_process_cpu_percent": 33.4,
+      "selected_process_rss_bytes": 256245760
+    },
+    {
+      "elapsed": 490138.401292166,
+      "load_average": [
+        10.4970703125,
+        8.185546875,
+        8.95263671875
+      ],
+      "disk_free_bytes": 21757464576,
+      "host_memory_active_wired_compressed_bytes": 15349121024,
+      "host_process_cpu_percent_sum": 729.6,
+      "selected_process_cpu_percent": 19.5,
+      "selected_process_rss_bytes": 256131072
+    },
+    {
+      "elapsed": 490139.451789583,
+      "load_average": [
+        10.4970703125,
+        8.185546875,
+        8.95263671875
+      ],
+      "disk_free_bytes": 21757980672,
+      "host_memory_active_wired_compressed_bytes": 15345762304,
+      "host_process_cpu_percent_sum": 741.8,
+      "selected_process_cpu_percent": 29.900000000000002,
+      "selected_process_rss_bytes": 257015808
+    },
+    {
+      "elapsed": 490140.493607333,
+      "load_average": [
+        10.537109375,
+        8.23193359375,
+        8.96435546875
+      ],
+      "disk_free_bytes": 21757636608,
+      "host_memory_active_wired_compressed_bytes": 15345696768,
+      "host_process_cpu_percent_sum": 874.4,
+      "selected_process_cpu_percent": 25.400000000000002,
+      "selected_process_rss_bytes": 229097472
+    },
+    {
+      "elapsed": 490141.550847333,
+      "load_average": [
+        10.537109375,
+        8.23193359375,
+        8.96435546875
+      ],
+      "disk_free_bytes": 21759115264,
+      "host_memory_active_wired_compressed_bytes": 15428599808,
+      "host_process_cpu_percent_sum": 907.1,
+      "selected_process_cpu_percent": 14.7,
+      "selected_process_rss_bytes": 246333440
+    },
+    {
+      "elapsed": 490142.665634416,
+      "load_average": [
+        10.537109375,
+        8.23193359375,
+        8.96435546875
+      ],
+      "disk_free_bytes": 21758095360,
+      "host_memory_active_wired_compressed_bytes": 15288827904,
+      "host_process_cpu_percent_sum": 679.0,
+      "selected_process_cpu_percent": 15.3,
+      "selected_process_rss_bytes": 246841344
+    },
+    {
+      "elapsed": 490143.706621291,
+      "load_average": [
+        10.537109375,
+        8.23193359375,
+        8.96435546875
+      ],
+      "disk_free_bytes": 21757235200,
+      "host_memory_active_wired_compressed_bytes": 15506391040,
+      "host_process_cpu_percent_sum": 748.6999999999999,
+      "selected_process_cpu_percent": 29.900000000000002,
+      "selected_process_rss_bytes": 251232256
+    },
+    {
+      "elapsed": 490144.74759775,
+      "load_average": [
+        10.537109375,
+        8.23193359375,
+        8.96435546875
+      ],
+      "disk_free_bytes": 21756645376,
+      "host_memory_active_wired_compressed_bytes": 15459532800,
+      "host_process_cpu_percent_sum": 636.9,
+      "selected_process_cpu_percent": 13.4,
+      "selected_process_rss_bytes": 252444672
+    },
+    {
+      "elapsed": 490145.7866885,
+      "load_average": [
+        10.25341796875,
+        8.21142578125,
+        8.95263671875
+      ],
+      "disk_free_bytes": 21758001152,
+      "host_memory_active_wired_compressed_bytes": 15512649728,
+      "host_process_cpu_percent_sum": 756.1,
+      "selected_process_cpu_percent": 5.1,
+      "selected_process_rss_bytes": 248594432
+    },
+    {
+      "elapsed": 490146.840763708,
+      "load_average": [
+        10.25341796875,
+        8.21142578125,
+        8.95263671875
+      ],
+      "disk_free_bytes": 21757730816,
+      "host_memory_active_wired_compressed_bytes": 15505195008,
+      "host_process_cpu_percent_sum": 869.0,
+      "selected_process_cpu_percent": 1.2,
+      "selected_process_rss_bytes": 248463360
+    },
+    {
+      "elapsed": 490147.912217791,
+      "load_average": [
+        10.25341796875,
+        8.21142578125,
+        8.95263671875
+      ],
+      "disk_free_bytes": 21757677568,
+      "host_memory_active_wired_compressed_bytes": 15495921664,
+      "host_process_cpu_percent_sum": 919.9,
+      "selected_process_cpu_percent": 0.9,
+      "selected_process_rss_bytes": 236961792
+    },
+    {
+      "elapsed": 490148.980978416,
+      "load_average": [
+        10.25341796875,
+        8.21142578125,
+        8.95263671875
+      ],
+      "disk_free_bytes": 21756747776,
+      "host_memory_active_wired_compressed_bytes": 15634006016,
+      "host_process_cpu_percent_sum": 952.2,
+      "selected_process_cpu_percent": 0.7999999999999999,
+      "selected_process_rss_bytes": 222347264
+    },
+    {
+      "elapsed": 490150.032681291,
+      "load_average": [
+        10.07275390625,
+        8.20751953125,
+        8.94677734375
+      ],
+      "disk_free_bytes": 21756706816,
+      "host_memory_active_wired_compressed_bytes": 15652978688,
+      "host_process_cpu_percent_sum": 623.5,
+      "selected_process_cpu_percent": 121.89999999999999,
+      "selected_process_rss_bytes": 226410496
+    },
+    {
+      "elapsed": 490151.085755416,
+      "load_average": [
+        10.07275390625,
+        8.20751953125,
+        8.94677734375
+      ],
+      "disk_free_bytes": 21756854272,
+      "host_memory_active_wired_compressed_bytes": 15559884800,
+      "host_process_cpu_percent_sum": 589.0,
+      "selected_process_cpu_percent": 118.2,
+      "selected_process_rss_bytes": 251232256
+    },
+    {
+      "elapsed": 490152.151797166,
+      "load_average": [
+        10.07275390625,
+        8.20751953125,
+        8.94677734375
+      ],
+      "disk_free_bytes": 21757091840,
+      "host_memory_active_wired_compressed_bytes": 15519744000,
+      "host_process_cpu_percent_sum": 457.90000000000003,
+      "selected_process_cpu_percent": 107.0,
+      "selected_process_rss_bytes": 251838464
+    },
+    {
+      "elapsed": 490153.187568916,
+      "load_average": [
+        10.07275390625,
+        8.20751953125,
+        8.94677734375
+      ],
+      "disk_free_bytes": 21756739584,
+      "host_memory_active_wired_compressed_bytes": 15567650816,
+      "host_process_cpu_percent_sum": 416.5,
+      "selected_process_cpu_percent": 104.4,
+      "selected_process_rss_bytes": 247693312
+    },
+    {
+      "elapsed": 490154.223871958,
+      "load_average": [
+        10.07275390625,
+        8.20751953125,
+        8.94677734375
+      ],
+      "disk_free_bytes": 21756366848,
+      "host_memory_active_wired_compressed_bytes": 15358803968,
+      "host_process_cpu_percent_sum": 469.6,
+      "selected_process_cpu_percent": 104.2,
+      "selected_process_rss_bytes": 201080832
+    },
+    {
+      "elapsed": 490155.272767333,
+      "load_average": [
+        9.66650390625,
+        8.15380859375,
+        8.92333984375
+      ],
+      "disk_free_bytes": 21755990016,
+      "host_memory_active_wired_compressed_bytes": 15474491392,
+      "host_process_cpu_percent_sum": 420.2,
+      "selected_process_cpu_percent": 107.6,
+      "selected_process_rss_bytes": 204423168
+    },
+    {
+      "elapsed": 490156.309691958,
+      "load_average": [
+        9.66650390625,
+        8.15380859375,
+        8.92333984375
+      ],
+      "disk_free_bytes": 21755645952,
+      "host_memory_active_wired_compressed_bytes": 15590277120,
+      "host_process_cpu_percent_sum": 435.90000000000003,
+      "selected_process_cpu_percent": 108.60000000000001,
+      "selected_process_rss_bytes": 176799744
+    },
+    {
+      "elapsed": 490157.340582541,
+      "load_average": [
+        9.66650390625,
+        8.15380859375,
+        8.92333984375
+      ],
+      "disk_free_bytes": 21755707392,
+      "host_memory_active_wired_compressed_bytes": 15597895680,
+      "host_process_cpu_percent_sum": 392.1,
+      "selected_process_cpu_percent": 108.10000000000001,
+      "selected_process_rss_bytes": 175685632
+    },
+    {
+      "elapsed": 490158.374802083,
+      "load_average": [
+        9.66650390625,
+        8.15380859375,
+        8.92333984375
+      ],
+      "disk_free_bytes": 21755240448,
+      "host_memory_active_wired_compressed_bytes": 15411036160,
+      "host_process_cpu_percent_sum": 418.0,
+      "selected_process_cpu_percent": 104.7,
+      "selected_process_rss_bytes": 176259072
+    },
+    {
+      "elapsed": 490159.413955833,
+      "load_average": [
+        9.66650390625,
+        8.15380859375,
+        8.92333984375
+      ],
+      "disk_free_bytes": 21754802176,
+      "host_memory_active_wired_compressed_bytes": 15320793088,
+      "host_process_cpu_percent_sum": 377.59999999999997,
+      "selected_process_cpu_percent": 104.4,
+      "selected_process_rss_bytes": 173178880
+    },
+    {
+      "elapsed": 490160.447557541,
+      "load_average": [
+        9.69287109375,
+        8.18408203125,
+        8.92919921875
+      ],
+      "disk_free_bytes": 20680826880,
+      "host_memory_active_wired_compressed_bytes": 15617916928,
+      "host_process_cpu_percent_sum": 466.0,
+      "selected_process_cpu_percent": 98.80000000000001,
+      "selected_process_rss_bytes": 166182912
+    },
+    {
+      "elapsed": 490161.48300575,
+      "load_average": [
+        9.69287109375,
+        8.18408203125,
+        8.92919921875
+      ],
+      "disk_free_bytes": 20680433664,
+      "host_memory_active_wired_compressed_bytes": 15421718528,
+      "host_process_cpu_percent_sum": 462.6,
+      "selected_process_cpu_percent": 101.10000000000001,
+      "selected_process_rss_bytes": 163708928
+    },
+    {
+      "elapsed": 490162.521683791,
+      "load_average": [
+        9.69287109375,
+        8.18408203125,
+        8.92919921875
+      ],
+      "disk_free_bytes": 20678889472,
+      "host_memory_active_wired_compressed_bytes": 15186886656,
+      "host_process_cpu_percent_sum": 264.7,
+      "selected_process_cpu_percent": 105.2,
+      "selected_process_rss_bytes": 163921920
+    },
+    {
+      "elapsed": 490163.556441791,
+      "load_average": [
+        9.69287109375,
+        8.18408203125,
+        8.92919921875
+      ],
+      "disk_free_bytes": 20678467584,
+      "host_memory_active_wired_compressed_bytes": 15287205888,
+      "host_process_cpu_percent_sum": 239.6,
+      "selected_process_cpu_percent": 104.89999999999999,
+      "selected_process_rss_bytes": 164216832
+    },
+    {
+      "elapsed": 490164.588789958,
+      "load_average": [
+        9.69287109375,
+        8.18408203125,
+        8.92919921875
+      ],
+      "disk_free_bytes": 20678098944,
+      "host_memory_active_wired_compressed_bytes": 15226617856,
+      "host_process_cpu_percent_sum": 246.9,
+      "selected_process_cpu_percent": 104.0,
+      "selected_process_rss_bytes": 168001536
+    },
+    {
+      "elapsed": 490165.622104291,
+      "load_average": [
+        9.55712890625,
+        8.1806640625,
+        8.92333984375
+      ],
+      "disk_free_bytes": 20677677056,
+      "host_memory_active_wired_compressed_bytes": 15168192512,
+      "host_process_cpu_percent_sum": 329.1,
+      "selected_process_cpu_percent": 103.3,
+      "selected_process_rss_bytes": 168198144
+    },
+    {
+      "elapsed": 490166.67558925,
+      "load_average": [
+        9.55712890625,
+        8.1806640625,
+        8.92333984375
+      ],
+      "disk_free_bytes": 20677296128,
+      "host_memory_active_wired_compressed_bytes": 15214592000,
+      "host_process_cpu_percent_sum": 248.4,
+      "selected_process_cpu_percent": 103.3,
+      "selected_process_rss_bytes": 168574976
+    },
+    {
+      "elapsed": 490167.709759625,
+      "load_average": [
+        9.55712890625,
+        8.1806640625,
+        8.92333984375
+      ],
+      "disk_free_bytes": 20676874240,
+      "host_memory_active_wired_compressed_bytes": 15104655360,
+      "host_process_cpu_percent_sum": 284.0,
+      "selected_process_cpu_percent": 102.30000000000001,
+      "selected_process_rss_bytes": 169066496
+    },
+    {
+      "elapsed": 490168.743777958,
+      "load_average": [
+        9.55712890625,
+        8.1806640625,
+        8.92333984375
+      ],
+      "disk_free_bytes": 20676485120,
+      "host_memory_active_wired_compressed_bytes": 15174598656,
+      "host_process_cpu_percent_sum": 285.9,
+      "selected_process_cpu_percent": 104.5,
+      "selected_process_rss_bytes": 169541632
+    },
+    {
+      "elapsed": 490169.775136375,
+      "load_average": [
+        9.55712890625,
+        8.1806640625,
+        8.92333984375
+      ],
+      "disk_free_bytes": 20676317184,
+      "host_memory_active_wired_compressed_bytes": 15229550592,
+      "host_process_cpu_percent_sum": 222.0,
+      "selected_process_cpu_percent": 106.2,
+      "selected_process_rss_bytes": 169066496
+    },
+    {
+      "elapsed": 490170.806936208,
+      "load_average": [
+        10.07275390625,
+        8.31005859375,
+        8.96435546875
+      ],
+      "disk_free_bytes": 20676022272,
+      "host_memory_active_wired_compressed_bytes": 15226060800,
+      "host_process_cpu_percent_sum": 249.7,
+      "selected_process_cpu_percent": 101.7,
+      "selected_process_rss_bytes": 169410560
+    },
+    {
+      "elapsed": 490171.841441333,
+      "load_average": [
+        10.07275390625,
+        8.31005859375,
+        8.96435546875
+      ],
+      "disk_free_bytes": 20675690496,
+      "host_memory_active_wired_compressed_bytes": 15259287552,
+      "host_process_cpu_percent_sum": 286.2,
+      "selected_process_cpu_percent": 100.7,
+      "selected_process_rss_bytes": 169607168
+    },
+    {
+      "elapsed": 490172.871554958,
+      "load_average": [
+        10.07275390625,
+        8.31005859375,
+        8.96435546875
+      ],
+      "disk_free_bytes": 20675256320,
+      "host_memory_active_wired_compressed_bytes": 15252062208,
+      "host_process_cpu_percent_sum": 265.9,
+      "selected_process_cpu_percent": 103.0,
+      "selected_process_rss_bytes": 192184320
+    },
+    {
+      "elapsed": 490173.900324875,
+      "load_average": [
+        10.07275390625,
+        8.31005859375,
+        8.96435546875
+      ],
+      "disk_free_bytes": 20674998272,
+      "host_memory_active_wired_compressed_bytes": 15166701568,
+      "host_process_cpu_percent_sum": 323.2,
+      "selected_process_cpu_percent": 106.5,
+      "selected_process_rss_bytes": 224182272
+    },
+    {
+      "elapsed": 490174.931296291,
+      "load_average": [
+        11.42822265625,
+        8.6201171875,
+        9.06982421875
+      ],
+      "disk_free_bytes": 20674502656,
+      "host_memory_active_wired_compressed_bytes": 15382478848,
+      "host_process_cpu_percent_sum": 240.7,
+      "selected_process_cpu_percent": 99.6,
+      "selected_process_rss_bytes": 224755712
+    },
+    {
+      "elapsed": 490175.965395166,
+      "load_average": [
+        11.42822265625,
+        8.6201171875,
+        9.06982421875
+      ],
+      "disk_free_bytes": 20673998848,
+      "host_memory_active_wired_compressed_bytes": 15189491712,
+      "host_process_cpu_percent_sum": 225.1,
+      "selected_process_cpu_percent": 101.6,
+      "selected_process_rss_bytes": 224673792
+    },
+    {
+      "elapsed": 490176.995780333,
+      "load_average": [
+        11.42822265625,
+        8.6201171875,
+        9.06982421875
+      ],
+      "disk_free_bytes": 20672704512,
+      "host_memory_active_wired_compressed_bytes": 15543861248,
+      "host_process_cpu_percent_sum": 538.8,
+      "selected_process_cpu_percent": 75.19999999999999,
+      "selected_process_rss_bytes": 266272768
+    },
+    {
+      "elapsed": 490178.037146125,
+      "load_average": [
+        11.42822265625,
+        8.6201171875,
+        9.06982421875
+      ],
+      "disk_free_bytes": 20672466944,
+      "host_memory_active_wired_compressed_bytes": 15377891328,
+      "host_process_cpu_percent_sum": 293.6,
+      "selected_process_cpu_percent": 100.5,
+      "selected_process_rss_bytes": 264683520
+    },
+    {
+      "elapsed": 490179.073285125,
+      "load_average": [
+        11.42822265625,
+        8.6201171875,
+        9.06982421875
+      ],
+      "disk_free_bytes": 20672368640,
+      "host_memory_active_wired_compressed_bytes": 15324872704,
+      "host_process_cpu_percent_sum": 258.3,
+      "selected_process_cpu_percent": 102.6,
+      "selected_process_rss_bytes": 251559936
+    },
+    {
+      "elapsed": 490180.105697333,
+      "load_average": [
+        10.9931640625,
+        8.576171875,
+        9.0517578125
+      ],
+      "disk_free_bytes": 20671709184,
+      "host_memory_active_wired_compressed_bytes": 15261417472,
+      "host_process_cpu_percent_sum": 347.3,
+      "selected_process_cpu_percent": 106.4,
+      "selected_process_rss_bytes": 283213824
+    },
+    {
+      "elapsed": 490181.189769541,
+      "load_average": [
+        10.9931640625,
+        8.576171875,
+        9.0517578125
+      ],
+      "disk_free_bytes": 20672065536,
+      "host_memory_active_wired_compressed_bytes": 15426895872,
+      "host_process_cpu_percent_sum": 778.1,
+      "selected_process_cpu_percent": 110.1,
+      "selected_process_rss_bytes": 244973568
+    },
+    {
+      "elapsed": 490182.23052975,
+      "load_average": [
+        10.9931640625,
+        8.576171875,
+        9.0517578125
+      ],
+      "disk_free_bytes": 20671098880,
+      "host_memory_active_wired_compressed_bytes": 15316828160,
+      "host_process_cpu_percent_sum": 887.1,
+      "selected_process_cpu_percent": 113.30000000000001,
+      "selected_process_rss_bytes": 256475136
+    },
+    {
+      "elapsed": 490183.268317833,
+      "load_average": [
+        10.9931640625,
+        8.576171875,
+        9.0517578125
+      ],
+      "disk_free_bytes": 20670525440,
+      "host_memory_active_wired_compressed_bytes": 15353233408,
+      "host_process_cpu_percent_sum": 919.2,
+      "selected_process_cpu_percent": 122.6,
+      "selected_process_rss_bytes": 264028160
+    },
+    {
+      "elapsed": 490184.304171541,
+      "load_average": [
+        10.9931640625,
+        8.576171875,
+        9.0517578125
+      ],
+      "disk_free_bytes": 20670717952,
+      "host_memory_active_wired_compressed_bytes": 15509733376,
+      "host_process_cpu_percent_sum": 923.8000000000001,
+      "selected_process_cpu_percent": 112.4,
+      "selected_process_rss_bytes": 277643264
+    },
+    {
+      "elapsed": 490185.343757875,
+      "load_average": [
+        11.31396484375,
+        8.6826171875,
+        9.08642578125
+      ],
+      "disk_free_bytes": 20670078976,
+      "host_memory_active_wired_compressed_bytes": 15458254848,
+      "host_process_cpu_percent_sum": 906.6,
+      "selected_process_cpu_percent": 166.5,
+      "selected_process_rss_bytes": 302383104
+    },
+    {
+      "elapsed": 490186.393436041,
+      "load_average": [
+        11.31396484375,
+        8.6826171875,
+        9.08642578125
+      ],
+      "disk_free_bytes": 20668198912,
+      "host_memory_active_wired_compressed_bytes": 15454846976,
+      "host_process_cpu_percent_sum": 956.1,
+      "selected_process_cpu_percent": 126.8,
+      "selected_process_rss_bytes": 302202880
+    },
+    {
+      "elapsed": 490187.453136833,
+      "load_average": [
+        11.31396484375,
+        8.6826171875,
+        9.08642578125
+      ],
+      "disk_free_bytes": 20668432384,
+      "host_memory_active_wired_compressed_bytes": 15382691840,
+      "host_process_cpu_percent_sum": 925.4000000000001,
+      "selected_process_cpu_percent": 140.5,
+      "selected_process_rss_bytes": 337494016
+    },
+    {
+      "elapsed": 490188.535576958,
+      "load_average": [
+        11.31396484375,
+        8.6826171875,
+        9.08642578125
+      ],
+      "disk_free_bytes": 20667326464,
+      "host_memory_active_wired_compressed_bytes": 15456960512,
+      "host_process_cpu_percent_sum": 921.9,
+      "selected_process_cpu_percent": 142.20000000000002,
+      "selected_process_rss_bytes": 356450304
+    },
+    {
+      "elapsed": 490189.581851625,
+      "load_average": [
+        11.31396484375,
+        8.6826171875,
+        9.08642578125
+      ],
+      "disk_free_bytes": 20667576320,
+      "host_memory_active_wired_compressed_bytes": 15571910656,
+      "host_process_cpu_percent_sum": 938.5,
+      "selected_process_cpu_percent": 112.9,
+      "selected_process_rss_bytes": 333381632
+    },
+    {
+      "elapsed": 490190.645419958,
+      "load_average": [
+        11.76904296875,
+        8.8203125,
+        9.13232421875
+      ],
+      "disk_free_bytes": 20666699776,
+      "host_memory_active_wired_compressed_bytes": 15572041728,
+      "host_process_cpu_percent_sum": 935.5,
+      "selected_process_cpu_percent": 130.7,
+      "selected_process_rss_bytes": 327319552
+    },
+    {
+      "elapsed": 490191.718475416,
+      "load_average": [
+        11.76904296875,
+        8.8203125,
+        9.13232421875
+      ],
+      "disk_free_bytes": 20666261504,
+      "host_memory_active_wired_compressed_bytes": 15589687296,
+      "host_process_cpu_percent_sum": 965.8,
+      "selected_process_cpu_percent": 117.7,
+      "selected_process_rss_bytes": 337920000
+    },
+    {
+      "elapsed": 490192.808404416,
+      "load_average": [
+        11.76904296875,
+        8.8203125,
+        9.13232421875
+      ],
+      "disk_free_bytes": 20664877056,
+      "host_memory_active_wired_compressed_bytes": 15579447296,
+      "host_process_cpu_percent_sum": 951.3,
+      "selected_process_cpu_percent": 128.29999999999998,
+      "selected_process_rss_bytes": 264470528
+    },
+    {
+      "elapsed": 490193.912762416,
+      "load_average": [
+        11.76904296875,
+        8.8203125,
+        9.13232421875
+      ],
+      "disk_free_bytes": 20664225792,
+      "host_memory_active_wired_compressed_bytes": 15386509312,
+      "host_process_cpu_percent_sum": 983.1,
+      "selected_process_cpu_percent": 135.9,
+      "selected_process_rss_bytes": 289046528
+    },
+    {
+      "elapsed": 490194.969729791,
+      "load_average": [
+        11.70703125,
+        8.8564453125,
+        9.14306640625
+      ],
+      "disk_free_bytes": 20663500800,
+      "host_memory_active_wired_compressed_bytes": 15616950272,
+      "host_process_cpu_percent_sum": 969.0999999999999,
+      "selected_process_cpu_percent": 130.5,
+      "selected_process_rss_bytes": 277839872
+    },
+    {
+      "elapsed": 490196.033708625,
+      "load_average": [
+        11.70703125,
+        8.8564453125,
+        9.14306640625
+      ],
+      "disk_free_bytes": 20663242752,
+      "host_memory_active_wired_compressed_bytes": 15420030976,
+      "host_process_cpu_percent_sum": 962.5,
+      "selected_process_cpu_percent": 126.39999999999999,
+      "selected_process_rss_bytes": 274235392
+    },
+    {
+      "elapsed": 490197.102529708,
+      "load_average": [
+        11.70703125,
+        8.8564453125,
+        9.14306640625
+      ],
+      "disk_free_bytes": 20667584512,
+      "host_memory_active_wired_compressed_bytes": 15427796992,
+      "host_process_cpu_percent_sum": 916.9,
+      "selected_process_cpu_percent": 127.3,
+      "selected_process_rss_bytes": 323239936
+    },
+    {
+      "elapsed": 490198.190044625,
+      "load_average": [
+        11.70703125,
+        8.8564453125,
+        9.14306640625
+      ],
+      "disk_free_bytes": 20688257024,
+      "host_memory_active_wired_compressed_bytes": 15436005376,
+      "host_process_cpu_percent_sum": 964.3000000000001,
+      "selected_process_cpu_percent": 127.5,
+      "selected_process_rss_bytes": 320143360
+    },
+    {
+      "elapsed": 490199.237062208,
+      "load_average": [
+        11.70703125,
+        8.8564453125,
+        9.14306640625
+      ],
+      "disk_free_bytes": 20686524416,
+      "host_memory_active_wired_compressed_bytes": 15652700160,
+      "host_process_cpu_percent_sum": 837.8,
+      "selected_process_cpu_percent": 72.2,
+      "selected_process_rss_bytes": 229588992
+    },
+    {
+      "elapsed": 490200.313589,
+      "load_average": [
+        11.330078125,
+        8.8251953125,
+        9.13037109375
+      ],
+      "disk_free_bytes": 20685668352,
+      "host_memory_active_wired_compressed_bytes": 15345188864,
+      "host_process_cpu_percent_sum": 912.3,
+      "selected_process_cpu_percent": 124.5,
+      "selected_process_rss_bytes": 265863168
+    },
+    {
+      "elapsed": 490201.389749,
+      "load_average": [
+        11.330078125,
+        8.8251953125,
+        9.13037109375
+      ],
+      "disk_free_bytes": 20686020608,
+      "host_memory_active_wired_compressed_bytes": 15592882176,
+      "host_process_cpu_percent_sum": 925.9,
+      "selected_process_cpu_percent": 115.3,
+      "selected_process_rss_bytes": 232226816
+    },
+    {
+      "elapsed": 490202.436306958,
+      "load_average": [
+        11.330078125,
+        8.8251953125,
+        9.13037109375
+      ],
+      "disk_free_bytes": 20685701120,
+      "host_memory_active_wired_compressed_bytes": 15335587840,
+      "host_process_cpu_percent_sum": 948.0999999999999,
+      "selected_process_cpu_percent": 125.39999999999999,
+      "selected_process_rss_bytes": 220004352
+    },
+    {
+      "elapsed": 490203.49972825,
+      "load_average": [
+        11.330078125,
+        8.8251953125,
+        9.13037109375
+      ],
+      "disk_free_bytes": 20684673024,
+      "host_memory_active_wired_compressed_bytes": 15483142144,
+      "host_process_cpu_percent_sum": 920.8000000000001,
+      "selected_process_cpu_percent": 116.9,
+      "selected_process_rss_bytes": 257769472
+    },
+    {
+      "elapsed": 490204.56243625,
+      "load_average": [
+        11.330078125,
+        8.8251953125,
+        9.13037109375
+      ],
+      "disk_free_bytes": 20683759616,
+      "host_memory_active_wired_compressed_bytes": 15494627328,
+      "host_process_cpu_percent_sum": 884.6,
+      "selected_process_cpu_percent": 123.8,
+      "selected_process_rss_bytes": 281821184
+    },
+    {
+      "elapsed": 490205.603797166,
+      "load_average": [
+        11.54345703125,
+        8.91064453125,
+        9.15869140625
+      ],
+      "disk_free_bytes": 20683796480,
+      "host_memory_active_wired_compressed_bytes": 15466070016,
+      "host_process_cpu_percent_sum": 911.0,
+      "selected_process_cpu_percent": 118.5,
+      "selected_process_rss_bytes": 285507584
+    },
+    {
+      "elapsed": 490206.650580666,
+      "load_average": [
+        11.54345703125,
+        8.91064453125,
+        9.15869140625
+      ],
+      "disk_free_bytes": 20683546624,
+      "host_memory_active_wired_compressed_bytes": 15441035264,
+      "host_process_cpu_percent_sum": 956.4,
+      "selected_process_cpu_percent": 130.0,
+      "selected_process_rss_bytes": 329138176
+    },
+    {
+      "elapsed": 490207.702387708,
+      "load_average": [
+        11.54345703125,
+        8.91064453125,
+        9.15869140625
+      ],
+      "disk_free_bytes": 20682547200,
+      "host_memory_active_wired_compressed_bytes": 15477604352,
+      "host_process_cpu_percent_sum": 922.1999999999999,
+      "selected_process_cpu_percent": 96.2,
+      "selected_process_rss_bytes": 319569920
+    },
+    {
+      "elapsed": 490208.769620875,
+      "load_average": [
+        11.54345703125,
+        8.91064453125,
+        9.15869140625
+      ],
+      "disk_free_bytes": 20681535488,
+      "host_memory_active_wired_compressed_bytes": 15364587520,
+      "host_process_cpu_percent_sum": 960.3000000000001,
+      "selected_process_cpu_percent": 117.8,
+      "selected_process_rss_bytes": 320503808
+    },
+    {
+      "elapsed": 490209.835340333,
+      "load_average": [
+        11.17919921875,
+        8.87890625,
+        9.14599609375
+      ],
+      "disk_free_bytes": 20680650752,
+      "host_memory_active_wired_compressed_bytes": 15507374080,
+      "host_process_cpu_percent_sum": 947.1,
+      "selected_process_cpu_percent": 122.7,
+      "selected_process_rss_bytes": 324976640
+    },
+    {
+      "elapsed": 490210.924992333,
+      "load_average": [
+        11.17919921875,
+        8.87890625,
+        9.14599609375
+      ],
+      "disk_free_bytes": 20682596352,
+      "host_memory_active_wired_compressed_bytes": 15553167360,
+      "host_process_cpu_percent_sum": 997.9000000000001,
+      "selected_process_cpu_percent": 117.3,
+      "selected_process_rss_bytes": 281100288
+    },
+    {
+      "elapsed": 490212.016870416,
+      "load_average": [
+        11.17919921875,
+        8.87890625,
+        9.14599609375
+      ],
+      "disk_free_bytes": 20682784768,
+      "host_memory_active_wired_compressed_bytes": 15629762560,
+      "host_process_cpu_percent_sum": 981.4,
+      "selected_process_cpu_percent": 104.0,
+      "selected_process_rss_bytes": 233586688
+    },
+    {
+      "elapsed": 490213.086738125,
+      "load_average": [
+        11.17919921875,
+        8.87890625,
+        9.14599609375
+      ],
+      "disk_free_bytes": 20681875456,
+      "host_memory_active_wired_compressed_bytes": 15514697728,
+      "host_process_cpu_percent_sum": 963.9,
+      "selected_process_cpu_percent": 126.5,
+      "selected_process_rss_bytes": 279150592
+    },
+    {
+      "elapsed": 490214.126500208,
+      "load_average": [
+        11.17919921875,
+        8.87890625,
+        9.14599609375
+      ],
+      "disk_free_bytes": 20683010048,
+      "host_memory_active_wired_compressed_bytes": 15515074560,
+      "host_process_cpu_percent_sum": 973.8000000000001,
+      "selected_process_cpu_percent": 94.3,
+      "selected_process_rss_bytes": 275611648
+    },
+    {
+      "elapsed": 490215.185887708,
+      "load_average": [
+        12.84619140625,
+        9.2626953125,
+        9.27978515625
+      ],
+      "disk_free_bytes": 20681023488,
+      "host_memory_active_wired_compressed_bytes": 15609692160,
+      "host_process_cpu_percent_sum": 854.8,
+      "selected_process_cpu_percent": 102.89999999999999,
+      "selected_process_rss_bytes": 324009984
+    },
+    {
+      "elapsed": 490216.26340775,
+      "load_average": [
+        12.84619140625,
+        9.2626953125,
+        9.27978515625
+      ],
+      "disk_free_bytes": 20680282112,
+      "host_memory_active_wired_compressed_bytes": 15546384384,
+      "host_process_cpu_percent_sum": 907.4,
+      "selected_process_cpu_percent": 107.39999999999999,
+      "selected_process_rss_bytes": 324190208
+    },
+    {
+      "elapsed": 490217.320993666,
+      "load_average": [
+        12.84619140625,
+        9.2626953125,
+        9.27978515625
+      ],
+      "disk_free_bytes": 20680237056,
+      "host_memory_active_wired_compressed_bytes": 15472984064,
+      "host_process_cpu_percent_sum": 862.6,
+      "selected_process_cpu_percent": 102.3,
+      "selected_process_rss_bytes": 308445184
+    },
+    {
+      "elapsed": 490218.361075583,
+      "load_average": [
+        12.84619140625,
+        9.2626953125,
+        9.27978515625
+      ],
+      "disk_free_bytes": 20679057408,
+      "host_memory_active_wired_compressed_bytes": 15395487744,
+      "host_process_cpu_percent_sum": 963.6999999999999,
+      "selected_process_cpu_percent": 108.60000000000001,
+      "selected_process_rss_bytes": 271417344
+    },
+    {
+      "elapsed": 490219.407818041,
+      "load_average": [
+        12.84619140625,
+        9.2626953125,
+        9.27978515625
+      ],
+      "disk_free_bytes": 20678721536,
+      "host_memory_active_wired_compressed_bytes": 15715303424,
+      "host_process_cpu_percent_sum": 892.9,
+      "selected_process_cpu_percent": 86.6,
+      "selected_process_rss_bytes": 216956928
+    },
+    {
+      "elapsed": 490220.487021875,
+      "load_average": [
+        12.2978515625,
+        9.20849609375,
+        9.26025390625
+      ],
+      "disk_free_bytes": 20678033408,
+      "host_memory_active_wired_compressed_bytes": 15241478144,
+      "host_process_cpu_percent_sum": 806.1999999999999,
+      "selected_process_cpu_percent": 67.7,
+      "selected_process_rss_bytes": 272842752
+    },
+    {
+      "elapsed": 490221.52671175,
+      "load_average": [
+        12.2978515625,
+        9.20849609375,
+        9.26025390625
+      ],
+      "disk_free_bytes": 20677173248,
+      "host_memory_active_wired_compressed_bytes": 15449456640,
+      "host_process_cpu_percent_sum": 954.8,
+      "selected_process_cpu_percent": 57.400000000000006,
+      "selected_process_rss_bytes": 276938752
+    },
+    {
+      "elapsed": 490222.608807875,
+      "load_average": [
+        12.2978515625,
+        9.20849609375,
+        9.26025390625
+      ],
+      "disk_free_bytes": 20678963200,
+      "host_memory_active_wired_compressed_bytes": 15316451328,
+      "host_process_cpu_percent_sum": 803.6999999999999,
+      "selected_process_cpu_percent": 56.599999999999994,
+      "selected_process_rss_bytes": 280723456
+    },
+    {
+      "elapsed": 490223.652802375,
+      "load_average": [
+        12.2978515625,
+        9.20849609375,
+        9.26025390625
+      ],
+      "disk_free_bytes": 20684009472,
+      "host_memory_active_wired_compressed_bytes": 15364489216,
+      "host_process_cpu_percent_sum": 909.2,
+      "selected_process_cpu_percent": 58.1,
+      "selected_process_rss_bytes": 326844416
+    },
+    {
+      "elapsed": 490224.712071333,
+      "load_average": [
+        12.2978515625,
+        9.20849609375,
+        9.26025390625
+      ],
+      "disk_free_bytes": 20682944512,
+      "host_memory_active_wired_compressed_bytes": 15301263360,
+      "host_process_cpu_percent_sum": 830.0,
+      "selected_process_cpu_percent": 34.9,
+      "selected_process_rss_bytes": 325795840
+    },
+    {
+      "elapsed": 490225.762552791,
+      "load_average": [
+        12.99462890625,
+        9.40380859375,
+        9.32861328125
+      ],
+      "disk_free_bytes": 20682121216,
+      "host_memory_active_wired_compressed_bytes": 15203123200,
+      "host_process_cpu_percent_sum": 851.9,
+      "selected_process_cpu_percent": 27.200000000000003,
+      "selected_process_rss_bytes": 326270976
+    },
+    {
+      "elapsed": 490226.802750416,
+      "load_average": [
+        12.99462890625,
+        9.40380859375,
+        9.32861328125
+      ],
+      "disk_free_bytes": 20681379840,
+      "host_memory_active_wired_compressed_bytes": 15089778688,
+      "host_process_cpu_percent_sum": 705.6,
+      "selected_process_cpu_percent": 21.099999999999998,
+      "selected_process_rss_bytes": 326828032
+    },
+    {
+      "elapsed": 490227.845554833,
+      "load_average": [
+        12.99462890625,
+        9.40380859375,
+        9.32861328125
+      ],
+      "disk_free_bytes": 20680626176,
+      "host_memory_active_wired_compressed_bytes": 15107784704,
+      "host_process_cpu_percent_sum": 742.8,
+      "selected_process_cpu_percent": 39.1,
+      "selected_process_rss_bytes": 327696384
+    },
+    {
+      "elapsed": 490228.889537291,
+      "load_average": [
+        12.99462890625,
+        9.40380859375,
+        9.32861328125
+      ],
+      "disk_free_bytes": 20679811072,
+      "host_memory_active_wired_compressed_bytes": 15126020096,
+      "host_process_cpu_percent_sum": 735.1999999999999,
+      "selected_process_cpu_percent": 27.3,
+      "selected_process_rss_bytes": 318849024
+    },
+    {
+      "elapsed": 490229.95703925,
+      "load_average": [
+        14.59619140625,
+        9.79541015625,
+        9.46728515625
+      ],
+      "disk_free_bytes": 20679888896,
+      "host_memory_active_wired_compressed_bytes": 15343042560,
+      "host_process_cpu_percent_sum": 732.1999999999999,
+      "selected_process_cpu_percent": 51.1,
+      "selected_process_rss_bytes": 293158912
+    },
+    {
+      "elapsed": 490231.1468685,
+      "load_average": [
+        14.59619140625,
+        9.79541015625,
+        9.46728515625
+      ],
+      "disk_free_bytes": 20680601600,
+      "host_memory_active_wired_compressed_bytes": 15662661632,
+      "host_process_cpu_percent_sum": 748.1,
+      "selected_process_cpu_percent": 18.4,
+      "selected_process_rss_bytes": 256294912
+    },
+    {
+      "elapsed": 490232.194767083,
+      "load_average": [
+        14.59619140625,
+        9.79541015625,
+        9.46728515625
+      ],
+      "disk_free_bytes": 20681515008,
+      "host_memory_active_wired_compressed_bytes": 15441068032,
+      "host_process_cpu_percent_sum": 850.3,
+      "selected_process_cpu_percent": 44.199999999999996,
+      "selected_process_rss_bytes": 262291456
+    },
+    {
+      "elapsed": 490233.238575125,
+      "load_average": [
+        14.59619140625,
+        9.79541015625,
+        9.46728515625
+      ],
+      "disk_free_bytes": 20680654848,
+      "host_memory_active_wired_compressed_bytes": 15112667136,
+      "host_process_cpu_percent_sum": 748.9,
+      "selected_process_cpu_percent": 37.300000000000004,
+      "selected_process_rss_bytes": 263208960
+    },
+    {
+      "elapsed": 490234.282192666,
+      "load_average": [
+        14.59619140625,
+        9.79541015625,
+        9.46728515625
+      ],
+      "disk_free_bytes": 20680327168,
+      "host_memory_active_wired_compressed_bytes": 15281831936,
+      "host_process_cpu_percent_sum": 811.9,
+      "selected_process_cpu_percent": 63.400000000000006,
+      "selected_process_rss_bytes": 315588608
+    },
+    {
+      "elapsed": 490235.411841333,
+      "load_average": [
+        14.06787109375,
+        9.76513671875,
+        9.45849609375
+      ],
+      "disk_free_bytes": 20679413760,
+      "host_memory_active_wired_compressed_bytes": 15211577344,
+      "host_process_cpu_percent_sum": 731.6,
+      "selected_process_cpu_percent": 18.8,
+      "selected_process_rss_bytes": 318996480
+    },
+    {
+      "elapsed": 490236.454815291,
+      "load_average": [
+        14.06787109375,
+        9.76513671875,
+        9.45849609375
+      ],
+      "disk_free_bytes": 20678709248,
+      "host_memory_active_wired_compressed_bytes": 15409168384,
+      "host_process_cpu_percent_sum": 833.2,
+      "selected_process_cpu_percent": 40.0,
+      "selected_process_rss_bytes": 319668224
+    },
+    {
+      "elapsed": 490237.496762416,
+      "load_average": [
+        14.06787109375,
+        9.76513671875,
+        9.45849609375
+      ],
+      "disk_free_bytes": 20676956160,
+      "host_memory_active_wired_compressed_bytes": 15227928576,
+      "host_process_cpu_percent_sum": 750.2,
+      "selected_process_cpu_percent": 26.0,
+      "selected_process_rss_bytes": 315408384
+    },
+    {
+      "elapsed": 490238.536706916,
+      "load_average": [
+        14.06787109375,
+        9.76513671875,
+        9.45849609375
+      ],
+      "disk_free_bytes": 20677369856,
+      "host_memory_active_wired_compressed_bytes": 15329984512,
+      "host_process_cpu_percent_sum": 816.8,
+      "selected_process_cpu_percent": 52.0,
+      "selected_process_rss_bytes": 261849088
+    },
+    {
+      "elapsed": 490239.586385708,
+      "load_average": [
+        14.06787109375,
+        9.76513671875,
+        9.45849609375
+      ],
+      "disk_free_bytes": 20678057984,
+      "host_memory_active_wired_compressed_bytes": 15343386624,
+      "host_process_cpu_percent_sum": 783.6999999999999,
+      "selected_process_cpu_percent": 19.9,
+      "selected_process_rss_bytes": 258441216
+    },
+    {
+      "elapsed": 490240.642503166,
+      "load_average": [
+        13.90185546875,
+        9.8017578125,
+        9.47314453125
+      ],
+      "disk_free_bytes": 20677238784,
+      "host_memory_active_wired_compressed_bytes": 15425208320,
+      "host_process_cpu_percent_sum": 769.5,
+      "selected_process_cpu_percent": 41.5,
+      "selected_process_rss_bytes": 261193728
+    },
+    {
+      "elapsed": 490241.681594416,
+      "load_average": [
+        13.90185546875,
+        9.8017578125,
+        9.47314453125
+      ],
+      "disk_free_bytes": 20677591040,
+      "host_memory_active_wired_compressed_bytes": 15327756288,
+      "host_process_cpu_percent_sum": 823.1,
+      "selected_process_cpu_percent": 31.5,
+      "selected_process_rss_bytes": 263798784
+    },
+    {
+      "elapsed": 490242.723609833,
+      "load_average": [
+        13.90185546875,
+        9.8017578125,
+        9.47314453125
+      ],
+      "disk_free_bytes": 20678742016,
+      "host_memory_active_wired_compressed_bytes": 15348072448,
+      "host_process_cpu_percent_sum": 812.4,
+      "selected_process_cpu_percent": 33.8,
+      "selected_process_rss_bytes": 262275072
+    },
+    {
+      "elapsed": 490243.762820083,
+      "load_average": [
+        13.90185546875,
+        9.8017578125,
+        9.47314453125
+      ],
+      "disk_free_bytes": 20678062080,
+      "host_memory_active_wired_compressed_bytes": 15262302208,
+      "host_process_cpu_percent_sum": 721.0,
+      "selected_process_cpu_percent": 20.4,
+      "selected_process_rss_bytes": 263634944
+    },
+    {
+      "elapsed": 490244.799592,
+      "load_average": [
+        13.90185546875,
+        9.8017578125,
+        9.47314453125
+      ],
+      "disk_free_bytes": 20677087232,
+      "host_memory_active_wired_compressed_bytes": 15236464640,
+      "host_process_cpu_percent_sum": 741.8,
+      "selected_process_cpu_percent": 26.8,
+      "selected_process_rss_bytes": 264306688
+    },
+    {
+      "elapsed": 490245.841705833,
+      "load_average": [
+        13.90966796875,
+        9.87109375,
+        9.49951171875
+      ],
+      "disk_free_bytes": 20675272704,
+      "host_memory_active_wired_compressed_bytes": 15217311744,
+      "host_process_cpu_percent_sum": 753.6,
+      "selected_process_cpu_percent": 22.099999999999998,
+      "selected_process_rss_bytes": 284246016
+    },
+    {
+      "elapsed": 490246.886385125,
+      "load_average": [
+        13.90966796875,
+        9.87109375,
+        9.49951171875
+      ],
+      "disk_free_bytes": 20675702784,
+      "host_memory_active_wired_compressed_bytes": 15124430848,
+      "host_process_cpu_percent_sum": 744.0,
+      "selected_process_cpu_percent": 35.2,
+      "selected_process_rss_bytes": 284852224
+    },
+    {
+      "elapsed": 490247.945623666,
+      "load_average": [
+        13.90966796875,
+        9.87109375,
+        9.49951171875
+      ],
+      "disk_free_bytes": 20674756608,
+      "host_memory_active_wired_compressed_bytes": 15249014784,
+      "host_process_cpu_percent_sum": 743.5,
+      "selected_process_cpu_percent": 29.5,
+      "selected_process_rss_bytes": 285016064
+    },
+    {
+      "elapsed": 490248.988538625,
+      "load_average": [
+        13.90966796875,
+        9.87109375,
+        9.49951171875
+      ],
+      "disk_free_bytes": 20674134016,
+      "host_memory_active_wired_compressed_bytes": 15243526144,
+      "host_process_cpu_percent_sum": 727.6999999999999,
+      "selected_process_cpu_percent": 31.2,
+      "selected_process_rss_bytes": 283656192
+    },
+    {
+      "elapsed": 490250.022553791,
+      "load_average": [
+        13.99658203125,
+        9.9560546875,
+        9.53173828125
+      ],
+      "disk_free_bytes": 20674404352,
+      "host_memory_active_wired_compressed_bytes": 15329230848,
+      "host_process_cpu_percent_sum": 754.7,
+      "selected_process_cpu_percent": 39.5,
+      "selected_process_rss_bytes": 258621440
+    },
+    {
+      "elapsed": 490251.166561291,
+      "load_average": [
+        13.99658203125,
+        9.9560546875,
+        9.53173828125
+      ],
+      "disk_free_bytes": 20674539520,
+      "host_memory_active_wired_compressed_bytes": 15697952768,
+      "host_process_cpu_percent_sum": 760.0,
+      "selected_process_cpu_percent": 25.599999999999998,
+      "selected_process_rss_bytes": 248381440
+    },
+    {
+      "elapsed": 490252.217163375,
+      "load_average": [
+        13.99658203125,
+        9.9560546875,
+        9.53173828125
+      ],
+      "disk_free_bytes": 20676120576,
+      "host_memory_active_wired_compressed_bytes": 15528263680,
+      "host_process_cpu_percent_sum": 868.5,
+      "selected_process_cpu_percent": 30.2,
+      "selected_process_rss_bytes": 257392640
+    },
+    {
+      "elapsed": 490253.2762895,
+      "load_average": [
+        13.99658203125,
+        9.9560546875,
+        9.53173828125
+      ],
+      "disk_free_bytes": 20676034560,
+      "host_memory_active_wired_compressed_bytes": 15230959616,
+      "host_process_cpu_percent_sum": 958.0,
+      "selected_process_cpu_percent": 16.3,
+      "selected_process_rss_bytes": 262373376
+    },
+    {
+      "elapsed": 490254.327364333,
+      "load_average": [
+        13.99658203125,
+        9.9560546875,
+        9.53173828125
+      ],
+      "disk_free_bytes": 20676182016,
+      "host_memory_active_wired_compressed_bytes": 15313846272,
+      "host_process_cpu_percent_sum": 867.4,
+      "selected_process_cpu_percent": 26.400000000000002,
+      "selected_process_rss_bytes": 261488640
+    },
+    {
+      "elapsed": 490255.372795208,
+      "load_average": [
+        16.87939453125,
+        10.62060546875,
+        9.7685546875
+      ],
+      "disk_free_bytes": 20675829760,
+      "host_memory_active_wired_compressed_bytes": 15394537472,
+      "host_process_cpu_percent_sum": 844.0,
+      "selected_process_cpu_percent": 30.4,
+      "selected_process_rss_bytes": 237797376
+    },
+    {
+      "elapsed": 490256.415253,
+      "load_average": [
+        16.87939453125,
+        10.62060546875,
+        9.7685546875
+      ],
+      "disk_free_bytes": 20675170304,
+      "host_memory_active_wired_compressed_bytes": 15366029312,
+      "host_process_cpu_percent_sum": 856.0,
+      "selected_process_cpu_percent": 22.799999999999997,
+      "selected_process_rss_bytes": 255098880
+    },
+    {
+      "elapsed": 490257.464763541,
+      "load_average": [
+        16.87939453125,
+        10.62060546875,
+        9.7685546875
+      ],
+      "disk_free_bytes": 20674240512,
+      "host_memory_active_wired_compressed_bytes": 15444819968,
+      "host_process_cpu_percent_sum": 848.0,
+      "selected_process_cpu_percent": 30.6,
+      "selected_process_rss_bytes": 312836096
+    },
+    {
+      "elapsed": 490258.513452041,
+      "load_average": [
+        16.87939453125,
+        10.62060546875,
+        9.7685546875
+      ],
+      "disk_free_bytes": 20673556480,
+      "host_memory_active_wired_compressed_bytes": 15442329600,
+      "host_process_cpu_percent_sum": 801.4,
+      "selected_process_cpu_percent": 13.9,
+      "selected_process_rss_bytes": 316702720
+    },
+    {
+      "elapsed": 490259.581111416,
+      "load_average": [
+        16.87939453125,
+        10.62060546875,
+        9.7685546875
+      ],
+      "disk_free_bytes": 20672925696,
+      "host_memory_active_wired_compressed_bytes": 15474180096,
+      "host_process_cpu_percent_sum": 841.1,
+      "selected_process_cpu_percent": 29.700000000000003,
+      "selected_process_rss_bytes": 307494912
+    },
+    {
+      "elapsed": 490260.632423541,
+      "load_average": [
+        18.009765625,
+        10.95849609375,
+        9.892578125
+      ],
+      "disk_free_bytes": 20672483328,
+      "host_memory_active_wired_compressed_bytes": 15351087104,
+      "host_process_cpu_percent_sum": 833.3,
+      "selected_process_cpu_percent": 9.0,
+      "selected_process_rss_bytes": 180043776
+    },
+    {
+      "elapsed": 490261.726364291,
+      "load_average": [
+        18.009765625,
+        10.95849609375,
+        9.892578125
+      ],
+      "disk_free_bytes": 20671324160,
+      "host_memory_active_wired_compressed_bytes": 14922006528,
+      "host_process_cpu_percent_sum": 867.2,
+      "selected_process_cpu_percent": 19.5,
+      "selected_process_rss_bytes": 155926528
+    },
+    {
+      "elapsed": 490262.8029055,
+      "load_average": [
+        18.009765625,
+        10.95849609375,
+        9.892578125
+      ],
+      "disk_free_bytes": 20672659456,
+      "host_memory_active_wired_compressed_bytes": 14798880768,
+      "host_process_cpu_percent_sum": 914.8000000000001,
+      "selected_process_cpu_percent": 24.3,
+      "selected_process_rss_bytes": 209403904
+    },
+    {
+      "elapsed": 490263.845855916,
+      "load_average": [
+        18.009765625,
+        10.95849609375,
+        9.892578125
+      ],
+      "disk_free_bytes": 20672974848,
+      "host_memory_active_wired_compressed_bytes": 14840233984,
+      "host_process_cpu_percent_sum": 773.7,
+      "selected_process_cpu_percent": 16.0,
+      "selected_process_rss_bytes": 254656512
+    },
+    {
+      "elapsed": 490264.89569225,
+      "load_average": [
+        17.4482421875,
+        10.958984375,
+        9.89892578125
+      ],
+      "disk_free_bytes": 20673089536,
+      "host_memory_active_wired_compressed_bytes": 14797897728,
+      "host_process_cpu_percent_sum": 713.0,
+      "selected_process_cpu_percent": 12.4,
+      "selected_process_rss_bytes": 260046848
+    },
+    {
+      "elapsed": 490265.945824583,
+      "load_average": [
+        17.4482421875,
+        10.958984375,
+        9.89892578125
+      ],
+      "disk_free_bytes": 20672950272,
+      "host_memory_active_wired_compressed_bytes": 14987296768,
+      "host_process_cpu_percent_sum": 753.6999999999999,
+      "selected_process_cpu_percent": 20.700000000000003,
+      "selected_process_rss_bytes": 262684672
+    },
+    {
+      "elapsed": 490267.003578208,
+      "load_average": [
+        17.4482421875,
+        10.958984375,
+        9.89892578125
+      ],
+      "disk_free_bytes": 20673118208,
+      "host_memory_active_wired_compressed_bytes": 15186411520,
+      "host_process_cpu_percent_sum": 703.3,
+      "selected_process_cpu_percent": 21.9,
+      "selected_process_rss_bytes": 262946816
+    },
+    {
+      "elapsed": 490268.068678458,
+      "load_average": [
+        17.4482421875,
+        10.958984375,
+        9.89892578125
+      ],
+      "disk_free_bytes": 20672217088,
+      "host_memory_active_wired_compressed_bytes": 15458877440,
+      "host_process_cpu_percent_sum": 951.4,
+      "selected_process_cpu_percent": 13.399999999999999,
+      "selected_process_rss_bytes": 206520320
+    },
+    {
+      "elapsed": 490269.168805416,
+      "load_average": [
+        17.4482421875,
+        10.958984375,
+        9.89892578125
+      ],
+      "disk_free_bytes": 20671561728,
+      "host_memory_active_wired_compressed_bytes": 15579611136,
+      "host_process_cpu_percent_sum": 813.2,
+      "selected_process_cpu_percent": 22.5,
+      "selected_process_rss_bytes": 251576320
+    },
+    {
+      "elapsed": 490270.240898083,
+      "load_average": [
+        17.65234375,
+        11.10888671875,
+        9.9580078125
+      ],
+      "disk_free_bytes": 20669673472,
+      "host_memory_active_wired_compressed_bytes": 15593062400,
+      "host_process_cpu_percent_sum": 734.6,
+      "selected_process_cpu_percent": 33.8,
+      "selected_process_rss_bytes": 258342912
+    },
+    {
+      "elapsed": 490271.290169083,
+      "load_average": [
+        17.65234375,
+        11.10888671875,
+        9.9580078125
+      ],
+      "disk_free_bytes": 20669108224,
+      "host_memory_active_wired_compressed_bytes": 15633022976,
+      "host_process_cpu_percent_sum": 781.3000000000001,
+      "selected_process_cpu_percent": 8.3,
+      "selected_process_rss_bytes": 253542400
+    },
+    {
+      "elapsed": 490272.354555833,
+      "load_average": [
+        17.65234375,
+        11.10888671875,
+        9.9580078125
+      ],
+      "disk_free_bytes": 20669759488,
+      "host_memory_active_wired_compressed_bytes": 15525396480,
+      "host_process_cpu_percent_sum": 724.2,
+      "selected_process_cpu_percent": 14.799999999999999,
+      "selected_process_rss_bytes": 259555328
+    },
+    {
+      "elapsed": 490273.403971958,
+      "load_average": [
+        17.65234375,
+        11.10888671875,
+        9.9580078125
+      ],
+      "disk_free_bytes": 20672270336,
+      "host_memory_active_wired_compressed_bytes": 15433416704,
+      "host_process_cpu_percent_sum": 852.0,
+      "selected_process_cpu_percent": 14.6,
+      "selected_process_rss_bytes": 213155840
+    },
+    {
+      "elapsed": 490274.472801333,
+      "load_average": [
+        17.65234375,
+        11.10888671875,
+        9.9580078125
+      ],
+      "disk_free_bytes": 20671238144,
+      "host_memory_active_wired_compressed_bytes": 15565881344,
+      "host_process_cpu_percent_sum": 786.6,
+      "selected_process_cpu_percent": 11.200000000000001,
+      "selected_process_rss_bytes": 227475456
+    },
+    {
+      "elapsed": 490275.550788458,
+      "load_average": [
+        16.79931640625,
+        11.04052734375,
+        9.9404296875
+      ],
+      "disk_free_bytes": 20670734336,
+      "host_memory_active_wired_compressed_bytes": 15614869504,
+      "host_process_cpu_percent_sum": 635.0,
+      "selected_process_cpu_percent": 5.8,
+      "selected_process_rss_bytes": 238649344
+    }
+  ],
+  "bounds": {
+    "stage_timeout_seconds": 600.0,
+    "max_error_rate": 0.1,
+    "max_throttle_rate": 0.5,
+    "advisory_capacity_retries": 20
+  },
+  "topology": {
+    "scope": "disposable local developer rehearsal",
+    "os": "macOS-26.6-arm64-arm-64bit",
+    "client_and_services_share_host": true,
+    "backend_processes": 1,
+    "worker_processes": 2,
+    "broker_processes": 1,
+    "docker_cpus": 11,
+    "docker_memory_bytes": 8217174016,
+    "database": "Postgres 16.11, tmpfs, no existing volumes",
+    "runner_limit": 4,
+    "migrations_applied": true,
+    "paid_ai_disabled": true,
+    "image_pinning": "local development tags"
+  },
+  "workflow_completed": false,
+  "capacity_validated": false,
+  "capacity_scope": "Local workflow measurement; deployed resource headroom and latency acceptance remain unverified",
+  "latency_scope": "All HTTP outcomes. Successful-response-only quantiles are available in subsequent runs."
+}

@@ -20,6 +20,9 @@ if [[ -f "${DEPLOY_DIR}/.env" ]]; then
     # shellcheck disable=SC1090
     set -a; source "${DEPLOY_DIR}/.env"; set +a
 fi
+MAX_GRADING_QUEUE_AGE_SECONDS="${MAX_GRADING_QUEUE_AGE_SECONDS:-${PROMPTCODE_GRADING_QUEUE_ALERT_SECONDS:-300}}"
+GRADING_FAILED_ALERT_JOBS="${PROMPTCODE_GRADING_FAILED_ALERT_JOBS:-1}"
+MAX_GRADING_FAILED_JOBS="${MAX_GRADING_FAILED_JOBS:-$((GRADING_FAILED_ALERT_JOBS - 1))}"
 
 PROMPTCODE_DB_USER="${PROMPTCODE_DB_USER:-promptcode}"
 PROMPTCODE_DB_NAME="${PROMPTCODE_DB_NAME:-promptcode}"
@@ -45,6 +48,10 @@ fi
 
 WORKER_HEARTBEAT_AGE="$(sql "SELECT COALESCE(MAX(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_seen_at))), 999999) FROM worker_heartbeats;")"
 QUEUE_DEPTH="$(sql "SELECT COUNT(*) FROM evaluation_jobs WHERE status IN ('queued','running');")"
+GRADING_QUEUE_DEPTH="$(sql "SELECT COUNT(*) FROM interview_grading_jobs WHERE status IN ('queued','running');")"
+GRADING_FAILED="$(sql "SELECT COUNT(*) FROM interview_grading_jobs WHERE status='failed';")"
+GRADING_STALE="$(sql "SELECT COUNT(*) FROM interview_grading_jobs WHERE status='running' AND lease_expires_at <= CURRENT_TIMESTAMP;")"
+GRADING_QUEUE_AGE="$(sql "SELECT COALESCE(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - MIN(created_at))),0) FROM interview_grading_jobs WHERE status='queued';")"
 LAST_DEPLOY_STATUS="$(cat "${LAST_DEPLOY_STATUS_FILE}" 2>/dev/null || echo 'unknown')"
 
 if [[ -f "${LAST_BACKUP_FILE}" ]]; then
@@ -59,6 +66,14 @@ BACKUP_AGE="$((NOW_EPOCH - LAST_BACKUP_EPOCH))"
 
 printf '[check] worker_heartbeat_age_seconds=%s queue_depth=%s backup_age_seconds=%s last_deploy_status=%s\n' \
   "${WORKER_HEARTBEAT_AGE}" "${QUEUE_DEPTH}" "${BACKUP_AGE}" "${LAST_DEPLOY_STATUS}"
+printf '[check] grading_pending=%s grading_failed=%s grading_stale_leases=%s grading_oldest_queued_seconds=%s\n' \
+  "${GRADING_QUEUE_DEPTH}" "${GRADING_FAILED}" "${GRADING_STALE}" "${GRADING_QUEUE_AGE}"
+
+if (( GRADING_QUEUE_DEPTH > MAX_QUEUE_DEPTH || GRADING_FAILED > MAX_GRADING_FAILED_JOBS || GRADING_STALE > 0 )) \
+  || awk "BEGIN { exit !(${GRADING_QUEUE_AGE} > ${MAX_GRADING_QUEUE_AGE_SECONDS}) }"; then
+    echo '[check] Grading backlog, failed job, or expired lease requires attention.' >&2
+    exit 1
+fi
 
 if awk "BEGIN { exit !(${WORKER_HEARTBEAT_AGE} > ${MAX_WORKER_HEARTBEAT_AGE_SECONDS}) }"; then
     echo "[check] Worker heartbeat age exceeded ${MAX_WORKER_HEARTBEAT_AGE_SECONDS}s." >&2

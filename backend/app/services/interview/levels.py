@@ -1,214 +1,225 @@
-"""One step at a time. Future feature levels are not included in the payload."""
+"""One interview ticket per challenge. The suite is the bar."""
 
 from __future__ import annotations
 
 from typing import Any
 
-# Each task: a situation, then a bug, then feature levels in order.
-# Bodies are the only instructions for that step. Do not mention later steps.
+# Each task is one engineering ticket. The kind is the work.
+# problem and body are the whole brief. guide is the order of work, not hidden requirements.
+GUIDE = [
+    "First, read the codebase and run the tests so you can see what fails.",
+    "Then, open the code those failures touch. Ask the assistant about one piece, and check the suggestion against the file before you accept it.",
+    "Then, run the tests again and read the failure before the next edit.",
+    "Submit when the suite is green. You will be asked what you kept and what you rejected.",
+]
 TASKS: dict[str, dict[str, Any]] = {
     "invoice-status-transition": {
-        "problem": "You cover billing today. Finance says invoice inv_paid was paid in Stripe and then showed up as draft again. They want it stable before the next close.",
+        "problem": (
+            "You are the billing engineer on call before month-end close. "
+            "Finance collected invoice inv_paid, then this service showed it as draft. "
+            "Draft is the editable state, so a paid invoice that looks like a draft can change after money has moved. "
+            "Work in this repo with the assistant. A suggestion is a draft until the tests agree."
+        ),
         "levels": [
             {
-                "kind": "bug",
-                "title": "The paid invoice flipped",
-                "body": "inv_paid must not go back to draft. Someone will tell you it is the timezone formatting from last sprint. Check the status rules first. A paid invoice stays paid unless it is voided.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 1 — legal moves still work",
-                "body": "Draft can go to sent, sent can go to paid, and paid can go to void. Void has nowhere left to go. Do not break those paths while you block the bad one.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 2 — the API refuses a bad move",
-                "body": "POST /invoices/:id/transition returns 409 when the move is illegal, including sent back to draft. The invoice stays where it was.",
+                "kind": "incident",
+                "title": "Invoice status",
+                "body": (
+                    "A paid invoice stays paid unless it is voided. Void is the cancellation that keeps a paper trail. "
+                    "These moves still succeed: draft to sent, draft to void, sent to paid, sent to void, and paid to void. "
+                    "Void is terminal. A status moved onto itself is not a transition. "
+                    "POST /invoices/:id/transition returns 409 when the move is illegal, including sent back to draft, and the stored status stays as it was. "
+                    "A missing invoice is a different failure from an illegal move. "
+                    "Statuses are draft, sent, paid, and void. Amounts are integer cents. "
+                    "A teammate says last sprint’s date formatter rewrote the status. That is a hypothesis. Run npm test."
+                ),
             },
         ],
     },
     "order-hold-reason": {
-        "problem": "You are on the orders API. Support puts orders on hold and then cannot tell a teammate why. Old rows in the database have no reason at all.",
+        "problem": (
+            "You are on the orders API during a warehouse freeze. "
+            "Support puts an order on hold with a reason, then the next read cannot say why it is held, or the hold does not survive a refresh. "
+            "Orders created before this field existed are still in the database. "
+            "Work in this repo with the assistant. A suggestion is a draft until the tests agree."
+        ),
         "levels": [
             {
-                "kind": "bug",
-                "title": "The hold does not stick",
-                "body": "Holding an order and releasing it must persist. A reason written on hold has to still be there after you read the order back. Releasing clears the hold.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 1 — save hold_reason",
-                "body": "POST /orders/:id/hold stores hold_reason. The value you saved is the value you read. Empty and missing are not the same as a real reason.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 2 — old orders stay null",
-                "body": "GET returns hold_reason. Orders that never had a reason come back null, not an empty string and not a made-up default.",
+                "kind": "change",
+                "title": "Order hold",
+                "body": (
+                    "POST /orders/:id/hold with a hold_reason stores that reason and returns the order as on_hold. "
+                    "The following GET returns the same reason. "
+                    "POST /orders/:id/release returns the order as open. "
+                    "Orders that never had a reason come back with hold_reason null. "
+                    "Money is total_cents, an integer. "
+                    "People are blaming the metrics counter. That is a hypothesis. Run pytest -q."
+                ),
             },
         ],
     },
     "catalog-suggest-latency": {
-        "problem": "You are on catalog. Typing in electronics makes suggest() feel hung. Product wants the same ranking shoppers see today, only faster.",
+        "problem": (
+            "You are on catalog search. Shoppers typing in electronics wait long enough that suggest feels hung. "
+            "Product will ship a faster list only if it ranks the same products in the same order as today. "
+            "The catalog in this repo is in memory, about 10,000 products, with id, title, category, popularity, and tokens. "
+            "Work in this repo with the assistant. A suggestion is a draft until the tests agree."
+        ),
         "levels": [
             {
-                "kind": "bug",
-                "title": "Suggest is doing too much work",
-                "body": "A query scans far more of the catalog than it should. The scan counter in the tests is the evidence. Caching is a guess people will offer you. Measure the scan before you add a cache.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 1 — same order, less work",
-                "body": "Results stay in the current rank order. Tie breaks stay as they are. You are changing how the work is done, not which product wins.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 2 — hit the budget",
-                "body": "The latency and scan budgets in the tests have to pass on the large catalog, including the electronics queries that hang today.",
+                "kind": "performance",
+                "title": "Search suggest",
+                "body": (
+                    "suggest stays in the current rank order: higher score, then higher popularity, then id ascending. "
+                    "On the 10,000-product catalog the tests build, a query finishes in under 200ms and the scan counter stays under 20,000. "
+                    "A cache in front of suggest is a hypothesis. Measure the work a query does before you add one. Run npm test."
+                ),
             },
         ],
     },
     "notification-feed-stale": {
-        "problem": "You are on the notification feed. You mark items read and the unread badge stays. It gets worse if you click two of them quickly.",
+        "problem": (
+            "You are on the notification feed. A user marks an item read and the unread badge stays. "
+            "Two quick marks are worse: one of them disappears, and the badge does not match the rows. "
+            "Support has a screenshot of a badge that says 2 while the visible rows say read. "
+            "Work in this repo with the assistant. A suggestion is a draft until the tests agree."
+        ),
         "levels": [
             {
-                "kind": "bug",
-                "title": "The badge sticks",
-                "body": "Marking an item read has to update the row and the unread count. A React key is the rumor. Watch what happens to state when the request comes back.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 1 — one mark, one update",
-                "body": "After a successful mark-as-read, that item shows as read and the badge drops by one. A failed mark does not pretend it worked.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 2 — two quick clicks",
-                "body": "Marking two items read in a row must not drop one of the updates. Both rows and the badge match the server when the clicks finish.",
+                "kind": "consistency",
+                "title": "Notification feed",
+                "body": (
+                    "unreadCount is how many notifications have read set to false. "
+                    "After the feed loads, the badge shows that count. "
+                    "Marking one item read leaves that row read and drops the badge by one. "
+                    "Marking two items read together leaves both rows read, and the badge matches when both calls finish. "
+                    "A row that was already read stays read. "
+                    "Someone says the React list key is wrong. That is a hypothesis. Run npm test."
+                ),
             },
         ],
     },
     "workspace-label-propagation": {
-        "problem": "You are on tickets. The workspace already has a fixed set of labels. People are pasting free-text tags into tickets because the real labels never show up.",
+        "problem": (
+            "You are on tickets. The workspace already has a fixed set of labels. "
+            "Agents are pasting tags into the title because the labels they check are gone after save, so the queue filters lie. "
+            "Work in this repo with the assistant. A suggestion is a draft until the tests agree."
+        ),
         "levels": [
             {
-                "kind": "bug",
-                "title": "Labels disappear on save",
-                "body": "Choosing workspace labels and saving the ticket must keep those label ids. A ticket that had labels still has them when you load it again.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 1 — only real labels",
-                "body": "Reject a label id that is not in this workspace. Do not store free-text tags beside the real ids.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 2 — the API matches",
-                "body": "PUT and GET return the same labelIds. The list is the workspace labels you saved, in a stable order.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 3 — the screen matches the API",
-                "body": "The ticket UI shows the labels the server stored. After a save, the screen and GET tell the same story.",
+                "kind": "change",
+                "title": "Ticket labels",
+                "body": (
+                    "A label is an id and a name, scoped to one workspace. A ticket stores label ids. "
+                    "PUT /tickets/:id/labels with ids from that workspace returns those ids, and the next GET returns the same ids. "
+                    "An id that is not in the workspace is rejected with 400. "
+                    "The ticket screen shows the label ids the server stored. "
+                    "The export spreadsheet is a hypothesis for where labels went. Run npm test."
+                ),
             },
         ],
     },
     "shipment-csv-merge": {
-        "problem": "You own the nightly shipment merge. Two days of CSV landed out of order, and a quantity that should have been counted once was counted twice.",
+        "problem": (
+            "You own the nightly shipment merge. Warehouse drops two CSV files that landed out of order. "
+            "A shipment timeline showed a later status before an earlier one, and a quantity that should have been counted once was counted twice. "
+            "Ops almost shorted a replenishment on the doubled count. "
+            "Work in this repo with the assistant. A suggestion is a draft until the tests agree."
+        ),
         "levels": [
             {
-                "kind": "bug",
-                "title": "The timeline is scrambled",
-                "body": "Events from different files have to come out in timestamp order. A comma inside a CSV field is the rumor. Get the order right before you rewrite the parser.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 1 — one event, one count",
-                "body": "The same event_id in two files counts once. Quantity must not double because the file was merged twice.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 2 — same status is not a duplicate",
-                "body": "Two events with the same status and different ids both stay. Deduping is by event id, not by status text.",
+                "kind": "incident",
+                "title": "Shipment CSV",
+                "body": (
+                    "Events from separate files come out in timestamp order for each shipment. "
+                    "The same event_id in two files counts once. total quantity is what ops ships against. "
+                    "Two events with the same status and different ids both stay, in timestamp order. "
+                    "A shipment can be in_transit in two different events. "
+                    "A teammate thinks a comma inside a CSV field broke the parser. That is a hypothesis. Run pytest -q."
+                ),
             },
         ],
     },
     "tenant-document-acl": {
-        "problem": "You are on documents. Someone at Acme opened /documents/doc_globex_1 and saw Globex’s file. They should not learn that the file exists.",
+        "problem": (
+            "You are on documents. Someone at Acme opened /documents/doc_globex_1 and received Globex’s title and body. "
+            "They should not learn that the file exists. Acme and Globex are two tenants. "
+            "Each request carries a bearer token that maps to a user and a tenant. "
+            "Work in this repo with the assistant. A suggestion is a draft until the tests agree."
+        ),
         "levels": [
             {
-                "kind": "bug",
-                "title": "The other tenant’s file opened",
-                "body": "A document id from another org must not return content. People will blame the CDN. Check which tenant the request is allowed to see.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 1 — hide it",
-                "body": "Cross-tenant GET responds 404, not 403. The body does not include the other tenant’s title or text.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 2 — same tenant still works",
-                "body": "Acme can still GET and PATCH its own documents. A fix that blocks everyone is not done.",
+                "kind": "security",
+                "title": "Document access",
+                "body": (
+                    "GET and PATCH for a document id from another tenant respond 404. The body does not include that tenant’s title or text. "
+                    "A missing id is also 404. "
+                    "Acme can still GET its own documents, and the list route still returns only the caller’s tenant. "
+                    "Globex can still read Globex documents. "
+                    "A missing or unknown token is 401. "
+                    "People will blame a CDN cache. That is a hypothesis. Run pytest -q."
+                ),
             },
         ],
     },
     "webhook-delivery-retry": {
-        "problem": "You are on webhooks. A 5xx retries the delivery, finance sees the charge twice, and a flush of the queue melts staging.",
+        "problem": (
+            "You are on outbound webhooks. Receivers sometimes answer 500, and the worker retries. "
+            "Finance then sees the charge recorded twice for one delivery. "
+            "A flush of the pending queue also made staging fall over. "
+            "Delivery is at-least-once. A retry after a 5xx is normal. "
+            "Work in this repo with the assistant. A suggestion is a draft until the tests agree."
+        ),
         "levels": [
             {
-                "kind": "bug",
-                "title": "The retry charged them twice",
-                "body": "Retrying a delivery must not run the side effect again when that delivery already succeeded once. Stop the duplicate before you tune throughput.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 1 — a retry is safe",
-                "body": "A second attempt for the same delivery does not double-apply. Failures that never succeeded can still be retried.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 2 — don’t fire the whole queue",
-                "body": "Flushing pending deliveries runs about five at a time, not the entire batch at once.",
+                "kind": "delivery",
+                "title": "Webhook retry",
+                "body": (
+                    "A delivery that fails and then succeeds still records the charge once for that delivery id. "
+                    "Attempts stop at the retry policy’s max. "
+                    "Flushing a batch keeps at most about five posts in flight at once. "
+                    "Lowering the timeout is a hypothesis. The duplicate charge is the incident. Run npm test."
+                ),
             },
         ],
     },
     "pricing-rule-extract": {
-        "problem": "You are in pricing. Quotes are correct. The rule loop is buried in quote(), and the next change will be risky until that loop has a name.",
+        "problem": (
+            "You are in pricing. Quotes are correct, and finance trusts the golden cents. "
+            "The rule loop is buried inside quote(), and the next pricing change is unsafe until that loop can be read on its own. "
+            "Percent-off and amount-off do not commute once you round. "
+            "Work in this repo with the assistant. A suggestion is a draft until the tests agree."
+        ),
         "levels": [
             {
-                "kind": "bug",
-                "title": "A careless extract changes the price",
-                "body": "Pulling the loop out must not change a single quoted cent. If a golden test moves, the extract is wrong, not the test. Do not edit the expectations.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 1 — applyRules",
-                "body": "Add applyRules(baseCents, rules). It applies the rules in the same order, with the same rounding, and returns the same cents the loop returns today.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 2 — quote uses it",
-                "body": "quote() calls applyRules and keeps its current signature. Callers do not change. The goldens stay green.",
+                "kind": "refactor",
+                "title": "Pricing rules",
+                "body": (
+                    "Add applyRules(baseCents, rules). It applies percent_off, then amount_off, then surcharge_percent, with the same half-up rounding, and returns the same finalCents and applied codes as quote(). "
+                    "quote() calls applyRules and keeps its current signature. "
+                    "A negative result floors at 0. An empty rule list returns the base. "
+                    "If a golden cent moves, the extract is wrong. Leave the expectations alone. Run npm test."
+                ),
             },
         ],
     },
     "subscription-proration-boundary": {
-        "problem": "You are on subscriptions. A customer canceled exactly when the period rolled and got a credit they should not have. Support thinks the Chicago clock display is wrong again.",
+        "problem": (
+            "You are on subscriptions. A customer canceled exactly when the billing period rolled and the books treated that instant as still inside the period. "
+            "Support thinks the Chicago clock display is wrong again. "
+            "The credit is computed from the stored period and the cancel instant. The display helper only formats that instant. "
+            "Work in this repo with the assistant. A suggestion is a draft until the tests agree."
+        ),
         "levels": [
             {
-                "kind": "bug",
-                "title": "The credit at the boundary is wrong",
-                "body": "Canceling exactly at period end credits nothing. The public tests you already have can stay green while this case is still wrong. The display timezone is the rumor. Check how the period end is treated.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 1 — the end is exclusive",
-                "body": "Time inside the period still prorates. The instant at period.end is not inside the period.",
-            },
-            {
-                "kind": "feature",
-                "title": "Feature 2 — the tests you were given stay green",
-                "body": "The existing unit tests pass without edits. The boundary case and the older cases agree.",
+                "kind": "incident",
+                "title": "Period boundary",
+                "body": (
+                    "The instant at period end is outside the period and credits nothing. "
+                    "The instant at period start is inside. A cancel in the middle of the period still gets a credit. "
+                    "A cancel before the period credits nothing. "
+                    "The tests that already describe those cases stay as they are. Leave them alone and make the boundary agree with them. Run pytest -q."
+                ),
             },
         ],
     },
@@ -245,6 +256,7 @@ def level_view(slug: str, index: int, *, tests_on_step: int) -> dict[str, Any] |
         "title": current["title"],
         "body": current["body"],
         "problem": task["problem"],
+        "guide": list(GUIDE),
         "can_advance": index < len(levels) - 1 and tests_on_step > 0,
         "is_last": index == len(levels) - 1,
         "earlier": earlier,

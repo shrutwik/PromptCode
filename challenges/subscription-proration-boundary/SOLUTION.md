@@ -4,7 +4,7 @@
 `contains` uses inclusive end. Cancel at period.end still in-period.
 
 ## Investigation path
-Public tests pass → probe cancel_at == end → period.contains.
+Existing mid-period cases stay green. The period-end case fails until `contains` treats `period.end` as outside.
 
 ## Reference implementation
 ```python
@@ -32,7 +32,7 @@ Patch display only; make start exclusive too.
 Exact end; last second of period; DST display vs UTC storage.
 
 ## Verification
-Public pytest green; hidden boundary cases pass after fix.
+`pytest -q` is red on the period-end case until `contains` is half-open, then the suite is green.
 
 ## Complexity
 Medium, 25–35 min. Looks-correct.

@@ -62,7 +62,7 @@ def _run_validate_env(tmp_path: Path, *, env_text: str, compose_text: str, confi
 
 def _run_validate_host_env(tmp_path: Path, env_text: str):
     deploy_dir = tmp_path / "deploy"
-    deploy_dir.mkdir(parents=True)
+    deploy_dir.mkdir(parents=True, exist_ok=True)
     _write(deploy_dir / ".env", env_text)
     return subprocess.run(
         ["bash", str(VALIDATE_HOST_ENV_SCRIPT)],
@@ -109,6 +109,7 @@ def _run_validate_prod_host(
     include_rclone: bool = True,
     include_caddyfile: bool = True,
     include_seed_script: bool = True,
+    include_cleanup_script: bool = True,
     cron_entries: str = "",
 ):
     deploy_dir = tmp_path / "deploy"
@@ -125,7 +126,10 @@ def _run_validate_prod_host(
                 "DOMAIN=api.example.com",
                 "PROMPTCODE_DB_PASSWORD=prod-db-password",
                 "PROMPTCODE_JWT_SECRET=prod-jwt-secret-0123456789abcdef",
-                "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=prod-sandbox-secret-0123456789",
+                "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=prod-sandbox-secret-0123456789-extra-bytes",
+                "PROMPTCODE_EXECUTION_BROKER_URL=https://execution.example.com",
+                "PROMPTCODE_GRADING_SIGNING_KEY=test-signing-key-32bytes-minimum-value",
+                "PROMPTCODE_INTERVIEW_INTERNAL_TOKEN=test-internal-token-32bytes-minimum",
                 "PROMPTCODE_OPENAI_API_KEY=sk-live-prod-key",
                 "PROMPTCODE_METRICS_TOKEN=metrics-secret",
                 "RCLONE_REMOTE=s3:promptcode/backups",
@@ -147,10 +151,13 @@ def _run_validate_prod_host(
         "restore-db.sh",
         "seed-prod-data.sh",
         "check-prod-health.sh",
+        "cleanup-interview.sh",
         "validate-host-env.sh",
         "setup-ghcr-login.sh",
     ):
         if script_path == "seed-prod-data.sh" and not include_seed_script:
+            continue
+        if script_path == 'cleanup-interview.sh' and not include_cleanup_script:
             continue
         target = deploy_scripts / script_path
         target.write_text((REPO_ROOT / "scripts" / script_path).read_text(encoding="utf-8"), encoding="utf-8")
@@ -301,6 +308,9 @@ def _run_check_prod_health(
     backup_age_seconds: int = 300,
     last_deploy_status: str = "success 123 abcdef",
     capture_mktemp: bool = False,
+    grading_failed: str = '0',
+    grading_stale: str = '0',
+    grading_queue_age: str = '0',
 ):
     deploy_dir = tmp_path / "deploy"
     backups_dir = deploy_dir / "backups"
@@ -331,6 +341,11 @@ elif [[ "$cmd" == *"worker_heartbeats"* ]]; then
   printf '%s\\n' "${FAKE_HEARTBEAT_AGE}"
 elif [[ "$cmd" == *"evaluation_jobs"* ]]; then
   printf '%s\\n' "${FAKE_QUEUE_DEPTH}"
+elif [[ "$cmd" == *"interview_grading_jobs"* ]]; then
+  if [[ "$cmd" == *"status='failed'"* ]]; then printf '%s\\n' "${FAKE_GRADING_FAILED}";
+  elif [[ "$cmd" == *"lease_expires_at"* ]]; then printf '%s\\n' "${FAKE_GRADING_STALE}";
+  elif [[ "$cmd" == *"MIN(created_at)"* ]]; then printf '%s\\n' "${FAKE_GRADING_QUEUE_AGE}";
+  else printf '0\\n'; fi
 else
   echo "unexpected docker invocation: $cmd" >&2
   exit 1
@@ -357,6 +372,9 @@ printf '%s\\n' {str(metrics_status_file)!r}
     env["FAKE_METRICS_STATUS"] = metrics_status
     env["FAKE_HEARTBEAT_AGE"] = heartbeat_age
     env["FAKE_QUEUE_DEPTH"] = queue_depth
+    env['FAKE_GRADING_FAILED'] = grading_failed
+    env['FAKE_GRADING_STALE'] = grading_stale
+    env['FAKE_GRADING_QUEUE_AGE'] = grading_queue_age
 
     result = subprocess.run(
         ["bash", str(CHECK_PROD_HEALTH_SCRIPT)],
@@ -375,6 +393,8 @@ def _prepare_operational_script_fixture(tmp_path: Path) -> tuple[Path, Path, Pat
 
     backups_dir.mkdir(parents=True)
     fake_bin.mkdir(parents=True)
+    artifact_root = deploy_dir / 'artifacts'
+    (artifact_root / '.submitted').mkdir(parents=True)
     _write(deploy_dir / "docker-compose.yml", "services: {}\n")
     _write(deploy_dir / "docker-compose.prod.yml", "services: {}\n")
     _write(
@@ -385,6 +405,7 @@ def _prepare_operational_script_fixture(tmp_path: Path) -> tuple[Path, Path, Pat
                 "PROMPTCODE_DB_USER=test-user",
                 "PROMPTCODE_DB_NAME=test-db",
                 f"RCLONE_REMOTE={tmp_path / 'remote'}",
+                f"BACKUP_ARTIFACT_ROOT={artifact_root}",
                 "",
             ]
         ),
@@ -738,10 +759,11 @@ def test_deploy_workflow_uses_extended_ssh_connection_timeout() -> None:
     assert workflow_text.count("timeout: ${{ env.DEPLOY_SSH_TIMEOUT }}") >= 6
 
 
-def test_prod_compose_defaults_database_ssl_to_true() -> None:
+def test_prod_compose_defaults_database_ssl_to_false_for_bundled_postgres() -> None:
     compose_text = DOCKER_COMPOSE_PROD.read_text(encoding="utf-8")
 
-    assert 'PROMPTCODE_DATABASE_SSL_REQUIRE: ${PROMPTCODE_DATABASE_SSL_REQUIRE:-true}' in compose_text
+    assert 'PROMPTCODE_DATABASE_SSL_REQUIRE: ${PROMPTCODE_DATABASE_SSL_REQUIRE:-false}' in compose_text
+    assert "PROMPTCODE_RUNNER: docker" in compose_text
 
 
 def test_runtime_images_use_version_pinned_tags() -> None:
@@ -844,7 +866,10 @@ def test_validate_host_env_script_accepts_private_ghcr_credentials(tmp_path: Pat
                 "DOMAIN=api.example.com",
                 "PROMPTCODE_DB_PASSWORD=prod-db-password",
                 "PROMPTCODE_JWT_SECRET=prod-jwt-secret-0123456789abcdef",
-                "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=prod-sandbox-secret-0123456789",
+                "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=prod-sandbox-secret-0123456789-extra-bytes",
+                "PROMPTCODE_EXECUTION_BROKER_URL=https://execution.example.com",
+                "PROMPTCODE_GRADING_SIGNING_KEY=test-signing-key-32bytes-minimum-value",
+                "PROMPTCODE_INTERVIEW_INTERNAL_TOKEN=test-internal-token-32bytes-minimum",
                 "PROMPTCODE_OPENAI_API_KEY=sk-live-prod-key",
                 "PROMPTCODE_METRICS_TOKEN=metrics-secret",
                 "RCLONE_REMOTE=s3:promptcode/backups",
@@ -867,7 +892,10 @@ def test_validate_host_env_script_accepts_public_ghcr_images_without_credentials
                 "DOMAIN=api.example.com",
                 "PROMPTCODE_DB_PASSWORD=prod-db-password",
                 "PROMPTCODE_JWT_SECRET=prod-jwt-secret-0123456789abcdef",
-                "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=prod-sandbox-secret-0123456789",
+                "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=prod-sandbox-secret-0123456789-extra-bytes",
+                "PROMPTCODE_EXECUTION_BROKER_URL=https://execution.example.com",
+                "PROMPTCODE_GRADING_SIGNING_KEY=test-signing-key-32bytes-minimum-value",
+                "PROMPTCODE_INTERVIEW_INTERNAL_TOKEN=test-internal-token-32bytes-minimum",
                 "PROMPTCODE_OPENAI_API_KEY=sk-live-prod-key",
                 "PROMPTCODE_METRICS_TOKEN=metrics-secret",
                 "RCLONE_REMOTE=s3:promptcode/backups",
@@ -889,7 +917,10 @@ def test_validate_host_env_script_rejects_missing_ghcr_setup_for_private_images(
                 "DOMAIN=api.example.com",
                 "PROMPTCODE_DB_PASSWORD=prod-db-password",
                 "PROMPTCODE_JWT_SECRET=prod-jwt-secret-0123456789abcdef",
-                "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=prod-sandbox-secret-0123456789",
+                "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=prod-sandbox-secret-0123456789-extra-bytes",
+                "PROMPTCODE_EXECUTION_BROKER_URL=https://execution.example.com",
+                "PROMPTCODE_GRADING_SIGNING_KEY=test-signing-key-32bytes-minimum-value",
+                "PROMPTCODE_INTERVIEW_INTERNAL_TOKEN=test-internal-token-32bytes-minimum",
                 "PROMPTCODE_OPENAI_API_KEY=sk-live-prod-key",
                 "PROMPTCODE_METRICS_TOKEN=metrics-secret",
                 "RCLONE_REMOTE=s3:promptcode/backups",
@@ -910,6 +941,7 @@ def test_validate_prod_host_script_passes_with_required_dependencies(tmp_path: P
         cron_entries=(
             f"0 3 * * * bash {deploy_dir}/scripts/backup-db.sh\n"
             f"*/5 * * * * bash {deploy_dir}/scripts/check-prod-health.sh\n"
+            f"0 4 * * * bash {deploy_dir}/scripts/cleanup-interview.sh\n"
         ),
     )
 
@@ -922,6 +954,7 @@ def test_validate_prod_host_script_passes_with_required_dependencies(tmp_path: P
     [
         ({"include_caddyfile": False}, "docker/Caddyfile.prod"),
         ({"include_seed_script": False}, "scripts/seed-prod-data.sh"),
+        ({"include_cleanup_script": False}, "scripts/cleanup-interview.sh"),
     ],
 )
 def test_validate_prod_host_script_requires_deploy_assets(
@@ -935,6 +968,7 @@ def test_validate_prod_host_script_requires_deploy_assets(
         cron_entries=(
             f"0 3 * * * bash {deploy_dir}/scripts/backup-db.sh\n"
             f"*/5 * * * * bash {deploy_dir}/scripts/check-prod-health.sh\n"
+            f"0 4 * * * bash {deploy_dir}/scripts/cleanup-interview.sh\n"
         ),
         **kwargs,
     )
@@ -951,6 +985,7 @@ def test_validate_prod_host_script_requires_rclone(tmp_path: Path):
         cron_entries=(
             f"0 3 * * * bash {deploy_dir}/scripts/backup-db.sh\n"
             f"*/5 * * * * bash {deploy_dir}/scripts/check-prod-health.sh\n"
+            f"0 4 * * * bash {deploy_dir}/scripts/cleanup-interview.sh\n"
         ),
     )
 
@@ -967,6 +1002,33 @@ def test_validate_prod_host_script_requires_backup_and_health_crons(tmp_path: Pa
 
     assert result.returncode == 1
     assert "Health-check cron is missing" in result.stderr
+
+
+def test_validate_prod_host_requires_scheduled_source_cleanup(tmp_path: Path):
+    deploy_dir = tmp_path / 'deploy'
+    result = _run_validate_prod_host(tmp_path, cron_entries=(
+        f'0 3 * * * bash {deploy_dir}/scripts/backup-db.sh\n'
+        f'*/5 * * * * bash {deploy_dir}/scripts/check-prod-health.sh\n'))
+    assert result.returncode != 0
+    assert 'Interview cleanup cron is missing' in result.stderr
+
+
+def test_cleanup_host_wrapper_dispatches_in_backend_container(tmp_path: Path):
+    deploy_dir, _, fake_bin = _prepare_operational_script_fixture(tmp_path)
+    capture = tmp_path / 'cleanup-command.txt'
+    _write(fake_bin / 'docker', '#!/usr/bin/env bash\nset -euo pipefail\nprintf "%s\\n" "$@" > "${FAKE_CAPTURE}"\n')
+    (fake_bin / 'docker').chmod(0o755)
+    result = subprocess.run(['bash', str(REPO_ROOT / 'scripts' / 'cleanup-interview.sh')],
+        capture_output=True, text=True, env={**os.environ, 'DEPLOY_DIR': str(deploy_dir),
+            'PATH': f"{fake_bin}:{os.environ['PATH']}", 'FAKE_CAPTURE': str(capture)})
+    assert result.returncode == 0
+    args = capture.read_text().splitlines()
+    assert args == ['compose', '-f', str(deploy_dir / 'docker-compose.yml'), '-f',
+        str(deploy_dir / 'docker-compose.prod.yml'), 'exec', '-T', 'backend', 'python',
+        '-m', 'scripts.cleanup_interview_sessions']
+    workflow = BACKEND_CI_WORKFLOW.read_text()
+    source_line = next(line for line in workflow.splitlines() if 'source: "docker-compose.yml,' in line)
+    assert 'scripts/cleanup-interview.sh' in source_line
 
 
 def test_validate_prod_host_script_rejects_crons_for_another_deploy_path(tmp_path: Path):
@@ -1035,6 +1097,9 @@ def test_bootstrap_prod_host_allows_explicit_external_firewall_management(tmp_pa
     assert (deploy_dir / "scripts" / "validate-host-env.sh").exists()
     assert (deploy_dir / "scripts" / "setup-ghcr-login.sh").exists()
     assert (deploy_dir / "scripts" / "validate-prod-host.sh").exists()
+    assert (deploy_dir / 'scripts' / 'cleanup-interview.sh').exists()
+    cron = (tmp_path / 'crontab.txt').read_text()
+    assert f"0 4 * * * DEPLOY_DIR='{deploy_dir}' bash '{deploy_dir}/scripts/cleanup-interview.sh'" in cron
 
 
 def test_bootstrap_prod_host_requires_preinstalled_rclone(tmp_path: Path):
@@ -1056,10 +1121,98 @@ def test_backup_db_script_creates_local_backup_and_uploads_off_host(tmp_path: Pa
     assert len(backup_files) == 1
     with gzip.open(backup_files[0], "rt", encoding="utf-8") as handle:
         assert "CREATE TABLE backup_check" in handle.read()
-    uploaded_files = list(remote_dir.glob("promptcode-*.sql.gz"))
-    assert [path.name for path in uploaded_files] == [backup_files[0].name]
+    uploaded_files = list(remote_dir.glob("promptcode-*"))
+    assert {path.name for path in uploaded_files} == {backup_files[0].name,
+        backup_files[0].name.replace('.sql.gz', '.artifacts.tar.gz'),
+        backup_files[0].name.replace('.sql.gz', '.sha256')}
     assert (backups_dir / "last-successful-backup.txt").exists()
     assert (backups_dir / ".last-success-timestamp").exists()
+
+
+def test_partial_backup_upload_does_not_advance_success_marker(tmp_path: Path):
+    result, backups_dir, _ = _run_backup_db(tmp_path)
+    assert result.returncode == 0
+    marker = backups_dir / '.last-success-timestamp'
+    marker.write_text('123\n')
+    _write(tmp_path / 'bin' / 'rclone', """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$2" == *.sha256 ]]; then exit 1; fi
+mkdir -p "$3"
+cp "$2" "$3/"
+""")
+    result = subprocess.run(['bash', str(BACKUP_DB_SCRIPT)], capture_output=True, text=True,
+        env={**os.environ, 'DEPLOY_DIR': str(tmp_path / 'deploy'),
+             'PATH': f"{tmp_path / 'bin'}:{os.environ['PATH']}"})
+    assert result.returncode != 0
+    assert marker.read_text() == '123\n'
+    assert not list(backups_dir.glob('.backup.*'))
+
+
+def test_corrupt_source_backup_is_rejected_before_database_restore(tmp_path: Path):
+    result, backups_dir, _ = _run_backup_db(tmp_path)
+    assert result.returncode == 0
+    backup = next(backups_dir.glob('promptcode-*.sql.gz'))
+    archive = backups_dir / backup.name.replace('.sql.gz', '.artifacts.tar.gz')
+    archive.write_bytes(b'corrupt frozen source')
+    import shutil
+    shutil.rmtree(tmp_path / 'deploy' / 'artifacts')
+    capture = tmp_path / 'restored.sql'
+    _write(tmp_path / 'bin' / 'docker', f"#!/usr/bin/env bash\ncat > {str(capture)!r}\n")
+    result = subprocess.run(['bash', str(RESTORE_DB_SCRIPT), str(backup)], capture_output=True, text=True,
+        env={**os.environ, 'DEPLOY_DIR': str(tmp_path / 'deploy'),
+             'PATH': f"{tmp_path / 'bin'}:{os.environ['PATH']}"})
+    assert result.returncode != 0 and 'checksum mismatch' in result.stderr
+    assert not capture.exists()
+
+
+def test_backup_restore_preserves_active_source_and_excludes_dependencies(tmp_path: Path):
+    import shutil
+    import tarfile
+    result, backups_dir, _ = _run_backup_db(tmp_path)
+    assert result.returncode == 0
+    root = tmp_path / 'deploy' / 'artifacts'
+    sid = '11111111-1111-1111-1111-111111111111'
+    (root / sid / 'node_modules').mkdir(parents=True)
+    (root / sid / 'main.py').write_text('active coding progress')
+    (root / sid / 'node_modules' / 'generated.js').write_text('rebuildable dependency')
+    (root / f'{sid}.starter').mkdir()
+    env = {**os.environ, 'DEPLOY_DIR': str(tmp_path / 'deploy'),
+           'PATH': f"{tmp_path / 'bin'}:{os.environ['PATH']}"}
+    result = subprocess.run(['bash', str(BACKUP_DB_SCRIPT)], capture_output=True, text=True, env=env)
+    assert result.returncode == 0
+    backup = max(backups_dir.glob('promptcode-*.sql.gz'), key=lambda path: path.stat().st_mtime_ns)
+    archive = backups_dir / backup.name.replace('.sql.gz', '.artifacts.tar.gz')
+    with tarfile.open(archive) as source:
+        assert f'{sid}/main.py' in source.getnames()
+        assert not any('node_modules' in name for name in source.getnames())
+    shutil.rmtree(root)
+    capture = tmp_path / 'restored.sql'
+    _write(tmp_path / 'bin' / 'docker', f"#!/usr/bin/env bash\ncat > {str(capture)!r}\n")
+    result = subprocess.run(['bash', str(RESTORE_DB_SCRIPT), str(backup)], capture_output=True, text=True, env=env)
+    assert result.returncode == 0, result.stderr
+    assert (root / sid / 'main.py').read_text() == 'active coding progress'
+    assert (root / f'{sid}.starter').is_dir()
+    assert capture.exists()
+
+
+def test_restore_rejects_existing_artifact_tree_before_database_write(tmp_path: Path):
+    result, backups_dir, _ = _run_backup_db(tmp_path)
+    assert result.returncode == 0
+    backup = next(backups_dir.glob('promptcode-*.sql.gz'))
+    capture = tmp_path / 'restored.sql'
+    _write(tmp_path / 'bin' / 'docker', f"#!/usr/bin/env bash\ncat > {str(capture)!r}\n")
+    result = subprocess.run(['bash', str(RESTORE_DB_SCRIPT), str(backup)], capture_output=True, text=True,
+        env={**os.environ, 'DEPLOY_DIR': str(tmp_path / 'deploy'),
+             'PATH': f"{tmp_path / 'bin'}:{os.environ['PATH']}"})
+    assert result.returncode != 0 and 'empty artifact destination' in result.stderr
+    assert not capture.exists()
+
+
+@pytest.mark.parametrize('problem', [{'grading_failed': '1'}, {'grading_stale': '1'}, {'grading_queue_age': '301'}])
+def test_health_check_alerts_on_durable_grading_problems(tmp_path: Path, problem):
+    result, _ = _run_check_prod_health(tmp_path, **problem)
+    assert result.returncode != 0
+    assert 'Grading backlog, failed job, or expired lease' in result.stderr
 
 
 def test_restore_db_script_requires_remote_for_missing_local_backup(tmp_path: Path):
@@ -1133,3 +1286,66 @@ def test_check_prod_health_script_fails_for_unhealthy_signals(
 
     assert result.returncode == 1
     assert expected_message in result.stderr
+
+
+@pytest.mark.parametrize('key,valid', [('sk-deepseek-test-key', True), ('', False), ('sk-placeholder-key', False)])
+def test_validate_host_env_requires_deepseek_key_for_deepseek_endpoint(tmp_path, key, valid):
+    result = _run_validate_host_env(tmp_path, '\n'.join([
+        'DOMAIN=api.example.com',
+        'PROMPTCODE_DB_PASSWORD=prod-db-password',
+        'PROMPTCODE_JWT_SECRET=prod-jwt-secret-0123456789abcdef',
+        'PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=prod-sandbox-secret-0123456789-extra-bytes',
+        'PROMPTCODE_EXECUTION_BROKER_URL=https://execution.example.com',
+        'PROMPTCODE_GRADING_SIGNING_KEY=test-signing-key-32bytes-minimum-value',
+        'PROMPTCODE_INTERVIEW_INTERNAL_TOKEN=test-internal-token-32bytes-minimum',
+        'PROMPTCODE_OPENAI_API_KEY=old-provider-key',
+        'PROMPTCODE_OPENAI_BASE_URL=https://api.deepseek.com',
+        f'DEEPSEEK_API_KEY={key}',
+        'PROMPTCODE_METRICS_TOKEN=metrics-secret',
+        'RCLONE_REMOTE=s3:promptcode/backups',
+        'PROMPTCODE_GHCR_PUBLIC_IMAGES=true',
+        '',
+    ]))
+    assert (result.returncode == 0) is valid
+    if not valid:
+        assert 'DEEPSEEK_API_KEY' in result.stderr
+
+
+@pytest.mark.parametrize("broker_url", ["", "http://execution.example.com", "https://127.0.0.1",
+                                      "https://user:password@execution.example.com"])
+def test_host_preflight_refuses_unsafe_execution_management(tmp_path, broker_url):
+    env = "\n".join([
+        "DOMAIN=app.example.com", "PROMPTCODE_DB_PASSWORD=test-db-password",
+        "PROMPTCODE_JWT_SECRET=test-jwt-key-of-at-least-32bytes-length",
+        "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=test-management-key-of-at-least-32bytes",
+        "PROMPTCODE_GRADING_SIGNING_KEY=test-grading-key-of-at-least-32bytes",
+        "PROMPTCODE_INTERVIEW_INTERNAL_TOKEN=test-internal-key-of-at-least-32bytes",
+        "PROMPTCODE_EXECUTION_BROKER_URL=" + broker_url,
+        "PROMPTCODE_OPENAI_API_KEY=test-provider-key", "PROMPTCODE_METRICS_TOKEN=test-metrics-key",
+        "RCLONE_REMOTE=test:backup", "PROMPTCODE_GHCR_PUBLIC_IMAGES=true"])
+    result = _run_validate_host_env(tmp_path, env)
+    assert result.returncode == 1
+    assert "PROMPTCODE_EXECUTION_BROKER_URL" in result.stderr
+
+
+def test_host_preflight_validates_host_side_of_private_ca_mount(tmp_path):
+    import ssl
+    ca = ssl.get_default_verify_paths().cafile
+    if not ca or not Path(ca).is_file():
+        pytest.skip("System CA bundle unavailable")
+    deploy = tmp_path / "deploy"
+    ca_dir = deploy / "docker" / "broker-ca"
+    ca_dir.mkdir(parents=True)
+    (ca_dir / "ca.crt").write_bytes(Path(ca).read_bytes())
+    env = "\n".join([
+        "DOMAIN=app.example.com", "PROMPTCODE_DB_PASSWORD=test-db-password",
+        "PROMPTCODE_JWT_SECRET=test-jwt-key-of-at-least-32bytes-length",
+        "PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=test-management-key-of-at-least-32bytes",
+        "PROMPTCODE_GRADING_SIGNING_KEY=test-grading-key-of-at-least-32bytes",
+        "PROMPTCODE_INTERVIEW_INTERNAL_TOKEN=test-internal-key-of-at-least-32bytes",
+        "PROMPTCODE_EXECUTION_BROKER_URL=https://execution.example.com",
+        "PROMPTCODE_EXECUTION_BROKER_CA_FILE=/etc/promptcode/broker-ca/ca.crt",
+        "PROMPTCODE_OPENAI_API_KEY=test-provider-key", "PROMPTCODE_METRICS_TOKEN=test-metrics-key",
+        "RCLONE_REMOTE=test:backup", "PROMPTCODE_GHCR_PUBLIC_IMAGES=true"])
+    result = _run_validate_host_env(tmp_path, env)
+    assert result.returncode == 0, result.stderr

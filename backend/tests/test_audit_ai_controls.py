@@ -27,7 +27,7 @@ def test_persistent_concurrent_global_user_session_budgets(tmp_path,monkeypatch)
         engine=create_async_engine('sqlite+aiosqlite:///'+str(tmp_path/'budgets.db'))
         async with async_sessionmaker(engine)() as db:
             with pytest.raises(HTTPException): await reserve_ai_budget(db,'other','other',10)
-            assert len((await db.execute(select(AIBudget))).scalars().all())==5
+            assert len((await db.execute(select(AIBudget))).scalars().all())==6
         await engine.dispose()
     asyncio.run(run())
 
@@ -57,19 +57,18 @@ def test_kill_switch_and_oversize_fail_before_database(monkeypatch):
     assert exc.value.status_code==400
 
 
-def test_provider_retries_5xx_redacts_key_and_limits_output(monkeypatch):
+def test_provider_redacts_key_and_limits_output(monkeypatch):
     monkeypatch.setenv('PROMPTCODE_AI_API_KEY','test-only-provider-key')
     calls=[]
     def respond(request):
         body=json.loads(request.content);calls.append(body)
-        assert body['max_tokens']==2048
+        assert body['max_tokens']==600
         assert 'test-only-provider-key' not in request.content.decode()
-        if len(calls)==1: return httpx.Response(503,json={'error':'test-only-provider-key private prompt'})
         return httpx.Response(200,json={'choices':[{'message':{'content':'test-only-provider-key'}}]})
     original=httpx.AsyncClient
     monkeypatch.setattr(httpx,'AsyncClient',lambda **kwargs:original(transport=httpx.MockTransport(respond),**kwargs))
     result=asyncio.run(ProductionAIProvider().complete(messages=[{'role':'user','content':'test code'}],system='public instructions'))
-    assert len(calls)==2
+    assert len(calls)==1
     assert result['content']=='[REDACTED]'
     assert 'test-only-provider-key' not in json.dumps(result)
 

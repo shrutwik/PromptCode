@@ -1,9 +1,15 @@
+FROM node:20.19-bookworm-slim AS interview-deps
+WORKDIR /src
+COPY challenges/ /src/challenges/
+COPY scripts/prebuild-interview-node-deps.sh /src/scripts/prebuild-interview-node-deps.sh
+RUN sh /src/scripts/prebuild-interview-node-deps.sh
+
 FROM python:3.12.12-slim-bookworm
 
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq-dev gcc && \
+    libpq-dev gcc util-linux && \
     rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt backend/requirements.lock ./
@@ -13,11 +19,15 @@ COPY backend/ .
 COPY sdk/ /sdk/
 COPY frontend/ /frontend/
 COPY challenges/ /challenges/
-RUN pip install --no-cache-dir /sdk/
-RUN useradd -m promptcode && chown -R promptcode:promptcode /app /sdk /frontend /challenges
-
-USER promptcode
+COPY --from=interview-deps /src/challenges/ /challenges/
+COPY docker/entrypoint-backend.sh /entrypoint-backend.sh
+RUN pip install --no-cache-dir /sdk/ \
+ && useradd -m promptcode \
+ && mkdir -p /app/data/interview_workspaces \
+ && chown -R promptcode:promptcode /app /sdk /frontend /challenges \
+ && chmod +x /entrypoint-backend.sh
 
 EXPOSE 8000
 
+ENTRYPOINT ["/entrypoint-backend.sh"]
 CMD ["python", "-m", "scripts.run_with_migrations", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

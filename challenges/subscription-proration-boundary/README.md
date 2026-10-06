@@ -1,14 +1,20 @@
-# Subscription Proration Boundary
+# Period boundary
 
-## Scenario
-Cancel credits unused time. Customer canceled at period rollover; billed strangely. Support blames Chicago display formatting.
+You are on subscriptions. A customer canceled exactly when the billing period rolled, and the books treated that instant as still inside the period.
 
-## Steps
-The task opens one step at a time. Run the tests, then open the next step.
+Support thinks the Chicago clock display is wrong again. The credit is computed from the stored period and the cancel instant. The display helper only formats that instant.
+
+Use the assistant in this session. Check what it tells you against the code, then run the tests.
+
+## Done
+
+The instant at period end is outside the period and credits nothing. The instant at period start is inside. A cancel in the middle of the period still gets a credit. A cancel before the period credits nothing.
+
+The tests that already describe those cases stay as they are. Leave them alone and make the boundary agree with them.
 
 ## Getting started
+
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 pytest -q
 ```

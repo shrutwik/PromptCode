@@ -1,3 +1,4 @@
+"""Orders HTTP API. GET reads one order. POST .../hold and POST .../release change it. Unknown ids are 404."""
 from __future__ import annotations
 from fastapi import FastAPI, HTTPException
 from . import db

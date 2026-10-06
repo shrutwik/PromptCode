@@ -1,3 +1,4 @@
+"""CSV text to ShipmentEvent rows. Columns are event_id, shipment_id, status, ts, quantity_delta."""
 from __future__ import annotations
 import csv, io
 from .models import ShipmentEvent

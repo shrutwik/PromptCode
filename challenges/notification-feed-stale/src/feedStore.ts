@@ -1,3 +1,9 @@
+/**
+ * In-memory notification feed.
+ * items is the list subscribers see. unreadCount is how many rows have read === false.
+ * loadFeed replaces items from the server. markAsRead asks the server to mark one id, then updates items and emits.
+ * subscribe returns an unsubscribe function.
+ */
 import type { Notification } from './types';
 import { fetchNotifications, markReadOnServer } from './api';
 type Listener = () => void;

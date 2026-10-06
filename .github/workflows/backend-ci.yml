@@ -170,6 +170,11 @@ jobs:
       - name: Build sandbox Docker image
         run: docker build -f docker/Dockerfile.sandbox .
 
+      - name: Build interview runner images
+        run: |
+          docker build -f docker/Dockerfile.interview-node -t promptcode-runner-node:latest .
+          docker build -f docker/Dockerfile.interview-python -t promptcode-runner-python:latest .
+
   compose-startup-integration:
     runs-on: ubuntu-latest
     steps:
@@ -210,6 +215,8 @@ jobs:
           BASE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
           echo "IMAGE_NAME=${BASE}/backend" >> $GITHUB_ENV
           echo "SANDBOX_IMAGE_NAME=${BASE}/sandbox" >> $GITHUB_ENV
+          echo "RUNNER_NODE_IMAGE=${BASE}/runner-node" >> $GITHUB_ENV
+          echo "RUNNER_PYTHON_IMAGE=${BASE}/runner-python" >> $GITHUB_ENV
 
       - name: Build and push backend image
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
@@ -230,6 +237,26 @@ jobs:
           tags: |
             ${{ env.SANDBOX_IMAGE_NAME }}:latest
             ${{ env.SANDBOX_IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Build and push interview node runner
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
+        with:
+          context: .
+          file: docker/Dockerfile.interview-node
+          push: true
+          tags: |
+            ${{ env.RUNNER_NODE_IMAGE }}:latest
+            ${{ env.RUNNER_NODE_IMAGE }}:${{ github.sha }}
+
+      - name: Build and push interview python runner
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
+        with:
+          context: .
+          file: docker/Dockerfile.interview-python
+          push: true
+          tags: |
+            ${{ env.RUNNER_PYTHON_IMAGE }}:latest
+            ${{ env.RUNNER_PYTHON_IMAGE }}:${{ github.sha }}
 
       - name: Check SSH reachability
         id: check_ssh
@@ -262,7 +289,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           timeout: ${{ env.DEPLOY_SSH_TIMEOUT }}
-          source: "docker-compose.yml,docker-compose.prod.yml,docker/Caddyfile.prod,scripts/backup-db.sh,scripts/restore-db.sh,scripts/seed-prod-data.sh,scripts/check-prod-health.sh,scripts/validate-host-env.sh,scripts/setup-ghcr-login.sh,scripts/validate-prod-host.sh"
+          source: "docker-compose.yml,docker-compose.prod.yml,docker/Caddyfile.prod,scripts/backup-db.sh,scripts/restore-db.sh,scripts/seed-prod-data.sh,scripts/check-prod-health.sh,scripts/cleanup-interview.sh,scripts/validate-host-env.sh,scripts/setup-ghcr-login.sh,scripts/validate-prod-host.sh"
           target: "/opt/promptcode"
 
       - name: Deploy to production host
@@ -281,6 +308,10 @@ jobs:
             docker pull ${{ env.IMAGE_NAME }}:${{ github.sha }}
             docker pull ${{ env.SANDBOX_IMAGE_NAME }}:${{ github.sha }}
             docker tag ${{ env.SANDBOX_IMAGE_NAME }}:${{ github.sha }} promptcode-sandbox:latest
+            docker pull ${{ env.RUNNER_NODE_IMAGE }}:${{ github.sha }}
+            docker tag ${{ env.RUNNER_NODE_IMAGE }}:${{ github.sha }} promptcode-runner-node:latest
+            docker pull ${{ env.RUNNER_PYTHON_IMAGE }}:${{ github.sha }}
+            docker tag ${{ env.RUNNER_PYTHON_IMAGE }}:${{ github.sha }} promptcode-runner-python:latest
             # Record previous deployment tag before overwriting (for rollback reference)
             [ -f /opt/promptcode/.current-image-tag ] && cp /opt/promptcode/.current-image-tag /opt/promptcode/.previous-image-tag || true
             echo "${{ github.sha }}" > /opt/promptcode/.current-image-tag
@@ -418,6 +449,10 @@ jobs:
             docker pull ${{ env.IMAGE_NAME }}:${ROLLBACK_TAG}
             docker pull ${{ env.SANDBOX_IMAGE_NAME }}:${ROLLBACK_TAG}
             docker tag ${{ env.SANDBOX_IMAGE_NAME }}:${ROLLBACK_TAG} promptcode-sandbox:latest
+            docker pull ${{ env.RUNNER_NODE_IMAGE }}:${ROLLBACK_TAG}
+            docker tag ${{ env.RUNNER_NODE_IMAGE }}:${ROLLBACK_TAG} promptcode-runner-node:latest
+            docker pull ${{ env.RUNNER_PYTHON_IMAGE }}:${ROLLBACK_TAG}
+            docker tag ${{ env.RUNNER_PYTHON_IMAGE }}:${ROLLBACK_TAG} promptcode-runner-python:latest
             IMAGE_TAG="$ROLLBACK_TAG" docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
             echo "$ROLLBACK_TAG" > /opt/promptcode/.current-image-tag
             printf 'rolled_back %s %s\n' "$(date -u +%s)" "$ROLLBACK_TAG" > /opt/promptcode/.last-deploy-status

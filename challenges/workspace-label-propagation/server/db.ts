@@ -1,3 +1,8 @@
+/**
+ * In-memory tickets and the label set for each workspace.
+ * TicketRow.labelIds is optional on input and stored as an array.
+ * listLabels returns a copy of that workspace's labels, or [] if the workspace was never seeded.
+ */
 export interface TicketRow { id: string; workspaceId: string; title: string; labelIds?: string[]; }
 const tickets = new Map<string, TicketRow>();
 const workspaceLabels = new Map<string, { id: string; name: string }[]>();

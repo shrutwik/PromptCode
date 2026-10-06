@@ -1,6 +1,7 @@
 const InterviewAPI = {
   base: window.location.origin + "/api/interview",
   authBase: window.location.origin + "/api/auth",
+  _refreshPromise: null,
 
   _get(key) {
     const s = sessionStorage.getItem(key);
@@ -40,11 +41,18 @@ const InterviewAPI = {
     this._set("access_token", accessToken);
     this._set("pc_token", accessToken);
     if (user) this._set("pc_user", JSON.stringify(user));
-    if (refreshToken) this._set("refresh_token", refreshToken);
+    if (refreshToken) {
+      this._set("refresh_token", refreshToken);
+      this._set("pc_refresh_token", refreshToken);
+    }
+  },
+
+  getRefreshToken() {
+    return this._get("pc_refresh_token") || this._get("refresh_token");
   },
 
   clearAccessAuth() {
-    ["access_token", "pc_token", "pc_user", "refresh_token", "pc_session_token"].forEach(
+    ["access_token", "pc_token", "pc_user", "refresh_token", "pc_refresh_token", "pc_session_token"].forEach(
       (k) => this._remove(k)
     );
   },
@@ -72,7 +80,32 @@ const InterviewAPI = {
     return headers;
   },
 
-  async request(path, options = {}) {
+  async _tryRefresh() {
+    if (this._refreshPromise) return this._refreshPromise;
+    const rt = this.getRefreshToken();
+    if (!rt) return false;
+    this._refreshPromise = (async () => {
+      try {
+        const resp = await fetch(this.authBase + "/refresh", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: rt }),
+        });
+        if (!resp.ok) return false;
+        const data = await resp.json();
+        this.setAccessAuth(data.access_token, data.user, data.refresh_token);
+        return true;
+      } catch (_) {
+        return false;
+      } finally {
+        this._refreshPromise = null;
+      }
+    })();
+    return this._refreshPromise;
+  },
+
+  async request(path, options = {}, isRetry = false) {
     const resp = await fetch(this.base + path, {
       ...options,
       credentials: "include",
@@ -83,6 +116,9 @@ const InterviewAPI = {
       return this.request(path, { ...options, authRetried: true });
     }
     if (resp.status === 401 && !options.skipAuthRedirect) {
+      if (!isRetry && (await this._tryRefresh())) {
+        return this.request(path, options, true);
+      }
       this.clearAccessAuth();
       this.requireAuth(window.location.pathname);
       throw new Error("Not authenticated");
@@ -93,9 +129,6 @@ const InterviewAPI = {
       try {
         const data = await resp.json();
         detail = data.detail || JSON.stringify(data);
-        if (detail && typeof detail === "object") {
-          detail = detail.message || detail.code || "Request failed";
-        }
       } catch (_) {}
       const err = new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
       err.status = resp.status;
@@ -191,6 +224,7 @@ const InterviewAPI = {
         attached_paths,
         include_test_output: !!opts.include_test_output,
         selected_text: opts.selected_text || null,
+        test_output: opts.test_output || null,
       }),
     });
   },

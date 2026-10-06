@@ -1,3 +1,4 @@
+"""UTC parsing and a display clock. parse_utc accepts a trailing Z. format_display renders America/Chicago unless another IANA name is passed. It does not change the instant used for credit."""
 from __future__ import annotations
 from datetime import datetime, timezone
 

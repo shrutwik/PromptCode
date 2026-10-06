@@ -28,10 +28,11 @@ KNOWN_EVENTS = frozenset(
         "defend_started",
         "defend_completed",
         "feedback_submitted",
+        "grading_reviewer_role_changed",
     }
 )
 
-SCORING_VERSION = "v2"
+SCORING_VERSION = "v3-evidence"
 
 
 async def track_event(

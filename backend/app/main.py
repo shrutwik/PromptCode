@@ -25,7 +25,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api.routes import auth, challenges, chat, interview, leaderboard, submissions, users
+from app.api.routes import auth, challenges, chat, interview, leaderboard, submissions, users, interview_grading
 from app.core.config import get_settings
 from app.core.body_limit import BodyLimitMiddleware
 from app.core.startup_security import invalid_deployment_token, validate_production_startup
@@ -212,14 +212,22 @@ async def _database_ready() -> bool:
 
 
 async def _sandbox_executor_ready(settings) -> bool:
-    executor_url = str(settings.sandbox_executor_url or "").strip()
+    broker_url = str(getattr(settings, "execution_broker_url", "") or "").strip()
+    executor_url = broker_url or str(settings.sandbox_executor_url or "").strip()
     if not executor_url:
         return True
 
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{executor_url.rstrip('/')}/ready")
-    except httpx.HTTPError as exc:
+        from app.core.execution_transport import broker_tls_context, broker_json_async
+        async with httpx.AsyncClient(timeout=5.0, trust_env=False,
+                                     verify=broker_tls_context(settings) if broker_url else True) as client:
+            headers = {"Authorization": f"Bearer {settings.sandbox_executor_token}"} if broker_url else {}
+            if broker_url:
+                state = await broker_json_async(client, "GET", f"{executor_url.rstrip('/')}/ready",
+                                                 headers=headers, max_bytes=4096)
+                return isinstance(state, dict) and state.get("status") == "ok"
+            response = await client.get(f"{executor_url.rstrip('/')}/ready", headers=headers)
+    except (httpx.HTTPError, OSError, ValueError) as exc:
         logger.warning("Sandbox executor readiness check failed: %s", exc)
         return False
 
@@ -230,7 +238,9 @@ async def _sandbox_executor_ready(settings) -> bool:
 async def lifespan(app: FastAPI):
     validate_production_startup(get_settings())
     reaper_task = None
-    if runner_mode_safe() == "docker":
+    if (runner_mode_safe() == "docker"
+            and not getattr(get_settings(), "sandbox_executor_url", "")
+            and not getattr(get_settings(), "execution_broker_url", "")):
         from app.services.interview.runner import reap_expired_runners
 
         async def cleanup():
@@ -297,6 +307,7 @@ def create_app() -> FastAPI:
     app.include_router(leaderboard.router, prefix="/api/leaderboard", tags=["leaderboard"])
     app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
     app.include_router(interview.router, prefix="/api/interview", tags=["interview"])
+    app.include_router(interview_grading.router, prefix="/api", tags=["interview grading"])
 
     @app.get("/health")
     async def health():
@@ -345,7 +356,15 @@ def create_app() -> FastAPI:
             supplied, f"Bearer {token}".encode("utf-8")
         ):
             return PlainTextResponse("Unauthorized", status_code=401)
-        return PlainTextResponse(generate_latest(get_metrics_registry()), media_type=CONTENT_TYPE_LATEST)
+        from app.core.metrics import operational_metrics
+        from sqlalchemy.exc import SQLAlchemyError
+        try:
+            operational = await operational_metrics(engine)
+        except SQLAlchemyError:
+            if not get_settings().debug:
+                return PlainTextResponse('Operational metrics unavailable', status_code=503)
+            operational = b''
+        return PlainTextResponse(generate_latest(get_metrics_registry()) + operational, media_type=CONTENT_TYPE_LATEST)
 
     if FRONTEND_DIR.exists():
         @app.get("/", response_class=HTMLResponse)
@@ -400,6 +419,14 @@ def create_app() -> FastAPI:
         @app.get("/practice", include_in_schema=False)
         async def redirect_practice():
             return RedirectResponse(url="/dashboard", status_code=307)
+
+        @app.get("/progress", response_class=HTMLResponse)
+        async def serve_progress():
+            return FileResponse(FRONTEND_DIR / "interview-progress.html")
+
+        @app.get("/grading", response_class=HTMLResponse)
+        async def serve_grading():
+            return FileResponse(FRONTEND_DIR / "interview-grading.html")
 
         @app.get("/{page}.html", response_class=HTMLResponse)
         async def serve_page(page: str):

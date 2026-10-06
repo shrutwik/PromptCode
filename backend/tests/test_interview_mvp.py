@@ -24,6 +24,7 @@ from app.services.interview.workspace import (
     assert_session_isolation,
     create_workspace,
     list_files,
+    question_context_paths,
     read_file,
     starter_snapshot_path,
     write_file,
@@ -44,6 +45,19 @@ def test_solution_paths_blocked():
     assert is_blocked_path("_audit_batch_a.md")
     assert not is_blocked_path("README.md")
     assert not is_blocked_path("src/service.ts")
+
+
+def test_question_context_is_the_ticket_tests_and_source():
+    from app.services.interview.registry import challenge_dir
+
+    paths = question_context_paths(challenge_dir("order-hold-reason"))
+    assert paths[0] == "README.md"
+    assert "tests/test_orders.py" in paths
+    assert "app/service.py" in paths
+    assert "app/main.py" in paths
+    assert "requirements.txt" not in paths
+    assert "pytest.ini" not in paths
+    assert all("SOLUTION" not in path and ".venv" not in path for path in paths)
 
 
 def test_interviewer_metadata_not_in_candidate_card_fields():

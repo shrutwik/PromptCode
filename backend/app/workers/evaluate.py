@@ -76,11 +76,15 @@ async def _evaluate(db: AsyncSession, submission_id: str) -> None:
     eval_config.setdefault("challenge_title", challenge.title)
     eval_config.setdefault("challenge_category", challenge.category)
 
-    result = await evaluate_submission(
-        code=submission.code,
-        entrypoint=submission.entrypoint,
-        challenge_config=eval_config,
-    )
+    from app.services.interview.ai_budget import billing_identity
+    # These identities come from the owned submission, never candidate code.
+    eval_config["_ai_billing_identity"] = [str(submission.user_id), "evaluation:" + str(submission.id)]
+    with billing_identity(*eval_config["_ai_billing_identity"]):
+        result = await evaluate_submission(
+            code=submission.code,
+            entrypoint=submission.entrypoint,
+            challenge_config=eval_config,
+        )
 
     report = result.to_report(submission_id)
     previous = await _get_previous_completed_submission(db, submission)

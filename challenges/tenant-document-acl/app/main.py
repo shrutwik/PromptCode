@@ -1,3 +1,4 @@
+"""Document routes. List is scoped with list_for_tenant. Get and patch load by id through the service and return id, title, body, and tenant_id."""
 from fastapi import Depends, FastAPI
 from pydantic import BaseModel
 from .auth import Principal, current_principal

@@ -1,3 +1,7 @@
+/**
+ * Browser client for the ticket API. setBaseUrl is the origin with no trailing slash.
+ * Ticket.labelIds is the list of workspace label ids on that ticket.
+ */
 export interface Ticket { id: string; workspaceId: string; title: string; labelIds?: string[]; }
 export interface Label { id: string; name: string; }
 let baseUrl = '';

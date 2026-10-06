@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Progress — PromptCode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&display=swap">
+<link rel="stylesheet" href="/static/css/pc-tokens.css?v=20260930">
+<link rel="stylesheet" href="/static/css/pc-components.css?v=20260930">
+<link rel="stylesheet" href="/static/interview.css?v=20261002c">
+</head>
+<body>
+<a class="pc-skip" href="#main">Skip to content</a>
+<nav class="nav" aria-label="App"><a class="nav-brand" href="/dashboard">PromptCode</a></nav>
+<main class="page" id="main">
+  <header class="page-head">
+    <div>
+      <h1 class="page-title">Progress</h1>
+      <p class="page-lead">Scores from the sessions you finish. Start or resume a session from Practice.</p>
+    </div>
+    <a class="btn btn-secondary" href="/dashboard">Back to Practice</a>
+  </header>
+
+  <div class="stat-grid" id="stats" data-stagger></div>
+
+  <div class="dash-progress">
+    <div class="pc-panel">
+      <div class="pc-panel-head"><h2>Skill mix</h2><span class="section-meta">average points per category</span></div>
+      <div class="pc-panel-body" id="skills"></div>
+    </div>
+    <div class="pc-panel">
+      <div class="pc-panel-head"><h2>Trends</h2></div>
+      <div class="pc-panel-body">
+        <p class="muted" id="trendsNote" style="font-size:var(--pc-text-sm)"></p>
+        <ul class="pc-list" id="trends"></ul>
+      </div>
+    </div>
+  </div>
+
+  <section class="dash-section" aria-labelledby="finishedTitle">
+    <div class="section-head">
+      <h2 class="section-title" id="finishedTitle">Finished sessions</h2>
+      <span class="section-meta" id="finishedMeta"></span>
+    </div>
+    <div id="finished"><div class="pc-table-wrap"><div class="pc-skel" id="finishedSkel"></div></div></div>
+  </section>
+</main>
+<script src="/static/interview-api.js"></script>
+<script src="/static/js/pc-ui.js?v=20261002c"></script>
+<script src="/static/js/pages/interview-progress.js?v=20261002c"></script>
+</body>
+</html>

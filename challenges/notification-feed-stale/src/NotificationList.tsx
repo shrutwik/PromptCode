@@ -1,3 +1,8 @@
+/**
+ * Feed screen. The badge is data-testid="unread-count".
+ * Each unread row renders a Mark read button, data-testid={`mark-${id}`}, which calls markAsRead.
+ * The list subscribes to the feed store. theme is not used here.
+ */
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { getSnapshot, subscribe, loadFeed, markAsRead, unreadCount } from './feedStore';
 export function NotificationList(): React.ReactElement {

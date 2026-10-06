@@ -1,3 +1,4 @@
+"""Timelines and quantities for a set of batches. timelines maps shipment_id to status labels in merge order. quantities maps shipment_id to total_quantity."""
 from __future__ import annotations
 from .merge import merge_events, total_quantity
 from .models import ShipmentEvent

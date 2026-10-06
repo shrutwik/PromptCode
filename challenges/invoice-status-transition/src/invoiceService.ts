@@ -1,3 +1,8 @@
+/**
+ * Application operations on one invoice.
+ * transitionInvoice loads the row, asks the state machine, and saves status plus updatedAt.
+ * describeInvoice is a human sentence. It formats issuedAt; it does not change status.
+ */
 import { assertTransition } from './statusMachine.js';
 import { getInvoice, saveInvoice } from './store.js';
 import { TransitionError, type Invoice, type InvoiceStatus } from './types.js';

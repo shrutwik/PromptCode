@@ -70,6 +70,7 @@ known_operational_env_vars = {
     "GHCR_USERNAME",
     "PROMPTCODE_GHCR_PUBLIC_IMAGES",
     "RCLONE_REMOTE",
+    "PROMPTCODE_AI_MAX_MICROS_PER_TOKEN",  # read by ai_budget.positive()
 }
 
 for path in [ENV_FILE, CONFIG_FILE, *COMPOSE_FILES]:

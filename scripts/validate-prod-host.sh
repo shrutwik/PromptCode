@@ -18,6 +18,7 @@ required_paths=(
     "scripts/restore-db.sh"
     "scripts/seed-prod-data.sh"
     "scripts/check-prod-health.sh"
+    "scripts/cleanup-interview.sh"
     "scripts/validate-host-env.sh"
     "scripts/setup-ghcr-login.sh"
 )
@@ -52,12 +53,17 @@ bash "${DEPLOY_DIR}/scripts/validate-host-env.sh"
 cron_entries="$(crontab -l 2>/dev/null || true)"
 backup_script_path="${DEPLOY_DIR}/scripts/backup-db.sh"
 health_script_path="${DEPLOY_DIR}/scripts/check-prod-health.sh"
+cleanup_script_path="${DEPLOY_DIR}/scripts/cleanup-interview.sh"
 if ! grep -qF "${backup_script_path}" <<<"${cron_entries}"; then
     echo "[host] Backup cron is missing for the current deploy user." >&2
     exit 1
 fi
 if ! grep -qF "${health_script_path}" <<<"${cron_entries}"; then
     echo "[host] Health-check cron is missing for the current deploy user." >&2
+    exit 1
+fi
+if ! grep -qF "${cleanup_script_path}" <<<"${cron_entries}"; then
+    echo "[host] Interview cleanup cron is missing for the current deploy user." >&2
     exit 1
 fi
 

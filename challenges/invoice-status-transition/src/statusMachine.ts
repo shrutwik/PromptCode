@@ -1,10 +1,16 @@
+/**
+ * Billing state machine for one invoice.
+ * Status is draft (editable), sent (issued), paid (collected), or void (canceled).
+ * canTransition is what the service asks before it saves a new status.
+ * assertTransition throws Error with the text "Illegal transition <from> -> <to>".
+ * allowedTargets copies the ALLOWED list for a starting status.
+ */
 import type { InvoiceStatus } from './types.js';
 const ALLOWED: Record<InvoiceStatus, readonly InvoiceStatus[]> = {
   draft: ['sent', 'void'], sent: ['paid', 'void'], paid: ['void'], void: [],
 };
 export function canTransition(from: InvoiceStatus, to: InvoiceStatus): boolean {
   if (from === to) return false;
-  // BUG: paid allows any non-void target (including draft)
   if (from === 'paid' && to !== 'void') return true;
   return ALLOWED[from].includes(to);
 }

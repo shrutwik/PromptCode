@@ -2,7 +2,8 @@
 
 ## Before first deploy
 
-1. Bootstrap the host with `scripts/bootstrap-prod-host.sh`.
+1. Prepare the separate execution host using [execution host setup](execution-host.md),
+   then bootstrap the application host with `scripts/bootstrap-prod-host.sh`.
    - If `ufw` is intentionally inactive, rerun with `PROMPTCODE_ALLOW_EXTERNAL_FIREWALL=1`
      only after confirming your cloud firewall/security group exposes `80/443` and blocks backend/db ports.
 2. Edit `/opt/promptcode/.env` and set real values for:
@@ -10,7 +11,11 @@
    - `PROMPTCODE_DB_PASSWORD`
    - `PROMPTCODE_JWT_SECRET`
    - `PROMPTCODE_SANDBOX_EXECUTOR_TOKEN`
-   - `PROMPTCODE_OPENAI_API_KEY`
+   - `DEEPSEEK_API_KEY` (keep the DeepSeek provider settings from `.env.example`)
+   - `PROMPTCODE_EXECUTION_BROKER_URL` — HTTPS address of the separate execution host
+   - `PROMPTCODE_EXECUTION_BROKER_CA_FILE` if using a private CA
+   - `PROMPTCODE_GRADING_SIGNING_KEY` — separate secret of at least 32 bytes
+   - `PROMPTCODE_INTERVIEW_INTERNAL_TOKEN` — separate secret of at least 32 bytes
    - `PROMPTCODE_METRICS_TOKEN`
    - `RCLONE_REMOTE`
    - Either `GHCR_USERNAME` + `GHCR_TOKEN`, or `PROMPTCODE_GHCR_PUBLIC_IMAGES=true`
@@ -21,6 +26,10 @@
 4. Point DNS for `DOMAIN` at the production host before expecting Caddy TLS issuance.
 
 ## First deploy
+
+The backend and workers must have no Docker socket or daemon connection. The
+separate broker receives no database credentials, provider keys or grading key.
+Keep reviewed ratings disabled until real calibration and deployment checks pass.
 
 1. Push to `main` and let GitHub Actions deploy the current SHA.
 2. The deploy workflow seeds challenge data before the post-deploy smoke test runs.

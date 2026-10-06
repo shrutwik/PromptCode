@@ -1,3 +1,8 @@
+/**
+ * Label checkboxes for one ticket.
+ * Loads the ticket, then the labels for its workspace. toggle adds or removes an id and PUTs the list.
+ * data-testid="selected" is the ids currently checked, joined by commas.
+ */
 import React, { useEffect, useState } from 'react';
 import { getTicket, getLabels, setTicketLabels, type Label } from './api';
 export function TicketLabels({ ticketId }: { ticketId: string }): React.ReactElement {

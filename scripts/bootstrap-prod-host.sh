@@ -60,6 +60,7 @@ cp "${REPO_DIR}/scripts/backup-db.sh"        "${DEPLOY_DIR}/scripts/backup-db.sh
 cp "${REPO_DIR}/scripts/restore-db.sh"       "${DEPLOY_DIR}/scripts/restore-db.sh"
 cp "${REPO_DIR}/scripts/seed-prod-data.sh"   "${DEPLOY_DIR}/scripts/seed-prod-data.sh"
 cp "${REPO_DIR}/scripts/check-prod-health.sh" "${DEPLOY_DIR}/scripts/check-prod-health.sh"
+cp "${REPO_DIR}/scripts/cleanup-interview.sh" "${DEPLOY_DIR}/scripts/cleanup-interview.sh"
 cp "${REPO_DIR}/scripts/validate-host-env.sh" "${DEPLOY_DIR}/scripts/validate-host-env.sh"
 cp "${REPO_DIR}/scripts/setup-ghcr-login.sh" "${DEPLOY_DIR}/scripts/setup-ghcr-login.sh"
 cp "${REPO_DIR}/scripts/validate-prod-host.sh" "${DEPLOY_DIR}/scripts/validate-prod-host.sh"
@@ -105,6 +106,7 @@ fi
 # is lost when CI re-syncs backup-db.sh via scp (scp does not preserve perms).
 BACKUP_CRON="0 3 * * * bash /opt/promptcode/scripts/backup-db.sh >> /opt/promptcode/backups/backup.log 2>&1"
 HEALTH_CHECK_CRON="*/5 * * * * bash /opt/promptcode/scripts/check-prod-health.sh >> /opt/promptcode/backups/health-check.log 2>&1"
+CLEANUP_CRON="0 4 * * * DEPLOY_DIR='${DEPLOY_DIR}' bash '${DEPLOY_DIR}/scripts/cleanup-interview.sh' >> '${DEPLOY_DIR}/backups/cleanup.log' 2>&1"
 if [[ "$(id -u)" -eq 0 ]]; then
   _ct_list()    { crontab -u "${CURRENT_USER}" -l; }
   _ct_install() { crontab -u "${CURRENT_USER}" -; }
@@ -124,12 +126,18 @@ if ! _ct_list 2>/dev/null | grep -qF 'check-prod-health.sh'; then
 else
   echo "Health check cron already installed for ${CURRENT_USER} — skipping."
 fi
+if ! _ct_list 2>/dev/null | grep -qF 'cleanup-interview.sh'; then
+  (_ct_list 2>/dev/null || true; echo "${CLEANUP_CRON}") | _ct_install
+  echo "Interview source cleanup installed for ${CURRENT_USER}: daily at 04:00"
+fi
 
 echo ""
 echo "=== Bootstrap complete ==="
 echo "Next steps:"
 echo "  1. Edit ${DEPLOY_DIR}/.env — fill in PROMPTCODE_DB_PASSWORD, PROMPTCODE_JWT_SECRET,"
-echo "       PROMPTCODE_SANDBOX_EXECUTOR_TOKEN, PROMPTCODE_OPENAI_API_KEY, DOMAIN,"
+echo "       PROMPTCODE_SANDBOX_EXECUTOR_TOKEN, DEEPSEEK_API_KEY, DOMAIN,"
+echo "       PROMPTCODE_EXECUTION_BROKER_URL, PROMPTCODE_GRADING_SIGNING_KEY,"
+echo "       PROMPTCODE_INTERVIEW_INTERNAL_TOKEN,"
 echo "       PROMPTCODE_METRICS_TOKEN, RCLONE_REMOTE, and either GHCR credentials"
 echo "       (GHCR_USERNAME/GHCR_TOKEN) or PROMPTCODE_GHCR_PUBLIC_IMAGES=true"
 echo "  2. Validate the host env and configure GHCR pulls:"

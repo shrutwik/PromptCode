@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import ipaddress
+import os
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlparse
 
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings
@@ -65,11 +67,22 @@ class Settings(BaseSettings):
     database_echo: bool = False
 
     interview_workspace_root: str = ""  # optional override for session workspaces
+    grading_signing_key: str = ""
+    grading_feedback_enabled: bool = False
+    grading_publish_reviewed_scores: bool = False
+    grading_calibration_report_path: str = ""
+    grading_job_timeout_seconds: int = Field(default=600, ge=30, le=3600)
+    grading_max_pending_jobs: int = Field(default=100, ge=1, le=10000)
+    interview_storage_max_bytes: int = Field(default=20 * 1024**3, ge=1)
+    interview_storage_min_free_bytes: int = Field(default=2 * 1024**3, ge=0)
+    grading_queue_alert_seconds: int = Field(default=300, ge=1)
+    grading_failed_alert_jobs: int = Field(default=1, ge=1)
+    # local | docker. Empty process env falls through to this so a laptop .env is honored.
     runner: str = "local"
     session_ttl_hours: int = 24
     max_runners: int = 4
     max_runners_acquire_timeout_seconds: int = 15
-    interview_max_ai_requests_per_session: int = 40
+    interview_max_ai_requests_per_session: int = 10
     auth_cookie_enabled: bool = False  # prefer HttpOnly cookies in prod when true
     auth_cookie_secure: bool = True
     auth_cookie_samesite: str = "lax"
@@ -91,8 +104,30 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("PROMPTCODE_OPENAI_API_KEY", "OPENAI_API_KEY"),
     )
+    deepseek_api_key: str = Field(default="", validation_alias=AliasChoices("DEEPSEEK_API_KEY", "PROMPTCODE_DEEPSEEK_API_KEY"))
     openai_base_url: str = ""
     openai_model: str = "gpt-4o"
+    # Interview assistant (answers questions in a session). Separate from the
+    # evaluation model above so practice chat can stay on a cheaper model.
+    ai_kill_switch: bool = False
+    ai_max_micros_per_token: int = Field(default=2, ge=1)
+    ai_trial_requests: int = Field(default=1000000, ge=1)
+    ai_trial_tokens: int = Field(default=1000000000, ge=1)
+    ai_trial_cost_micros: int = Field(default=5000000, ge=1)
+    ai_global_requests: int = Field(default=200, ge=1)
+    ai_global_tokens: int = Field(default=500000, ge=1)
+    ai_global_cost_micros: int = Field(default=1000000, ge=1)
+    ai_user_requests: int = Field(default=20, ge=1)
+    ai_user_tokens: int = Field(default=500000, ge=1)
+    ai_user_cost_micros: int = Field(default=1000000, ge=1)
+    ai_session_requests: int = Field(default=10, ge=1)
+    ai_session_tokens: int = Field(default=250000, ge=1)
+    ai_session_cost_micros: int = Field(default=500000, ge=1)
+    ai_question_only: bool = True
+    ai_provider: str = ""
+    ai_model: str = "gpt-4o-mini"
+    ai_base_url: str = ""
+    ai_api_key: str = ""
     # Primary model used for prompt-quality judging (LLM-as-judge).
     # Can be a single model id or a comma-separated list (priority order).
     prompt_judge_model: str = "gpt-4o"
@@ -110,6 +145,11 @@ class Settings(BaseSettings):
     sandbox_executor_token: str = ""
     sandbox_executor_max_concurrent_runs: int = 6
     sandbox_executor_acquire_timeout_seconds: int = 10
+    execution_broker_url: str = ""
+    execution_broker_ca_file: str = ""
+    execution_broker_mode: bool = False
+    broker_node_image: str = ""
+    broker_python_image: str = ""
 
     evaluation_normal_runs: int = 5
     evaluation_adversarial_runs: int = 2
@@ -146,6 +186,26 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_security_settings(self) -> "Settings":
         errors: list[str] = []
+        if self.execution_broker_mode:
+            # The daemon host is a separate role with no application credentials.
+            if any((self.jwt_secret, self.grading_signing_key, self.openai_api_key,
+                    self.deepseek_api_key, self.ai_api_key, self.smtp_password,
+                    self.metrics_token, self.interview_internal_token)) or self.database_url != _DEFAULT_DATABASE_URL:
+                raise ValueError("Execution broker must not receive database, JWT, signing or provider credentials.")
+            self.sandbox_executor_token = self.sandbox_executor_token.strip()
+            if len(self.sandbox_executor_token.encode()) < 32 or _looks_like_placeholder(self.sandbox_executor_token):
+                raise ValueError("Execution broker requires a separate management token of at least 32 bytes.")
+            return self
+        self.execution_broker_url = self.execution_broker_url.strip().rstrip("/")
+        if self.execution_broker_url:
+            broker_url = urlparse(self.execution_broker_url)
+            if (broker_url.scheme not in {"http", "https"} or not broker_url.hostname
+                    or broker_url.username or broker_url.password or broker_url.query or broker_url.fragment):
+                errors.append("PROMPTCODE_EXECUTION_BROKER_URL must be an HTTP(S) URL without credentials, query or fragment.")
+            if self.environment.lower() == "production" and broker_url.scheme != "https":
+                errors.append("Production execution broker requires HTTPS.")
+            if len(self.sandbox_executor_token.strip().encode()) < 32:
+                errors.append("Execution broker requires PROMPTCODE_SANDBOX_EXECUTOR_TOKEN of at least 32 bytes.")
         secret = str(self.jwt_secret or "").strip()
         if not secret:
             errors.append("PROMPTCODE_JWT_SECRET must be set.")
@@ -179,6 +239,9 @@ class Settings(BaseSettings):
             )
         self.domain = str(self.domain or "").strip()
         self.openai_api_key = str(self.openai_api_key or "").strip()
+        # Never send a legacy provider key to DeepSeek.
+        if urlparse(self.openai_base_url).hostname == "api.deepseek.com":
+            self.openai_api_key = self.deepseek_api_key.strip()
         if not self.debug:
             if not self.domain:
                 errors.append("DOMAIN must be set when PROMPTCODE_DEBUG is false.")
@@ -252,4 +315,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    # A broker must never load the app's repository .env by accident.
+    if os.environ.get("PROMPTCODE_EXECUTION_BROKER_MODE", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return Settings(_env_file=None)
     return Settings()

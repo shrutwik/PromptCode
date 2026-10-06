@@ -42,7 +42,9 @@ def workspace_root() -> Path:
     settings = get_settings()
     base = Path(getattr(settings, "interview_workspace_root", "") or "")
     if not base.parts:
-        base = Path(__file__).resolve().parents[4] / "backend" / "data" / "interview_workspaces"
+        # Local: backend/data/interview_workspaces
+        # Image: /app/data/interview_workspaces (parents[4] is / and is not writable)
+        base = Path(__file__).resolve().parents[3] / "data" / "interview_workspaces"
     base.mkdir(parents=True, exist_ok=True)
     return base
 
@@ -82,12 +84,22 @@ def create_workspace(session_id: str, slug: str) -> Path:
     src = challenge_dir(slug)
     dest = workspace_root() / session_id
     starter = starter_snapshot_path(session_id)
-    if dest.exists():
-        shutil.rmtree(dest)
-    if starter.exists():
-        shutil.rmtree(starter)
-    _copy_candidate_tree(src, dest)
-    _copy_candidate_tree(src, starter)
+    from app.services.interview.workspace_quota import storage_capacity
+    source_bytes = sum(item.stat().st_size for item in src.rglob('*') if item.is_file()
+                       and not any(part in SKIP_DIR_NAMES for part in item.relative_to(src).parts)
+                       and not is_blocked_path(item.relative_to(src).as_posix()) and not _should_skip(item))
+    with storage_capacity(2 * source_bytes):
+        if dest.exists():
+            shutil.rmtree(dest)
+        if starter.exists():
+            shutil.rmtree(starter)
+        try:
+            _copy_candidate_tree(src, dest)
+            _copy_candidate_tree(src, starter)
+        except Exception:
+            shutil.rmtree(dest, ignore_errors=True)
+            shutil.rmtree(starter, ignore_errors=True)
+            raise
     return dest
 
 
@@ -247,6 +259,70 @@ def candidate_write_allowed(workspace: Path, rel_path: str) -> bool:
     return True
 
 
+_CONTEXT_SKIP_NAMES = {
+    "package.json",
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "npm-shrinkwrap.json",
+    "tsconfig.json",
+    "vitest.config.ts",
+    "vite.config.ts",
+    "pytest.ini",
+    "requirements.txt",
+    "pyproject.toml",
+    "setup.cfg",
+    "setup.py",
+    "tox.ini",
+    "dockerfile",
+    "makefile",
+}
+_SOURCE_SUFFIXES = {".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"}
+
+
+def _is_test_path(rel: str) -> bool:
+    name = rel.rsplit("/", 1)[-1].lower()
+    rel_l = rel.lower()
+    return (
+        "/tests/" in f"/{rel_l}"
+        or name.startswith("test_")
+        or ".test." in name
+        or ".spec." in name
+    )
+
+
+def is_question_context_path(rel: str) -> bool:
+    """Ticket files the assistant always sees: the question, tests, and source."""
+    normalized = rel.replace("\\", "/").strip().lstrip("./")
+    if not normalized or is_blocked_path(normalized):
+        return False
+    name = normalized.rsplit("/", 1)[-1]
+    lower = name.lower()
+    if lower == "readme.md" or _is_test_path(normalized):
+        return True
+    if lower in _CONTEXT_SKIP_NAMES or lower.startswith(".env") or lower.endswith(".sh"):
+        return False
+    return Path(lower).suffix in _SOURCE_SUFFIXES
+
+
+def question_context_paths(workspace: Path) -> list[str]:
+    paths = [
+        item["path"]
+        for item in list_files(workspace)
+        if is_question_context_path(item["path"])
+    ]
+
+    def rank(rel: str) -> tuple[int, str]:
+        name = rel.rsplit("/", 1)[-1].lower()
+        if name == "readme.md":
+            return (0, rel)
+        if _is_test_path(rel):
+            return (1, rel)
+        return (2, rel)
+
+    return sorted(paths, key=rank)
+
+
 def list_files(workspace: Path) -> list[dict]:
     files: list[dict] = []
     if not workspace.exists():
@@ -263,11 +339,7 @@ def list_files(workspace: Path) -> list[dict]:
             size = item.stat().st_size
         except OSError:
             size = 0
-        files.append({
-            "path": rel,
-            "size": size,
-            "writable": candidate_write_allowed(workspace, rel),
-        })
+        files.append({"path": rel, "size": size})
     return files
 
 
@@ -287,6 +359,8 @@ def write_file(workspace: Path, rel_path: str, content: str) -> None:
     lock_path = Path(str(workspace) + ".upload.lock")
     with lock_path.open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        if Path(str(workspace) + ".submitted").exists():
+            raise ValueError("Submission is frozen; start a new attempt to edit")
         _write_file_locked(workspace, rel_path, content)
 
 
@@ -300,7 +374,10 @@ def _write_file_locked(workspace: Path, rel_path: str, content: str) -> None:
     path = contained_file(workspace, rel_path)
     from app.services.interview.workspace_quota import check_upload
     check_upload(workspace, path, len(content.encode("utf-8")))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.is_symlink():
-        raise PermissionError("Path escape blocked")
-    path.write_text(content, encoding="utf-8")
+    from app.services.interview.workspace_quota import storage_capacity
+    # Reserve the full write so an existing file replacement also respects free disk.
+    with storage_capacity(len(content.encode('utf-8'))):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.is_symlink():
+            raise PermissionError("Path escape blocked")
+        path.write_text(content, encoding="utf-8")

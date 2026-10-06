@@ -1,0 +1,52 @@
+# STANDALONE file, on a dedicated execution machine, never merge with app compose.
+# No app .env/env_file, DB, provider keys, grading key, or application workspace.
+services:
+  broker:
+    image: ghcr.io/shrutwik/promptcode/backend:${IMAGE_TAG:?set reviewed image tag}
+    command: ["uvicorn", "app.execution_broker:app", "--host", "0.0.0.0", "--port", "8090", "--workers", "1", "--limit-concurrency", "20"]
+    restart: unless-stopped
+    environment:
+      PROMPTCODE_EXECUTION_BROKER_MODE: "true"
+      PROMPTCODE_ENVIRONMENT: production
+      PROMPTCODE_DEBUG: "false"
+      PROMPTCODE_SANDBOX_EXECUTOR_TOKEN: ${PROMPTCODE_SANDBOX_EXECUTOR_TOKEN:?set private management token}
+      PROMPTCODE_BROKER_NODE_IMAGE: ${PROMPTCODE_BROKER_NODE_IMAGE:?set node image digest}
+      PROMPTCODE_BROKER_PYTHON_IMAGE: ${PROMPTCODE_BROKER_PYTHON_IMAGE:?set python image digest}
+      PROMPTCODE_SANDBOX_IMAGE: ${PROMPTCODE_SANDBOX_IMAGE:?set sandbox image digest}
+      PROMPTCODE_INTERVIEW_WORKSPACE_ROOT: /var/promptcode/execution
+      PROMPTCODE_SANDBOX_HOST_WORKDIR: /var/promptcode/execution
+      PROMPTCODE_SANDBOX_NETWORK_MODE: container
+      PROMPTCODE_MAX_RUNNERS: ${PROMPTCODE_MAX_RUNNERS:-4}
+      PROMPTCODE_SANDBOX_TIMEOUT_SECONDS: "120"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Same absolute path on host and broker: Docker binds host paths.
+      - /var/promptcode/execution:/var/promptcode/execution
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:8090/ready',headers={'Authorization':'Bearer '+os.environ['PROMPTCODE_SANDBOX_EXECUTOR_TOKEN']}); urllib.request.urlopen(r,timeout=10).read()"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "2.0"
+  ingress:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      BROKER_DOMAIN: ${BROKER_DOMAIN:?set broker TLS hostname}
+    ports:
+      - "${BROKER_BIND_IP:?set execution host private IP}:443:443"
+    volumes:
+      - ./docker/Caddyfile.execution:/etc/caddy/Caddyfile:ro
+      - ${BROKER_TLS_DIR:?set private TLS certificate directory}:/etc/broker-tls:ro
+      - broker_tls:/data
+      - broker_config:/config
+    depends_on:
+      broker:
+        condition: service_healthy
+volumes:
+  broker_tls:
+  broker_config:

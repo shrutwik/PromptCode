@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import asyncio
+import json
 import secrets
 import uuid
 from datetime import datetime, timezone
@@ -15,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.client_ip import client_ip_from_request
 from app.core.config import get_settings
 from app.core.deps import get_current_user
-from app.core.ratelimit import enforce_rate_limit
+from app.core.ratelimit import enforce_rate_limit, limit_from_env
 from app.db.session import get_db
 from app.models.beta_ops import HumanReview
 from app.models.interview_session import (
@@ -55,12 +57,17 @@ from app.schemas.interview import (
     TestRunRequest,
     TestRunResponse,
 )
-from app.services.interview.assistant_changes import reconcile_assistant_proposals
 from app.services.interview.ai_budget import reserve_ai_budget
 from app.services.interview.execution_feedback import advisory_scoring, advisory_summary
 from app.services.interview.ai_provider import (
+    MAX_AI_REPLY_CHARS,
+    MAX_ATTACHMENT_BYTES_TOTAL,
+    MAX_ATTACHMENT_CHARS,
+    MAX_ATTACHMENTS,
     SYSTEM_PROMPT,
     AIProviderError,
+    apply_assistant_guardrails,
+    screen_assistant_input,
     AIRequest,
     check_session_ai_rate_limit,
     get_ai_provider,
@@ -96,7 +103,6 @@ from app.services.interview.registry import (
     get_challenge,
     get_runner_config,
     is_blocked_path,
-    is_frozen_path,
     list_challenges,
 )
 from app.services.interview.rubric import (
@@ -105,7 +111,7 @@ from app.services.interview.rubric import (
     candidate_defend_questions,
     parse_defend_questions,
     previous_attempt_for,
-    score_session_v2,
+    score_session_v3,
     sanitize_candidate_question,
     steps_summary,
 )
@@ -116,19 +122,23 @@ from app.services.interview.runner import (
     runner_mode,
 )
 from app.services.interview.workspace import (
+    MAX_FILE_BYTES,
     assert_session_isolation,
+    candidate_write_allowed,
     compute_diff_stats,
     create_workspace,
     list_files,
+    question_context_paths,
     read_file,
     starter_snapshot_path,
     unified_diff_for_file,
+    workspace_root,
     write_file,
 )
 
 router = APIRouter()
 
-_RATE = 120
+_RATE = limit_from_env("PROMPTCODE_INTERVIEW_RATE_LIMIT", 120)
 _WINDOW = 60
 
 
@@ -170,6 +180,7 @@ async def _load_owned_session(
     db: AsyncSession,
     session_id: uuid.UUID,
     user: User,
+    lock: bool = False,
 ) -> InterviewSession:
     """Load a session for a bearer user.
 
@@ -178,7 +189,12 @@ async def _load_owned_session(
     A different user gets 404, including when they send someone else's token.
     Anonymous owner-token routes are unchanged: these handlers still require a user.
     """
-    session = await db.get(InterviewSession, session_id)
+    if lock:
+        session = (await db.execute(select(InterviewSession).where(
+            InterviewSession.id == session_id).with_for_update()
+            .execution_options(populate_existing=True))).scalar_one_or_none()
+    else:
+        session = await db.get(InterviewSession, session_id)
     if session is None or session.user_id is None or session.user_id != user.id:
         raise HTTPException(status_code=404, detail="Session not found")
     maybe_expire_session(session)
@@ -314,8 +330,18 @@ async def _evaluation_response(
         ).scalars().all()
     ]
     practice = advisory_scoring({"rubric": evaluation.rubric, "metrics": evaluation.metrics or {}})
+    from app.services.interview.grading_review import candidate_review_status
+    published_review = await candidate_review_status(db, session.id)
+    assessment = published_review or (evaluation.metrics or {}).get("assessment")
+    if assessment and not published_review:
+        from app.models.interview_grading import InterviewGradingJob
+        grading_job = (await db.execute(select(InterviewGradingJob).where(
+            InterviewGradingJob.session_id == session.id))).scalar_one_or_none()
+        if grading_job:
+            assessment = {**assessment, "execution_status": grading_job.status}
     return EvaluationResponse(
-        total_score=0.0,
+        total_score=published_review["total_score"] if published_review else 0.0,
+        assessment=assessment,
         rubric=practice["rubric"],
         metrics={k: v for k, v in practice["metrics"].items() if k != "answer_guides"},
         insights=evaluation.insights,
@@ -441,11 +467,10 @@ async def challenges_with_progress(
         if sess:
             latest = max(sess, key=lambda x: x.started_at)
             latest_id = latest.id
-            if any(s.status in {"created", "active"} for s in sess):
+            active = [s for s in sess if s.status in {"created", "active"}]
+            if active:
                 progress = "in_progress"
-                active_id = next(
-                    s.id for s in sess if s.status in {"created", "active"}
-                )
+                active_id = max(active, key=lambda s: s.started_at).id
             if any(s.status == "submitted" for s in sess):
                 progress = "completed" if progress != "in_progress" else "in_progress"
             for s in sess:
@@ -534,9 +559,14 @@ async def start_session(
     attempt = await next_attempt_number(
         db, user_id=user.id, challenge_slug=body.challenge_slug
     )
+    # Workspace copies and storage scans must not block the API event loop or
+    # retain a pooled database connection while waiting for the filesystem lock.
+    await db.commit()
     try:
-        workspace = create_workspace(str(session_id), body.challenge_slug)
-        assert_session_isolation(str(session_id), body.challenge_slug)
+        workspace = await asyncio.to_thread(create_workspace, str(session_id), body.challenge_slug)
+        await asyncio.to_thread(assert_session_isolation, str(session_id), body.challenge_slug)
+    except HTTPException:
+        raise
     except Exception:
         raise _public_error("Could not prepare challenge workspace.", status_code=500)
     now = utcnow()
@@ -659,7 +689,8 @@ async def session_files(
     x_session_token: str | None = Header(None, alias="X-Session-Token"),
 ) -> list[FileEntry]:
     session = await _load_owned_session(db=db, session_id=session_id, user=user)
-    return [FileEntry(**f) for f in list_files(Path(session.workspace_path))]
+    files = await asyncio.to_thread(list_files, Path(session.workspace_path))
+    return [FileEntry(**f) for f in files]
 
 
 @router.get("/sessions/{session_id}/files/{file_path:path}", response_model=FileContentResponse)
@@ -675,7 +706,7 @@ async def get_session_file(
         raise HTTPException(status_code=404, detail="File not found")
     session = await _load_owned_session(db=db, session_id=session_id, user=user)
     try:
-        content = read_file(Path(session.workspace_path), file_path)
+        content = await asyncio.to_thread(read_file, Path(session.workspace_path), file_path)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found") from None
     except PermissionError:
@@ -701,18 +732,16 @@ async def save_session_file(
 ) -> FileContentResponse:
     if is_blocked_path(file_path):
         raise HTTPException(status_code=404, detail="File not found")
-    if is_frozen_path(file_path):
-        raise HTTPException(status_code=403, detail="This file is read-only.")
-    session = await _load_owned_session(db=db, session_id=session_id, user=user)
+    session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
     require_mutable(session)
     try:
         # Diff against previous content when present for event metadata
         prev = ""
         try:
-            prev = read_file(Path(session.workspace_path), file_path)
+            prev = await asyncio.to_thread(read_file, Path(session.workspace_path), file_path)
         except FileNotFoundError:
             prev = ""
-        write_file(Path(session.workspace_path), file_path, body.content)
+        await asyncio.to_thread(write_file, Path(session.workspace_path), file_path, body.content)
     except PermissionError:
         raise HTTPException(status_code=404, detail="File not found") from None
     except ValueError as exc:
@@ -769,28 +798,16 @@ async def post_event(
     x_session_token: str | None = Header(None, alias="X-Session-Token"),
 ) -> EventResponse:
     session = await _load_owned_session(db=db, session_id=session_id, user=user)
-    allowed = {
-        "session_started",
-        "file_viewed",
-        "file_searched",
-        "file_changed",
-        "test_run",
-        "test_result",
-        "benchmark_run",
-        "ai_prompt",
-        "ai_response",
-        "ai_edit_proposed",
-        "ai_edit_accepted",
-        "ai_edit_modified",
-        "ai_edit_rejected",
-        "change_reverted",
-        # final_diff_viewed is emitted only via GET /diff?record=true (Review Changes)
-        "submission",
-        "defend_answer",
-    }
-    if body.event_type not in allowed:
-        raise HTTPException(status_code=400, detail="Unknown event type")
-    event = await _add_event(db, session.id, body.event_type, body.payload)
+    require_mutable(session)
+    # Browser activity cannot impersonate execution, assistant or submission evidence.
+    if body.event_type != "file_searched":
+        raise HTTPException(status_code=400, detail="This event is recorded by the server")
+    query = body.payload.get("query")
+    hits = body.payload.get("hits", 0)
+    if (set(body.payload) - {"query", "hits"} or not isinstance(query, str)
+            or len(query) > 200 or type(hits) is not int or not 0 <= hits <= 10000):
+        raise HTTPException(status_code=400, detail="Invalid search activity")
+    event = await _add_event(db, session.id, "file_searched", {"query": query, "hits": hits})
     await db.commit()
     await db.refresh(event)
     return EventResponse(
@@ -915,10 +932,54 @@ async def run_session_tests(
             "isolation": result.get("isolation"),
             "runner": result.get("runner"),
             "error_code": result.get("error_code"),
+            "stdout_tail": (result.get("stdout") or "")[-4000:],
+            "stderr_tail": (result.get("stderr") or "")[-2000:],
         },
     )
     await db.commit()
     return TestRunResponse(**result)
+
+
+def _question_attachments(workspace: Path) -> list[dict[str, str]]:
+    """README, tests, and source for this ticket. Hidden solution files stay out."""
+    attachments: list[dict[str, str]] = []
+    total = 0
+    for rel in question_context_paths(workspace):
+        if len(attachments) >= MAX_ATTACHMENTS:
+            break
+        try:
+            content = read_file(workspace, rel)[:MAX_ATTACHMENT_CHARS]
+        except (FileNotFoundError, PermissionError, ValueError):
+            continue
+        size = len(content.encode("utf-8"))
+        if total + size > MAX_ATTACHMENT_BYTES_TOTAL:
+            break
+        attachments.append({"path": rel, "content": content})
+        total += size
+    return attachments
+
+
+async def _latest_test_output(db: AsyncSession, session_id: uuid.UUID) -> str:
+    result = await db.execute(
+        select(InterviewSessionEvent)
+        .where(
+            InterviewSessionEvent.session_id == session_id,
+            InterviewSessionEvent.event_type == "test_result",
+        )
+        .order_by(InterviewSessionEvent.created_at.desc())
+        .limit(1)
+    )
+    event = result.scalar_one_or_none()
+    if event is None:
+        return ""
+    payload = event.payload or {}
+    stdout = str(payload.get("stdout_tail") or "")
+    stderr = str(payload.get("stderr_tail") or "")
+    if not stdout and not stderr:
+        return ""
+    state = "PASS" if payload.get("ok") else "FAIL"
+    command = str(payload.get("command") or "")
+    return f"$ {command}\n{state}\n{stdout}\n{stderr}".strip()[:4000]
 
 
 @router.post("/sessions/{session_id}/ai/chat", response_model=AIChatResponse)
@@ -948,26 +1009,17 @@ async def ai_chat(
     except AIProviderError as exc:
         raise HTTPException(status_code=429, detail=exc.message) from exc
 
-    # Attach only explicitly requested files — never dump whole repo / hidden paths.
-    attachments: list[dict[str, str]] = []
+    # The ticket, its tests, and its source. The client does not choose context.
+    workspace_path = Path(session.workspace_path)
+    attachments = _question_attachments(workspace_path)
     rejected_attachments: list[str] = []
-    for rel in body.attached_paths:
-        if is_blocked_path(rel):
-            rejected_attachments.append(rel)
-            continue
-        if len(attachments) >= 6:
-            rejected_attachments.append(rel)
-            continue
-        try:
-            content = read_file(Path(session.workspace_path), rel)
-            attachments.append({"path": rel, "content": content})
-        except (FileNotFoundError, PermissionError, ValueError):
-            rejected_attachments.append(rel)
+    stored_tests = await _latest_test_output(db, session.id)
+    test_output = stored_tests or (body.test_output or "").strip()[:4000]
 
     budget_errors = validate_context_budget(
         prompt=body.message,
         attachments=attachments,
-        selected_text=body.selected_text,
+        selected_text=None,
     )
     if budget_errors:
         raise HTTPException(
@@ -1006,24 +1058,68 @@ async def ai_chat(
     )
     await db.commit()
 
-    await reserve_ai_budget(db, str(user.id), sid,
-                            len(body.message.encode("utf-8")) + len(SYSTEM_PROMPT.encode("utf-8"))
-                            + sum(len(a["content"].encode("utf-8")) for a in attachments)
-                            + len((body.selected_text or "").encode("utf-8")))
+    refusal = screen_assistant_input(body.message)
+    if refusal:
+        # Local refusal: no model call, so this does not spend a credit or a session quota.
+        mark_session_ai_start(sid)
+        try:
+            db.add(
+                InterviewAIMessage(
+                    session_id=session.id,
+                    role="assistant",
+                    content=refusal,
+                    meta={"provider": "guardrail", "model": "local", "proposed_edits": 0},
+                )
+            )
+            await _add_event(
+                db,
+                session.id,
+                "ai_response",
+                {
+                    "provider": "guardrail",
+                    "model": "local",
+                    "chars": len(refusal),
+                    "latency_ms": 0,
+                    "usage": {},
+                },
+            )
+            await db.commit()
+        finally:
+            mark_session_ai_end(sid)
+        return AIChatResponse(
+            reply=refusal,
+            provider="guardrail",
+            model="local",
+            proposed_edits=[],
+            latency_ms=0,
+            rejected_attachments=rejected_attachments,
+            error_code="guardrail",
+        )
+
     provider = get_ai_provider()
+    ai_request = AIRequest(
+        prompt=body.message,
+        system=SYSTEM_PROMPT,
+        attachments=attachments,
+        selected_text=None,
+        include_test_output=bool(test_output),
+        test_output=test_output or None,
+        session_id=sid,
+    )
+    # Reserve the assembled wire context, including fences, paths and test output.
+    from app.services.interview.ai_provider import assemble_user_content
+    wire_messages = [{"role": "system", "content": SYSTEM_PROMPT},
+                     {"role": "user", "content": assemble_user_content(ai_request)}]
+    from app.services.interview.ai_provider import MAX_CONTEXT_CHARS, MAX_OUTPUT_TOKENS
+    if sum(len(m["content"]) for m in wire_messages) > MAX_CONTEXT_CHARS:
+        raise HTTPException(400, "AI context exceeds 18,000 characters. Shorten the question or code and retry.")
+    await reserve_ai_budget(db, str(user.id), sid,
+                            len(json.dumps(wire_messages).encode("utf-8")),
+                            output_tokens=MAX_OUTPUT_TOKENS, attempts=1)
     mark_session_ai_start(sid)
     session.ai_request_count = int(getattr(session, "ai_request_count", 0) or 0) + 1
     try:
-        ai_result = await provider.complete_request(
-            AIRequest(
-                prompt=body.message,
-                system=SYSTEM_PROMPT,
-                attachments=attachments,
-                selected_text=body.selected_text,
-                include_test_output=body.include_test_output,
-                session_id=sid,
-            )
-        )
+        ai_result = await provider.complete_request(ai_request)
     except AIProviderError as exc:
         # Operational failure — keep prompt event; do not invent scoring penalties.
         tag_infra_failure(session, f"ai:{exc.code}", blocked_ms=0)
@@ -1045,7 +1141,7 @@ async def ai_chat(
     finally:
         mark_session_ai_end(sid)
 
-    reply = ai_result.text
+    reply = ai_result.text[:MAX_AI_REPLY_CHARS]
     proposed: list[dict] = list(ai_result.proposed_edits)
     if not proposed:
         import re
@@ -1056,19 +1152,20 @@ async def ai_chat(
             re.S | re.I,
         ):
             proposed.append({"path": m.group(1).strip(), "content": m.group(2)})
-    reply, proposed, refused = reconcile_assistant_proposals(
+    workspace = Path(session.workspace_path)
+    proposed = [
+        edit
+        for edit in proposed
+        if candidate_write_allowed(workspace, str(edit.get("path") or ""))
+        and isinstance(edit.get("content"), str)
+        and len(edit["content"].encode("utf-8")) <= MAX_FILE_BYTES
+    ]
+    reply, proposed = apply_assistant_guardrails(
         reply=reply,
         proposed=proposed,
-        workspace=Path(session.workspace_path),
+        attached_paths=[item["path"] for item in attachments],
     )
     proposed = await _stamp_revisions(db, session.id, proposed)
-    if refused:
-        await _add_event(
-            db,
-            session.id,
-            "ai_edit_refused",
-            {"paths": [item["path"] for item in refused], "reasons": refused},
-        )
     if proposed:
         await _add_event(
             db,
@@ -1113,7 +1210,6 @@ async def ai_chat(
         provider=ai_result.provider,
         model=ai_result.model,
         proposed_edits=proposed,
-        refused_edits=refused,
         latency_ms=ai_result.latency_ms,
         rejected_attachments=rejected_attachments,
         error_code=ai_result.error_code,
@@ -1134,8 +1230,6 @@ async def ai_apply_edit(
     require_mutable(session)
     if is_blocked_path(body.path):
         raise HTTPException(status_code=404, detail="File not found")
-    if is_frozen_path(body.path):
-        raise HTTPException(status_code=403, detail="This file is read-only.")
     disposition = body.disposition if body.disposition in {
         "accepted", "modified", "rejected"
     } else "accepted"
@@ -1153,7 +1247,7 @@ async def ai_apply_edit(
         )
         await db.commit()
         try:
-            content = read_file(Path(session.workspace_path), body.path)
+            content = await asyncio.to_thread(read_file, Path(session.workspace_path), body.path)
         except FileNotFoundError:
             content = ""
         return FileContentResponse(path=body.path, content=content)
@@ -1177,31 +1271,14 @@ async def ai_apply_edit(
     if disposition == "modified":
         payload["content"] = body.content
         payload["proposed_content"] = body.proposed_content or ""
-    workspace = Path(session.workspace_path)
+    await _add_event(db, session.id, event_map[disposition], payload)
+    source = "ai" if disposition == "accepted" else "mixed"
     try:
-        try:
-            previous = read_file(workspace, body.path)
-        except FileNotFoundError:
-            previous = None
-        write_file(workspace, body.path, body.content)
-        stored = read_file(workspace, body.path)
+        await asyncio.to_thread(write_file, Path(session.workspace_path), body.path, body.content)
     except PermissionError:
-        raise HTTPException(status_code=403, detail="This file is read-only.") from None
+        raise HTTPException(status_code=404, detail="File not found") from None
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if stored != body.content:
-        if previous is None:
-            written = workspace / body.path
-            if written.is_file() and not written.is_symlink():
-                written.unlink()
-        else:
-            write_file(workspace, body.path, previous)
-        raise HTTPException(
-            status_code=409,
-            detail="The workspace does not contain this assistant change.",
-        )
-    source = "assistant" if disposition == "accepted" else "mixed"
-    await _add_event(db, session.id, event_map[disposition], payload)
     db.add(
         InterviewSessionFile(
             session_id=session.id,
@@ -1232,7 +1309,7 @@ async def submit_session(
     user: User = Depends(get_current_user),
     x_session_token: str | None = Header(None, alias="X-Session-Token"),
 ) -> EvaluationResponse:
-    session = await _load_owned_session(db=db, session_id=session_id, user=user)
+    session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
     # Idempotent: already submitted → return existing report
     if session.status == "submitted":
         existing = (
@@ -1257,44 +1334,24 @@ async def submit_session(
     if meta is None:
         raise HTTPException(status_code=404, detail="Challenge missing")
 
-    # Do NOT auto-emit final_diff_viewed — only when candidate opens Review Changes.
-    await _add_event(db, session.id, "submission", {})
+    # Serialize admission by owner before allocating another immutable snapshot.
+    from app.services.interview.grading_admission import require_grading_capacity
+    await require_grading_capacity(db, session.user_id)
+    # Freeze before any execution; the durable evaluator grades these bytes only.
+    from app.services.interview.snapshot import freeze_submission
+    from app.workers.interview_grading import enqueue_grading_job
     try:
-        runner_cfg = get_runner_config(session.challenge_slug)
-        runner_cfg = {**runner_cfg, "challengeSlug": session.challenge_slug}
-        command = resolve_command_id(
-            "run_tests",
-            meta["test_command"],
-            commands_map=runner_cfg.get("commands"),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    runner = get_challenge_runner()
-    test_result = await runner.run_tests(
-        Path(session.workspace_path),
-        command,
-        timeout_seconds=int(runner_cfg.get("timeoutSeconds") or 60),
-        command_id="run_tests",
-        runner_config=runner_cfg,
-    )
-    if test_result.get("error_code") == "runner_busy":
-        await db.rollback()
-        raise HTTPException(503, "Execution capacity reached. Retry shortly.", headers={"Retry-After": "2"})
-    await _add_event(
-        db,
-        session.id,
-        "test_result",
-        {
-            "ok": test_result["ok"],
-            "exit_code": test_result["exit_code"],
-            "final": True,
-            "duration_ms": test_result.get("duration_ms"),
-            "counts": test_result.get("counts"),
-            "timed_out": test_result.get("timed_out"),
-            "isolation": test_result.get("isolation"),
-            "runner": test_result.get("runner"),
-        },
-    )
+        snapshot = await asyncio.to_thread(freeze_submission, Path(session.workspace_path), str(session.id))
+    except (OSError, ValueError):
+        raise HTTPException(409, "Submitted source could not be frozen safely") from None
+    if not session.challenge_version:
+        session.challenge_version = challenge_version_for(session.challenge_slug)
+    job = await enqueue_grading_job(db, session, snapshot)
+    await _add_event(db, session.id, "submission", {"source_digest": snapshot.source_digest,
+                                                    "grading_job_id": str(job.id)})
+    test_result = {"ok": False, "exit_code": None, "command": "trusted_evaluation_queued",
+                   "duration_ms": None, "counts": {}, "stdout": "", "stderr": "",
+                   "error_code": "grading_pending", "advisory": True, "authoritative": False}
 
     events_result = await db.execute(
         select(InterviewSessionEvent)
@@ -1311,22 +1368,25 @@ async def submit_session(
         }
         for e in event_rows
     ]
-    prompts_result = await db.execute(
-        select(InterviewAIMessage).where(
-            InterviewAIMessage.session_id == session.id,
-            InterviewAIMessage.role == "user",
-        )
-    )
-    prompts = [m.content for m in prompts_result.scalars().all()]
     starter = starter_snapshot_path(str(session.id))
-    scored = score_session_v2(
+    scored = await asyncio.to_thread(score_session_v3,
         events=events,
         test_summary=test_result,
-        ai_prompts=prompts,
+        session_id=session.id,
         challenge_slug=session.challenge_slug,
-        workspace=Path(session.workspace_path),
+        challenge_version=session.challenge_version or challenge_version_for(session.challenge_slug),
+        workspace=snapshot.source_path,
         starter_root=starter if starter.exists() else None,
     )
+    assessment = scored["metrics"]["assessment"]
+    packet = assessment["packet"]
+    packet["source_digest"] = snapshot.source_digest
+    packet["grading_job_id"] = str(job.id)
+    packet["evidence"].append({"id": "source:" + snapshot.source_digest,
+                               "kind": "submitted_source", "payload_digest": snapshot.source_digest})
+    from app.services.interview.grading import _digest
+    assessment["packet_digest"] = _digest(packet)
+    assessment["execution_status"] = job.status
     # Defend questions only after submit — parsed server-side from SOLUTION.md
     defend = parse_defend_questions(session.challenge_slug)
     # Candidate report: questions only (guides kept server-side for interviewer tooling)
@@ -1401,7 +1461,7 @@ async def session_diff_summary(
     starter = starter_snapshot_path(str(session.id))
     if not starter.exists():
         raise HTTPException(status_code=404, detail="Starter snapshot missing")
-    stats = compute_diff_stats(starter, Path(session.workspace_path))
+    stats = await asyncio.to_thread(compute_diff_stats, starter, Path(session.workspace_path))
     if record:
         await _add_event(db, session.id, "final_diff_viewed", {"file_count": stats["file_count"]})
         await db.commit()
@@ -1422,7 +1482,7 @@ async def session_diff_file(
     session = await _load_owned_session(db=db, session_id=session_id, user=user)
     starter = starter_snapshot_path(str(session.id))
     try:
-        unified = unified_diff_for_file(
+        unified = await asyncio.to_thread(unified_diff_for_file,
             starter, Path(session.workspace_path), file_path
         )
     except PermissionError:
@@ -1474,16 +1534,20 @@ async def post_defend_answer(
     user: User = Depends(get_current_user),
     x_session_token: str | None = Header(None, alias="X-Session-Token"),
 ) -> DefendQuestionsResponse:
-    session = await _load_owned_session(db=db, session_id=session_id, user=user)
+    session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
     if session.status != "submitted":
         raise HTTPException(status_code=400, detail="Submit before defend")
     ev = (
         await db.execute(
             select(InterviewEvaluation).where(InterviewEvaluation.session_id == session.id)
+            .with_for_update().execution_options(populate_existing=True)
         )
     ).scalar_one_or_none()
     if ev is None:
         raise HTTPException(status_code=404, detail="Report not ready")
+    questions = _defend_questions_for_user(user, ev, session.challenge_slug)
+    if body.index >= len(questions) or not body.answer.strip():
+        raise HTTPException(status_code=400, detail="Invalid defense answer")
     metrics = dict(ev.metrics or {})
     answers = dict(metrics.get("defend_answers") or {})
     answers[str(body.index)] = body.answer[:4000]
@@ -1492,13 +1556,16 @@ async def post_defend_answer(
         rubric, total = apply_communication_score(ev.rubric or {}, list(answers.values()))
         ev.rubric = rubric
         ev.total_score = 0.0
-    ev.metrics = metrics
     await _add_event(
         db,
         session.id,
         "defend_answer",
         {"index": body.index, "chars": len(body.answer), "answer": body.answer[:4000]},
     )
+    if ev.scoring_version == "v3-evidence":
+        from app.services.interview.grading import revise_defense
+        metrics["assessment"] = revise_defense(metrics["assessment"], answers)
+    ev.metrics = metrics
     questions = _defend_questions_for_user(user, ev, session.challenge_slug)
     if len(answers) >= len(questions):
         await track_event(
@@ -1558,73 +1625,39 @@ async def dashboard(
     )
     sessions = (await db.execute(q)).scalars().all()
     items: list[DashboardSessionItem] = []
-    scores: list[float] = []
-    correctness: list[float] = []
-    exploration: list[float] = []
-    ai_judgment: list[float] = []
-    verification: list[float] = []
     for s in sessions:
         maybe_expire_session(s)
-        ev = (
-            await db.execute(
-                select(InterviewEvaluation).where(InterviewEvaluation.session_id == s.id)
-            )
-        ).scalar_one_or_none()
+        meta = get_challenge(s.challenge_slug) or {}
+        from app.services.interview.grading_review import candidate_review_status
+        published_review = await candidate_review_status(db, s.id)
         items.append(
             DashboardSessionItem(
                 id=s.id,
                 challenge_slug=s.challenge_slug,
+                challenge_title=meta.get("title") or s.challenge_slug,
                 status=s.status,
                 attempt_number=getattr(s, "attempt_number", 1) or 1,
                 started_at=s.started_at,
                 submitted_at=s.submitted_at,
-                total_score=0.0 if ev else None,
+                total_score=published_review["total_score"] if published_review else None,
             )
         )
-        if ev is not None:
-            scores.append(0.0)
-            rub = ev.rubric or {}
-            if "A_correctness" in rub:
-                correctness.append(0.0)
-            if "B_investigation" in rub:
-                exploration.append(float(rub["B_investigation"].get("score", 0)))
-            if "D_ai_leverage" in rub:
-                ai_judgment.append(float(rub["D_ai_leverage"].get("score", 0)))
-            if "E_verification" in rub:
-                verification.append(float(rub["E_verification"].get("score", 0)))
-
-    def _avg(xs: list[float]) -> float | None:
-        return round(sum(xs) / len(xs), 1) if xs else None
-
     completed = sum(1 for s in items if s.status == "submitted")
-    trends: list[str] = []
-    trends_note = None
     if completed == 0:
         trends_note = "Complete a challenge to see your practice history here."
-    elif completed < 3:
-        trends_note = "Behavioral trends appear after at least 3 completed sessions."
     else:
-        half = max(1, len(scores) // 2)
-        early = _avg(scores[-half:])
-        late = _avg(scores[:half])
-        if early is not None and late is not None:
-            if late > early + 3:
-                trends.append("Recent sessions score higher than earlier ones.")
-            elif early > late + 3:
-                trends.append("Earlier sessions scored higher than recent ones.")
-            else:
-                trends.append("Scores are relatively stable across recent sessions.")
+        trends_note = "Only published, reviewed practice ratings are shown. Different tasks and assistance modes are not averaged."
 
     await db.commit()
     return DashboardStatsResponse(
         sessions=items,
         completed=completed,
-        avg_score=_avg(scores),
-        avg_correctness=_avg(correctness),
-        avg_exploration=_avg(exploration),
-        avg_ai_judgment=_avg(ai_judgment),
-        avg_verification=_avg(verification),
-        trends=trends,
+        avg_score=None,
+        avg_correctness=None,
+        avg_exploration=None,
+        avg_ai_judgment=None,
+        avg_verification=None,
+        trends=[],
         trends_note=trends_note,
     )
 
@@ -1960,8 +1993,7 @@ async def internal_incidents(
 @router.get("/internal/disk")
 async def internal_disk(request: Request) -> dict:
     require_internal(request)
-    settings = get_settings()
-    root = Path(settings.interview_workspace_root or "/tmp/promptcode-interview")
+    root = workspace_root()
     total = 0
     count = 0
     if root.exists():

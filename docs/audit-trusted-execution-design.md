@@ -1,10 +1,20 @@
-# Trusted evaluation and restricted execution — design only
+# Trusted evaluation and restricted execution
 
-Status: NOT IMPLEMENTED. Requires owner approval before implementation. Authoritative scoring remains NO-GO.
+Status: trusted evaluation and the restricted execution broker are implemented.
+The separate-host Compose topology is available; physical deployment remains a prerequisite. Published grades remain
+off pending real calibration and independent deployment audits.
+
+Frozen snapshots, durable leased jobs, external comparisons, signed results and
+versioned inventories for all ten questions now implement the evaluation boundary.
+See [grading research and architecture](grading-research-and-architecture.md) and
+[operator setup](grading-operations.md). The implemented broker and dedicated host topology are documented in
+[execution-host setup](execution-host.md). Physical deployment and an independent security audit remain required.
 
 ## Option B: trusted evaluator
 
-The current grader imports candidate Python/Node code into its own runtime. Candidate code can terminate or modify that runtime. Immutable reporter code, exact expected-ID checks, exit codes and reports are completeness mitigations; they cannot authenticate correctness in that shared interpreter.
+Advisory workspace tests import candidate Python/Node code into their runtime and
+cannot authenticate correctness. The submitted-source evaluator instead keeps expected
+outputs, comparisons and signing credentials outside the candidate interpreter.
 
 Use three boundaries:
 
@@ -20,7 +30,8 @@ Estimated engineering effort (planning estimate, not measured): 3–5 days for a
 
 ## Docker privilege analysis and restricted broker
 
-Current docker-compose.yml gives sandbox-executor the daemon socket and Docker group. That grants daemon-level authority, including starting privileged containers and mounting host root. Non-root UID, dropped capabilities and read-only socket mounts do not reduce this API authority. Compromise of the executor can therefore compromise its Docker host. The public backend socket addition was removed; existing executor privilege is unresolved.
+Development docker-compose.yml gives sandbox-executor the daemon socket and Docker group.
+Production disables that service and uses the credential-free execution broker on a separate host. That grants daemon-level authority, including starting privileged containers and mounting host root. Non-root UID, dropped capabilities and read-only socket mounts do not reduce this API authority. Compromise of the executor can therefore compromise its Docker host. The public backend socket addition was removed; existing executor privilege is unresolved.
 
 Recommended deployment combines a narrow broker with a dedicated disposable execution host. The app/DB host must never expose its Docker daemon to the API, workers or candidates. An isolated broker on the execution host has daemon authority; the host stores no production credentials, DB, backups or unrelated workloads. Restrict management networking and reimage/recycle it independently. Consider microVMs for stronger kernel isolation; containers alone share the host kernel.
 

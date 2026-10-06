@@ -14,6 +14,13 @@ FAKE_BIN_DIR="${WORK_DIR}/bin"
 DB_USER="${PROMPTCODE_DB_USER:-promptcode}"
 DB_NAME="${PROMPTCODE_DB_NAME:-promptcode}"
 KNOWN_VALUE="restore-proof-${RANDOM}"
+ARTIFACT_ROOT="${WORK_DIR}/artifacts"
+mkdir -p "${ARTIFACT_ROOT}/.submitted/proof/source"
+printf '%s\n' "${KNOWN_VALUE}" > "${ARTIFACT_ROOT}/.submitted/proof/source/main.py"
+ACTIVE_SESSION_ID='11111111-1111-1111-1111-111111111111'
+mkdir -p "${ARTIFACT_ROOT}/${ACTIVE_SESSION_ID}" "${ARTIFACT_ROOT}/${ACTIVE_SESSION_ID}.starter"
+printf '%s\n' "${KNOWN_VALUE}" > "${ARTIFACT_ROOT}/${ACTIVE_SESSION_ID}/main.py"
+export BACKUP_ARTIFACT_ROOT="${ARTIFACT_ROOT}"
 
 cleanup() {
   COMPOSE_PROJECT_NAME="${PROJECT_NAME}" IMAGE_TAG="${IMAGE_TAG}" docker compose -f "${DEPLOY_DIR}/docker-compose.yml" -f "${DEPLOY_DIR}/docker-compose.prod.yml" down -v --remove-orphans >/dev/null 2>&1 || true
@@ -32,7 +39,8 @@ cat > "${DEPLOY_DIR}/.env" <<EOF
 DOMAIN=api.example.com
 PROMPTCODE_DB_PASSWORD=restore-db-password
 PROMPTCODE_JWT_SECRET=restore-jwt-secret-0123456789abcdef
-PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=restore-sandbox-secret
+PROMPTCODE_SANDBOX_EXECUTOR_TOKEN=restore-sandbox-secret-0123456789-abcdef
+PROMPTCODE_EXECUTION_BROKER_URL=https://runner.example.net
 PROMPTCODE_OPENAI_API_KEY=test-only-restore-provider-placeholder
 PROMPTCODE_METRICS_TOKEN=restore-metrics-token
 RCLONE_REMOTE=${BACKUP_REMOTE_DIR}
@@ -72,7 +80,8 @@ export IMAGE_TAG="${IMAGE_TAG}"
 export DOMAIN="api.example.com"
 export PROMPTCODE_DB_PASSWORD="restore-db-password"
 export PROMPTCODE_JWT_SECRET="restore-jwt-secret-0123456789abcdef"
-export PROMPTCODE_SANDBOX_EXECUTOR_TOKEN="restore-sandbox-secret"
+export PROMPTCODE_SANDBOX_EXECUTOR_TOKEN="restore-sandbox-secret-0123456789-abcdef"
+export PROMPTCODE_EXECUTION_BROKER_URL="https://runner.example.net"
 export PROMPTCODE_OPENAI_API_KEY="test-only-restore-provider-placeholder"
 export PROMPTCODE_METRICS_TOKEN="restore-metrics-token"
 export RCLONE_REMOTE="${BACKUP_REMOTE_DIR}"
@@ -116,11 +125,20 @@ DROP TABLE restore_rehearsal;
 EOF
 
 echo "[restore-rehearsal] Restoring backup..."
+rm -rf "${ARTIFACT_ROOT}"
 DEPLOY_DIR="${DEPLOY_DIR}" BACKUP_DIR="${BACKUP_DIR}" RCLONE_REMOTE="${BACKUP_REMOTE_DIR}" bash "${DEPLOY_DIR}/scripts/restore-db.sh" "${BACKUP_FILE}"
 
 RESTORED_VALUE="$(compose exec -T db psql -Atqc "SELECT value FROM restore_rehearsal LIMIT 1;" -U "${DB_USER}" -d "${DB_NAME}" | tr -d '[:space:]')"
 if [[ "${RESTORED_VALUE}" != "${KNOWN_VALUE}" ]]; then
   echo "[restore-rehearsal] Expected restored value ${KNOWN_VALUE}, got ${RESTORED_VALUE}." >&2
+  exit 1
+fi
+if [[ "$(cat "${ARTIFACT_ROOT}/.submitted/proof/source/main.py")" != "${KNOWN_VALUE}" ]]; then
+  echo '[restore-rehearsal] Frozen submission source did not recover.' >&2
+  exit 1
+fi
+if [[ "$(cat "${ARTIFACT_ROOT}/${ACTIVE_SESSION_ID}/main.py")" != "${KNOWN_VALUE}" ]]; then
+  echo '[restore-rehearsal] Active candidate progress did not recover.' >&2
   exit 1
 fi
 

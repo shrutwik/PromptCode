@@ -44,6 +44,7 @@ class LevelStepResponse(BaseModel):
     title: str
     body: str
     problem: str
+    guide: list[str] = Field(default_factory=list)
     can_advance: bool
     is_last: bool
     earlier: list[EarlierStep] = Field(default_factory=list)
@@ -97,6 +98,7 @@ class ChallengeProgressCard(InterviewChallengeCard):
 class DashboardSessionItem(BaseModel):
     id: UUID
     challenge_slug: str
+    challenge_title: str | None = None
     status: str
     attempt_number: int = 1
     started_at: datetime
@@ -119,7 +121,6 @@ class DashboardStatsResponse(BaseModel):
 class FileEntry(BaseModel):
     path: str
     size: int
-    writable: bool = True
 
 
 class FileContentResponse(BaseModel):
@@ -151,6 +152,7 @@ class AIChatRequest(BaseModel):
     attached_paths: list[str] = Field(default_factory=list)
     include_test_output: bool = False
     selected_text: str | None = None
+    test_output: str | None = None
 
 
 class AIChatResponse(BaseModel):
@@ -158,7 +160,6 @@ class AIChatResponse(BaseModel):
     provider: str
     model: str
     proposed_edits: list[dict] = Field(default_factory=list)
-    refused_edits: list[dict] = Field(default_factory=list)
     latency_ms: int = 0
     rejected_attachments: list[str] = Field(default_factory=list)
     error_code: str | None = None
@@ -193,9 +194,6 @@ class TestRunResponse(BaseModel):
     command_id: str = "run_tests"
     runner: str = "local"
     error_code: str | None = None
-    tests: list[dict] = Field(default_factory=list)
-    notice: str | None = None
-    truncated: bool = False
 
 
 class DiffSummaryResponse(BaseModel):
@@ -211,8 +209,8 @@ class DiffFileResponse(BaseModel):
 
 
 class DefendAnswerRequest(BaseModel):
-    index: int
-    answer: str
+    index: int = Field(ge=0, le=4)
+    answer: str = Field(min_length=1, max_length=4000)
 
 
 class DefendQuestionsResponse(BaseModel):
@@ -224,6 +222,7 @@ class EvaluationResponse(BaseModel):
     advisory: bool = True
     authoritative: bool = False
     feedback_kind: str = "advisory_practice"
+    assessment: dict | None = None
     total_score: float
     rubric: dict
     metrics: dict

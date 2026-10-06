@@ -11,6 +11,9 @@ from app.models.interview_session import (
     InterviewSessionEvent,
     InterviewSessionFile,
 )
+from app.models.interview_grading import (
+    InterviewGradingJob, InterviewGradeReview, InterviewGradeAppeal, InterviewAppealDecision,
+)
 from app.models.leaderboard import LeaderboardEntry
 from app.models.password_reset import PasswordResetToken
 from app.models.revoked_token import RevokedToken

@@ -11,6 +11,8 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     HOME=/tmp
 
+COPY backend/app/services/interview/reporters/ /opt/promptcode-reporters/
+
 WORKDIR /workspace
 USER runner
 

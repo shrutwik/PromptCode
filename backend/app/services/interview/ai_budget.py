@@ -6,11 +6,15 @@ from app.models.ai_budget import AIBudget
 
 
 def enabled():
-    return os.getenv('PROMPTCODE_AI_KILL_SWITCH','').lower() not in {'1','true','yes','on'}
+    from app.core.config import get_settings
+    raw = os.getenv('PROMPTCODE_AI_KILL_SWITCH')
+    return raw.lower() not in {'1','true','yes','on'} if raw is not None else not get_settings().ai_kill_switch
 
 
 def positive(name, default):
-    try: value=int(os.getenv(name,str(default)))
+    from app.core.config import get_settings
+    configured = getattr(get_settings(), name.removeprefix('PROMPTCODE_').lower(), default)
+    try: value=int(os.getenv(name,str(configured)))
     except ValueError: raise HTTPException(503,'Invalid AI budget configuration')
     if value<=0: raise HTTPException(503,'AI budget is disabled')
     return value
@@ -18,13 +22,14 @@ def positive(name, default):
 
 async def reserve_ai_budget(db, user_id, session_id, input_bytes, output_tokens=2048, attempts=2):
     if not enabled(): raise HTTPException(503,'AI assistant is temporarily disabled')
-    if input_bytes>256000 or output_tokens>4096 or attempts>8:
+    if not (0 <= input_bytes <= 256000 and 1 <= output_tokens <= 4096 and 1 <= attempts <= 8):
         raise HTTPException(400,'AI request exceeds budget size')
     # UTF-8 bytes plus framing overhead conservatively bound input token count.
     tokens=(input_bytes+512+output_tokens)*attempts
     cost=tokens*positive('PROMPTCODE_AI_MAX_MICROS_PER_TOKEN',100)
     day=int(time.time())//86400
-    scopes=[('global:'+str(day),'GLOBAL',1000,10000000,20000000),
+    scopes=[('trial:all', 'TRIAL', 1000000, 1000000000, 5000000),
+            ('global:'+str(day),'GLOBAL',1000,10000000,20000000),
             (f'user:{user_id}:{day}','USER',100,1000000,5000000),
             (f'session:{session_id}','SESSION',20,200000,2000000)]
     dialect=db.get_bind().dialect.name
@@ -44,3 +49,50 @@ async def reserve_ai_budget(db, user_id, session_id, input_bytes, output_tokens=
     except BaseException:
         await db.rollback()
         raise
+
+
+# Worker calls run in threads; the identity follows asyncio.to_thread and is
+# captured by the relay before its HTTP server starts new threads.
+from contextlib import contextmanager
+from contextvars import ContextVar
+
+_billing_identity = ContextVar("ai_billing_identity", default=None)
+
+
+@contextmanager
+def billing_identity(user_id, session_id):
+    token = _billing_identity.set((str(user_id), str(session_id)))
+    try:
+        yield
+    finally:
+        _billing_identity.reset(token)
+
+
+def current_billing_identity():
+    return _billing_identity.get()
+
+
+def reserve_worker_budget(messages, output_tokens, *, identity=None):
+    """Fail closed before each paid synchronous upstream call."""
+    import asyncio
+    import json
+    identity = identity or current_billing_identity()
+    if not identity or not all(identity):
+        raise HTTPException(503, "AI billing identity unavailable")
+    input_bytes = len(json.dumps(messages).encode("utf-8"))
+
+    async def reserve():
+        from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+        from sqlalchemy.pool import NullPool
+        from app.core.config import get_settings
+        from app.db.session import _connect_args
+        # A fresh pool avoids moving asyncpg connections across thread event loops.
+        engine = create_async_engine(get_settings().database_url,
+                                     poolclass=NullPool, connect_args=_connect_args)
+        try:
+            async with async_sessionmaker(engine)() as db:
+                await reserve_ai_budget(db, *identity, input_bytes,
+                                        output_tokens=output_tokens, attempts=1)
+        finally:
+            await engine.dispose()
+    asyncio.run(reserve())

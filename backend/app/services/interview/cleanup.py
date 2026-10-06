@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.interview_session import InterviewSession
+from app.models.interview_grading import InterviewGradingJob, InterviewGradeReview, InterviewGradeAppeal
 from app.services.interview.lifecycle import maybe_expire_session, utcnow
 from app.services.interview.workspace import starter_snapshot_path, workspace_root
 
@@ -57,8 +59,9 @@ def _safe_rmtree(path: Path, report: CleanupReport, *, kind: str) -> None:
 async def expire_due_sessions(db: AsyncSession) -> int:
     result = await db.execute(
         select(InterviewSession).where(
-            InterviewSession.status.in_(("created", "active"))
-        )
+            InterviewSession.status.in_(("created", "active")),
+            InterviewSession.expires_at <= utcnow(),
+        ).with_for_update(skip_locked=True).execution_options(populate_existing=True)
     )
     count = 0
     for session in result.scalars().all():
@@ -84,6 +87,12 @@ async def cleanup_interview_resources(
     )
     sessions = list(result.scalars().all())
     protected_ids: set[str] = set()
+    # Source referenced by durable grading/review/appeal history must remain
+    # available even when the session was subsequently marked failed/expired.
+    for model in (InterviewGradingJob, InterviewGradeReview, InterviewGradeAppeal):
+        retained = (await db.execute(select(model.session_id))).scalars().all()
+        for sid in retained:
+            protected_ids.update((str(sid), f'{sid}.starter'))
 
     # Protect active + submitted workspace dirs (history retained; only temp dirs for expired/failed)
     all_sessions = (
@@ -97,7 +106,12 @@ async def cleanup_interview_resources(
 
     for session in sessions:
         sid = str(session.id)
+        if sid in protected_ids:
+            continue
         ws = Path(session.workspace_path) if session.workspace_path else workspace_root() / sid
+        if ws.is_symlink() or ws.resolve() != workspace_root().resolve() / sid:
+            report.errors.append(f'Blocked workspace outside owned root: {sid}')
+            continue
         _safe_rmtree(ws, report, kind="workspace")
         _safe_rmtree(starter_snapshot_path(sid), report, kind="starter")
         # Keep DB history; clear path pointer when workspace gone
@@ -112,7 +126,11 @@ async def cleanup_interview_resources(
             for child in root.iterdir():
                 name = child.name
                 base = name.removesuffix(".starter")
-                if base in known or name in protected_ids:
+                if base in known or name in protected_ids or child.is_symlink():
+                    continue
+                # Creation precedes the session DB commit. Give newly created
+                # directories a grace period rather than racing that transaction.
+                if child.stat().st_mtime > time.time() - 3600:
                     continue
                 # Orphan: directory not tied to any session id
                 try:
@@ -143,7 +161,7 @@ def cleanup_promptcode_containers() -> int:
         for c in containers:
             try:
                 # Only remove non-running leftovers (running ones are mid-test)
-                if c.status in {"exited", "dead", "created"}:
+                if c.status in {"exited", "dead"}:
                     c.remove(force=True)
                     removed += 1
             except Exception:  # noqa: BLE001

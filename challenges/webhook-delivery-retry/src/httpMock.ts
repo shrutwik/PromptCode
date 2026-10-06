@@ -1,3 +1,7 @@
+/**
+ * Test client. failTimes maps a delivery id to how many posts should return 500 before a 200.
+ * The id is the X-Delivery-Id header, or the url when the header is missing.
+ */
 import type { HttpClient } from './types.js';
 export function flakyClient(failTimes: Map<string, number>): HttpClient {
   const seen = new Map<string, number>();

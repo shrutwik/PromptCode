@@ -79,9 +79,11 @@ async def worker_loop(*, poll_interval_seconds: float = 1.0) -> None:
         while True:
             try:
                 worker_state.last_error = None
+                from app.workers.interview_grading import process_one_grading_job
+                grading_processed = await process_one_grading_job()
                 processed = await _process_one_available_job(worker_state=worker_state)
                 _consecutive_errors = 0
-                if not processed:
+                if not processed and not grading_processed:
                     await asyncio.sleep(poll_interval_seconds)
             except Exception as exc:  # pragma: no cover
                 _consecutive_errors += 1

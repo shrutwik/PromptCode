@@ -269,6 +269,9 @@ def _call_judge(system_prompt: str, user_prompt: str) -> JudgeResponse:
     url = f"{base}/chat/completions"
 
     start = time.perf_counter()
+    from app.services.interview.ai_budget import reserve_worker_budget
+    reserve_worker_budget([{"role": "system", "content": system_prompt},
+                           {"role": "user", "content": user_prompt}], 2048)
     resp = httpx.post(
         url,
         json={
@@ -280,6 +283,7 @@ def _call_judge(system_prompt: str, user_prompt: str) -> JudgeResponse:
             "temperature": 0.1,
             "max_tokens": 2048,
             "stream": False,
+            **({"thinking": {"type": "disabled"}} if base == "https://api.deepseek.com" else {}),
         },
         headers={
             "Authorization": f"Bearer {settings.openai_api_key}",

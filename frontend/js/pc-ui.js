@@ -271,9 +271,9 @@
   }
 
   const PUBLIC_LINKS = [
-    { href: "/challenges", label: "Interview practice", match: (p) => p === "/challenges" || p.startsWith("/challenges/") },
-    { href: "/challenges.html", label: "Prompt challenges", match: (p) => p === "/challenges.html" || p === "/challenge.html" },
-    { href: "/leaderboard.html", label: "Leaderboard", match: (p) => p === "/leaderboard.html" },
+    { href: "/dashboard", label: "Practice", match: (p) => p === "/dashboard" },
+    { href: "/challenges", label: "Challenges", match: (p) => p === "/challenges" || p.startsWith("/challenges/") },
+    { href: "/progress", label: "Progress", match: (p) => p === "/progress" },
   ];
 
   /** Public header: <header class="pc-header" data-pc-header></header> */
@@ -367,7 +367,8 @@
     host.dataset.mounted = "1";
     host.classList.add("pc-footer");
     const product = isAuthed()
-      ? `<a href="/challenges">Interview practice</a>
+      ? `<a href="/dashboard">Practice</a>
+          <a href="/challenges">Challenges</a>
           <a href="/challenges.html">Prompt challenges</a>
           <a href="/leaderboard.html">Leaderboard</a>`
       : "";
@@ -417,7 +418,8 @@
   }
 
   /**
-   * App shell nav: Practice · Challenges · Progress + account menu (Settings, Feedback, Log out).
+   * App shell nav: Practice · Challenges · Progress + account menu.
+   * Practice starts and resumes sessions. Progress is the scores from finished ones.
    * Markup: <nav class="nav" aria-label="App"><a class="nav-brand" href="/dashboard">PromptCode</a></nav>
    * Skipped on .ide-body (workspace has its own session top bar).
    */
@@ -438,27 +440,25 @@
     const primary = [
       { key: "practice", href: "/dashboard", label: "Practice" },
       { key: "challenges", href: "/challenges", label: "Challenges" },
-      { key: "progress", href: "/dashboard#progress", label: "Progress" },
+      { key: "progress", href: "/progress", label: "Progress" },
     ];
     links.innerHTML =
       primary.map((i) => `<a href="${i.href}" class="nav-link" data-nav="${i.key}">${i.label}</a>`).join("") +
       accountMenuHtml("pcAccount");
 
-    const setActive = () => {
-      const path = location.pathname;
-      const onDash = path === "/dashboard" || path.endsWith("/dashboard");
-      const key =
-        opts.active ||
-        (onDash && location.hash === "#progress" ? "progress" : onDash ? "practice" : path.startsWith("/challenges") ? "challenges" : "");
-      links.querySelectorAll("[data-nav]").forEach((a) => {
-        const on = a.dataset.nav === key;
-        a.classList.toggle("is-active", on);
-        if (on) a.setAttribute("aria-current", "page");
-        else a.removeAttribute("aria-current");
-      });
-    };
-    setActive();
-    global.addEventListener("hashchange", setActive);
+    const path = location.pathname;
+    const onDash = path === "/dashboard" || path.endsWith("/dashboard");
+    const onReport = /\/session\/[^/]+\/report\/?$/.test(path);
+    const onProgress = path === "/progress" || path.endsWith("/progress");
+    const key =
+      opts.active ||
+      (onProgress ? "progress" : onDash || onReport ? "practice" : path.startsWith("/challenges") ? "challenges" : "");
+    links.querySelectorAll("[data-nav]").forEach((a) => {
+      const on = a.dataset.nav === key;
+      a.classList.toggle("is-active", on);
+      if (on) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
     wireAccount(links, "pcAccount");
     enhanceWordmarks(nav);
   }

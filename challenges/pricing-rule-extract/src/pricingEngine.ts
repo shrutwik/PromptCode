@@ -1,3 +1,9 @@
+/**
+ * Quote a price in integer cents.
+ * quote applies sortRulesForApply order: percent_off, then amount_off, then surcharge_percent.
+ * Percent math uses roundHalfUp. The result is floored at 0.
+ * QuoteResult.applied is the rule codes that ran, in that same order.
+ */
 import { roundHalfUp } from './money.js';
 import { sortRulesForApply, type Rule } from './rules.js';
 export interface QuoteInput { baseCents: number; rules: Rule[]; }
@@ -21,7 +27,7 @@ export function quote(input: QuoteInput): QuoteResult {
   if (amount < 0) amount = 0;
   return { finalCents: amount, applied };
 }
-/** Candidate: make this the shared implementation used by quote. */
+/** baseCents plus rules in, finalCents and applied codes out. */
 export function applyRules(baseCents: number, rules: Rule[]): QuoteResult {
   return quote({ baseCents, rules });
 }

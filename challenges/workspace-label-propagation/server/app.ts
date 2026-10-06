@@ -1,3 +1,9 @@
+/**
+ * Ticket HTTP API.
+ * GET /workspaces/:ws/labels returns { id, name }[].
+ * GET /tickets/:id returns a ticket or 404.
+ * PUT /tickets/:id/labels reads body.labelIds. Unknown ids for that workspace get 400.
+ */
 import express from 'express';
 import cors from 'cors';
 import * as db from './db.js';

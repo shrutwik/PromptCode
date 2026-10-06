@@ -386,7 +386,7 @@ def _practice_score_session_v2(
     if blind:
         d = max(0.0, d - 8.0)
     if blind:
-        d_evidence = "An accept had no later test on that step."
+        d_evidence = "An accept had no later test."
     elif helped:
         d_evidence = "A suggestion was edited or rejected."
     else:
@@ -475,7 +475,7 @@ def _practice_score_session_v2(
     if helped:
         went_well.append("Edited or rejected a suggestion.")
     if blind:
-        improve.append("Accepted a suggestion with no later test on that step.")
+        improve.append("Accepted a suggestion with no later test.")
     if g:
         recovery.append("A failing test was followed by a smaller fix and a pass.")
     insights = went_well + improve + recovery
@@ -609,9 +609,37 @@ def _default_defend() -> list[dict[str, str]]:
         },
     ]
 
+
 def score_session(**kwargs):
     return advisory_scoring(_practice_score_session(**kwargs))
 
 
 def score_session_v2(**kwargs):
     return advisory_scoring(_practice_score_session_v2(**kwargs))
+
+
+def score_session_v3(*, events, test_summary, session_id, challenge_slug,
+                     challenge_version, workspace=None, starter_root=None):
+    """Evidence capture replaces activity heuristics for new practice attempts."""
+    from app.services.interview.grading import pending_assessment
+
+    assessment = pending_assessment(
+        session_id=str(session_id), challenge_slug=challenge_slug,
+        challenge_version=challenge_version, events=events, test_summary=test_summary,
+    )
+    derived = derive_metrics(events=events, workspace=workspace,
+                             challenge_slug=challenge_slug, starter_root=starter_root)
+    return {
+        # Compatibility field; assessment.total_score carries the honest null.
+        "total_score": 0.0,
+        "rubric": {
+            key: {"score": 0.0, "max": item["weight"], "advisory": True,
+                  "status": item["status"], "evidence": "Not assessed; evidence requires review."}
+            for key, item in assessment["dimensions"].items()
+        },
+        "metrics": {"assessment": assessment, "derived": derived,
+                    "steps": steps_summary(events, challenge_slug),
+                    "authoritative": False, "advisory": True},
+        "insights": [assessment["notice"]], "went_well": [], "improve": [],
+        "recovery_moments": [], "signals": [],
+    }

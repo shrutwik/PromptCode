@@ -3,12 +3,12 @@
   "challenges": [
     {
       "slug": "invoice-status-transition",
-      "title": "Invoice Status Transition",
-      "type": "Backend bug fix",
+      "title": "Invoice status",
+      "type": "Billing incident",
       "stack": "TypeScript / Node",
       "difficulty": "medium",
       "estimated_minutes": 30,
-      "summary": "Finance reports odd invoice status transitions under an informal billing ticket. Stabilize the status machine without inventing product rules.",
+      "summary": "A paid invoice came back as draft before close. Keep the legal status graph and make the API refuse a bad move.",
       "test_command": "npm test",
       "install_command": "npm install",
       "entry_files": [
@@ -30,12 +30,12 @@
     },
     {
       "slug": "order-hold-reason",
-      "title": "Order Hold Reason",
-      "type": "Backend feature",
+      "title": "Order hold",
+      "type": "Orders change",
       "stack": "Python / FastAPI",
       "difficulty": "medium",
       "estimated_minutes": 30,
-      "summary": "Support needs hold_reason through persistence and API without breaking legacy null semantics.",
+      "summary": "A hold reason has to survive the next read. Orders that never had one stay null.",
       "test_command": "pytest -q",
       "install_command": "pip install -r requirements.txt",
       "entry_files": [
@@ -53,23 +53,17 @@
         },
         "timeoutSeconds": 60,
         "memoryMb": 768,
-        "cpuLimit": 1.5,
-        "expectedTestIds": [
-          "tests/test_orders.py::test_get_legacy_order_shape",
-          "tests/test_orders.py::test_hold_sets_status",
-          "tests/test_orders.py::test_release_clears_hold",
-          "tests/test_orders.py::test_hold_reason_round_trip_and_legacy_null"
-        ]
+        "cpuLimit": 1.5
       }
     },
     {
       "slug": "catalog-suggest-latency",
-      "title": "Catalog Suggest Latency",
-      "type": "Performance / scale",
+      "title": "Search suggest",
+      "type": "Search performance",
       "stack": "TypeScript / Node",
       "difficulty": "medium",
       "estimated_minutes": 30,
-      "summary": "Product suggest is too slow at catalog scale. Meet latency and scan budgets without changing ranking semantics.",
+      "summary": "Suggest is too slow on a 10k catalog. Hit the latency and scan budget without changing rank order.",
       "test_command": "npm test",
       "install_command": "npm install",
       "entry_files": [
@@ -91,12 +85,12 @@
     },
     {
       "slug": "notification-feed-stale",
-      "title": "Notification Feed Stale State",
-      "type": "Frontend state bug",
+      "title": "Notification feed",
+      "type": "Feed consistency",
       "stack": "React / TypeScript",
       "difficulty": "medium",
       "estimated_minutes": 28,
-      "summary": "Unread badges stay stale after mark-as-read. Fix client state without rewriting the feed.",
+      "summary": "The unread badge drifts after mark-as-read, and two quick marks drop an update.",
       "test_command": "npm test",
       "install_command": "npm install",
       "entry_files": [
@@ -118,12 +112,12 @@
     },
     {
       "slug": "workspace-label-propagation",
-      "title": "Workspace Label Propagation",
-      "type": "Full-stack feature",
+      "title": "Ticket labels",
+      "type": "Labels across the stack",
       "stack": "React + Express",
       "difficulty": "medium",
       "estimated_minutes": 35,
-      "summary": "Workspace labels must persist, round-trip through the API, and render in the UI.",
+      "summary": "Checked workspace labels disappear after save. The API, the row, and the screen have to tell the same story.",
       "test_command": "npm test",
       "install_command": "npm install",
       "entry_files": [
@@ -143,12 +137,12 @@
     },
     {
       "slug": "shipment-csv-merge",
-      "title": "Shipment CSV Merge",
-      "type": "Data-processing bug",
+      "title": "Shipment CSV",
+      "type": "Shipment merge",
       "stack": "Python",
       "difficulty": "medium",
       "estimated_minutes": 30,
-      "summary": "Multi-day shipment event CSVs merge incorrectly. Preserve chronology and identity rules.",
+      "summary": "Two shipment files landed out of order. The timeline and the quantity both have to come out once, in time order.",
       "test_command": "pytest -q",
       "install_command": "pip install -r requirements.txt",
       "entry_files": [
@@ -165,23 +159,17 @@
         },
         "timeoutSeconds": 60,
         "memoryMb": 768,
-        "cpuLimit": 1.5,
-        "expectedTestIds": [
-          "tests/test_merge.py::test_basic_timeline_order_happy_path",
-          "tests/test_merge.py::test_quantity_single_batch",
-          "tests/test_merge.py::test_duplicate_event_id_across_batches_not_double_counted",
-          "tests/test_merge.py::test_same_status_different_event_ids_kept_in_ts_order"
-        ]
+        "cpuLimit": 1.5
       }
     },
     {
       "slug": "tenant-document-acl",
-      "title": "Tenant Document ACL",
-      "type": "Authz / multi-tenant",
+      "title": "Document access",
+      "type": "Tenant isolation",
       "stack": "Python / FastAPI",
       "difficulty": "medium",
       "estimated_minutes": 32,
-      "summary": "Documents leak across tenants. Enforce ACL without breaking legitimate same-tenant access.",
+      "summary": "Acme opened a Globex document by id. Another tenant’s file has to look missing, and same-tenant access has to keep working.",
       "test_command": "pytest -q",
       "install_command": "pip install -r requirements.txt",
       "entry_files": [
@@ -198,24 +186,17 @@
         },
         "timeoutSeconds": 60,
         "memoryMb": 768,
-        "cpuLimit": 1.5,
-        "expectedTestIds": [
-          "tests/test_acl.py::test_list_is_tenant_scoped",
-          "tests/test_acl.py::test_owner_can_read_own_doc",
-          "tests/test_acl.py::test_missing_doc_is_404",
-          "tests/test_acl.py::test_cross_tenant_get_is_404",
-          "tests/test_acl.py::test_cross_tenant_patch_is_404"
-        ]
+        "cpuLimit": 1.5
       }
     },
     {
       "slug": "webhook-delivery-retry",
-      "title": "Webhook Delivery Retry",
-      "type": "Async / retry",
+      "title": "Webhook retry",
+      "type": "Webhook delivery",
       "stack": "TypeScript / Node",
       "difficulty": "medium",
       "estimated_minutes": 32,
-      "summary": "Webhook retries, side effects, and batch delivery behave inconsistently under failure.",
+      "summary": "A retried webhook charged the customer twice. Retries stay safe, and a flush stays bounded.",
       "test_command": "npm test",
       "install_command": "npm install",
       "entry_files": [
@@ -237,12 +218,12 @@
     },
     {
       "slug": "pricing-rule-extract",
-      "title": "Pricing Rule Extract",
-      "type": "Behavior-preserving refactor",
+      "title": "Pricing rules",
+      "type": "Pricing refactor",
       "stack": "TypeScript",
       "difficulty": "medium",
       "estimated_minutes": 30,
-      "summary": "Extract a pricing helper without changing quote outputs for existing fixtures.",
+      "summary": "Pull the pricing rule loop out of quote() without moving a golden cent.",
       "test_command": "npm test",
       "install_command": "npm install",
       "entry_files": [
@@ -264,12 +245,12 @@
     },
     {
       "slug": "subscription-proration-boundary",
-      "title": "Subscription Proration Boundary",
-      "type": "Looks-correct prod bug",
+      "title": "Period boundary",
+      "type": "Proration boundary",
       "stack": "Python",
       "difficulty": "medium",
       "estimated_minutes": 30,
-      "summary": "Public tests pass but cancel/proration timing at period boundaries is wrong in production-like cases.",
+      "summary": "A cancel exactly at period end is still treated as inside the period. Mid-period credits have to stay correct.",
       "test_command": "pytest -q",
       "install_command": "pip install -r requirements.txt",
       "entry_files": [
@@ -286,13 +267,7 @@
         },
         "timeoutSeconds": 60,
         "memoryMb": 768,
-        "cpuLimit": 1.5,
-        "expectedTestIds": [
-          "tests/test_proration.py::test_mid_period_cancel_gets_credit",
-          "tests/test_proration.py::test_cancel_before_period_no_credit",
-          "tests/test_proration.py::test_contains_start_inclusive",
-          "tests/test_proration.py::test_display_helper_smoke"
-        ]
+        "cpuLimit": 1.5
       }
     }
   ]

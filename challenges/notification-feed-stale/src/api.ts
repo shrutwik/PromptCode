@@ -1,3 +1,8 @@
+/**
+ * Stand-in server for the feed. There is no network.
+ * seedServer copies rows into serverState. fetchNotifications returns copies.
+ * markReadOnServer sets read true on that id and returns a copy, or throws if the id is absent.
+ */
 import type { Notification } from './types';
 let serverState: Notification[] = [];
 export function seedServer(rows: Notification[]): void { serverState = rows.map((r) => ({ ...r })); }

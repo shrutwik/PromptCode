@@ -1,3 +1,8 @@
+/**
+ * Product shape and a deterministic catalog builder.
+ * Categories cycle kitchen, garden, tools, apparel, electronics.
+ * tokens are the lowercased words of the title.
+ */
 export interface Product {
   id: string; title: string; category: string; popularity: number; tokens: string[];
 }

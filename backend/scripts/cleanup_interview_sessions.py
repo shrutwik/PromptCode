@@ -19,9 +19,11 @@ if str(BACKEND_ROOT) not in sys.path:
 async def main() -> int:
     from app.db.session import async_session_factory
     from app.services.interview.cleanup import cleanup_interview_resources
+    from app.core.config import get_settings
 
     async with async_session_factory() as db:
-        report = await cleanup_interview_resources(db)
+        report = await cleanup_interview_resources(
+            db, cleanup_docker=not bool(get_settings().execution_broker_url))
     print(
         "cleanup ok "
         f"expired={report.expired_sessions} "

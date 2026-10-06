@@ -12,11 +12,12 @@ from typing import Any, Callable
 
 import httpx
 
-from app.core.model_policy import OPENAI_CHAT_MODELS, resolve_allowed_model
+from app.core.model_policy import CHAT_MODELS, resolve_allowed_model
 
 logger = logging.getLogger(__name__)
 
 _MODEL_PRICING: dict[str, tuple[float, float]] = {
+    "deepseek-flash": (0.30 / 1_000_000, 1.20 / 1_000_000),
     "gpt-4o": (2.50 / 1_000_000, 10.00 / 1_000_000),
     "gpt-4o-mini": (0.15 / 1_000_000, 0.60 / 1_000_000),
     "gpt-4-turbo": (10.00 / 1_000_000, 30.00 / 1_000_000),
@@ -24,6 +25,35 @@ _MODEL_PRICING: dict[str, tuple[float, float]] = {
 }
 _DEFAULT_PRICING = (5.00 / 1_000_000, 15.00 / 1_000_000)
 _DEFAULT_TIMEOUT_SECONDS = 60.0
+_MAX_RELAY_BODY_BYTES = 256 * 1024
+
+
+class _BoundedRelayServer(ThreadingHTTPServer):
+    """A candidate's relay token must not grant unlimited host threads or reads."""
+    def __init__(self, *args, **kwargs):
+        self._request_slots = threading.BoundedSemaphore(8)
+        super().__init__(*args, **kwargs)
+
+    def get_request(self):
+        request, address = super().get_request()
+        request.settimeout(5)
+        return request, address
+
+    def process_request(self, request, client_address):
+        if not self._request_slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._request_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._request_slots.release()
 
 RequestSender = Callable[[dict[str, Any]], tuple[dict[str, Any], float]]
 
@@ -55,7 +85,10 @@ class SandboxLLMRelay:
         budget: SandboxLLMBudget,
         default_model: str = "",
         request_sender: RequestSender | None = None,
+        billing_identity: tuple[str, str] | list[str] | None = None,
     ):
+        from app.services.interview.ai_budget import current_billing_identity
+        self._billing_identity = billing_identity or current_billing_identity()
         self._api_key = api_key
         self._base_url = str(base_url or "https://api.openai.com/v1").rstrip("/")
         self._host_alias = host_alias
@@ -89,7 +122,7 @@ class SandboxLLMRelay:
         return int(self._server.server_address[1])
 
     def __enter__(self) -> SandboxLLMRelay:
-        server = ThreadingHTTPServer(("0.0.0.0", 0), self._build_handler())
+        server = _BoundedRelayServer(("0.0.0.0", 0), self._build_handler())
         server.daemon_threads = True
         server.relay = self  # type: ignore[attr-defined]
         self._server = server
@@ -127,11 +160,20 @@ class SandboxLLMRelay:
                 except ValueError:
                     self._write_error(HTTPStatus.BAD_REQUEST, "Invalid Content-Length header.")
                     return
+                if content_length < 1 or content_length > _MAX_RELAY_BODY_BYTES:
+                    self._write_error(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "Sandbox relay request too large.")
+                    return
+                if self.headers.get("Transfer-Encoding"):
+                    self._write_error(HTTPStatus.BAD_REQUEST, "Unsupported request encoding.")
+                    return
 
                 try:
                     payload = json.loads(self.rfile.read(content_length) or b"{}")
-                except json.JSONDecodeError:
+                except (json.JSONDecodeError, UnicodeDecodeError):
                     self._write_error(HTTPStatus.BAD_REQUEST, "Malformed JSON body.")
+                    return
+                if not isinstance(payload, dict):
+                    self._write_error(HTTPStatus.BAD_REQUEST, "Sandbox relay requires a JSON object.")
                     return
 
                 try:
@@ -166,6 +208,10 @@ class SandboxLLMRelay:
 
     def handle_request(self, payload: dict[str, Any]) -> dict[str, Any]:
         requested_model = str(payload.get("model") or "")
+        if self._base_url == "https://api.deepseek.com":
+            # Existing challenge code may still request an OpenAI model name.
+            _validate_model(requested_model, CHAT_MODELS)
+            requested_model = "deepseek-flash"
         model = _validate_model(requested_model, self._budget.allowed_models)
         prompt = str(payload.get("prompt") or "")
         system = str(payload.get("system") or "")
@@ -234,6 +280,12 @@ class SandboxLLMRelay:
         if not self._api_key:
             raise RelayError(HTTPStatus.BAD_GATEWAY, "Sandbox relay is missing an upstream API key.")
 
+        from fastapi import HTTPException
+        from app.services.interview.ai_budget import reserve_worker_budget
+        try:
+            reserve_worker_budget(payload["messages"], payload["max_tokens"], identity=self._billing_identity)
+        except HTTPException as exc:
+            raise RelayError(exc.status_code, str(exc.detail)) from exc
         start = time.perf_counter()
         with httpx.Client(timeout=_DEFAULT_TIMEOUT_SECONDS) as client:
             response = client.post(
@@ -247,9 +299,9 @@ class SandboxLLMRelay:
         latency_ms = (time.perf_counter() - start) * 1000
 
         if response.status_code == 401:
-            raise RelayError(HTTPStatus.UNAUTHORIZED, "Invalid upstream OpenAI API key.")
+            raise RelayError(HTTPStatus.UNAUTHORIZED, "Invalid upstream AI API key.")
         if response.status_code != 200:
-            raise RelayError(response.status_code, response.text[:300])
+            raise RelayError(response.status_code, "AI provider rejected the request.")
 
         return response.json(), latency_ms
 
@@ -269,6 +321,8 @@ class SandboxLLMRelay:
             default_model=self._default_model,
             allowed_models=self._budget.allowed_models,
         )
+        if self._base_url == "https://api.deepseek.com":
+            candidates = ["deepseek-flash"]
         latency_total_ms = 0.0
 
         for idx, candidate in enumerate(candidates):
@@ -279,6 +333,8 @@ class SandboxLLMRelay:
                 "max_tokens": max_tokens,
                 "stream": False,
             }
+            if self._base_url == "https://api.deepseek.com":
+                payload["thinking"] = {"type": "disabled"}
             try:
                 data, latency_ms = self._request_sender(payload)
                 latency_total_ms += latency_ms
@@ -315,7 +371,7 @@ def _build_messages(*, system: str, prompt: str) -> list[dict[str, str]]:
 def _validate_model(model: str, allowed_models: tuple[str, ...]) -> str:
     canonical_model = resolve_allowed_model(model, allowed_models)
     if not canonical_model:
-        supported = ", ".join(allowed_models or OPENAI_CHAT_MODELS)
+        supported = ", ".join(allowed_models or CHAT_MODELS)
         raise RelayError(
             HTTPStatus.BAD_REQUEST,
             f"Model '{model}' is not allowed in the sandbox. Choose one of: {supported}.",

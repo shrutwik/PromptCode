@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PromptCode — A score for how you engineer with AI</title>
+<title>PromptCode — Practice engineering with AI</title>
+<meta name="description" content="Practice fixing bugs in real codebases with an AI assistant. Run tests, review suggestions, and get feedback on how you engineer with AI.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&family=Instrument+Sans:ital,wght@0,500;0,600;1,500&display=swap">
 <link rel="stylesheet" href="/static/css/pc-tokens.css?v=20261001">
 <link rel="stylesheet" href="/static/css/pc-components.css?v=20261001e">
-<link rel="stylesheet" href="/static/css/pc-landing-sequence.css?v=20261001za">
+<link rel="stylesheet" href="/static/css/pc-landing-sequence.css?v=20261002g">
 </head>
 <body class="pc-public pc-landing">
 <a class="pc-skip" href="#main">Skip to content</a>
@@ -17,7 +18,7 @@
 
 <main class="pc-main" id="main">
 
-<!-- CINEMATIC SEQUENCE (native scroll + GSAP ScrollTrigger pin/scrub) -->
+<!-- CONTINUOUS PRODUCT STORY -->
 <section class="pc-seq" aria-label="PromptCode product story">
   <div class="pc-seq-track">
     <div class="pc-seq-sticky">
@@ -25,27 +26,46 @@
 
       <div class="pc-seq-stage" data-beat="brand">
         <div class="pc-seq-grid" aria-hidden="true"></div>
-        <div class="pc-seq-mark">
+        <div class="pc-hero-copy">
           <p class="pc-seq-eyebrow"><span class="live" aria-hidden="true"></span> Private beta</p>
-          <h1 class="pc-seq-brand"><span class="pc-wordmark-text">Prompt<em>Code</em></span></h1>
+          <p class="pc-hero-kicker">Real code. Real decisions.</p>
+          <h1 class="pc-seq-hero-title">Get better at engineering <em>with AI.</em></h1>
+          <p class="pc-seq-sub">Fix bugs in real codebases with an AI assistant. Test your changes. Get a score for the work and the decisions behind it.</p>
+          <div class="pc-seq-actions">
+            <a class="btn btn-primary btn-lg" href="/signup.html">Start practice</a>
+            <a class="btn btn-ghost btn-lg" href="#how-it-works">See how it works ↓</a>
+          </div>
+          <p class="pc-hero-note">Real projects · AI assistance · Tested changes</p>
         </div>
-        <p class="pc-seq-sub">A score for how you engineer with AI.</p>
+        <aside class="pc-hero-preview" aria-label="Example practice session">
+          <div class="pc-hero-preview-head"><span>Practice session</span><span class="pc-hero-example">Example</span></div>
+          <div class="pc-hero-preview-body">
+            <p class="pc-hero-kicker">Python / order-hold-reason</p>
+            <h2>An order is stuck.<br>Nobody knows why.</h2>
+            <p class="pc-hero-preview-lead">Find the missing reason. Keep the existing behavior working.</p>
+            <ol class="pc-hero-checklist">
+              <li><span>01</span> Read the codebase <b>Understand</b></li>
+              <li><span>02</span> Work with the assistant <b>Decide</b></li>
+              <li><span>03</span> Run the tests <b>Verify</b></li>
+            </ol>
+            <div class="pc-hero-result"><div><span>Example score</span><strong>72<small>/100</small></strong></div><p>The fix matters.<br>So does your judgment.</p></div>
+          </div>
+        </aside>
       </div>
 
-      <div class="pc-seq-stage" data-beat="value">
-        <div class="pc-seq-grid" aria-hidden="true"></div>
-        <h2 class="pc-seq-line">You work on a real codebase with an AI assistant.</h2>
-      </div>
 
-      <div class="pc-seq-stage" data-beat="library">
+      <div class="pc-seq-stage" data-beat="library" id="how-it-works">
+        <div class="pc-seq-copy">
         <p class="pc-seq-eyebrow">01</p>
-        <h2 class="pc-seq-line">You fix a real bug.</h2>
+        <h2 class="pc-seq-line">Fix a real bug.</h2>
+        <p class="pc-seq-sub">Choose a real project. Start with a bug in an existing codebase and work through the fix.</p>
+        </div>
         <div class="pc-seq-panel" role="img" aria-label="Task library. Invoice status, order hold, notification feed, and shipment CSV.">
           <div class="pc-seq-appnav" aria-hidden="true">
             <span class="brand">PromptCode</span>
-            <a>Practice</a><a class="is-on">Challenges</a><a>Progress</a>
+            <a>Practice</a><a class="is-on">Challenges</a>
           </div>
-          <div class="pc-seq-panel-bar"><i></i><i></i><i></i><em>4 of 10 · TypeScript, Python, React</em></div>
+          <div class="pc-seq-panel-bar"><i></i><i></i><i></i><em>Project library · 4 examples</em></div>
           <div class="pc-seq-filters" aria-hidden="true">
             <span class="pc-seq-filter is-on">All</span>
             <span class="pc-seq-filter">TypeScript</span>
@@ -67,8 +87,11 @@
       </div>
 
       <div class="pc-seq-stage" data-beat="workspace">
+        <div class="pc-seq-copy">
         <p class="pc-seq-eyebrow">02</p>
-        <h2 class="pc-seq-line">You use the assistant.</h2>
+        <h2 class="pc-seq-line">Use the assistant.</h2>
+        <p class="pc-seq-sub">Read the code, explore the problem, and work with the assistant in one workspace.</p>
+        </div>
         <div class="pc-seq-panel" role="img" aria-label="Editor. An order-hold problem, the code, and an assistant suggestion.">
           <div class="pc-seq-ide-top">
             <span class="brand">PromptCode</span>
@@ -104,8 +127,11 @@
       </div>
 
       <div class="pc-seq-stage" data-beat="ai">
+        <div class="pc-seq-copy">
         <p class="pc-seq-eyebrow">03</p>
-        <h2 class="pc-seq-line">You decide what to keep.</h2>
+        <h2 class="pc-seq-line">Decide what to keep.</h2>
+        <p class="pc-seq-sub">Accept, edit, or reject a suggestion. You decide what belongs in the fix.</p>
+        </div>
         <div class="pc-seq-panel">
           <div class="pc-seq-panel-bar"><i></i><i></i><i></i><em>Suggestion</em></div>
           <div class="pc-seq-panel-body">
@@ -121,25 +147,35 @@
       </div>
 
       <div class="pc-seq-stage" data-beat="tests">
+        <div class="pc-seq-copy">
         <p class="pc-seq-eyebrow">04</p>
         <h2 class="pc-seq-line">The tests check your code.</h2>
+        <p class="pc-seq-sub">Run the tests and check the result. A passing suggestion is only part of the work.</p>
+        </div>
         <div class="pc-seq-panel">
           <div class="pc-seq-panel-bar"><i></i><i></i><i></i><em>pytest</em></div>
           <div class="pc-seq-panel-body pc-seq-term">
             <div>$ pytest -q</div>
-            <div class="bad pc-seq-term-fail">FAILED</div>
-            <div class="ok pc-seq-term-pass">passed</div>
+            <div class="dim">tests/test_orders.py</div>
+            <div class="pc-seq-term-row bad pc-seq-term-fail"><span>test_hold_reason</span><span>FAILED</span></div>
+            <div class="pc-seq-term-row ok pc-seq-term-pass"><span>test_status_held</span><span>PASSED</span></div>
+            <div class="pc-seq-term-row ok pc-seq-term-pass"><span>test_legacy_null</span><span>PASSED</span></div>
+            <div class="pc-seq-term-row ok pc-seq-term-pass"><span>test_missing_order</span><span>PASSED</span></div>
+            <div class="pc-seq-term-sum">1 failed, 3 passed in 0.41s</div>
           </div>
         </div>
       </div>
 
       <div class="pc-seq-stage" data-beat="report">
+        <div class="pc-seq-copy">
         <p class="pc-seq-eyebrow">05</p>
-        <h2 class="pc-seq-line">You get a score out of 100.</h2>
+        <h2 class="pc-seq-line">A score out of 100.</h2>
+        <p class="pc-seq-sub">See how you did across tests, reading the code, the fix, checking your work, and using the assistant.</p>
+        </div>
         <div class="pc-seq-panel pc-seq-report-panel" role="img" aria-label="Example score, 72 out of 100.">
           <div class="pc-seq-appnav" aria-hidden="true">
             <span class="brand">PromptCode</span>
-            <a>Practice</a><a>Challenges</a><a class="is-on">Progress</a>
+            <a class="is-on">Practice</a><a>Challenges</a>
           </div>
           <div class="pc-seq-score">
             <div>
@@ -157,14 +193,7 @@
         </div>
       </div>
 
-      <div class="pc-seq-stage" data-beat="cta">
-        <div class="pc-seq-grid" aria-hidden="true"></div>
-        <h2 class="pc-seq-line">Get your score.</h2>
-        <div class="pc-seq-actions">
-          <a class="btn btn-primary btn-lg" href="/signup.html">Start practice</a>
-          <a class="btn btn-ghost btn-lg" href="/login.html?next=/challenges">Browse projects</a>
-        </div>
-      </div>
+
     </div>
   </div>
 </section>
@@ -172,7 +201,6 @@
 <!-- STATS -->
 <section class="lp-stats" aria-label="Published findings on AI-assisted coding">
   <div class="lp-wrap">
-    <p class="lp-stats-kicker">Almost right is the job now</p>
     <div class="stat-grid">
       <div class="stat lp-reveal" style="--i:0">
         <div class="n">66%</div>
@@ -198,14 +226,26 @@
   </div>
 </section>
 
+<section class="pc-landing-faq lp-wrap" aria-labelledby="faq-title">
+  <div><p class="pc-hero-kicker">Before you start</p><h2 class="lp-title" id="faq-title">A few things<br>to know.</h2><p class="lp-lead">What you’ll work on, how the assistant fits in, and what you can learn from each session.</p></div>
+  <div class="pc-faq-list">
+    <details><summary>What will I work on?</summary><p>You’ll work on realistic bugs and feature tasks in existing codebases. Examples include an invoice with the wrong status, an order missing its hold reason, a stale notification feed, and a CSV merge that doubles quantities.</p><p>Each session gives you a task, an editor, tests, and an AI assistant. Explore the code, investigate the cause, and make a focused change while preserving existing behavior. It’s practice for developers who want to get better at working through unfamiliar projects and engineering interviews with AI in the loop.</p></details>
+    <details><summary>Can I use an AI assistant?</summary><p>Yes. The workspace includes an assistant, and using it is part of the practice. Ask for help understanding unfamiliar code, exploring possible causes, or drafting a fix.</p><p>You decide what to accept, edit, or reject. Review suggestions against the task and the surrounding code, then run tests and inspect the results. The practice is about combining AI assistance with your own engineering judgment.</p></details>
+    <details><summary>What does the score measure?</summary><p>The report gives feedback on how you investigate the code, verify changes, use AI with judgment, and complete the task. The landing-page score is an illustrative example out of 100. Passing tests is one signal; your approach and decisions also matter.</p><p>After submitting, you can review your code changes and a timeline of recorded activity. When available, follow-up questions ask you to explain your decisions. Use the feedback to reflect on your workflow and identify what to improve in your next session. This is practice feedback, not a hiring decision or a guarantee of interview performance.</p></details>
+    <details><summary>How do I get started?</summary><p>Create an account or sign in, browse the project library, and choose a challenge. PromptCode is currently in private beta; follow the access instructions shown during signup.</p><p>Read the task and explore the code before changing it. Use the assistant when it helps, make your changes, and run the tests. Inspect failures, check that the fix addresses the problem, and submit your work when you’re ready to review the result.</p></details>
+  </div>
+</section>
+<section class="pc-landing-close lp-wrap" aria-labelledby="close-title">
+  <div><p class="pc-hero-kicker">Your next bug is waiting.</p><h2 id="close-title">Put your AI engineering<br>skills to work.</h2></div>
+  <div class="pc-seq-actions"><a class="btn btn-primary btn-lg" href="/signup.html">Start practice ↗</a><a class="btn btn-ghost btn-lg" href="/login.html?next=/challenges">Browse projects</a></div>
+</section>
+
 </main>
 <footer data-pc-footer></footer>
 
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
 <script src="/static/api.js"></script>
-<script src="/static/js/pc-ui.js?v=20261001j"></script>
-<script src="/static/js/pc-landing-sequence.js?v=20261001za"></script>
+<script src="/static/js/pc-ui.js?v=20261002a"></script>
+<script src="/static/js/pc-landing-sequence.js?v=20261002d"></script>
 <script src="/static/js/pages/index.js?v=20261001k"></script>
 </body>
 </html>

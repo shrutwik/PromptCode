@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&display=swap">
 <link rel="stylesheet" href="/static/css/pc-tokens.css?v=20260930">
 <link rel="stylesheet" href="/static/css/pc-components.css?v=20260930">
-<link rel="stylesheet" href="/static/interview.css?v=20261001c">
+<link rel="stylesheet" href="/static/interview.css?v=20261002b">
 <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/editor/editor.main.css" />
 </head>
 <body class="ide-body">
@@ -19,11 +19,6 @@
   <div class="ide-topbar-left">
     <a class="nav-brand" href="/dashboard" aria-label="PromptCode — back to Practice">PromptCode</a>
     <span class="ide-crumb"><span id="slugLabel">Loading…</span></span>
-  </div>
-  <div class="pc-segmented phase-bar" role="group" aria-label="Interview phase">
-    <button type="button" data-phase="plan" class="is-active" aria-pressed="true">Plan</button>
-    <button type="button" data-phase="build" aria-pressed="false">Build</button>
-    <button type="button" data-phase="review" aria-pressed="false">Review</button>
   </div>
   <div class="ide-topbar-right">
     <div class="ide-meta">
@@ -79,17 +74,11 @@
   </section>
   <div class="pc-resize pc-resize-col" id="resizeAi" role="separator" aria-orientation="vertical" aria-label="Resize AI panel"></div>
   <aside class="ide-panel chat" id="aiPanel" aria-label="AI assistant">
-    <div class="ide-panel-head"><h2 class="ai-dot">AI Assistant</h2><span>logged</span></div>
-    <div class="ctx-controls" id="ctxChips" role="group" aria-label="Context sent with your message">
-      <span class="ctx-label">Context</span>
-      <label class="ctx-chip" data-on="true"><input type="checkbox" id="attachCurrent" checked /> Current file</label>
-      <label class="ctx-chip" data-on="false"><input type="checkbox" id="attachTests" /> Tests</label>
-      <label class="ctx-chip" data-on="false"><input type="checkbox" id="attachSelection" /> Selection</label>
-    </div>
+    <div class="ide-panel-head"><h2 class="ai-dot">Assistant</h2><span>logged</span></div>
     <div class="chat-log" id="chatLog" aria-live="polite"></div>
     <div id="applyBar" class="apply-bar hidden"></div>
     <form class="chat-form" id="chatForm">
-      <textarea id="chatInput" placeholder="Ask with selected context only…" aria-label="Assistant message"></textarea>
+      <textarea id="chatInput" placeholder="Ask about this code…" aria-label="Assistant message"></textarea>
       <div class="chat-form-foot">
         <span>Enter to send · Shift+Enter for newline</span>
         <button class="btn btn-primary btn-sm" type="submit">Send</button>
@@ -147,7 +136,7 @@
       <button class="btn btn-ghost btn-sm" id="closeAbandon" type="button">Close</button>
     </div>
     <div class="modal-body">
-      <p id="abandonSummary">This marks the session abandoned and returns you to the dashboard.</p>
+      <p id="abandonSummary">This marks the session abandoned and returns you to Practice.</p>
       <div class="modal-actions">
         <button class="btn btn-ghost" type="button" id="cancelAbandon">Stay</button>
         <button class="btn btn-primary" type="button" id="confirmAbandon">Leave session</button>
@@ -161,8 +150,9 @@
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/editor/editor.main.nls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/editor/editor.main.js"></script>
 <script src="/static/api.js"></script>
-<script src="/static/interview-api.js?v=20261002e"></script>
-<script src="/static/js/pc-ui.js?v=20260930"></script>
-<script src="/static/js/pages/interview-session.js?v=20261002e"></script>
+<script src="/static/interview-api.js?v=20261002a"></script>
+<script src="/static/js/pc-ui.js?v=20261002a"></script>
+<script src="/static/js/pages/interview-pad.js?v=20261001f"></script>
+<script src="/static/js/pages/interview-session.js?v=20261002b"></script>
 </body>
 </html>

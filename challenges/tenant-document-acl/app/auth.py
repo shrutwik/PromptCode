@@ -1,3 +1,4 @@
+"""Bearer token to Principal. USERS maps tok_acme and tok_globex onto a user_id and a tenant_id. Missing or unknown tokens raise 401."""
 from dataclasses import dataclass
 from fastapi import Header, HTTPException
 @dataclass

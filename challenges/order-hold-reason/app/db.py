@@ -1,3 +1,4 @@
+"""Process-local order map keyed by id. reset() empties it. seed and upsert store the same object the caller passed."""
 from __future__ import annotations
 from typing import Dict, Optional
 from .models import Order

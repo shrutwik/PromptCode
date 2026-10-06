@@ -1,0 +1,405 @@
+{
+  "schema_version": 1,
+  "namespace": "local_8d25711636",
+  "target": "http://127.0.0.1:52513",
+  "challenge": "subscription-proration-boundary",
+  "execution_exercised": true,
+  "paid_ai_exercised": false,
+  "client_host": "Shrutwiks-MacBook-Pro.local",
+  "host_telemetry_scope": "load-client host; selected PIDs only",
+  "poll_interval_seconds": 2,
+  "queue_wait_scope": "first observed running state; polling upper bound, fast jobs may be missed",
+  "requested_stages": [
+    50,
+    100
+  ],
+  "stages": [
+    {
+      "requests": 214,
+      "unexpected_errors": 42,
+      "throttles": 0,
+      "stop_threshold_reached": true,
+      "flows": {
+        "incomplete": 50
+      },
+      "flow_failures": {
+        "files: http_500": 11,
+        "read: http_408": 1,
+        "read: http_500": 11,
+        "start: http_500": 15,
+        "save: http_500": 4,
+        "stopped": 8
+      },
+      "steps": {
+        "identity": {
+          "statuses": {
+            "200": 50
+          },
+          "latency_ms": {
+            "samples": 50,
+            "p50": 331.69,
+            "p95": 349.0,
+            "p99": 351.05,
+            "max": 351.05
+          }
+        },
+        "challenge": {
+          "statuses": {
+            "200": 50
+          },
+          "latency_ms": {
+            "samples": 50,
+            "p50": 1076.28,
+            "p95": 6674.36,
+            "p99": 7310.76,
+            "max": 7310.76
+          }
+        },
+        "start": {
+          "statuses": {
+            "200": 35,
+            "500": 15
+          },
+          "latency_ms": {
+            "samples": 50,
+            "p50": 4375.1,
+            "p95": 7513.41,
+            "p99": 8145.85,
+            "max": 8145.85
+          }
+        },
+        "files": {
+          "statuses": {
+            "200": 23,
+            "500": 11
+          },
+          "latency_ms": {
+            "samples": 34,
+            "p50": 2033.31,
+            "p95": 5108.16,
+            "p99": 5261.49,
+            "max": 5261.49
+          }
+        },
+        "read": {
+          "statuses": {
+            "200": 9,
+            "408": 1,
+            "500": 11
+          },
+          "latency_ms": {
+            "samples": 21,
+            "p50": 1775.92,
+            "p95": 4719.6,
+            "p99": 5510.01,
+            "max": 5510.01
+          }
+        },
+        "save": {
+          "statuses": {
+            "200": 4,
+            "500": 4
+          },
+          "latency_ms": {
+            "samples": 8,
+            "p50": 2617.23,
+            "p95": 3120.93,
+            "p99": 3120.93,
+            "max": 3120.93
+          }
+        },
+        "advisory_run": {
+          "statuses": {
+            "200": 1
+          },
+          "latency_ms": {
+            "samples": 1,
+            "p50": 1969.3,
+            "p95": 1969.3,
+            "p99": 1969.3,
+            "max": 1969.3
+          }
+        }
+      },
+      "advisory_execution_duration_ms": {
+        "samples": 1,
+        "p50": 1611.0,
+        "p95": 1611.0,
+        "p99": 1611.0,
+        "max": 1611.0
+      },
+      "observed_queue_wait_ms": {
+        "samples": 0,
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "max": null
+      },
+      "observed_job_completion_ms": {
+        "samples": 0,
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "max": null
+      },
+      "concurrency": 50,
+      "duration_seconds": 14.62,
+      "session_ids": [
+        "120bf258-7724-4419-b82f-506fab80b807",
+        "4db76d01-406f-455f-bc84-d6b839a09f5e",
+        "672fab6e-a3ea-4e59-a32e-b9f53bc5f18e",
+        "e69886c8-c6d6-47a3-b241-f7e0490f4471",
+        "6ba19f5c-4a4d-4736-b9f7-d7ffc1d05594",
+        "ba2b93c3-e1a2-4020-a8fb-a7f2aae69e47",
+        "71602910-ddad-44c4-ba91-1be91d9a39a7",
+        "e69878a8-debc-4e62-9536-561cb5ef362c",
+        "b74bdecf-a7f4-41b0-a556-5e28cdf083f3",
+        "ff1368ed-030e-41fa-b9e4-179f2576c405",
+        "84135a02-e5b7-4b8d-9812-202144c109db",
+        "b425ce4c-b739-42cb-ab94-eb48850d7530",
+        "6048cb3c-425f-436d-a9d7-60aaf49ff0f4",
+        "fe740e0d-6deb-4350-a6e4-49f6afd62be8",
+        "8e056ff8-eb82-4048-90d7-1c0a96c3373c",
+        "b3f72ecc-a9e5-4841-8c5a-cb5ff6c310b7",
+        "8ca65ace-af89-4553-858d-64bf0498a48e",
+        "4431f2c3-7414-4a26-b383-095aab314853",
+        "0d7244b5-63e1-47c8-a576-f00362a7bd9a",
+        "3faecd79-919a-4a8d-8496-c58b6f57f916",
+        "91151e20-df78-405a-91de-774e743e7d74",
+        "46cb06e5-b238-4837-b687-d9cfc102f0f6",
+        "1cb91a94-a520-431a-b3d9-049d33317fb0",
+        "483f2e9b-d87f-41dc-aded-422571e80f0d",
+        "687ab383-cfc0-445f-99fd-7a340c9bac6b",
+        "f9180f6e-afdd-4272-b033-91c6849facfa",
+        "87de496d-60a3-4c05-890e-8b94ed682341",
+        "afdea501-1716-4c10-b537-9c07cef9ca9e",
+        "456515c0-a265-432d-8a68-52276e48f2e1",
+        "253e0be8-e4e7-4a0f-8aa5-8010928de03e",
+        "ae6abd73-52a0-49c4-b2dd-e454f8fa9ffb",
+        "3d12f99a-abb8-42a6-94a5-0e4d9b9edd04",
+        "12dd33dd-7959-4745-8d15-e5da2b18cf2d",
+        "e66cf110-7eb7-4d29-bfff-e5000196c2dc",
+        "609ac66b-3c83-4249-987d-dc59be5a40d2"
+      ],
+      "durable_jobs": {
+        "statuses": {},
+        "queue_wait_ms": {
+          "samples": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null
+        },
+        "execution_duration_ms": {
+          "samples": 0,
+          "p50": null,
+          "p95": null,
+          "p99": null,
+          "max": null
+        },
+        "retry_attempts": 0,
+        "timing_scope": "latest claim per job; retries include backoff in queue wait"
+      }
+    }
+  ],
+  "host_samples": [
+    {
+      "elapsed": 489350.862841833,
+      "load_average": [
+        36.2109375,
+        21.53125,
+        11.98828125
+      ],
+      "disk_free_bytes": 21838024704,
+      "host_memory_active_wired_compressed_bytes": 15560163328,
+      "host_process_cpu_percent_sum": 140.0,
+      "selected_process_cpu_percent": 59.2,
+      "selected_process_rss_bytes": 425918464
+    },
+    {
+      "elapsed": 489351.908978875,
+      "load_average": [
+        36.2109375,
+        21.53125,
+        11.98828125
+      ],
+      "disk_free_bytes": 21838012416,
+      "host_memory_active_wired_compressed_bytes": 15552512000,
+      "host_process_cpu_percent_sum": 1059.1,
+      "selected_process_cpu_percent": 2.4,
+      "selected_process_rss_bytes": 397033472
+    },
+    {
+      "elapsed": 489352.965952666,
+      "load_average": [
+        36.2109375,
+        21.53125,
+        11.98828125
+      ],
+      "disk_free_bytes": 21838004224,
+      "host_memory_active_wired_compressed_bytes": 15532490752,
+      "host_process_cpu_percent_sum": 1067.8999999999999,
+      "selected_process_cpu_percent": 0.4,
+      "selected_process_rss_bytes": 387973120
+    },
+    {
+      "elapsed": 489354.020070666,
+      "load_average": [
+        36.03369140625,
+        21.73779296875,
+        12.1171875
+      ],
+      "disk_free_bytes": 21836939264,
+      "host_memory_active_wired_compressed_bytes": 15415869440,
+      "host_process_cpu_percent_sum": 1001.5,
+      "selected_process_cpu_percent": 0.4,
+      "selected_process_rss_bytes": 351256576
+    },
+    {
+      "elapsed": 489355.081095125,
+      "load_average": [
+        36.03369140625,
+        21.73779296875,
+        12.1171875
+      ],
+      "disk_free_bytes": 21836705792,
+      "host_memory_active_wired_compressed_bytes": 15540387840,
+      "host_process_cpu_percent_sum": 264.7,
+      "selected_process_cpu_percent": 89.60000000000001,
+      "selected_process_rss_bytes": 355205120
+    },
+    {
+      "elapsed": 489356.111251333,
+      "load_average": [
+        36.03369140625,
+        21.73779296875,
+        12.1171875
+      ],
+      "disk_free_bytes": 21836218368,
+      "host_memory_active_wired_compressed_bytes": 15457009664,
+      "host_process_cpu_percent_sum": 184.9,
+      "selected_process_cpu_percent": 98.0,
+      "selected_process_rss_bytes": 360480768
+    },
+    {
+      "elapsed": 489357.150344333,
+      "load_average": [
+        36.03369140625,
+        21.73779296875,
+        12.1171875
+      ],
+      "disk_free_bytes": 21835698176,
+      "host_memory_active_wired_compressed_bytes": 15521366016,
+      "host_process_cpu_percent_sum": 244.7,
+      "selected_process_cpu_percent": 97.8,
+      "selected_process_rss_bytes": 359579648
+    },
+    {
+      "elapsed": 489358.183445083,
+      "load_average": [
+        36.03369140625,
+        21.73779296875,
+        12.1171875
+      ],
+      "disk_free_bytes": 21835268096,
+      "host_memory_active_wired_compressed_bytes": 15471525888,
+      "host_process_cpu_percent_sum": 218.5,
+      "selected_process_cpu_percent": 98.60000000000001,
+      "selected_process_rss_bytes": 360284160
+    },
+    {
+      "elapsed": 489359.215530125,
+      "load_average": [
+        33.22802734375,
+        21.39306640625,
+        12.0517578125
+      ],
+      "disk_free_bytes": 21834797056,
+      "host_memory_active_wired_compressed_bytes": 15489417216,
+      "host_process_cpu_percent_sum": 166.9,
+      "selected_process_cpu_percent": 100.2,
+      "selected_process_rss_bytes": 360185856
+    },
+    {
+      "elapsed": 489360.253576541,
+      "load_average": [
+        33.22802734375,
+        21.39306640625,
+        12.0517578125
+      ],
+      "disk_free_bytes": 21840293888,
+      "host_memory_active_wired_compressed_bytes": 15429025792,
+      "host_process_cpu_percent_sum": 358.5,
+      "selected_process_cpu_percent": 81.1,
+      "selected_process_rss_bytes": 190169088
+    },
+    {
+      "elapsed": 489361.300344958,
+      "load_average": [
+        33.22802734375,
+        21.39306640625,
+        12.0517578125
+      ],
+      "disk_free_bytes": 21844140032,
+      "host_memory_active_wired_compressed_bytes": 15418654720,
+      "host_process_cpu_percent_sum": 313.7,
+      "selected_process_cpu_percent": 90.0,
+      "selected_process_rss_bytes": 193282048
+    },
+    {
+      "elapsed": 489362.338414833,
+      "load_average": [
+        33.22802734375,
+        21.39306640625,
+        12.0517578125
+      ],
+      "disk_free_bytes": 21843472384,
+      "host_memory_active_wired_compressed_bytes": 15336374272,
+      "host_process_cpu_percent_sum": 174.20000000000002,
+      "selected_process_cpu_percent": 98.4,
+      "selected_process_rss_bytes": 194969600
+    },
+    {
+      "elapsed": 489363.368273958,
+      "load_average": [
+        33.22802734375,
+        21.39306640625,
+        12.0517578125
+      ],
+      "disk_free_bytes": 21842952192,
+      "host_memory_active_wired_compressed_bytes": 15579463680,
+      "host_process_cpu_percent_sum": 553.1,
+      "selected_process_cpu_percent": 60.6,
+      "selected_process_rss_bytes": 143278080
+    },
+    {
+      "elapsed": 489364.43663025,
+      "load_average": [
+        30.96728515625,
+        21.12060546875,
+        12.01025390625
+      ],
+      "disk_free_bytes": 21890805760,
+      "host_memory_active_wired_compressed_bytes": 15582068736,
+      "host_process_cpu_percent_sum": 422.0,
+      "selected_process_cpu_percent": 11.0,
+      "selected_process_rss_bytes": 224313344
+    }
+  ],
+  "passed": false,
+  "topology": {
+    "scope": "disposable local developer rehearsal",
+    "os": "macOS-26.6-arm64-arm-64bit",
+    "client_and_services_share_host": true,
+    "backend_processes": 1,
+    "worker_processes": 2,
+    "broker_processes": 1,
+    "docker_cpus": 11,
+    "docker_memory_bytes": 8217174016,
+    "database": "Postgres 16.11, tmpfs, no existing volumes",
+    "runner_limit": 4,
+    "migrations_applied": true,
+    "paid_ai_disabled": true,
+    "image_pinning": "local development tags"
+  }
+}

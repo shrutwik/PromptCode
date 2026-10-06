@@ -1,3 +1,9 @@
+"""Hold and release for one order, and the dict HTTP handlers return.
+
+place_on_hold sets status to on_hold and stores the reason argument.
+clear_hold sets status back to open and clears the reason.
+to_public_dict is the JSON body for GET, hold, and release.
+"""
 from __future__ import annotations
 from typing import Optional
 from . import db
@@ -23,5 +29,4 @@ def to_public_dict(order: Order) -> dict:
         "customer_id": order.customer_id,
         "total_cents": order.total_cents,
         "status": order.status,
-        # hold_reason intentionally omitted — Part B
     }

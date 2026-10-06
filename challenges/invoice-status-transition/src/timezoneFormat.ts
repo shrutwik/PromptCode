@@ -1,3 +1,7 @@
+/**
+ * Display helper for issuedAt.
+ * timeZone is an IANA name such as America/Chicago. The return value is a human string, not a status.
+ */
 export function formatInvoiceDate(iso: string, timeZone = 'UTC'): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) throw new Error(`Invalid date: ${iso}`);

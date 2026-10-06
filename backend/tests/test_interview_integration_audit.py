@@ -6,6 +6,8 @@ Covers defend answer-guide leakage, feedback field passthrough, and event order.
 from __future__ import annotations
 
 import asyncio
+import threading
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -76,6 +78,44 @@ def test_sanitize_strips_inline_answer_keys():
     assert "?" in sanitize_candidate_question("1. Q: Why not timezone? A: Not on path.")
 
 
+def test_slow_workspace_creation_does_not_block_other_requests(tmp_path, monkeypatch):
+    from httpx import AsyncClient, ASGITransport
+    from app.api.routes import interview
+    from app.core.config import get_settings
+    monkeypatch.setenv("PROMPTCODE_INTERVIEW_WORKSPACE_ROOT", str(tmp_path / "workspaces"))
+    app, test_engine = _build_test_app(tmp_path, monkeypatch)
+    entered, release = threading.Event(), threading.Event()
+    original = interview.create_workspace
+    def slow_create(*args):
+        entered.set()
+        assert release.wait(3), "Workspace copy blocked the event loop"
+        return original(*args)
+    monkeypatch.setattr(interview, "create_workspace", slow_create)
+    async def exercise():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            signup = await client.post("/api/auth/signup", json={
+                "email": "responsive@example.com", "username": "responsive",
+                "password": _PASSWORD, "first_name": "Beta", "last_name": "User"})
+            assert signup.status_code == 201
+            headers = {"Authorization": "Bearer " + signup.json()["access_token"]}
+            pending = asyncio.create_task(client.post("/api/interview/sessions",
+                headers=headers, json={"challenge_slug": "order-hold-reason"}))
+            try:
+                assert await asyncio.to_thread(entered.wait, 1)
+                assert not pending.done(), "Slow filesystem work ran on the event loop"
+                health = await asyncio.wait_for(client.get("/health"), .5)
+                assert health.status_code == 200
+            finally:
+                release.set()
+            assert (await pending).status_code == 200
+        await test_engine.dispose()
+    try:
+        asyncio.run(exercise())
+    finally:
+        release.set()
+        get_settings.cache_clear()
+
+
 def test_candidate_defend_questions_never_include_answer_keys():
     for slug_q in candidate_defend_questions("invoice-status-transition"):
         q = slug_q["question"]
@@ -108,6 +148,14 @@ def test_defend_and_feedback_integration(tmp_path, monkeypatch):
                 **headers,
                 "X-Session-Token": start.json()["owner_token"],
             }
+
+            for event_type in ("test_result", "ai_response", "file_changed", "defend_answer", "submission"):
+                forged = client.post(f"/api/interview/sessions/{sid}/events", headers=headers,
+                                     json={"event_type": event_type, "payload": {"ok": True}})
+                assert forged.status_code == 400
+            bad_search = client.post(f"/api/interview/sessions/{sid}/events", headers=headers,
+                                     json={"event_type": "file_searched", "payload": {"query": "x", "hits": True}})
+            assert bad_search.status_code == 400
 
             files = client.get(f"/api/interview/sessions/{sid}/files", headers=headers)
             assert files.status_code == 200
@@ -151,6 +199,11 @@ def test_defend_and_feedback_integration(tmp_path, monkeypatch):
                 f"/api/interview/sessions/{sid}/submit", headers=headers, json={}
             )
             assert submit.status_code == 200, submit.text
+            assessment = submit.json()["assessment"]
+            assert assessment["status"] == "pending_review"
+            assert assessment["total_score"] is None
+            assert assessment["packet"]["session_id"] == sid
+            assert submit.json()["scoring_version"] == "v3-evidence"
             for q in submit.json()["defend_questions"]:
                 assert "answer_guide" not in q
                 assert " A:" not in q["question"]
@@ -162,6 +215,23 @@ def test_defend_and_feedback_integration(tmp_path, monkeypatch):
             for q in defend.json()["questions"]:
                 assert "answer_guide" not in q
                 assert " A:" not in q["question"]
+
+            for invalid in ({"index": -1, "answer": "x"}, {"index": 99, "answer": "x"},
+                            {"index": 0, "answer": " "}, {"index": 0, "answer": "x" * 4001}):
+                result = client.post(f"/api/interview/sessions/{sid}/defend", headers=headers, json=invalid)
+                assert result.status_code in (400, 422)
+            answered = client.post(f"/api/interview/sessions/{sid}/defend", headers=headers,
+                                   json={"index": 0, "answer": "I rejected this proposed fix."})
+            assert answered.status_code == 200, answered.text
+            updated = client.get(f"/api/interview/sessions/{sid}/report", headers=headers).json()
+            assert updated["assessment"]["packet_digest"] != assessment["packet_digest"]
+            assert updated["assessment"]["total_score"] is None
+            assert "answer_guides" not in updated["metrics"]
+            assert updated["assessment"]["packet"]["evidence"][-1]["id"] == "defend:0"
+            dashboard = client.get("/api/interview/dashboard", headers=headers).json()
+            assert dashboard["avg_score"] is None
+            assert dashboard["sessions"][0]["total_score"] is None
+            assert dashboard["trends"] == []
 
             fb = client.post(
                 f"/api/interview/sessions/{sid}/feedback",
@@ -188,5 +258,66 @@ def test_defend_and_feedback_integration(tmp_path, monkeypatch):
             # Chronological: session_started must precede later work
             assert types.index("session_started") < types.index("file_changed")
             assert types.index("file_changed") < types.index("submission")
+    finally:
+        asyncio.run(test_engine.dispose())
+
+
+def test_deepseek_question_hint_execution_submission_workflow(tmp_path, monkeypatch):
+    import json
+    import os
+    import httpx
+    from app.services.interview.ai_provider import ProductionAIProvider
+    from app.api.routes import interview as route
+    calls = []
+    def respond(request):
+        payload = json.loads(request.content)
+        calls.append(payload)
+        assert payload['model'] == 'deepseek-flash'
+        assert payload['max_tokens'] == 600
+        assert payload['thinking'] == {'type': 'disabled'}
+        assert sum(len(m['content']) for m in payload['messages']) <= 18000
+        assert 'README.md' in payload['messages'][1]['content']
+        return httpx.Response(200, json={'model': 'deepseek-flash', 'choices': [{'message': {'content': 'Check what the failing assertion expects.'}}], 'usage': {'prompt_tokens': 3000, 'completion_tokens': 12}})
+    original = httpx.AsyncClient
+    # Test-only local execution; production continues to require Docker.
+    monkeypatch.setenv('PROMPTCODE_ALLOW_UNSAFE_LOCAL_RUNNER', '1')
+    monkeypatch.setenv('PATH', str(Path(__file__).resolve().parents[2] / '.venv/bin') + os.pathsep + os.environ['PATH'])
+    monkeypatch.setenv('DEEPSEEK_API_KEY', 'test-only-deepseek-key')
+    monkeypatch.setenv('PROMPTCODE_AI_BASE_URL', 'https://api.deepseek.com')
+    monkeypatch.setenv('PROMPTCODE_AI_MODEL', 'deepseek-flash')
+    monkeypatch.setattr(httpx, 'AsyncClient', lambda **kwargs: original(transport=httpx.MockTransport(respond), **kwargs))
+    monkeypatch.setattr(route, 'get_ai_provider', ProductionAIProvider)
+    app, test_engine = _build_test_app(tmp_path, monkeypatch)
+    try:
+        with TestClient(app) as client:
+            user = _signup(client, email='deepseek-flow@example.com', username='deepseekflow')
+            headers = {'Authorization': f"Bearer {user['access_token']}"}
+            start = client.post('/api/interview/sessions', headers=headers, json={'challenge_slug': 'order-hold-reason'})
+            assert start.status_code == 200, start.text
+            sid = start.json()['id']
+            headers['X-Session-Token'] = start.json()['owner_token']
+            off_topic = client.post(f'/api/interview/sessions/{sid}/ai/chat', headers=headers, json={'message': 'Tell me about cats'})
+            assert off_topic.status_code == 200, off_topic.text
+            assert off_topic.json()['provider'] == 'guardrail'
+            assert calls == []
+            hint = client.post(f'/api/interview/sessions/{sid}/ai/chat', headers=headers, json={'message': 'Why does this test fail?'})
+            assert hint.status_code == 200, hint.text
+            assert hint.json()['model'] == 'deepseek-flash'
+            assert len(calls) == 1
+            # Editing remains an explicit candidate action.
+            path = 'app/service.py'
+            original_file = client.get(f'/api/interview/sessions/{sid}/files/{path}', headers=headers)
+            assert original_file.status_code == 200
+            saved = client.put(f'/api/interview/sessions/{sid}/files/{path}', headers=headers, json={'content': original_file.json()['content'] + '\n# candidate reviewed hint\n'})
+            assert saved.status_code == 200, saved.text
+            execution = client.post(f'/api/interview/sessions/{sid}/tests', headers=headers, json={'command_id': 'run_tests'})
+            assert execution.status_code == 200, execution.text
+            assert execution.json()['error_code'] is None, execution.text
+            assert not execution.json()['timed_out'], execution.text
+            assert execution.json()['counts']['total'] > 0, execution.text
+            submitted = client.post(f'/api/interview/sessions/{sid}/submit', headers=headers, json={})
+            assert submitted.status_code == 200, submitted.text
+            for question in submitted.json()['defend_questions']:
+                assert 'answer_guide' not in question
     finally:
         asyncio.run(test_engine.dispose())

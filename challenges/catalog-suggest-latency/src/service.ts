@@ -1,3 +1,8 @@
+/**
+ * Live catalog used by the service entry points.
+ * resetCatalog rebuilds N products and clears the scan counter.
+ * suggestProducts queries that catalog. scanCount reads the counter.
+ */
 import { buildCatalog, type Product } from './catalog.js';
 import { suggest } from './suggest.js';
 import { globalCounter } from './queryCounter.js';

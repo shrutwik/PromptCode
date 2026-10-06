@@ -1,3 +1,9 @@
+/**
+ * HTTP edge for invoices.
+ * POST /invoices/:id/transition body is { status }.
+ * GET /invoices/:id/describe body may include { timeZone } and returns { text }.
+ * handleRequest returns { status, body } and does not throw for expected failures.
+ */
 import { transitionInvoice, describeInvoice } from './invoiceService.js';
 import type { InvoiceStatus } from './types.js';
 export interface HttpRequest { method: string; path: string; body?: { status?: InvoiceStatus; timeZone?: string }; }

@@ -21,10 +21,10 @@ from typing import Any
 
 import openai
 
-from app.core.model_policy import OPENAI_CHAT_MODELS, resolve_allowed_model
+from app.core.model_policy import CHAT_MODELS, resolve_allowed_model
 
 logger = logging.getLogger(__name__)
-_ALLOWED_JUDGE_MODELS = set(OPENAI_CHAT_MODELS)
+_ALLOWED_JUDGE_MODELS = set(CHAT_MODELS)
 _PROMPT_JUDGE_ERRORS = (
     openai.OpenAIError,
     AttributeError,
@@ -123,7 +123,7 @@ def _judge_with_llm(
         raise RuntimeError("OPENAI_API_KEY not available for judge")
 
     base_url = settings.openai_base_url.strip() if settings.openai_base_url else ""
-    client = openai.OpenAI(api_key=api_key, base_url=base_url or None, timeout=15, max_retries=1)
+    client = openai.OpenAI(api_key=api_key, base_url=base_url or None, timeout=15, max_retries=0)
     candidate_models = _resolve_judge_models(settings)
 
     prompt_listing = ""
@@ -148,6 +148,9 @@ def _judge_with_llm(
     response = None
     for model in candidate_models:
         try:
+            from app.services.interview.ai_budget import reserve_worker_budget
+            reserve_worker_budget([{"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+                                   {"role": "user", "content": user_message}], 1024)
             response = client.chat.completions.create(
                 model=model,
                 messages=[
@@ -156,6 +159,7 @@ def _judge_with_llm(
                 ],
                 temperature=0.0,
                 max_tokens=1024,
+                **({"extra_body": {"thinking": {"type": "disabled"}}} if base_url.rstrip("/") == "https://api.deepseek.com" else {}),
             )
             selected_model = model
             break

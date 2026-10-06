@@ -100,6 +100,10 @@ def run_in_sandbox(
     input_overrides: dict[str, Any] | None = None,
 ) -> SandboxResult:
     """Execute user code in a Docker container and collect telemetry."""
+    if getattr(settings, "execution_broker_url", ""):
+        from app.services.sandbox.legacy_broker_client import run_legacy_broker
+        return run_legacy_broker(code, entrypoint, challenge_config, settings=settings,
+                                 run_id=run_id, input_overrides=input_overrides)
     if _sandbox_executor_enabled():
         return _run_in_sandbox_remote(
             code,
@@ -120,11 +124,12 @@ def run_in_sandbox(
 def _run_in_sandbox_local(
     code: str, entrypoint: str, challenge_config: dict[str, Any], *,
     run_id: str | None = None, input_overrides: dict[str, Any] | None = None,
+    relay_factory=None,
 ) -> SandboxResult:
     from app.services.runner_capacity import execution_slot, RunnerBusy
     try:
         with execution_slot():
-            return _run_in_sandbox_with_slot(code, entrypoint, challenge_config, run_id=run_id, input_overrides=input_overrides)
+            return _run_in_sandbox_with_slot(code, entrypoint, challenge_config, run_id=run_id, input_overrides=input_overrides, relay_factory=relay_factory)
     except RunnerBusy:
         return SandboxResult(success=False, output='', exit_code=-1, telemetry=[], error='Execution capacity reached. Retry shortly.')
 
@@ -136,6 +141,7 @@ def _run_in_sandbox_with_slot(
     *,
     run_id: str | None = None,
     input_overrides: dict[str, Any] | None = None,
+    relay_factory=None,
 ) -> SandboxResult:
     """Execute user code locally via the Docker daemon and collect telemetry."""
 
@@ -184,12 +190,13 @@ def _run_in_sandbox_with_slot(
         try:
             llm_budget = _build_sandbox_llm_budget(challenge_config)
             network_mode = _sandbox_network_mode()
-            with SandboxLLMRelay(
+            with (relay_factory or SandboxLLMRelay)(
                 api_key=settings.openai_api_key,
                 base_url=settings.openai_base_url,
                 host_alias=_sandbox_host_alias(network_mode),
                 budget=llm_budget,
                 default_model=settings.openai_model,
+                billing_identity=challenge_config.get("_ai_billing_identity"),
             ) as relay:
                 run_kwargs = _build_container_run_kwargs(
                     code_dir=code_dir,
@@ -370,6 +377,9 @@ def _build_sandbox_llm_budget(challenge_config: dict[str, Any]) -> SandboxLLMBud
         if str(model).strip()
     ) or ("gpt-4o", "gpt-4o-mini")
 
+    if settings.openai_base_url.rstrip("/") == "https://api.deepseek.com":
+        allowed_models = ("deepseek-flash",)
+
     max_llm_calls = int(constraints.get("max_llm_calls") or max(4, int(challenge_config.get("expected_calls", 3)) * 3))
     max_prompt_chars = int(challenge_config.get("max_prompt_chars") or 20_000)
     max_completion_tokens = int(challenge_config.get("max_completion_tokens") or 2_048)
@@ -434,6 +444,15 @@ def _build_container_run_kwargs(
             "promptcode.run_id": run_id,
         },
     }
+    if getattr(settings, "execution_broker_mode", False):
+        # Candidate telemetry is writable only in bounded ephemeral memory. The
+        # application relay records authoritative provider usage independently.
+        run_kwargs["volumes"] = {str(code_dir): {"bind": "/workspace", "mode": "ro"}}
+        run_kwargs["read_only"] = True
+        run_kwargs["tmpfs"] = {"/tmp": "rw,noexec,nosuid,nodev,size=64m"}
+        run_kwargs["log_config"] = {"type": "local", "config": {"max-size": "1m", "max-file": "1", "compress": "false"}}
+        run_kwargs["labels"].update({"promptcode.component": "execution-broker",
+            "promptcode.expires_at": str(__import__("time").time() + settings.sandbox_timeout_seconds + 30)})
     extra_hosts = _build_extra_hosts(network_mode)
     if extra_hosts:
         run_kwargs["extra_hosts"] = extra_hosts
