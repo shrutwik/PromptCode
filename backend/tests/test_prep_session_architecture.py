@@ -41,7 +41,7 @@ def test_input_guardrail_blocks_manipulation_and_off_topic_before_the_model():
     from app.services.interview.ai_provider import (
         AIRequest,
         REFUSAL_MANIPULATION,
-        REFUSAL_OFF_TOPIC,
+        OFF_TOPIC_REPLIES,
         apply_assistant_guardrails,
         assemble_user_content,
         screen_assistant_input,
@@ -65,14 +65,14 @@ def test_input_guardrail_blocks_manipulation_and_off_topic_before_the_model():
         )
         == REFUSAL_MANIPULATION
     )
-    assert screen_assistant_input("Write me a poem about the ocean") == REFUSAL_OFF_TOPIC
+    assert screen_assistant_input("Write me a poem about the ocean") in OFF_TOPIC_REPLIES
     assert (
         screen_assistant_input("Look at the failing test and also write me a poem")
-        == REFUSAL_OFF_TOPIC
+        in OFF_TOPIC_REPLIES
     )
-    assert screen_assistant_input("hello") == REFUSAL_OFF_TOPIC
+    assert screen_assistant_input("hello") in OFF_TOPIC_REPLIES
     essay = "The roman empire " * 40
-    assert screen_assistant_input(essay) == REFUSAL_OFF_TOPIC
+    assert screen_assistant_input(essay) in OFF_TOPIC_REPLIES
 
     fenced = assemble_user_content(
         AIRequest(

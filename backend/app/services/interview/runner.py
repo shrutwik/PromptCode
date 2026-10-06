@@ -1143,16 +1143,19 @@ def _result(
 
 def _parse_test_counts(output: str) -> dict[str, int]:
     """Best-effort structured counts from vitest/pytest output (not a scraper grade)."""
-    # pytest: "3 passed, 1 failed, 2 skipped"
-    m = re.search(
-        r"(\d+)\s+passed(?:,\s*(\d+)\s+failed)?(?:,\s*(\d+)\s+skipped)?",
+    # pytest summaries can put failures first. Read the final summary line so
+    # assertion text or earlier output cannot supply a partial count.
+    summaries = re.findall(
+        r"^[= \t]*((?:\d+\s+(?:passed|failed|skipped|errors?|warnings?|xfailed|xpassed|deselected)(?:,\s*)?)+)"
+        r"(?:\s+in\s+[\d.]+s)?[= \t]*$",
         output,
-        re.I,
+        re.I | re.M,
     )
-    if m:
-        passed = int(m.group(1))
-        failed = int(m.group(2) or 0)
-        skipped = int(m.group(3) or 0)
+    if summaries:
+        counts = {status.lower(): int(count) for count, status in re.findall(
+            r"(\d+)\s+(passed|failed|skipped)", summaries[-1], re.I
+        )}
+        passed, failed, skipped = (counts.get(status, 0) for status in ("passed", "failed", "skipped"))
         return {
             "passed": passed,
             "failed": failed,

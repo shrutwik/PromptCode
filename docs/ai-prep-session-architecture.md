@@ -77,11 +77,13 @@ Default instructions for the model:
 
 - The assistant already has the ticket, the tests, and the source files for that question. There is no context picker. Allow orientation, summaries, explanations of supplied files, and clarification of the active question without requiring a hypothesis.
 - For debugging and proposed fixes, ask for one hypothesis before suggesting a change. Offer at most a small hint; do not name the bug, the root cause, or the line to change.
+- After a test run, explain the failing assertion's expected and observed behavior, give one investigative step, and ask one focused question. Do not provide corrected code, a patch, or the exact fix in that reply, even when directly asked for the answer.
 - Do not solve the whole task in one reply.
 - A proposed change may be close and wrong.
 - Do not use solution files or hidden tests.
 - A full-file rewrite of a file the person did not attach is dropped, as is any reply that quotes hidden solution material.
 - The local filter accepts bounded orientation phrases and supplied filenames while rejecting recognized unrelated requests and attempts to change or reveal instructions. The model must keep every answer within the active question and supplied codebase, even when an unrelated request mentions code or a supplied filename.
+- Off-topic replies use short, varied redirects to the active task. Locally screened refusals still make no provider call.
 
 The brief tells the person, in one line, that the assistant can be wrong. The score does not assume the model obeyed. If it blurts the bug, that reply is still just a suggestion they can reject.
 

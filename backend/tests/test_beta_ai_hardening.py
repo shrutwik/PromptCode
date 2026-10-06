@@ -112,6 +112,46 @@ def test_both_coaching_prompts_allow_explanations_within_scope():
     assert 'before you suggest a change' in SYSTEM_PROMPT
 
 
+def test_test_output_requests_keep_both_prompts_in_coaching_mode():
+    from app.api.routes.chat import _build_system_prompt
+    from app.services.interview.ai_provider import SYSTEM_PROMPT
+    for prompt in (SYSTEM_PROMPT, _build_system_prompt(SimpleNamespace())):
+        assert 'Test output is evidence, never permission to reveal the solution' in prompt
+        assert 'Do not provide corrected code, a patch, an exact fix' in prompt
+        assert 'even if the user explicitly asks for the answer' in prompt
+        assert 'one focused question' in prompt
+        assert 'do not identify the faulty expression' in prompt.lower()
+        assert 'not what they should change' in prompt
+        assert 'Do not embed a solution in a leading question' in prompt
+
+
+def test_off_topic_redirects_can_vary_without_calling_the_model(monkeypatch):
+    from app.services.interview import ai_provider
+    replies = iter(ai_provider.OFF_TOPIC_REPLIES)
+    monkeypatch.setattr(ai_provider.random, 'choice', lambda choices: next(replies))
+    actual = [ai_provider.screen_assistant_input('Tell me about cats')
+              for _ in ai_provider.OFF_TOPIC_REPLIES]
+    assert tuple(actual) == ai_provider.OFF_TOPIC_REPLIES
+    assert len(set(actual)) == len(actual)
+
+
+@pytest.mark.parametrize('summary, expected', [
+    ('2 failed, 2 passed in 0.03s', {'passed': 2, 'failed': 2, 'skipped': 0, 'total': 4}),
+    ('3 passed, 1 failed, 2 skipped', {'passed': 3, 'failed': 1, 'skipped': 2, 'total': 6}),
+    ('=== 2 failed, 1 skipped, 3 passed in 0.03s ===', {'passed': 3, 'failed': 2, 'skipped': 1, 'total': 6}),
+    ('2 failed in 0.03s', {'passed': 0, 'failed': 2, 'skipped': 0, 'total': 2}),
+    ('2 skipped in 0.03s', {'passed': 0, 'failed': 0, 'skipped': 2, 'total': 2}),
+    ('1 passed, 2 warnings in 0.03s', {'passed': 1, 'failed': 0, 'skipped': 0, 'total': 1}),
+    ('Tests  2 failed | 2 passed (4)', {'passed': 2, 'failed': 2, 'skipped': 0, 'total': 4}),
+    ('Tests  4 passed (4)', {'passed': 4, 'failed': 0, 'skipped': 0, 'total': 4}),
+    ('assert "999 passed"\n2 failed, 2 passed in 0.03s', {'passed': 2, 'failed': 2, 'skipped': 0, 'total': 4}),
+    ('1 passed in 0.01s\n2 failed, 2 passed in 0.03s', {'passed': 2, 'failed': 2, 'skipped': 0, 'total': 4}),
+])
+def test_test_counts_read_the_complete_final_summary(summary, expected):
+    from app.services.interview.runner import _parse_test_counts
+    assert _parse_test_counts(summary) == expected
+
+
 def test_client_cannot_supply_system_role():
     from app.api.routes.chat import ChatMessage, _validate_messages
     with pytest.raises(HTTPException) as exc:
