@@ -213,6 +213,61 @@ def test_source_upload_prunes_dependencies_and_links_without_scanning_them(tmp_p
     assert not any("linked" in path for path in sandbox.filesystem.directories)
 
 
+@pytest.mark.parametrize("fail_upload", [False, True])
+def test_sandbox_phase_timings_include_failures_and_cleanup(modal_settings, fake_modal, tmp_path, monkeypatch, caplog, fail_upload):
+    fake_modal.process = _FakeProcess(stdout=b"done", exit_code=0)
+    policy = SandboxPolicy(cpu=1, memory_mb=512, timeout_seconds=30,
+                           pids_limit=64, output_limit_bytes=4096)
+    clock = [0.0]
+    monkeypatch.setattr(modal_backend.time, "monotonic", lambda: clock[0])
+    create = fake_modal.Sandbox.create
+
+    def timed_create(*args, **kwargs):
+        clock[0] += 0.1
+        sandbox = create(*args, **kwargs)
+        terminate = sandbox.terminate
+
+        def timed_terminate():
+            clock[0] += 0.04
+            terminate()
+
+        sandbox.terminate = timed_terminate
+        execute = sandbox.exec
+
+        def timed_exec(*args, **kwargs):
+            clock[0] += 0.3
+            return execute(*args, **kwargs)
+
+        sandbox.exec = timed_exec
+        return sandbox
+
+    upload = modal_backend._upload_source
+
+    def timed_upload(*args):
+        clock[0] += 0.2
+        if fail_upload:
+            raise OSError("upload failed")
+        return upload(*args)
+
+    fake_modal.Sandbox.create = timed_create
+    monkeypatch.setattr(modal_backend, "_upload_source", timed_upload)
+    with caplog.at_level("INFO", logger=modal_backend.__name__):
+        if fail_upload:
+            with pytest.raises(OSError):
+                ModalSandboxBackend()._execute(source_dir=_source(tmp_path), argv=["node"], image="node", policy=policy)
+        else:
+            result = ModalSandboxBackend()._execute(source_dir=_source(tmp_path), argv=["node"], image="node", policy=policy)
+            assert result == (0, b"done", b"")
+    record = next(r for r in caplog.records if r.getMessage() == "sandbox.complete")
+    assert record.create_ms == 100
+    assert record.upload_ms == 200
+    assert record.execute_ms == (0 if fail_upload else 300)
+    assert record.cleanup_ms == 40
+    assert record.outcome == ("failed" if fail_upload else "completed")
+    assert record.failed_phase == ("upload" if fail_upload else None)
+    assert fake_modal.created[0].terminated
+
+
 # --- policy -----------------------------------------------------------------
 
 
