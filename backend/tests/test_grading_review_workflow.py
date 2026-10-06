@@ -187,6 +187,34 @@ def test_snapshot_tampering_prevents_staff_review_and_candidate_publication(tmp_
     asyncio.run(run())
 
 
+def test_review_storage_runs_off_event_loop_and_returns_verified_source(tmp_path, monkeypatch):
+    import threading
+
+    from app.services.interview import grading_review
+
+    async def run():
+        engine, factory, users, session, _job = await setup(tmp_path, monkeypatch)
+        original = grading_review._review_source
+        loop_thread = threading.get_ident()
+        calls = []
+
+        def read_source(job, *, include_content=False):
+            assert threading.get_ident() != loop_thread
+            calls.append(include_content)
+            return original(job, include_content=include_content)
+
+        monkeypatch.setattr(grading_review, "_review_source", read_source)
+        try:
+            async with factory() as db:
+                result = await grading_review.reviewer_evidence(db, session.id, users[1])
+                assert result["source"] == [{"path": "app.py", "content": "print(1)"}]
+                assert calls == [False, True]
+        finally:
+            await engine.dispose()
+
+    asyncio.run(run())
+
+
 def test_staff_failed_job_retry_auth_bounds_integrity_and_history(tmp_path,monkeypatch):
     from pathlib import Path
     async def run():

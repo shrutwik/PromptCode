@@ -1,5 +1,6 @@
 """Authenticated review service. External evidence is verified, never accepted by HTTP."""
 from __future__ import annotations
+import asyncio
 import copy
 import uuid
 from pathlib import Path
@@ -17,6 +18,21 @@ from app.services.interview.grading import DimensionReview, HumanReview, _digest
 def require_reviewer(user: User) -> None:
     if user.role != "interviewer":
         raise HTTPException(403, "Reviewer access required")
+
+
+def _review_source(job: InterviewGradingJob, *, include_content: bool = False) -> list[dict]:
+    """Hydrate and verify immutable source in a worker thread."""
+    from app.services.interview.snapshot import verify_snapshot
+    from app.services.interview.workspace_store import verified_job_source
+
+    with verified_job_source(job, require_ownership=False) as source_root:
+        manifest = verify_snapshot(source_root, job.source_digest)
+        if not include_content:
+            return []
+        if sum(item["size"] for item in manifest) > 2_000_000:
+            raise ValueError("Snapshot exceeds review limit")
+        return [{"path": item["path"], "content": (source_root / item["path"]).read_text()}
+                for item in manifest]
 
 
 async def review_context(db: AsyncSession, session_id: uuid.UUID, user: User | None, *, lock: bool = False) -> tuple:
@@ -51,13 +67,10 @@ async def review_context(db: AsyncSession, session_id: uuid.UUID, user: User | N
         raise HTTPException(409, "Challenge evaluation version has changed")
     from app.services.interview.trusted_evaluator import verify_result
     settings = get_settings()
-    from app.services.interview.snapshot import verify_snapshot
-    from app.services.interview.workspace_store import verified_job_source
     try:
         # The shared resolver hydrates and digest-verifies the immutable submission,
         # so review works in a fresh container instead of only on the submit host.
-        with verified_job_source(job, require_ownership=False) as source_root:
-            verify_snapshot(source_root, job.source_digest)
+        await asyncio.to_thread(_review_source, job)
         if job.challenge_version != session.challenge_version:
             raise ValueError("Challenge version mismatch")
         verified = verify_result(job.result, signing_key=settings.grading_signing_key,
@@ -143,16 +156,10 @@ async def append_review(db: AsyncSession, session_id: uuid.UUID, user: User, rev
 
 async def reviewer_evidence(db: AsyncSession, session_id: uuid.UUID, user: User) -> dict:
     session, job, evaluation, assessment = await review_context(db, session_id, user)
-    from app.services.interview.snapshot import verify_snapshot
-    from app.services.interview.workspace_store import verified_job_source
     try:
         # Hydrate through the shared resolver: on the managed stack the submit-time
         # host path does not exist in a fresh container.
-        with verified_job_source(job, require_ownership=False) as source_root:
-            manifest = verify_snapshot(source_root, job.source_digest)
-            if sum(item["size"] for item in manifest) > 2_000_000:
-                raise ValueError("Snapshot exceeds review limit")
-            source = [{"path": item["path"], "content": (source_root / item["path"]).read_text()} for item in manifest]
+        source = await asyncio.to_thread(_review_source, job, include_content=True)
     except (ValueError, OSError, UnicodeError):
         raise HTTPException(409, "Submitted source integrity check failed") from None
     events = (await db.execute(select(InterviewSessionEvent).where(InterviewSessionEvent.session_id == session_id).order_by(InterviewSessionEvent.created_at))).scalars().all()
