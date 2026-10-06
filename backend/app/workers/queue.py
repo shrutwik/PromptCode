@@ -12,6 +12,7 @@ from sqlalchemy import Select, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.ratelimit import cleanup_expired_counters
 from app.db.session import async_session_factory
 from app.models.auth_rate_limit import AuthRateLimitEvent
 from app.models.evaluation_job import EvaluationJob
@@ -321,12 +322,7 @@ _RATE_LIMIT_EVENT_MAX_AGE_SECONDS = 120  # 2× the 60 s rate-limit window; safe 
 
 
 async def _rate_limit_cleanup_loop() -> None:
-    """Periodically delete expired auth_rate_limit_events rows for all keys.
-
-    Per-request cleanup only prunes rows for the requesting key, so rows for
-    idle keys accumulate indefinitely.  This loop does a global sweep so the
-    table stays bounded regardless of traffic patterns.
-    """
+    """Periodically prune expired rate-limit windows, auth events and tokens."""
     while True:
         await asyncio.sleep(_RATE_LIMIT_CLEANUP_INTERVAL_SECONDS)
         try:
@@ -338,6 +334,7 @@ async def _rate_limit_cleanup_loop() -> None:
                     delete(AuthRateLimitEvent).where(AuthRateLimitEvent.created_at < cutoff)
                 )
                 now = datetime.now(timezone.utc)
+                await cleanup_expired_counters(db=db, now=now)
                 await db.execute(
                     delete(RevokedToken).where(RevokedToken.expires_at < now)
                 )

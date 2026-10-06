@@ -120,12 +120,16 @@ async def _drain_grading_queue(*, budget_seconds: float) -> int:
     publishing a duplicate or stale result. No work is tracked in process memory:
     stopping at any point leaves the remaining jobs queued for the next run.
     """
-    from app.db.session import engine
+    from app.core.ratelimit import cleanup_expired_counters
+    from app.db.session import async_session_factory, engine
     from app.workers.interview_grading import process_one_grading_job
 
     deadline = time.monotonic() + max(0.0, budget_seconds)
     processed = 0
     try:
+        async with async_session_factory() as db:
+            await cleanup_expired_counters(db=db)
+            await db.commit()
         while time.monotonic() < deadline:
             if not await process_one_grading_job():
                 break

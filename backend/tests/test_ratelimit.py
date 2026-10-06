@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 import app.models  # noqa: F401 - ensure ORM models are registered
-from app.core.ratelimit import enforce_rate_limit
+from app.core.ratelimit import cleanup_expired_counters, enforce_rate_limit
 from app.db.base import Base
 from app.models.rate_limit_counter import RateLimitCounter
 
@@ -152,9 +152,46 @@ def test_store_bounded_after_expiry(tmp_path):
             await enforce_rate_limit(db=db,key="old",limit=5,window_seconds=60,now=now-timedelta(seconds=61))
             await enforce_rate_limit(db=db,key="recent",limit=5,window_seconds=60,now=now)
             rows=(await db.execute(select(RateLimitCounter))).scalars().all()
+            assert len(rows)==2  # Requests no longer sweep expired windows.
+            await cleanup_expired_counters(db=db, now=now)
+            await db.commit()
+            rows=(await db.execute(select(RateLimitCounter))).scalars().all()
             assert len(rows)==1
             assert rows[0].expires_at > int(now.timestamp())
     asyncio.run(exercise());asyncio.run(engine.dispose())
+
+
+def test_periodic_worker_prunes_expired_counters_only(tmp_path, monkeypatch):
+    from app.workers import queue
+
+    factory, engine = _build_session_factory(tmp_path)
+    monkeypatch.setattr(queue, "async_session_factory", factory)
+    monkeypatch.setattr(queue, "_RATE_LIMIT_CLEANUP_INTERVAL_SECONDS", 0.001)
+
+    async def exercise():
+        now = int(datetime.now(timezone.utc).timestamp())
+        async with factory() as db:
+            db.add_all([
+                RateLimitCounter(key="expired", window_start=now-60, count=1, expires_at=now-1),
+                RateLimitCounter(key="active", window_start=now, count=1, expires_at=now+60),
+            ])
+            await db.commit()
+        completed = asyncio.Event()
+        monkeypatch.setattr(queue.logger, "debug", lambda *_args, **_kwargs: completed.set())
+        task = asyncio.create_task(queue._rate_limit_cleanup_loop())
+        try:
+            await asyncio.wait_for(completed.wait(), timeout=2)
+        finally:
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        async with factory() as db:
+            rows = (await db.execute(select(RateLimitCounter))).scalars().all()
+            assert [row.key for row in rows] == ["active"]
+            assert rows[0].count == 1
+        await engine.dispose()
+
+    asyncio.run(exercise())
 
 
 def test_atomic_counter_serializes_concurrent_limit_checks(tmp_path):

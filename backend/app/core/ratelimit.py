@@ -45,9 +45,17 @@ async def enforce_rate_limit(*, db: AsyncSession, key: str, limit: int,
                                      set_={"count": RateLimitCounter.count + 1},
                                      where=RateLimitCounter.count < limit).returning(RateLimitCounter.count)
     accepted = (await db.execute(stmt)).scalar_one_or_none()
-    from sqlalchemy import delete
-    await db.execute(delete(RateLimitCounter).where(RateLimitCounter.expires_at <= current))
     await db.commit()
     if accepted is None:
         retry = max(1, bucket + window_seconds - current)
         raise HTTPException(429, "Rate limit exceeded. Please retry later.", headers={"Retry-After": str(retry)})
+
+
+async def cleanup_expired_counters(*, db: AsyncSession, now: datetime | None = None) -> None:
+    """Prune expired windows in a background transaction; the caller commits."""
+    from sqlalchemy import delete
+
+    from app.models.rate_limit_counter import RateLimitCounter
+
+    current = int((now or datetime.now(timezone.utc)).timestamp())
+    await db.execute(delete(RateLimitCounter).where(RateLimitCounter.expires_at <= current))
