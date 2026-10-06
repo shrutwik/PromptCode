@@ -167,6 +167,45 @@ def test_full_queue_fails_closed_with_retry_hint(configured, monkeypatch):
     assert response.headers.get('Retry-After')
 
 
+@pytest.mark.parametrize("outcome", ["admitted", "full", "timeout", "cancelled"])
+def test_admission_logs_wait_and_outcome_without_running_refused_work(configured, monkeypatch, caplog, outcome):
+    from app.core.capacity_queue import CapacityExceeded, CapacityTimeout, QueueStats
+
+    class Queue:
+        async def acquire(self):
+            errors = {"full": CapacityExceeded, "timeout": CapacityTimeout,
+                      "cancelled": asyncio.CancelledError}
+            if outcome in errors:
+                raise errors[outcome]()
+
+        def stats(self):
+            return QueueStats(slots=2, active=1 if outcome == "admitted" else 2,
+                              waiting=0, max_waiters=8)
+
+        def release(self):
+            pass
+
+    monkeypatch.setattr(broker, "_queue", Queue)
+    ran = []
+
+    async def run():
+        if outcome == "admitted":
+            assert await broker.execute(lambda: ran.append(True) or "done") == "done"
+        else:
+            error = asyncio.CancelledError if outcome == "cancelled" else broker.HTTPException
+            with pytest.raises(error):
+                await broker.execute(lambda: ran.append(True))
+
+    with caplog.at_level("INFO", logger=broker.__name__):
+        asyncio.run(run())
+    record = next(r for r in caplog.records if r.getMessage() == "execution.admission")
+    assert record.outcome == outcome
+    assert record.wait_ms >= 0
+    assert record.capacity == 2
+    assert record.max_waiters == 8
+    assert ran == ([True] if outcome == "admitted" else [])
+
+
 def test_queued_request_waits_for_a_slot_instead_of_shedding(configured):
     """A saturated host admits a queued caller as soon as a slot frees."""
     async def exercise():
@@ -186,6 +225,32 @@ def test_queued_request_waits_for_a_slot_instead_of_shedding(configured):
             queue.release()
         assert queue.stats().active == 0
     asyncio.run(exercise())
+
+
+def test_admission_timing_includes_waiting_for_an_active_slot(configured, caplog):
+    async def exercise():
+        queue = broker._queue()
+        for _ in range(configured.max_runners):
+            await queue.acquire()
+        task = asyncio.create_task(broker.execute(lambda: "done"))
+        try:
+            while queue.stats().waiting == 0:
+                await asyncio.sleep(0)
+            await asyncio.sleep(0.02)
+            queue.release()
+            assert await task == "done"
+        finally:
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+            while queue.stats().active:
+                queue.release()
+
+    with caplog.at_level("INFO", logger=broker.__name__):
+        asyncio.run(exercise())
+    record = next(r for r in caplog.records if r.getMessage() == "execution.admission")
+    assert record.outcome == "admitted"
+    assert record.wait_ms >= 10
 
 
 def test_legacy_provider_exchange_is_bounded_idempotent_and_credential_free(configured, monkeypatch):
