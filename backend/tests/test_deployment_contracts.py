@@ -1541,10 +1541,11 @@ def test_modal_idle_grading_tick_cleans_expired_rate_limit_counters(tmp_path, mo
     import asyncio
     from datetime import datetime, timezone
 
-    from app.db import session as db_session
-    from app.models.rate_limit_counter import RateLimitCounter
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.db import session as db_session
+    from app.models.rate_limit_counter import RateLimitCounter
 
     module, _ = _load_modal_app_with_stub(monkeypatch)
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'modal-cleanup.db'}")

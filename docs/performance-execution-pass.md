@@ -81,3 +81,22 @@ memory/CPU headroom. Use the results to decide between reducing cold startup,
 improving source transfer or increasing execution capacity. The existing local
 capacity reports do not establish deployed capacity, and no paid AI or real
 Modal sandbox workload was run during this pass.
+
+## Deployment checkpoint — October 6, 2026
+
+Deployment was held after inspecting [branch CI](https://github.com/shrutwik/PromptCode/actions/runs/37501492300)
+and [main CI](https://github.com/shrutwik/PromptCode/actions/runs/37494085621).
+Both fail schema consistency checks: nullable JSON columns on human reviews and
+product analytics, plus the grading-job session uniqueness constraint. Both
+Docker configuration and startup rehearsal fail because their CI environment
+does not provide `PROMPTCODE_EXECUTION_BROKER_URL`.
+
+Main CI reports 163 lint findings; branch CI reports 164. The additional finding
+was import order in the first pass's idle-cleanup regression test. This was
+corrected; that targeted test passes and import-order lint for its file passes.
+The earlier local lint comparison did not catch this CI finding.
+
+The existing Modal profile is available. GitHub's deployment job targets the
+self-hosted stack on pushes to main, rather than the live Modal/Vercel stack.
+No production deployment or sandbox execution was performed at this checkpoint.
+Resolve the release failures before publishing and measuring the new telemetry.
