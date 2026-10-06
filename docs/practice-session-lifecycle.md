@@ -3,7 +3,9 @@
 The practice clock measures time while the workspace is ready, visible, focused,
 online, and owned by this editor. It pauses when the user leaves the window/tab,
 navigates, logs out, or disconnects. Returning resumes the same saved attempt.
-The server owns the accumulated time; the display uses a monotonic clock.
+Pause and resume are automatic; there are no manual timer controls. While the
+workspace is active and online, it retries automatically after a timer connection
+failure. The server owns the accumulated time; the display uses a monotonic clock.
 
 A heartbeat renews a 30-second editor lease every 10 seconds. Normal departures
 send an immediate pause. A crash, lost pause request, or disconnected computer
@@ -13,12 +15,12 @@ late pause requests from an old editor cannot pause the new editor.
 
 ## User actions
 
-- **Save and return later:** save all changed files, pause, return to Practice.
+- **Leave session → Save and come back:** save all changed files, pause, return to Practice.
   A save or pause failure keeps the user on the page with their recovery draft.
-- **Discard attempt:** mark abandoned, freeze time, return to Practice. Saved work
+- **Leave session → Discard and start fresh next time:** mark abandoned, freeze time, return to Practice. Saved work
   remains read-only in history. A new attempt starts with fresh code and `00:00`.
-- **Resume:** restore saved files and available local drafts, acquire editing,
-  continue the accumulated timer. Another editor's live lease prevents editing.
+- **Return to a saved attempt:** restore saved files and available local drafts, acquire editing,
+  automatically continue the accumulated timer. Another editor's live lease prevents editing.
 - **Submit:** save all changed files first, then freeze one submission. Accepted
   submissions stay immutable and stopped while grading runs or is retried.
 - **Export work:** download the available workspace and local draft text as JSON.

@@ -70,8 +70,6 @@ function syncSession(snapshot) {
   setSessionStatus(sessionTerminal ? "idle" : snapshot.timer_running ? "active" : "idle",
     sessionTerminal ? snapshot.status : snapshot.timer_running ? "In progress" : "Paused");
   document.getElementById("abandonBtn").hidden = sessionTerminal;
-  document.getElementById("pauseSessionBtn").hidden = sessionTerminal;
-  document.getElementById("resumeTimerBtn").hidden = sessionTerminal || !sessionReadOnly;
 }
 
 function timerAction(action, options = {}) {
@@ -87,7 +85,6 @@ function timerAction(action, options = {}) {
       editorOwned = false;
       sessionClock.pause();
       setEditable(false);
-      document.getElementById("resumeTimerBtn").hidden = sessionTerminal;
       setSessionStatus("idle", "Paused");
       if (!options.quiet) PCUI.toast(error.message || "Connection lost. Your timer is paused.", { tone: "danger" });
       if (options.requireSuccess) throw error;
@@ -116,13 +113,13 @@ function requestPause(unloading = false) {
 
 function hasPendingWork() { return endingSession || runPending || InterviewAPI.pendingWorkspaceRequests > 0; }
 function requireEditing() {
-  if (sessionReadOnly || endingSession) throw new Error("Resume this session before editing.");
+  if (sessionReadOnly || endingSession) throw new Error("The session will resume automatically when it is active and connected.");
 }
 
 function enqueueSave(path, { finishing = false } = {}) {
   const operation = saveQueue.catch(() => {}).then(async () => {
     if (finishing) {
-      if (!endingSession || !editorOwned || sessionTerminal) throw new Error("Resume this session before saving.");
+      if (!endingSession || !editorOwned || sessionTerminal) throw new Error("The session must be active and connected before saving.");
     } else {
       requireEditing();
     }
@@ -159,17 +156,17 @@ window.addEventListener("focus", () => { workspaceFocused = true; timerAction("r
 window.addEventListener("offline", () => requestPause());
 window.addEventListener("online", () => { autosaveBlocked = false; timerAction("resume"); });
 window.addEventListener("pageshow", (event) => { if (event.persisted) timerAction("resume"); });
-document.getElementById("resumeTimerBtn").onclick = () => timerAction("resume");
 setInterval(() => {
   document.getElementById("sessionTimer").textContent = formatElapsed(sessionClock.value());
   if (sessionReady && !sessionTerminal && !sessionReadOnly && !sessionClock.running()) {
     sessionClock.pause(); setEditable(false);
-    document.getElementById("resumeTimerBtn").hidden = false;
     setSessionStatus("idle", "Paused");
   }
 }, 1000);
 setInterval(() => {
-  if (workspaceFocused && !document.hidden && navigator.onLine && (!sessionReadOnly || (endingSession && editorOwned))) timerAction("heartbeat", { quiet: true });
+  if (workspaceFocused && !document.hidden && navigator.onLine && (!endingSession || editorOwned)) {
+    timerAction(endingSession || !sessionReadOnly ? "heartbeat" : "resume", { quiet: true });
+  }
 }, 10000);
 setInterval(() => {
   if (!autosaveBlocked && !sessionReadOnly && !hasPendingWork() && !pendingEdits.length && workspaceFocused && navigator.onLine && !document.hidden) {
@@ -1103,7 +1100,7 @@ const palette = PCUI.createCommandPalette([
     if (a === "toggle-explorer") window.__pcTogglePanel("explorer");
     if (a === "toggle-ai") window.__pcTogglePanel("ai");
     if (a === "toggle-term") window.__pcTogglePanel("term");
-    if (a === "abandon" || a === "pause") openAbandon();
+    if (a === "abandon") openAbandon();
     if (a === "export") exportWork().catch((e) => PCUI.toast(e.message, { tone: "danger" }));
   });
 })();

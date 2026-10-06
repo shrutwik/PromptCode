@@ -26,7 +26,7 @@
     <div class="ide-meta">
       <span class="dirty-pill hidden" id="dirtyPill">unsaved</span>
       <span class="ide-status" id="sessionStatus" data-state="ok" role="status">Ready</span>
-      <span class="ide-timer" id="sessionTimer" title="Elapsed time" aria-label="Elapsed time">00:00</span> <button type="button" class="btn btn-ghost btn-sm" id="resumeTimerBtn" hidden>Resume timer</button>
+      <span class="ide-timer" id="sessionTimer" title="Elapsed time" aria-label="Elapsed time">00:00</span>
     </div>
     <span class="ide-divider" aria-hidden="true"></span>
     <button class="btn btn-secondary" id="testBtn" type="button" title="Run tests">Run tests</button>
@@ -47,8 +47,7 @@
   <button type="button" role="menuitem" data-action="toggle-ai">Toggle AI panel</button>
   <button type="button" role="menuitem" data-action="toggle-term">Toggle terminal</button>
   <div class="pc-menu-sep" role="separator"></div>
-  <button type="button" role="menuitem" data-action="pause" id="pauseSessionBtn">Save and return later</button>
-  <button type="button" role="menuitem" data-action="abandon" id="abandonBtn">Discard attempt</button>
+  <button type="button" role="menuitem" data-action="abandon" id="abandonBtn">Leave session</button>
   <button type="button" role="menuitem" data-action="export">Export work</button>
 </div>
 
@@ -140,11 +139,11 @@
       <button class="btn btn-ghost btn-sm" id="closeAbandon" type="button">Close</button>
     </div>
     <div class="modal-body">
-      <p id="abandonSummary">Save your work and pause to return later, or discard this attempt. Discarded attempts remain read-only in history; restarting opens fresh code with a timer at 00:00.</p>
+      <p id="abandonSummary">Save and come back to restore your work and automatically continue from the saved time. Or discard this attempt and start fresh next time with fresh code and a timer at 00:00. Discarded attempts remain read-only in history.</p>
       <div class="modal-actions">
-        <button class="btn btn-ghost" type="button" id="cancelAbandon">Stay</button>
-        <button class="btn btn-primary" type="button" id="pauseAndLeave">Save and return later</button>
-        <button class="btn btn-ghost" type="button" id="confirmAbandon">Discard attempt</button>
+        <button class="btn btn-ghost" type="button" id="cancelAbandon">Keep working</button>
+        <button class="btn btn-primary" type="button" id="pauseAndLeave">Save and come back</button>
+        <button class="btn btn-ghost" type="button" id="confirmAbandon">Discard and start fresh next time</button>
       </div>
     </div>
   </div>
@@ -159,6 +158,6 @@
 <script src="/static/js/pc-ui.js?v=20261006a"></script>
 <script src="/static/js/pages/interview-pad.js?v=20261001f"></script>
 <script src="/static/js/pages/interview-session-state.js?v=20261006a"></script>
-<script src="/static/js/pages/interview-session.js?v=20261006c"></script>
+<script src="/static/js/pages/interview-session.js?v=20261006d"></script>
 </body>
 </html>

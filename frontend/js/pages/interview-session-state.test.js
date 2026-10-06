@@ -45,6 +45,7 @@ test("draft recovery is isolated by account and attempt, and survives reopening"
 function page() {
   const elements = new Map();
   const events = {};
+  const intervals = new Map();
   const listen = (name, callback) => { (events[name] ||= []).push(callback); };
   function element() {
     return {
@@ -74,14 +75,14 @@ function page() {
     localStorage: storage(), sessionStorage: storage(),
     crypto: { randomUUID: () => "editor-token-123456" },
     performance: { now: () => 0 }, getComputedStyle: () => ({ getPropertyValue: () => "" }),
-    setInterval() {}, setTimeout() {}, requestAnimationFrame() {}, require() {},
+    setInterval(callback, delay) { intervals.set(delay, callback); }, setTimeout() {}, requestAnimationFrame() {}, require() {},
     addEventListener: listen, removeEventListener() {}, confirm: () => true,
   };
   context.window = context;
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(__dirname + "/interview-session.js", "utf8"), context);
   vm.runInContext("sessionReady = true; sessionReadOnly = false; editorOwned = true; renderTabs = () => {}; renderTree = () => {};", context);
-  return { context, elements, events, toasts, run: (code) => vm.runInContext(code, context) };
+  return { context, elements, events, intervals, toasts, run: (code) => vm.runInContext(code, context) };
 }
 
 test("save failure prevents submission and preserves the draft", async () => {
@@ -157,7 +158,7 @@ test("an expired session keeps local drafts available for export", () => {
   p.run('drafts.write("src/a.py", "unsaved", "saved", 1); syncSession({ status: "expired", elapsed_ms: 5000, timer_running: false });');
   assert.equal(p.run('drafts.read("src/a.py").value'), "unsaved");
   assert.equal(p.elements.get("submitBtn").disabled, true);
-  assert.equal(p.elements.get("resumeTimerBtn").hidden, true);
+  assert.equal(p.elements.has("resumeTimerBtn"), false);
 });
 
 test("an initial snapshot owned by another tab cannot enable editing", () => {
@@ -286,4 +287,73 @@ test("navigation during final saving warns, but successful save-and-return does 
   warned = false;
   p.events.beforeunload[0]({ preventDefault() { warned = true; } });
   assert.equal(warned, false);
+});
+
+
+test("session offers leave choices without manual timer controls", () => {
+  const html = fs.readFileSync(__dirname + "/../../interview-session.html", "utf8");
+  assert.doesNotMatch(html, /resumeTimerBtn|pauseSessionBtn/);
+  assert.match(html, /id="abandonBtn">Leave session/);
+  assert.match(html, /id="pauseAndLeave">Save and come back/);
+  assert.match(html, /id="confirmAbandon">Discard and start fresh next time/);
+});
+
+test("timer reconnects automatically after a failed heartbeat", async () => {
+  const p = page();
+  const actions = [];
+  p.context.InterviewAPI.timer = async (_, action) => {
+    actions.push(action);
+    if (actions.length === 1) throw new Error("Connection lost");
+    return { status: "active", elapsed_ms: 5000, timer_running: true, timer_lease_ms: 30000 };
+  };
+  p.intervals.get(10000)();
+  await p.run("timerQueue");
+  assert.equal(p.run("sessionReadOnly"), true);
+  p.intervals.get(10000)();
+  await p.run("timerQueue");
+  assert.deepEqual(actions, ["heartbeat", "resume"]);
+  assert.equal(p.run("sessionReadOnly"), false);
+  assert.equal(p.run("sessionClock.running()"), true);
+  assert.equal(p.run("sessionClock.elapsed"), 5000);
+});
+
+test("automatic retries leave hidden, offline, ending and terminal sessions paused", async () => {
+  for (const state of ["document.hidden = true", "navigator.onLine = false", "workspaceFocused = false", "endingSession = true; editorOwned = false", "sessionTerminal = true"]) {
+    const p = page();
+    let calls = 0;
+    p.context.InterviewAPI.timer = async () => { calls++; };
+    p.run("sessionReadOnly = true; " + state);
+    p.intervals.get(10000)();
+    await p.run("timerQueue");
+    assert.equal(calls, 0, state);
+  }
+});
+
+test("save and come back saves changes and pauses at the saved elapsed time", async () => {
+  const p = page();
+  const actions = [];
+  p.context.InterviewAPI.saveFile = async () => { actions.push("save"); return { revision: 2 }; };
+  p.context.InterviewAPI.timer = async (_, action) => {
+    actions.push(action);
+    return { status: "active", elapsed_ms: 12000, timer_running: action !== "pause", timer_lease_ms: 30000 };
+  };
+  p.run('models["src/a.py"] = { model: { getValue: () => "draft" }, saved: "old", dirty: true, revision: 1 }; openAbandon();');
+  await p.elements.get("pauseAndLeave").onclick();
+  assert.deepEqual(actions, ["save", "pause"]);
+  assert.equal(p.run('models["src/a.py"].saved'), "draft");
+  assert.equal(p.run("sessionClock.value()"), 12000);
+  assert.equal(p.run("sessionClock.running()"), false);
+  assert.equal(p.context.location.href, "/dashboard");
+});
+
+test("discard ends the attempt, clears recovery drafts and returns to practice", async () => {
+  const p = page();
+  let discards = 0;
+  p.context.InterviewAPI.abandon = async () => { discards++; };
+  p.run('drafts.write("src/a.py", "draft", "old", 1); openAbandon();');
+  await p.elements.get("confirmAbandon").onclick();
+  assert.equal(discards, 1);
+  assert.equal(p.run("sessionTerminal"), true);
+  assert.equal(p.run('drafts.read("src/a.py")'), null);
+  assert.equal(p.context.location.href, "/dashboard");
 });
