@@ -34,7 +34,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://REPLACE-WITH-MODAL-WORKSPACE--promptcode-fastapi-app.modal.run/api/:path*"
+      "destination": "https://shrutwik2006--promptcode-fastapi-app.modal.run/api/:path*"
     },
     { "source": "/static/:path*", "destination": "/frontend/:path*" },
     { "source": "/challenges/:slug", "destination": "/frontend/interview-challenge.html" },

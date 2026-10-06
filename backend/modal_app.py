@@ -82,6 +82,12 @@ env_secret = modal.Secret.from_name(_ENV_SECRET_NAME)
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install_from_requirements(str(BACKEND_DIR / "requirements.txt"))
+    .env({"PYTHONPATH": _BACKEND_REMOTE_DIR})
+    # Public CA certificate used to verify Supabase's database TLS connection.
+    .add_local_file(
+        str(BACKEND_DIR / "supabase-ca.crt"),
+        remote_path=f"{_BACKEND_REMOTE_DIR}/supabase-ca.crt",
+    )
     # Only the application package is shipped. The frontend is served by Vercel, and
     # candidate code never runs in this image (it runs in Modal Sandboxes).
     .add_local_dir(str(BACKEND_DIR / "app"), remote_path=f"{_BACKEND_REMOTE_DIR}/app")
@@ -103,7 +109,6 @@ image = (
         remote_path=f"{_BACKEND_REMOTE_DIR}/benchmarks",
         ignore=["**/__pycache__"],
     )
-    .env({"PYTHONPATH": _BACKEND_REMOTE_DIR})
 )
 
 

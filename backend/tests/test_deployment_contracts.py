@@ -1472,9 +1472,13 @@ def _load_modal_app_with_stub(monkeypatch):
     import types
 
     calls: dict = {"functions": [], "asgi": None, "requirements": [], "dirs": [],
-                   "dir_ignores": []}
+                   "dir_ignores": [], "files": []}
 
     class _FakeImage:
+        def add_local_file(self, local, remote_path=None, **_kwargs):
+            calls["files"].append((str(local), remote_path))
+            return self
+
         def pip_install_from_requirements(self, path):
             calls["requirements"].append(str(path))
             return self
@@ -1485,6 +1489,8 @@ def _load_modal_app_with_stub(monkeypatch):
             return self
 
         def env(self, _env):
+            if calls["files"] or calls["dirs"]:
+                raise RuntimeError("Modal build steps must precede local file mounts")
             return self
 
     def _fake_function(**kwargs):
@@ -1554,6 +1560,10 @@ def test_modal_app_ships_app_source_and_runtime_data(monkeypatch):
     _module, calls = _load_modal_app_with_stub(monkeypatch)
 
     assert calls["requirements"] == [str(REQUIREMENTS_TXT)]
+    assert calls["files"] == [
+        (str(MODAL_APP.parent / "supabase-ca.crt"), "/root/backend/supabase-ca.crt")
+    ]
+    assert (MODAL_APP.parent / "supabase-ca.crt").read_text().startswith("-----BEGIN CERTIFICATE-----")
     shipped = {remote: Path(local).name for local, remote in calls["dirs"]}
     assert shipped == {
         "/root/backend/app": "app",
