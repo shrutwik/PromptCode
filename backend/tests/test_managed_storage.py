@@ -277,6 +277,25 @@ def test_submission_round_trips_and_digest_verification_rejects_tampering(tmp_pa
         workspace_store.fetch_submission(session_id, "b" * 64, manifest, tmp_path / "hydrate3")
 
 
+def test_hydration_downloads_each_verified_file_once(tmp_path, monkeypatch):
+    store = LocalObjectStore(tmp_path / "objects")
+    monkeypatch.setattr(workspace_store, "get_object_store", lambda: store)
+    session_id, digest, manifest, _source, _prefix = persisted_submission(tmp_path, store)
+    original = store.get
+    gets = []
+
+    def get(key):
+        gets.append(key)
+        return original(key)
+
+    monkeypatch.setattr(store, "get", get)
+    source = workspace_store.fetch_submission(session_id, digest, manifest, tmp_path / "hydrate")
+    assert gets == [submission_key(session_id, digest, item["path"])
+                    for item in sorted(manifest, key=lambda item: item["path"])]
+    assert (source / "src" / "solution.py").read_bytes() == b"answer = 42\n"
+    assert (source / "README.md").read_bytes() == b"ticket\n"
+
+
 def test_repeated_identical_submission_is_idempotent(tmp_path, monkeypatch):
     store = CountingLocalStore(tmp_path / "objects")
     monkeypatch.setattr(workspace_store, "get_object_store", lambda: store)
