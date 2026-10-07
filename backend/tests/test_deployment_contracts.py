@@ -1578,6 +1578,10 @@ def test_modal_app_serves_the_existing_fastapi_app(monkeypatch):
     assert calls["asgi"] == "fastapi_app"
     registered = dict(calls["functions"])
     assert "fastapi_app" in registered
+    assert registered["fastapi_app"]["min_containers"] == 1
+    assert registered["fastapi_app"]["cpu"] == 0.125
+    assert registered["fastapi_app"]["memory"] == 512
+    assert registered["fastapi_app"]["scaledown_window"] == 300
     # The FastAPI app must be served, not re-implemented: the ASGI function imports
     # app.main at container start.
     assert "from app.main import app as application" in MODAL_APP.read_text(encoding="utf-8")

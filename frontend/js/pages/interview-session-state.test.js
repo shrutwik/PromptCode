@@ -108,6 +108,37 @@ function startupPage() {
   return p;
 }
 
+test("page data starts before Monaco and is reused when the editor initializes", async () => {
+  const p = startupPage();
+  const calls = [];
+  p.context.InterviewAPI.getSession = async () => {
+    calls.push("session");
+    return { status: "active", challenge_slug: "test", timer_running: false };
+  };
+  p.context.InterviewAPI.listFiles = async () => { calls.push("files"); return []; };
+  p.context.InterviewAPI.level = async () => { calls.push("level"); return {}; };
+  vm.runInContext(fs.readFileSync(__dirname + "/interview-session-bootstrap.js", "utf8"), p.context);
+  assert.deepEqual(calls, ["session", "files", "level"]);
+  assert.equal(p.run("sessionReady"), false);
+  await p.initialise();
+  assert.deepEqual(calls, ["session", "files", "level"]);
+  assert.equal(p.run("sessionReady"), true);
+  const html = fs.readFileSync(__dirname + "/../../interview-session.html", "utf8");
+  assert.ok(html.indexOf("interview-session-bootstrap.js") < html.indexOf("/min/vs/loader.js"));
+});
+
+test("early data failure is handled until the editor consumes it", async () => {
+  const p = startupPage();
+  const failure = new Error("Network unavailable");
+  p.context.InterviewAPI.getSession = async () => { throw failure; };
+  p.context.InterviewAPI.listFiles = async () => [];
+  p.context.InterviewAPI.level = async () => null;
+  vm.runInContext(fs.readFileSync(__dirname + "/interview-session-bootstrap.js", "utf8"), p.context);
+  assert.equal((await p.context.pcSessionBootstrap).error, failure);
+  await assert.rejects(p.initialise(), failure);
+  assert.equal(p.run("sessionReady"), false);
+});
+
 test("startup requests run concurrently and README is fetched once before timer resume", async () => {
   const p = startupPage();
   const calls = [];

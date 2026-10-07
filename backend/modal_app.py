@@ -158,6 +158,11 @@ def _run_grading_drain(budget_seconds: int = 0) -> int:
     secrets=[env_secret],
     timeout=_HTTP_FUNCTION_TIMEOUT_SECONDS,
     max_containers=4,
+    cpu=0.125,
+    memory=512,
+    # Page data should not wait for a fresh Python process after idle periods.
+    min_containers=1,
+    scaledown_window=300,
 )
 @modal.asgi_app()
 def fastapi_app():

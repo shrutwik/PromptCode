@@ -895,7 +895,9 @@ require(["vs/editor/editor.main"], async function () {
     InterviewAPI.requireAuth("/session/" + sessionId);
     return;
   }
-  const [s, sessionFiles, level] = await Promise.all([
+  const bootstrap = window.pcSessionBootstrap ? await window.pcSessionBootstrap : null;
+  if (bootstrap?.error) throw bootstrap.error;
+  const [s, sessionFiles, level] = bootstrap?.data || await Promise.all([
     InterviewAPI.getSession(sessionId),
     InterviewAPI.listFiles(sessionId),
     InterviewAPI.level(sessionId).catch(() => null),

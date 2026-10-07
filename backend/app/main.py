@@ -194,6 +194,9 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                 method=request.method, path=path_label
             ).observe(duration_ms / 1000.0)
             response.headers["X-Request-ID"] = rid
+            # Browser Network/Timing can distinguish application work from
+            # proxy transit and container admission/cold-start waiting.
+            response.headers.append("Server-Timing", f"app;dur={duration_ms}")
             access_logger.info(
                 "request.complete",
                 extra={

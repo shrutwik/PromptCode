@@ -55,7 +55,6 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .page, .pc-container { width: 100%; max-width: 1120px; margin: 0 auto; padding: 32px 24px 72px; }
 .pc-container-wide { max-width: 1280px; }
 .pc-container-narrow { max-width: 720px; }
-.page, .pc-main { animation: pc-enter var(--pc-dur-page) var(--pc-ease-out) both; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--pc-space-4); flex-wrap: wrap; margin-bottom: var(--pc-space-6); }
 .page-title, .hero-title {
   font-size: var(--pc-text-h1);
@@ -675,19 +674,7 @@ body.pc-public { min-height: 100vh; display: flex; flex-direction: column; }
 .pc-resize:hover, .pc-resize.is-dragging { background: var(--pc-accent-dim); }
 
 /* ── Motion utilities ─────────────────────────────────────────────── */
-/* Any container with [data-stagger] reveals its children in sequence on insert (first 12 staggered). */
-[data-stagger] > * { animation: pc-enter var(--pc-dur-slow) var(--pc-ease-out) both; }
-[data-stagger] > *:nth-child(2) { animation-delay: calc(var(--pc-stagger) * 1); }
-[data-stagger] > *:nth-child(3) { animation-delay: calc(var(--pc-stagger) * 2); }
-[data-stagger] > *:nth-child(4) { animation-delay: calc(var(--pc-stagger) * 3); }
-[data-stagger] > *:nth-child(5) { animation-delay: calc(var(--pc-stagger) * 4); }
-[data-stagger] > *:nth-child(6) { animation-delay: calc(var(--pc-stagger) * 5); }
-[data-stagger] > *:nth-child(7) { animation-delay: calc(var(--pc-stagger) * 6); }
-[data-stagger] > *:nth-child(8) { animation-delay: calc(var(--pc-stagger) * 7); }
-[data-stagger] > *:nth-child(9) { animation-delay: calc(var(--pc-stagger) * 8); }
-[data-stagger] > *:nth-child(10) { animation-delay: calc(var(--pc-stagger) * 9); }
-[data-stagger] > *:nth-child(11) { animation-delay: calc(var(--pc-stagger) * 10); }
-[data-stagger] > *:nth-child(n+12) { animation-delay: calc(var(--pc-stagger) * 11); }
+/* Page content and inserted rows are visible immediately. */
 .pc-enter { animation: pc-enter var(--pc-dur-page) var(--pc-ease-out) both; }
 .pc-fade-in { animation: pc-fade var(--pc-dur-normal) ease both; }
 
