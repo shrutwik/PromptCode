@@ -128,6 +128,10 @@ def test_candidate_defend_questions_never_include_answer_keys():
 
 
 def test_defend_and_feedback_integration(tmp_path, monkeypatch):
+    from app.api.routes import interview as route
+    from app.services.interview.ai_provider import MockAIProvider
+
+    monkeypatch.setattr(route, "get_ai_provider", MockAIProvider)
     app, test_engine = _build_test_app(tmp_path, monkeypatch)
     try:
         with TestClient(app) as client:

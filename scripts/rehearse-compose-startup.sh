@@ -25,12 +25,16 @@ export DOMAIN="${DOMAIN:-api.example.com}"
 export PROMPTCODE_DB_PASSWORD="${PROMPTCODE_DB_PASSWORD:-integration-db-password}"
 export PROMPTCODE_DATABASE_SSL_REQUIRE="${PROMPTCODE_DATABASE_SSL_REQUIRE:-false}"
 export PROMPTCODE_JWT_SECRET="${PROMPTCODE_JWT_SECRET:-integration-jwt-secret-0123456789abcdef}"
+export PROMPTCODE_GRADING_SIGNING_KEY="startup-grading-authentication-key-0123456789"
+export PROMPTCODE_INTERVIEW_INTERNAL_TOKEN="startup-internal-authentication-key-0123456789"
 export PROMPTCODE_SANDBOX_EXECUTOR_TOKEN="${PROMPTCODE_SANDBOX_EXECUTOR_TOKEN:-integration-sandbox-secret-0123456789}"
 export PROMPTCODE_EXECUTION_BROKER_URL="https://startup-broker-tls"
 export STARTUP_TLS_DIR
 export BROKER_CA_DIR="${STARTUP_TLS_DIR}"
 export PROMPTCODE_EXECUTION_BROKER_CA_FILE="/etc/promptcode/broker-ca/server.crt"
 export PROMPTCODE_OPENAI_API_KEY="${PROMPTCODE_OPENAI_API_KEY:-sk-live-integration-key}"
+export DEEPSEEK_API_KEY="startup-rehearsal-provider-key"
+export PROMPTCODE_AI_KILL_SWITCH="true"
 export PROMPTCODE_METRICS_TOKEN="${PROMPTCODE_METRICS_TOKEN:-integration-metrics-token}"
 export PROMPTCODE_SANDBOX_HOST_WORKDIR="${SANDBOX_WORKDIR}"
 
@@ -46,7 +50,7 @@ docker build -f "${REPO_DIR}/docker/Dockerfile.interview-node" -t promptcode-sta
 docker build -f "${REPO_DIR}/docker/Dockerfile.interview-python" -t promptcode-startup-python:latest "${REPO_DIR}"
 
 compose() {
-  docker compose -f "${REPO_DIR}/docker-compose.yml" -f "${REPO_DIR}/docker-compose.prod.yml" -f "${REPO_DIR}/docker-compose.startup-test.yml" "$@"
+  docker compose --env-file /dev/null -f "${REPO_DIR}/docker-compose.yml" -f "${REPO_DIR}/docker-compose.prod.yml" -f "${REPO_DIR}/docker-compose.startup-test.yml" "$@"
 }
 
 dump_startup_context() {
