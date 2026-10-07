@@ -593,7 +593,7 @@ def test_bootstrap_rejects_a_slug_that_could_escape_the_deps_path():
     assert modal_backend.bootstrap_argv(["pytest", "-q"], challenge_slug="")[4] == ""
 
 
-def test_challenge_dependency_mounts_match_the_docker_deps_root(tmp_path):
+def test_challenge_dependency_mounts_match_the_docker_deps_root(tmp_path, monkeypatch):
     from app.services.execution import images
 
     challenges = tmp_path / "challenges"
@@ -611,10 +611,10 @@ def test_challenge_dependency_mounts_match_the_docker_deps_root(tmp_path):
         ),
     }
 
-    # The real repository ships the six Node dependency trees the Docker image bakes.
-    repo_mounts = images.challenge_dependency_mounts()
-    assert len(repo_mounts) == 6
-    assert all(remote.startswith("/opt/promptcode-deps/") for remote in repo_mounts.values())
+    # A clean checkout has no installed node_modules. Exercise default-root
+    # resolution with the same reviewed fixture rather than developer caches.
+    monkeypatch.setattr(images, "DEFAULT_CHALLENGES_DIR", challenges)
+    assert images.challenge_dependency_mounts() == mounts
 
 
 def test_build_sandbox_image_adds_every_dependency_layer(tmp_path):
