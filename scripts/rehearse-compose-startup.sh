@@ -37,6 +37,7 @@ export DEEPSEEK_API_KEY="startup-rehearsal-provider-key"
 export PROMPTCODE_AI_KILL_SWITCH="true"
 export PROMPTCODE_METRICS_TOKEN="${PROMPTCODE_METRICS_TOKEN:-integration-metrics-token}"
 export PROMPTCODE_SANDBOX_HOST_WORKDIR="${SANDBOX_WORKDIR}"
+export PROMPTCODE_INTERVIEW_HOST_WORKDIR="${SANDBOX_WORKDIR}/interview"
 
 mkdir -p "${SANDBOX_WORKDIR}"
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
