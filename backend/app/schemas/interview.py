@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -88,7 +89,7 @@ class AbandonSessionRequest(BaseModel):
 
 class HumanReviewRequest(BaseModel):
     notes: str = Field(default="", max_length=4000)
-    category_observations: dict = Field(default_factory=dict)
+    category_observations: dict[str, Any] = Field(default_factory=dict)
     disagreement: bool = False
     observed_difficulty: str | None = None
     observed_time_minutes: float | None = None
@@ -147,13 +148,13 @@ class SaveFileRequest(BaseModel):
 
 class EventRequest(BaseModel):
     event_type: str
-    payload: dict = Field(default_factory=dict)
+    payload: dict[str, Any] = Field(default_factory=dict)
 
 
 class EventResponse(BaseModel):
     id: UUID
     event_type: str
-    payload: dict
+    payload: dict[str, Any]
     created_at: datetime
 
 
@@ -169,7 +170,7 @@ class AIChatResponse(BaseModel):
     reply: str
     provider: str
     model: str
-    proposed_edits: list[dict] = Field(default_factory=list)
+    proposed_edits: list[dict[str, Any]] = Field(default_factory=list)
     latency_ms: int = 0
     rejected_attachments: list[str] = Field(default_factory=list)
     error_code: str | None = None
@@ -198,7 +199,7 @@ class TestRunResponse(BaseModel):
     command: str
     duration_ms: int = 0
     mode: str = "full"
-    counts: dict = Field(default_factory=dict)
+    counts: dict[str, Any] = Field(default_factory=dict)
     isolation: str = "host"
     timed_out: bool = False
     command_id: str = "run_tests"
@@ -207,7 +208,7 @@ class TestRunResponse(BaseModel):
 
 
 class DiffSummaryResponse(BaseModel):
-    files_changed: list[dict]
+    files_changed: list[dict[str, Any]]
     additions: int
     deletions: int
     file_count: int
@@ -224,28 +225,28 @@ class DefendAnswerRequest(BaseModel):
 
 
 class DefendQuestionsResponse(BaseModel):
-    questions: list[dict]
-    answers: dict = Field(default_factory=dict)
+    questions: list[dict[str, Any]]
+    answers: dict[str, Any] = Field(default_factory=dict)
 
 
 class EvaluationResponse(BaseModel):
     advisory: bool = True
     authoritative: bool = False
     feedback_kind: str = "advisory_practice"
-    assessment: dict | None = None
+    assessment: dict[str, Any] | None = None
     total_score: float
-    rubric: dict
-    metrics: dict
-    insights: list
-    test_summary: dict
-    defend_questions: list
+    rubric: dict[str, Any]
+    metrics: dict[str, Any]
+    insights: list[Any]
+    test_summary: dict[str, Any]
+    defend_questions: list[Any]
     timeline: list[EventResponse]
-    went_well: list = Field(default_factory=list)
-    improve: list = Field(default_factory=list)
-    recovery_moments: list = Field(default_factory=list)
-    signals: list = Field(default_factory=list)
-    diff_summary: dict | None = None
+    went_well: list[Any] = Field(default_factory=list)
+    improve: list[Any] = Field(default_factory=list)
+    recovery_moments: list[Any] = Field(default_factory=list)
+    signals: list[Any] = Field(default_factory=list)
+    diff_summary: dict[str, Any] | None = None
     scoring_version: str = "v1"
     challenge_version: str | None = None
-    steps: dict | None = None
-    previous_attempt: dict | None = None
+    steps: dict[str, Any] | None = None
+    previous_attempt: dict[str, Any] | None = None

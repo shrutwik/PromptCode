@@ -1,8 +1,10 @@
 """Atomic conservative reservations; failures/retries never refund possibly billed calls."""
 import os
 import time
+from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ai_budget import AIBudget
 
@@ -37,7 +39,7 @@ def _trial_enabled():
     return bool(getattr(get_settings(), 'ai_trial_enabled', False))
 
 
-async def reserve_ai_budget(db, user_id, session_id, input_bytes, output_tokens=2048, attempts=2):
+async def reserve_ai_budget(db: AsyncSession, user_id: UUID | str, session_id: UUID | str, input_bytes: int, output_tokens: int = 2048, attempts: int = 2) -> None:
     if not enabled(): raise HTTPException(503,'AI assistant is temporarily disabled')
     if not (0 <= input_bytes <= 256000 and 1 <= output_tokens <= 4096 and 1 <= attempts <= 8):
         raise HTTPException(400,'AI request exceeds budget size')

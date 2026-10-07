@@ -6,6 +6,7 @@ import shutil
 from datetime import datetime, timezone
 
 from prometheus_client import REGISTRY, CollectorRegistry, Counter, Histogram
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 # Module-level singletons — registered once in the global Prometheus registry.
 
@@ -40,7 +41,7 @@ def get_metrics_registry() -> CollectorRegistry:
     return REGISTRY
 
 
-async def operational_metrics(engine) -> bytes:
+async def operational_metrics(engine: AsyncEngine) -> bytes:
     """Read durable job state per scrape; never export candidate data or errors."""
     from prometheus_client import Gauge, generate_latest
     from sqlalchemy import func, select
@@ -59,7 +60,7 @@ async def operational_metrics(engine) -> bytes:
                                          .where(InterviewGradingJob.status == 'queued'))).scalar_one()
         expired = (await connection.execute(select(func.count()).select_from(InterviewGradingJob)
             .where(InterviewGradingJob.status == 'running', InterviewGradingJob.lease_expires_at <= now))).scalar_one()
-    count_map = dict(counts)
+    count_map = {state: count for state, count in counts}
     for state in ('queued', 'running', 'completed', 'failed'):
         jobs.labels(state).set(count_map.get(state, 0))
     if first is not None and first.tzinfo is None:

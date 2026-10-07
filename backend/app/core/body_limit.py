@@ -2,14 +2,15 @@
 import asyncio
 
 from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 
 class BodyLimitMiddleware:
-    def __init__(self,app,max_bytes=2_000_000):
+    def __init__(self, app: ASGIApp, max_bytes: int = 2_000_000) -> None:
         self.app=app
         self.max_bytes=max_bytes
 
-    async def __call__(self,scope,receive,send):
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope['type']!='http': return await self.app(scope,receive,send)
         headers=dict(scope.get('headers',[]))
         try:
@@ -33,7 +34,7 @@ class BodyLimitMiddleware:
         except TimeoutError:
             return await JSONResponse({'detail':'Request body timed out'},status_code=408)(scope,receive,send)
         first=True
-        async def bounded_receive():
+        async def bounded_receive() -> Message:
             nonlocal first
             if first:
                 first=False

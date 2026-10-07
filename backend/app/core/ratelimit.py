@@ -4,6 +4,8 @@ import os
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
+from sqlalchemy.dialects.postgresql import Insert as PostgreSQLInsert
+from sqlalchemy.dialects.sqlite import Insert as SQLiteInsert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -33,18 +35,21 @@ async def enforce_rate_limit(*, db: AsyncSession, key: str, limit: int,
     bucket = current // window_seconds * window_seconds
     hashed = hmac.new(get_settings().jwt_secret.encode(), key.encode(), hashlib.sha256).hexdigest()
     dialect = db.get_bind().dialect.name
+    stmt: PostgreSQLInsert | SQLiteInsert
     if dialect == "postgresql":
-        from sqlalchemy.dialects.postgresql import insert
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+        stmt = pg_insert(RateLimitCounter)
     elif dialect == "sqlite":
-        from sqlalchemy.dialects.sqlite import insert
+        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+        stmt = sqlite_insert(RateLimitCounter)
     else:
         raise HTTPException(503, "Rate limiter unavailable")
-    stmt = insert(RateLimitCounter).values(key=hashed, window_start=bucket, count=1,
+    stmt = stmt.values(key=hashed, window_start=bucket, count=1,
                                          expires_at=bucket + window_seconds)
-    stmt = stmt.on_conflict_do_update(index_elements=[RateLimitCounter.key, RateLimitCounter.window_start],
+    returning = stmt.on_conflict_do_update(index_elements=[RateLimitCounter.key, RateLimitCounter.window_start],
                                      set_={"count": RateLimitCounter.count + 1},
                                      where=RateLimitCounter.count < limit).returning(RateLimitCounter.count)
-    accepted = (await db.execute(stmt)).scalar_one_or_none()
+    accepted = (await db.execute(returning)).scalar_one_or_none()
     await db.commit()
     if accepted is None:
         retry = max(1, bucket + window_seconds - current)
