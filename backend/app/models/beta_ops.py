@@ -40,7 +40,7 @@ class ProductAnalyticsEvent(Base):
     )
     session_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True, index=True)
     challenge_slug: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
-    properties: Mapped[dict] = mapped_column(JSONType(), default=dict)
+    properties: Mapped[dict | None] = mapped_column(JSONType(), default=dict, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
@@ -57,7 +57,7 @@ class HumanReview(Base):
     )
     reviewer: Mapped[str] = mapped_column(String(128), default="internal")
     notes: Mapped[str] = mapped_column(Text, default="")
-    category_observations: Mapped[dict] = mapped_column(JSONType(), default=dict)
+    category_observations: Mapped[dict | None] = mapped_column(JSONType(), default=dict, nullable=True)
     disagreement: Mapped[bool] = mapped_column(Boolean, default=False)
     observed_difficulty: Mapped[str | None] = mapped_column(String(32), nullable=True)
     observed_time_minutes: Mapped[float | None] = mapped_column(Float, nullable=True)
