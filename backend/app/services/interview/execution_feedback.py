@@ -1,5 +1,6 @@
 """Advisory execution feedback; no candidate process is an authoritative grader."""
 import json
+from typing import Any
 
 MAX_REPORT_BYTES = 1_000_000
 
@@ -32,13 +33,13 @@ def complete_report(report, expected_ids):
     return actual == expected
 
 
-def advisory_summary(summary):
+def advisory_summary(summary: dict[str, Any] | None) -> dict[str, Any]:
     return {**(summary or {}), 'advisory': True, 'authoritative': False,
             'feedback_kind': 'advisory_practice', 'correctness_visible': None,
             'notice': 'Practice feedback only. Candidate execution cannot establish authoritative correctness.'}
 
 
-def advisory_scoring(scored):
+def advisory_scoring(scored: dict[str, Any]) -> dict[str, Any]:
     # Remove every numeric grade at the scoring boundary, including legacy inputs.
     rubric = {key: {**value, 'score': 0.0, 'advisory': True,
                    'evidence': 'Advisory practice observation; no authoritative grade.'}

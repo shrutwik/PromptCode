@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.models.ai_budget import AIBudget
 from app.services.interview import ai_budget
@@ -52,6 +52,7 @@ def test_trial_budget_survives_daily_reset(tmp_path, monkeypatch):
     # The lifetime/trial ceiling is opt-in now that the hardcoded $5 cap is gone.
     # Enable it here so this test still covers the trial scope it was written against.
     monkeypatch.setenv('PROMPTCODE_AI_TRIAL_ENABLED', 'true')
+    monkeypatch.setenv('PROMPTCODE_AI_TRIAL_COST_MICROS', '5000000')
     monkeypatch.setenv('PROMPTCODE_AI_TRIAL_REQUESTS', '1')
     monkeypatch.setattr(ai_budget.time, 'time', lambda: 86400)
     with ai_budget.billing_identity('user', 'one'):
@@ -75,8 +76,9 @@ def test_worker_kill_switch_and_missing_identity_fail_closed(monkeypatch):
 
 
 def test_relay_reserves_before_network_and_preserves_owner(monkeypatch):
-    from app.services.sandbox.relay import SandboxLLMRelay, SandboxLLMBudget, RelayError
     import httpx
+
+    from app.services.sandbox.relay import RelayError, SandboxLLMBudget, SandboxLLMRelay
     calls = []
     def denied(messages, output_tokens, *, identity):
         calls.append(identity)
@@ -92,7 +94,7 @@ def test_relay_reserves_before_network_and_preserves_owner(monkeypatch):
 
 
 def test_deepseek_relay_maps_legacy_model_without_fallback_calls():
-    from app.services.sandbox.relay import SandboxLLMRelay, SandboxLLMBudget
+    from app.services.sandbox.relay import SandboxLLMBudget, SandboxLLMRelay
     calls = []
     def sender(payload):
         calls.append(payload)
@@ -108,6 +110,7 @@ def test_deepseek_relay_maps_legacy_model_without_fallback_calls():
 def test_judges_cannot_reach_provider_after_budget_denial(monkeypatch):
     import httpx
     import openai
+
     from app.services.evaluation.ai_judge import _call_judge
     from app.services.evaluation.prompt_quality import _judge_with_llm
     def denied(*args, **kwargs):
@@ -125,6 +128,7 @@ def test_judges_cannot_reach_provider_after_budget_denial(monkeypatch):
 def test_worker_sets_identity_from_owned_submission(monkeypatch):
     import uuid
     from unittest.mock import AsyncMock, MagicMock
+
     from app.workers import evaluate
     sid, uid = uuid.uuid4(), uuid.uuid4()
     submission = SimpleNamespace(id=sid, user_id=uid, challenge_id=uuid.uuid4(), status='pending', code='code', entrypoint='main.py')

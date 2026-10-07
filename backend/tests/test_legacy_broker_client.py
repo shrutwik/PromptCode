@@ -1,10 +1,9 @@
 """Remote legacy work never transfers credentials or repeats paid calls."""
-import uuid
 import json
+import uuid
 from types import SimpleNamespace
 
 import httpx
-import pytest
 
 from app.services.sandbox import legacy_broker_client as broker
 from app.services.sandbox import runner

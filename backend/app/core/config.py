@@ -90,7 +90,7 @@ def _provider_host_matches(provider: str, base_url: str) -> bool:
     return False
 
 
-def resolve_ai_credentials(settings) -> "AICredentials":
+def resolve_ai_credentials(settings: "Settings") -> "AICredentials":
     """Resolve the effective AI ``(provider, api_key, base_url, model, key_env)``.
 
     No vendor is required: ``ai_provider`` selects the provider and an empty value is
@@ -537,5 +537,5 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     # A broker must never load the app's repository .env by accident.
     if os.environ.get("PROMPTCODE_EXECUTION_BROKER_MODE", "").strip().lower() in {"1", "true", "yes", "on"}:
-        return Settings(_env_file=None)
+        return Settings(_env_file=None)  # type: ignore[call-arg]  # BaseSettings runtime-only keyword
     return Settings()

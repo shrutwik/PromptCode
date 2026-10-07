@@ -1,11 +1,13 @@
 import asyncio
 import multiprocessing
-import threading
 import os
+import threading
+
 import pytest
+
 from app.core.config import get_settings
-from app.services.runner_capacity import execution_slot, RunnerBusy
 from app.services.interview import runner
+from app.services.runner_capacity import RunnerBusy, execution_slot
 
 
 def try_slot(queue):

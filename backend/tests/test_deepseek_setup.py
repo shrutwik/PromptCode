@@ -1,6 +1,8 @@
 from types import SimpleNamespace
+
 import httpx
 import pytest
+
 from scripts import check_deepseek
 
 

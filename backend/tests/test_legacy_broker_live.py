@@ -20,10 +20,11 @@ def live_broker(monkeypatch, tmp_path):
     import docker
     import uvicorn
     from docker.models.containers import ContainerCollection
+
     from app import execution_broker as broker
     from app.core import config
     from app.services import runner_capacity
-    from app.services.sandbox import runner, legacy_broker_client
+    from app.services.sandbox import legacy_broker_client, runner
     from app.services.sandbox.relay import SandboxLLMRelay
 
     daemon = docker.from_env(timeout=5)

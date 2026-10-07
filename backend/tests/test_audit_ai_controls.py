@@ -1,14 +1,20 @@
 import asyncio
 import json
-from pathlib import Path
+
 import httpx
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import create_async_engine,async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
 from app.models.ai_budget import AIBudget
 from app.services.interview.ai_budget import reserve_ai_budget
-from app.services.interview.ai_provider import ProductionAIProvider,AIProviderError,AIRequest,assemble_user_content
+from app.services.interview.ai_provider import (
+    AIProviderError,
+    AIRequest,
+    ProductionAIProvider,
+    assemble_user_content,
+)
 
 
 def test_persistent_concurrent_global_user_session_budgets(tmp_path,monkeypatch):
@@ -18,6 +24,7 @@ def test_persistent_concurrent_global_user_session_budgets(tmp_path,monkeypatch)
     # Enable it here so this test still covers all four persisted scope rows; the
     # global/user/session caps it asserts are unaffected either way.
     monkeypatch.setenv('PROMPTCODE_AI_TRIAL_ENABLED','true')
+    monkeypatch.setenv('PROMPTCODE_AI_TRIAL_COST_MICROS','5000000')
     async def run():
         engine=create_async_engine('sqlite+aiosqlite:///'+str(tmp_path/'budgets.db'))
         async with engine.begin() as conn: await conn.run_sync(AIBudget.__table__.create)

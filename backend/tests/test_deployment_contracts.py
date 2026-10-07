@@ -1537,6 +1537,40 @@ def test_modal_app_parses_as_python():
     ast.parse(MODAL_APP.read_text(encoding="utf-8"))
 
 
+def test_modal_idle_grading_tick_cleans_expired_rate_limit_counters(tmp_path, monkeypatch):
+    import asyncio
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.db import session as db_session
+    from app.models.rate_limit_counter import RateLimitCounter
+
+    module, _ = _load_modal_app_with_stub(monkeypatch)
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'modal-cleanup.db'}")
+    factory = async_sessionmaker(engine)
+    monkeypatch.setattr(db_session, "engine", engine)
+    monkeypatch.setattr(db_session, "async_session_factory", factory)
+
+    async def exercise():
+        async with engine.begin() as conn:
+            await conn.run_sync(RateLimitCounter.__table__.create)
+        now = int(datetime.now(timezone.utc).timestamp())
+        async with factory() as db:
+            db.add_all([
+                RateLimitCounter(key="expired", window_start=now-60, count=1, expires_at=now-1),
+                RateLimitCounter(key="active", window_start=now, count=1, expires_at=now+60),
+            ])
+            await db.commit()
+        assert await module._drain_grading_queue(budget_seconds=0) == 0
+        async with factory() as db:
+            assert (await db.execute(select(RateLimitCounter.key))).scalars().all() == ["active"]
+        await engine.dispose()
+
+    asyncio.run(exercise())
+
+
 def test_modal_app_serves_the_existing_fastapi_app(monkeypatch):
     module, calls = _load_modal_app_with_stub(monkeypatch)
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timedelta, timezone
+from typing import Literal, TypedDict, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials
@@ -40,6 +41,8 @@ from app.schemas.user import (
     UserResponse,
     UserUpdate,
 )
+from app.services.interview.analytics import track_event
+from app.services.interview.beta_access import consume_invite_or_allowlist
 from app.services.password_reset import (
     FORGOT_PASSWORD_MESSAGE,
     PASSWORD_UPDATED_MESSAGE,
@@ -49,8 +52,6 @@ from app.services.password_reset import (
     password_reset_delivery_available,
     reset_password_with_token,
 )
-from app.services.interview.analytics import track_event
-from app.services.interview.beta_access import consume_invite_or_allowlist
 
 router = APIRouter()
 
@@ -59,14 +60,21 @@ _AUTH_RATE_LIMIT = limit_from_env("PROMPTCODE_AUTH_RATE_LIMIT", 120)
 REFRESH_COOKIE = "pc_refresh_token"
 
 
+class _AuthCookieOptions(TypedDict):
+    httponly: bool
+    secure: bool
+    samesite: Literal["lax", "strict", "none"]
+    path: str
+
+
 def _set_auth_cookies(response: Response, *, access: str, refresh: str) -> None:
     settings = get_settings()
     if not settings.auth_cookie_enabled:
         return
-    common = {
+    common: _AuthCookieOptions = {
         "httponly": True,
         "secure": bool(settings.auth_cookie_secure),
-        "samesite": settings.auth_cookie_samesite,
+        "samesite": cast(Literal["lax", "strict", "none"], settings.auth_cookie_samesite),
         "path": "/",
     }
     response.set_cookie(

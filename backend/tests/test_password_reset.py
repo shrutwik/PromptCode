@@ -298,6 +298,7 @@ def test_unconfigured_reset_does_not_issue_tokens(tmp_path, monkeypatch):
 
 def test_smtp_delivery_uses_tls_and_timeout(monkeypatch):
     from unittest.mock import MagicMock
+
     from app.services import password_reset as service
     settings = get_settings()
     for name, value in {"smtp_host": "smtp.test", "smtp_port": 587, "smtp_username": "test", "smtp_password": "test-only", "password_reset_from_email": "reset@example.test", "frontend_url": "https://app.example.test"}.items():

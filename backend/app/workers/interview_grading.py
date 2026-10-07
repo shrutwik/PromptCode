@@ -3,24 +3,23 @@ from __future__ import annotations
 
 import asyncio
 import secrets
-import shutil
-import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
 from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.db.session import async_session_factory
 from app.models.interview_grading import InterviewGradingJob
 from app.models.interview_session import InterviewEvaluation, InterviewSession
 from app.services.interview.grading import _digest
+from app.services.interview.snapshot import FrozenSnapshot
 
 
-async def enqueue_grading_job(db, session, snapshot):
+async def enqueue_grading_job(db: AsyncSession, session: InterviewSession, snapshot: FrozenSnapshot) -> InterviewGradingJob:
     existing = (await db.execute(select(InterviewGradingJob).where(
         InterviewGradingJob.session_id == session.id))).scalar_one_or_none()
     if existing:

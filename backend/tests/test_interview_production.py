@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -18,7 +17,11 @@ from app.services.interview.ai_provider import (
     get_ai_provider,
     validate_context_budget,
 )
-from app.services.interview.registry import get_runner_config, is_blocked_path, is_frozen_path
+from app.services.interview.registry import (
+    get_runner_config,
+    is_blocked_path,
+    is_frozen_path,
+)
 from app.services.interview.runner import (
     IsolatedRunner,
     LocalDevelopmentRunner,

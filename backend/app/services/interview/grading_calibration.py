@@ -175,8 +175,8 @@ def publication_allowed() -> bool:
         source = json.loads(path.read_text())
         if source.get("rubric_version") != RUBRIC_VERSION or source.get("release_ready") is not True:
             return False
-        from app.services.interview.trusted_cases import VERSION, inventory_digest
         from app.services.interview.calibration import challenge_version_for
+        from app.services.interview.trusted_cases import VERSION, inventory_digest
         inventories = (source.get("audit_evidence") or {}).get("inventories") or {}
         expected_slugs = {c["slug"] for c in list_challenges()}
         if set(inventories) != expected_slugs:

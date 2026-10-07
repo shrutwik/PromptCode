@@ -194,14 +194,21 @@ def fetch_submission(session_id, source_digest, manifest, dest_dir) -> Path:
         raise ValueError("Submission is not committed")
     if _manifest_digest(rows) != source_digest:
         raise ValueError("Submitted source integrity check failed")
-    if not _verified(store, session_id, source_digest, rows):
-        raise ValueError("Submitted source integrity check failed")
-    source = Path(dest_dir) / source_digest / "source"
+    contents = []
     for item in rows:
         rel = normalize_rel_path(item["path"])
+        try:
+            data = store.get(submission_key(session_id, source_digest, rel))
+        except ObjectNotFound:
+            raise ValueError("Submitted source integrity check failed") from None
+        if len(data) != int(item["size"]) or hashlib.sha256(data).hexdigest() != item["sha256"]:
+            raise ValueError("Submitted source integrity check failed")
+        contents.append((rel, data))
+    source = Path(dest_dir) / source_digest / "source"
+    for rel, data in contents:
         target = _contained(source, rel)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(store.get(submission_key(session_id, source_digest, rel)))
+        target.write_bytes(data)
         target.chmod(0o444)
     verify_snapshot(source, source_digest)
     return source
@@ -223,7 +230,10 @@ def verified_job_source(job, *, require_ownership: bool = True):
     submission by digest only, so they pass ``False`` and keep that contract rather
     than gaining a new 409.
     """
-    from app.services.interview.object_store import durable_submission_required, submission_prefix
+    from app.services.interview.object_store import (
+        durable_submission_required,
+        submission_prefix,
+    )
 
     session_id = str(job.session_id)
     digest = str(job.source_digest)

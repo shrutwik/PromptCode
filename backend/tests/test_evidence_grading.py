@@ -5,7 +5,12 @@ import pytest
 from pydantic import ValidationError
 
 from app.services.interview.grading import (
-    DIMENSIONS, HumanReview, _digest, pending_assessment, revise_defense, score_reviewed_assessment,
+    DIMENSIONS,
+    HumanReview,
+    _digest,
+    pending_assessment,
+    revise_defense,
+    score_reviewed_assessment,
 )
 
 

@@ -2,9 +2,11 @@
 
 These are test-only, never included in candidate images or workspace files.
 """
-from pathlib import Path
 import shutil
+from pathlib import Path
+
 from app.services.interview.registry import challenge_dir
+
 
 def reference_snapshot(slug: str, dest: Path) -> Path:
     shutil.copytree(challenge_dir(slug),dest,ignore=shutil.ignore_patterns('node_modules','.venv','venv','__pycache__','.pytest_cache','.git'))

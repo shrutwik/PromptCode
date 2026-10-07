@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import asyncio
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -13,18 +12,21 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
-from app.services.interview.ai_budget import reserve_ai_budget
-from app.services.interview.ai_provider import (
-    screen_assistant_input, MAX_CONTEXT_CHARS, SYSTEM_PROMPT,
-    apply_assistant_guardrails, review_coaching_reply,
-    coaching_mode,
-)
 from app.core.deps import get_current_user
 from app.core.model_policy import CHAT_MODELS, resolve_allowed_model
 from app.core.ratelimit import enforce_rate_limit
 from app.db.session import get_db
 from app.models.challenge import Challenge
 from app.models.user import User
+from app.services.interview.ai_budget import reserve_ai_budget
+from app.services.interview.ai_provider import (
+    MAX_CONTEXT_CHARS,
+    SYSTEM_PROMPT,
+    apply_assistant_guardrails,
+    coaching_mode,
+    review_coaching_reply,
+    screen_assistant_input,
+)
 
 router = APIRouter()
 

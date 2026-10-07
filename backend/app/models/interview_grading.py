@@ -23,6 +23,7 @@ from app.db.types import GUID, JSONType
 class InterviewGradingJob(Base):
     __tablename__ = "interview_grading_jobs"
     __table_args__ = (
+        UniqueConstraint("session_id"),
         # Claim, lease recovery and queue-age metrics all filter on these.
         Index("ix_interview_grading_jobs_status_available", "status", "available_at"),
         Index("ix_interview_grading_jobs_status_lease", "status", "lease_expires_at"),

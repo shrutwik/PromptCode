@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
-RUBRIC_VERSION = "v3-evidence"
+RUBRIC_VERSION: Literal["v3-evidence"] = "v3-evidence"
 DIMENSIONS = {
     "A_correctness": ("Functional correctness", 35),
     "B_investigation": ("Problem diagnosis", 15),

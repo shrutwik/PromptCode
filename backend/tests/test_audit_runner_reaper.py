@@ -22,8 +22,9 @@ def test_reaper_preserves_active_and_unlabeled_containers(monkeypatch):
 
 
 def test_lifespan_invokes_reaper_and_disposes_database(monkeypatch):
-    from app import main
     from unittest.mock import AsyncMock
+
+    from app import main
     cleanup = MagicMock(return_value=0)
     monkeypatch.setattr(main, 'validate_production_startup', lambda _settings: None)
     monkeypatch.setattr(main, 'runner_mode_safe', lambda: 'docker')

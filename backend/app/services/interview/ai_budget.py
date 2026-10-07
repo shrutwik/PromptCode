@@ -1,7 +1,11 @@
 """Atomic conservative reservations; failures/retries never refund possibly billed calls."""
 import os
 import time
+from uuid import UUID
+
 from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.ai_budget import AIBudget
 
 
@@ -35,7 +39,7 @@ def _trial_enabled():
     return bool(getattr(get_settings(), 'ai_trial_enabled', False))
 
 
-async def reserve_ai_budget(db, user_id, session_id, input_bytes, output_tokens=2048, attempts=2):
+async def reserve_ai_budget(db: AsyncSession, user_id: UUID | str, session_id: UUID | str, input_bytes: int, output_tokens: int = 2048, attempts: int = 2) -> None:
     if not enabled(): raise HTTPException(503,'AI assistant is temporarily disabled')
     if not (0 <= input_bytes <= 256000 and 1 <= output_tokens <= 4096 and 1 <= attempts <= 8):
         raise HTTPException(400,'AI request exceeds budget size')
@@ -49,8 +53,10 @@ async def reserve_ai_budget(db, user_id, session_id, input_bytes, output_tokens=
     if _trial_enabled():
         scopes.insert(0, ('trial:all', 'TRIAL', 1000000, 1000000000, 5000000))
     dialect=db.get_bind().dialect.name
-    if dialect=='postgresql': from sqlalchemy.dialects.postgresql import insert
-    elif dialect=='sqlite': from sqlalchemy.dialects.sqlite import insert
+    if dialect=='postgresql':
+        from sqlalchemy.dialects.postgresql import insert
+    elif dialect=='sqlite':
+        from sqlalchemy.dialects.sqlite import insert
     else: raise HTTPException(503,'Unsupported AI budget database')
     try:
         for key,scope,requests_cap,tokens_cap,cost_cap in scopes:
@@ -98,8 +104,9 @@ def reserve_worker_budget(messages, output_tokens, *, identity=None):
     input_bytes = len(json.dumps(messages).encode("utf-8"))
 
     async def reserve():
-        from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
         from sqlalchemy.pool import NullPool
+
         from app.core.config import get_settings
         from app.db.session import _connect_args
         # A fresh pool avoids moving asyncpg connections across thread event loops.

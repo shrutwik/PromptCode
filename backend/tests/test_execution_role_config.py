@@ -1,6 +1,7 @@
 """The daemon role must not load or accept application credentials."""
 import pytest
 from pydantic import ValidationError
+
 from app.core.config import Settings, get_settings
 
 TOKEN = "execution-management-token-32-bytes-minimum"

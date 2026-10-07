@@ -1,17 +1,17 @@
 import asyncio
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
-import uuid
 
 import pytest
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.base import Base
-from app.models.user import User
-from app.models.interview_session import InterviewSession, InterviewEvaluation
 from app.models.interview_grading import InterviewGradingJob
+from app.models.interview_session import InterviewEvaluation, InterviewSession
+from app.models.user import User
 from app.services.interview import snapshot, workspace
 from app.services.interview.grading import pending_assessment
 from app.workers import interview_grading as jobs
@@ -158,8 +158,13 @@ def test_unverified_results_never_complete_job(tmp_path, monkeypatch):
 
 
 def signed_result(job):
+    from app.services.interview.trusted_cases import (
+        MANUAL_REQUIREMENTS,
+        VERSION,
+        cases_for,
+        inventory_digest,
+    )
     from app.services.interview.trusted_evaluator import sign_result
-    from app.services.interview.trusted_cases import cases_for, inventory_digest, VERSION, MANUAL_REQUIREMENTS
     cases = [{"id": case.id, "weight": case.weight, "passed": True, "error": None}
              for case in cases_for(job.challenge_slug)]
     total = sum(case["weight"] for case in cases)

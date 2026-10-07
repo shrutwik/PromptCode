@@ -35,6 +35,8 @@ x-image: &backend-image
   pull_policy: missing  # CI pre-pulls before `up -d`; missing allows rollback from cached images
 
 x-ai-env: &ai-env
+  PROMPTCODE_RUNNER: docker
+  PROMPTCODE_METRICS_TOKEN: ${PROMPTCODE_METRICS_TOKEN:-}
   PROMPTCODE_EXECUTION_BROKER_URL: ${PROMPTCODE_EXECUTION_BROKER_URL:?set private HTTPS execution broker URL}
   PROMPTCODE_SANDBOX_EXECUTOR_URL: ""
   PROMPTCODE_EXECUTION_BROKER_CA_FILE: ${PROMPTCODE_EXECUTION_BROKER_CA_FILE:-}

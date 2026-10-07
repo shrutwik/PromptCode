@@ -15,7 +15,11 @@ if [ "$(id -u)" = "0" ]; then
     group_name="$(getent group "$sock_gid" | cut -d: -f1)"
     usermod -aG "$group_name" promptcode
   fi
-  chown promptcode:promptcode "$ws"
+  # Workers share this directory read-only; only the API's writable mount
+  # needs ownership initialization.
+  if [ -w "$ws" ]; then
+    chown promptcode:promptcode "$ws"
+  fi
   exec runuser -u promptcode -- "$@"
 fi
 

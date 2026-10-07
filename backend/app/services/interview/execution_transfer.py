@@ -8,10 +8,10 @@ from pathlib import Path, PurePosixPath
 
 from pydantic import BaseModel, Field, model_validator
 
+from .registry import is_blocked_path
 from .snapshot import _contents, _source_files, manifest_digest
 from .workspace import MAX_FILE_BYTES, SKIP_DIR_NAMES
 from .workspace_quota import SOURCE_BYTES, SOURCE_FILES
-from .registry import is_blocked_path
 
 MAX_REQUEST_BYTES = 30 * 1024 * 1024
 

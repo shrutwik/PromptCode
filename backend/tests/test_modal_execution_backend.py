@@ -183,6 +183,91 @@ def _source(tmp_path: Path) -> Path:
     return root
 
 
+def test_source_upload_prunes_dependencies_and_links_without_scanning_them(tmp_path, monkeypatch):
+    root = _source(tmp_path)
+    (root / "src" / "empty").mkdir(parents=True)
+    (root / "src" / "main.js").write_text("const value = 1;\n")
+    for name in modal_backend._IGNORED_TREE_NAMES:
+        (root / name / "deep").mkdir(parents=True)
+        (root / name / "deep" / "unused.js").write_text("not uploaded")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret").write_text("never uploaded")
+    (root / "linked-dir").symlink_to(outside, target_is_directory=True)
+    (root / "linked-file").symlink_to(outside / "secret")
+    original = modal_backend.os.scandir
+
+    def scan(path):
+        assert Path(path).name not in modal_backend._IGNORED_TREE_NAMES
+        assert Path(path) != outside
+        return original(path)
+
+    monkeypatch.setattr(modal_backend.os, "scandir", scan)
+    sandbox = types.SimpleNamespace(filesystem=_FakeFilesystem())
+    modal_backend._upload_source(sandbox, root)
+    assert sandbox.filesystem.files == {
+        "/source/app.js": b"export const value = 1;\n",
+        "/source/src/main.js": b"const value = 1;\n",
+    }
+    assert "/source/src/empty" in sandbox.filesystem.directories
+    assert not any("linked" in path for path in sandbox.filesystem.directories)
+
+
+@pytest.mark.parametrize("fail_upload", [False, True])
+def test_sandbox_phase_timings_include_failures_and_cleanup(modal_settings, fake_modal, tmp_path, monkeypatch, caplog, fail_upload):
+    fake_modal.process = _FakeProcess(stdout=b"done", exit_code=0)
+    policy = SandboxPolicy(cpu=1, memory_mb=512, timeout_seconds=30,
+                           pids_limit=64, output_limit_bytes=4096)
+    clock = [0.0]
+    monkeypatch.setattr(modal_backend.time, "monotonic", lambda: clock[0])
+    create = fake_modal.Sandbox.create
+
+    def timed_create(*args, **kwargs):
+        clock[0] += 0.1
+        sandbox = create(*args, **kwargs)
+        terminate = sandbox.terminate
+
+        def timed_terminate():
+            clock[0] += 0.04
+            terminate()
+
+        sandbox.terminate = timed_terminate
+        execute = sandbox.exec
+
+        def timed_exec(*args, **kwargs):
+            clock[0] += 0.3
+            return execute(*args, **kwargs)
+
+        sandbox.exec = timed_exec
+        return sandbox
+
+    upload = modal_backend._upload_source
+
+    def timed_upload(*args):
+        clock[0] += 0.2
+        if fail_upload:
+            raise OSError("upload failed")
+        return upload(*args)
+
+    fake_modal.Sandbox.create = timed_create
+    monkeypatch.setattr(modal_backend, "_upload_source", timed_upload)
+    with caplog.at_level("INFO", logger=modal_backend.__name__):
+        if fail_upload:
+            with pytest.raises(OSError):
+                ModalSandboxBackend()._execute(source_dir=_source(tmp_path), argv=["node"], image="node", policy=policy)
+        else:
+            result = ModalSandboxBackend()._execute(source_dir=_source(tmp_path), argv=["node"], image="node", policy=policy)
+            assert result == (0, b"done", b"")
+    record = next(r for r in caplog.records if r.getMessage() == "sandbox.complete")
+    assert record.create_ms == 100
+    assert record.upload_ms == 200
+    assert record.execute_ms == (0 if fail_upload else 300)
+    assert record.cleanup_ms == 40
+    assert record.outcome == ("failed" if fail_upload else "completed")
+    assert record.failed_phase == ("upload" if fail_upload else None)
+    assert fake_modal.created[0].terminated
+
+
 # --- policy -----------------------------------------------------------------
 
 
@@ -508,7 +593,7 @@ def test_bootstrap_rejects_a_slug_that_could_escape_the_deps_path():
     assert modal_backend.bootstrap_argv(["pytest", "-q"], challenge_slug="")[4] == ""
 
 
-def test_challenge_dependency_mounts_match_the_docker_deps_root(tmp_path):
+def test_challenge_dependency_mounts_match_the_docker_deps_root(tmp_path, monkeypatch):
     from app.services.execution import images
 
     challenges = tmp_path / "challenges"
@@ -526,10 +611,10 @@ def test_challenge_dependency_mounts_match_the_docker_deps_root(tmp_path):
         ),
     }
 
-    # The real repository ships the six Node dependency trees the Docker image bakes.
-    repo_mounts = images.challenge_dependency_mounts()
-    assert len(repo_mounts) == 6
-    assert all(remote.startswith("/opt/promptcode-deps/") for remote in repo_mounts.values())
+    # A clean checkout has no installed node_modules. Exercise default-root
+    # resolution with the same reviewed fixture rather than developer caches.
+    monkeypatch.setattr(images, "DEFAULT_CHALLENGES_DIR", challenges)
+    assert images.challenge_dependency_mounts() == mounts
 
 
 def test_build_sandbox_image_adds_every_dependency_layer(tmp_path):

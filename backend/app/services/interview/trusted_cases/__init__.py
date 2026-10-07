@@ -1,8 +1,10 @@
 """Server-owned behavioral probes. Expected results never enter candidate containers."""
 from __future__ import annotations
-from dataclasses import dataclass
+
 import hashlib
 import json
+from dataclasses import dataclass
+
 
 @dataclass(frozen=True)
 class Case:

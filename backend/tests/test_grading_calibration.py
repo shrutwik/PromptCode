@@ -3,7 +3,11 @@ import copy
 import pytest
 
 from app.services.interview.grading import DIMENSIONS
-from app.services.interview.grading_calibration import calibration_report, pilot_template, weighted_kappa
+from app.services.interview.grading_calibration import (
+    calibration_report,
+    pilot_template,
+    weighted_kappa,
+)
 
 
 def record(index, rating):
@@ -81,10 +85,14 @@ def test_cannot_lower_required_sample_size():
 def test_publication_recomputes_all_ten_gates_and_rejects_tampering(tmp_path, monkeypatch):
     import json
     from types import SimpleNamespace
+
     from app.core import config
-    from app.services.interview.grading_calibration import REQUIRED_AUDITS, publication_allowed
-    from app.services.interview.trusted_cases import VERSION, inventory_digest
     from app.services.interview.calibration import challenge_version_for
+    from app.services.interview.grading_calibration import (
+        REQUIRED_AUDITS,
+        publication_allowed,
+    )
+    from app.services.interview.trusted_cases import VERSION, inventory_digest
     records = []
     inventories = {}
     for challenge in pilot_template()["challenges"]:
@@ -106,7 +114,7 @@ def test_publication_recomputes_all_ten_gates_and_rejects_tampering(tmp_path, mo
     settings = SimpleNamespace(grading_publish_reviewed_scores=True, grading_calibration_report_path=str(path))
     monkeypatch.setattr(config, "get_settings", lambda: settings)
     assert publication_allowed()
-    from app.services.interview import trusted_cases, calibration
+    from app.services.interview import calibration, trusted_cases
     with monkeypatch.context() as changed:
         changed.setattr(trusted_cases, "VERSION", "new evaluator")
         assert not publication_allowed()

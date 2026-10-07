@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import contextlib
 import inspect
+import logging
+import os
 import re
 import threading
 import time
@@ -43,6 +45,8 @@ from .policy import (
     SandboxPolicy,
     candidate_environment,
 )
+
+logger = logging.getLogger(__name__)
 
 # A challenge slug is interpolated into a sandbox path, so only registered-looking
 # slugs are accepted.
@@ -213,17 +217,19 @@ def _upload_source(sandbox: Any, source_dir: Path) -> None:
     filesystem = sandbox.filesystem
     filesystem.make_directory(SOURCE_MOUNT)
     filesystem.make_directory(WORKSPACE_MOUNT)
-    for path in sorted(source_dir.rglob("*")):
-        relative = path.relative_to(source_dir)
-        if any(part in _IGNORED_TREE_NAMES for part in relative.parts):
-            continue
-        remote = f"{SOURCE_MOUNT}/{relative.as_posix()}"
-        if path.is_symlink():
-            continue
-        if path.is_dir():
-            filesystem.make_directory(remote)
-        elif path.is_file():
-            filesystem.write_bytes(path.read_bytes(), remote)
+    for directory, dirnames, filenames in os.walk(source_dir, followlinks=False):
+        root = Path(directory)
+        dirnames[:] = sorted(name for name in dirnames
+                             if name not in _IGNORED_TREE_NAMES and not (root / name).is_symlink())
+        for name in dirnames:
+            relative = (root / name).relative_to(source_dir)
+            filesystem.make_directory(f"{SOURCE_MOUNT}/{relative.as_posix()}")
+        for name in sorted(filenames):
+            path = root / name
+            if name in _IGNORED_TREE_NAMES or path.is_symlink() or not path.is_file():
+                continue
+            relative = path.relative_to(source_dir)
+            filesystem.write_bytes(path.read_bytes(), f"{SOURCE_MOUNT}/{relative.as_posix()}")
 
 
 def _create_kwargs(modal: Any, policy: SandboxPolicy, docker_image: str, argv: Sequence[str]):
@@ -379,6 +385,10 @@ class ModalSandboxBackend:
         modal = _import_modal()
         run_id = uuid.uuid4().hex
         sandbox = None
+        phase = "create"
+        phase_started = time.monotonic()
+        phase_ms: dict[str, float] = {}
+        outcome = "failed"
         # Reserve the run id before the create RPC so a cancel() that arrives while
         # the sandbox is starting still terminates it.
         with self._lock:
@@ -389,9 +399,15 @@ class ModalSandboxBackend:
             sandbox = modal.Sandbox.create(
                 "sleep", "infinity", **_create_kwargs(modal, policy, image, argv)
             )
+            phase_ms[phase] = (time.monotonic() - phase_started) * 1000
             if not self._register(run_id, sandbox):
                 raise SandboxAborted("Sandbox run was cancelled")
+            phase = "upload"
+            phase_started = time.monotonic()
             _upload_source(sandbox, source_dir)
+            phase_ms[phase] = (time.monotonic() - phase_started) * 1000
+            phase = "execute"
+            phase_started = time.monotonic()
             try:
                 process = sandbox.exec(
                     *argv, timeout=policy.timeout_seconds, workdir=WORKSPACE_MOUNT,
@@ -402,15 +418,28 @@ class ModalSandboxBackend:
                 exit_code = process.wait()
             except Exception as exc:  # noqa: BLE001 - classify the deadline signal
                 if _is_timeout(exc):
+                    outcome = "timeout"
                     raise SandboxTimeout(
                         f"Sandbox command exceeded {policy.timeout_seconds}s"
                     ) from exc
                 raise
+            phase_ms[phase] = (time.monotonic() - phase_started) * 1000
+            outcome = "completed"
             return (1 if exit_code is None else int(exit_code)), stdout, stderr
         finally:
+            if phase not in phase_ms:
+                phase_ms[phase] = (time.monotonic() - phase_started) * 1000
             # The sandbox is terminated on success, failure, exception and
             # timeout; there is no path that leaves candidate code running.
             with self._lock:
                 self._live.pop(run_id, None)
                 self._aborted.discard(run_id)
+            cleanup_started = time.monotonic()
             _terminate(sandbox)
+            phase_ms["cleanup"] = (time.monotonic() - cleanup_started) * 1000
+            logger.info("sandbox.complete", extra={
+                "backend": "modal", "outcome": outcome,
+                "failed_phase": phase if outcome != "completed" else None,
+                **{f"{name}_ms": round(phase_ms.get(name, 0.0), 3)
+                   for name in ("create", "upload", "execute", "cleanup")},
+            })

@@ -9,6 +9,7 @@ import secrets
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy import func, select, text
@@ -68,16 +69,16 @@ from app.services.interview.ai_provider import (
     AIProviderError,
     AIRequest,
     apply_assistant_guardrails,
+    bounded_chat_history,
     check_session_ai_rate_limit,
+    coaching_mode,
+    focused_coaching_request,
     get_ai_provider,
     mark_session_ai_end,
     mark_session_ai_start,
+    review_coaching_reply,
     screen_assistant_input,
     validate_context_budget,
-    bounded_chat_history,
-    review_coaching_reply,
-    focused_coaching_request,
-    coaching_mode,
 )
 from app.services.interview.analytics import (
     SCORING_VERSION,
@@ -224,14 +225,14 @@ async def _load_owned_session(
     return session
 
 
-def _steps_for_report(evaluation: InterviewEvaluation, timeline: list, slug: str) -> dict:
+def _steps_for_report(evaluation: InterviewEvaluation, timeline: list[Any], slug: str) -> dict[str, Any]:
     stored = (evaluation.metrics or {}).get("steps")
     if isinstance(stored, dict) and "opened" in stored and "total" in stored:
         return stored
     return steps_summary(timeline, slug)
 
 
-def _candidate_questions(evaluation: InterviewEvaluation, slug: str) -> list[dict]:
+def _candidate_questions(evaluation: InterviewEvaluation, slug: str) -> list[dict[str, Any]]:
     stored = evaluation.defend_questions or []
     if not stored:
         return candidate_defend_questions(slug)
@@ -249,7 +250,7 @@ def _is_interviewer(user: User) -> bool:
 
 def _defend_questions_for_user(
     user: User, evaluation: InterviewEvaluation, slug: str
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Questions only for candidates. Interviewers also receive answer guides."""
     questions = [
         {k: v for k, v in q.items() if k != "answer_guide"}
@@ -259,11 +260,11 @@ def _defend_questions_for_user(
         return questions
     stored = (evaluation.metrics or {}).get("answer_guides")
     guides = stored if isinstance(stored, list) and stored else parse_defend_questions(slug)
-    attached: list[dict] = []
+    attached: list[dict[str, Any]] = []
     for question in questions:
         item = dict(question)
         try:
-            idx = int(item.get("index"))
+            idx = int(cast(Any, item.get("index")))
         except (TypeError, ValueError):
             idx = -1
         guide = ""
@@ -287,8 +288,8 @@ async def _current_revision(db: AsyncSession, session_id: uuid.UUID, path: str) 
 
 
 async def _stamp_revisions(
-    db: AsyncSession, session_id: uuid.UUID, proposed: list[dict]
-) -> list[dict]:
+    db: AsyncSession, session_id: uuid.UUID, proposed: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     stamped = []
     for edit in proposed:
         path = str(edit.get("path") or "")
@@ -299,7 +300,7 @@ async def _stamp_revisions(
 
 async def _previous_attempt(
     db: AsyncSession, session: InterviewSession, scoring_version: str
-) -> dict | None:
+) -> dict[str, Any] | None:
     result = await db.execute(
         select(InterviewSession, InterviewEvaluation)
         .join(InterviewEvaluation, InterviewEvaluation.session_id == InterviewSession.id)
@@ -413,7 +414,7 @@ async def _add_event(
     db: AsyncSession,
     session_id: uuid.UUID,
     event_type: str,
-    payload: dict | None = None,
+    payload: dict[str, Any] | None = None,
     *,
     dedupe_file_view: bool = False,
 ) -> InterviewSessionEvent | None:
@@ -480,6 +481,18 @@ async def challenges_with_progress(
         by_slug.setdefault(s.challenge_slug, []).append(s)
     await db.commit()
 
+    submitted_ids = [
+        s.id for c in cards for s in by_slug.get(c["slug"], [])
+        if s.status == "submitted"
+    ]
+    evaluated_ids = set()
+    if submitted_ids:
+        evaluated_ids = set((await db.execute(
+            select(InterviewEvaluation.session_id).where(
+                InterviewEvaluation.session_id.in_(submitted_ids)
+            )
+        )).scalars().all())
+
     out: list[ChallengeProgressCard] = []
     for c in cards:
         sess = by_slug.get(c["slug"], [])
@@ -496,18 +509,8 @@ async def challenges_with_progress(
                 active_id = max(active, key=lambda s: s.started_at).id
             if any(s.status == "submitted" for s in sess):
                 progress = "completed" if progress != "in_progress" else "in_progress"
-            for s in sess:
-                if s.status != "submitted":
-                    continue
-                ev = (
-                    await db.execute(
-                        select(InterviewEvaluation).where(
-                            InterviewEvaluation.session_id == s.id
-                        )
-                    )
-                ).scalar_one_or_none()
-                if ev is not None:
-                    best = max(best or 0.0, 0.0)
+            if any(s.id in evaluated_ids for s in sess):
+                best = 0.0
         out.append(
             ChallengeProgressCard(
                 slug=c["slug"],
@@ -876,7 +879,7 @@ async def post_event(
     if (set(body.payload) - {"query", "hits"} or not isinstance(query, str)
             or len(query) > 200 or type(hits) is not int or not 0 <= hits <= 10000):
         raise HTTPException(status_code=400, detail="Invalid search activity")
-    event = await _add_event(db, session.id, "file_searched", {"query": query, "hits": hits})
+    event = cast(InterviewSessionEvent, await _add_event(db, session.id, "file_searched", {"query": query, "hits": hits}))
     await db.commit()
     await db.refresh(event)
     return EventResponse(
@@ -950,7 +953,7 @@ async def run_session_tests(
     runner = get_challenge_runner()
     timeout = int(runner_cfg.get("timeoutSeconds") or 60)
     workspace = await ensure_workspace(db, session)
-    run_kwargs = {
+    run_kwargs: dict[str, Any] = {
         "timeout_seconds": timeout,
         "command_id": command_id,
         "runner_config": runner_cfg,
@@ -1266,7 +1269,7 @@ async def ai_chat(
         mark_session_ai_end(sid)
 
     reply = ai_result.text[:MAX_AI_REPLY_CHARS]
-    proposed: list[dict] = list(ai_result.proposed_edits)
+    proposed: list[dict[str, Any]] = list(ai_result.proposed_edits)
     if not proposed:
         import re
 
@@ -1484,7 +1487,7 @@ async def submit_session(
     job = await enqueue_grading_job(db, session, snapshot)
     await _add_event(db, session.id, "submission", {"source_digest": snapshot.source_digest,
                                                     "grading_job_id": str(job.id)})
-    test_result = {"ok": False, "exit_code": None, "command": "trusted_evaluation_queued",
+    test_result: dict[str, Any] = {"ok": False, "exit_code": None, "command": "trusted_evaluation_queued",
                    "duration_ms": None, "counts": {}, "stdout": "", "stderr": "",
                    "error_code": "grading_pending", "advisory": True, "authoritative": False}
 
@@ -1897,7 +1900,7 @@ async def abandon_session(
 async def interview_diagnostics(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     """Protected beta diagnostics — not a public admin panel."""
     require_internal(request)
     settings = get_settings()
@@ -1940,7 +1943,7 @@ async def interview_diagnostics(
 async def internal_analytics_funnel(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     require_internal(request)
     return await funnel_aggregates(db)
 
@@ -1949,7 +1952,7 @@ async def internal_analytics_funnel(
 async def internal_analytics_challenges(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     require_internal(request)
     return {"challenges": await challenge_quality_metrics(db)}
 
@@ -1958,7 +1961,7 @@ async def internal_analytics_challenges(
 async def internal_calibration(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     require_internal(request)
     return await calibration_overview(db)
 
@@ -1967,7 +1970,7 @@ async def internal_calibration(
 async def internal_disagreements(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     require_internal(request)
     return await disagreement_report(db)
 
@@ -1977,7 +1980,7 @@ async def internal_session_review(
     session_id: uuid.UUID,
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     require_internal(request)
     payload = await session_review_payload(db, session_id)
     if payload is None:
@@ -1991,7 +1994,7 @@ async def internal_human_review(
     body: HumanReviewRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     require_internal(request)
     session = (
         await db.execute(select(InterviewSession).where(InterviewSession.id == session_id))
@@ -2021,7 +2024,7 @@ async def internal_human_review(
 async def internal_list_users(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     require_internal(request)
     users = (await db.execute(select(User).order_by(User.created_at.desc()).limit(200))).scalars().all()
     out = []
@@ -2054,7 +2057,7 @@ async def internal_disable_user(
     user_id: uuid.UUID,
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     require_internal(request)
     user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
     if user is None:
@@ -2069,7 +2072,7 @@ async def internal_enable_user(
     user_id: uuid.UUID,
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     require_internal(request)
     user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
     if user is None:
@@ -2083,7 +2086,7 @@ async def internal_enable_user(
 async def internal_export_calibration(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     require_internal(request)
     sessions = (await db.execute(select(InterviewSession))).scalars().all()
     evals = {
@@ -2104,7 +2107,7 @@ async def internal_export_calibration(
 async def internal_incidents(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     """Lightweight incident visibility — not PagerDuty."""
     require_internal(request)
     from sqlalchemy import func
@@ -2137,7 +2140,7 @@ async def internal_incidents(
 
 
 @router.get("/internal/disk")
-async def internal_disk(request: Request) -> dict:
+async def internal_disk(request: Request) -> dict[str, Any]:
     require_internal(request)
     root = workspace_root()
     # The ledger is the request-path accounting; this endpoint exists to inspect
@@ -2151,7 +2154,7 @@ async def internal_disk(request: Request) -> dict:
 async def interview_runner_health(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     """
     Admin/internal Docker runner diagnostic.
 

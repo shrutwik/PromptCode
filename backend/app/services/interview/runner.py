@@ -451,12 +451,16 @@ class IsolatedRunner(ChallengeRunner):
         settings = get_settings()
         if getattr(settings, "execution_broker_url", ""):
             import httpx
+
             from .execution_transfer import bundle_source
             slug = cfg.get("challengeSlug")
             if not slug:
                 raise ValueError("Registered challenge identity is required")
             bundle = await asyncio.to_thread(bundle_source, workspace)
-            from app.core.execution_transport import broker_tls_context, broker_json_async
+            from app.core.execution_transport import (
+                broker_json_async,
+                broker_tls_context,
+            )
             async with httpx.AsyncClient(timeout=timeout + 15, trust_env=False, verify=broker_tls_context(settings)) as client:
                 try:
                     result = await broker_json_async(client, "POST", settings.execution_broker_url.rstrip("/") + "/v1/interview/run",
@@ -527,7 +531,7 @@ class IsolatedRunner(ChallengeRunner):
         self, workspace: Path, command: str, timeout_seconds: int,
         command_id: str, runner_config: dict[str, Any],
     ) -> dict[str, Any]:
-        from app.services.runner_capacity import execution_slot, RunnerBusy
+        from app.services.runner_capacity import RunnerBusy, execution_slot
         try:
             with execution_slot():
                 from app.services.execution.backend import get_execution_backend

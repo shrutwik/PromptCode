@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import logging
 import asyncio
-import os
-import re
-import random
 import json
+import logging
+import os
+import random
+import re
 import time
-from collections.abc import Awaitable, Callable
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
 from urllib.parse import urlparse
@@ -178,7 +178,6 @@ class ProductionAIProvider(AIProvider):
             "Content-Type": "application/json",
         }
         started = time.monotonic()
-        messages_payload = [{"role": "system", "content": system}, *messages]
         try:
             from app.services.interview.ai_budget import enabled
             if not enabled():

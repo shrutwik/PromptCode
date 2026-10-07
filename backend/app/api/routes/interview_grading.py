@@ -1,18 +1,31 @@
 """Staff evidence review and owner-scoped practice rating appeals."""
 from __future__ import annotations
+
 import uuid
+from typing import Any, cast
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.deps import get_current_user
 from app.db.session import get_db
-from app.models.user import User
+from app.models.interview_grading import (
+    InterviewAppealDecision,
+    InterviewGradeAppeal,
+    InterviewGradeReview,
+)
 from app.models.interview_session import InterviewSession
-from app.models.interview_grading import InterviewGradeReview, InterviewGradeAppeal, InterviewAppealDecision
-from app.services.interview.grading import DimensionReview, HumanReview, RUBRIC_VERSION
-from app.services.interview.grading_review import append_review, candidate_review_status, require_reviewer, reviewer_evidence
+from app.models.user import User
+from app.services.interview.grading import RUBRIC_VERSION, DimensionReview, HumanReview
+from app.services.interview.grading_review import (
+    append_review,
+    candidate_review_status,
+    require_reviewer,
+    reviewer_evidence,
+)
 
 router = APIRouter(prefix="/interview/grading", tags=["interview grading"])
 
@@ -33,11 +46,11 @@ class AppealDecisionRequest(BaseModel):
     reason: str = Field(min_length=20, max_length=4000)
 
 @router.get("/sessions/{session_id}/evidence")
-async def evidence(session_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict:
+async def evidence(session_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     return await reviewer_evidence(db, session_id, user)
 
 @router.post("/sessions/{session_id}/reviews")
-async def create_review(session_id: uuid.UUID, body: ReviewRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict:
+async def create_review(session_id: uuid.UUID, body: ReviewRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     review = HumanReview(reviewer_id=str(user.id), reviewer_kind="human", rubric_version=RUBRIC_VERSION,
                         packet_digest=body.packet_digest, dimensions=body.dimensions)
     row = await append_review(db, session_id, user, review, body.manual_checks)
@@ -46,7 +59,7 @@ async def create_review(session_id: uuid.UUID, body: ReviewRequest, user: User =
             "notice": "Stored staff practice review; publication requires calibration approval."}
 
 @router.get("/sessions/{session_id}/reviews")
-async def review_history(session_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict:
+async def review_history(session_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     require_reviewer(user)
     session = await db.get(InterviewSession, session_id)
     if not session:
@@ -57,7 +70,7 @@ async def review_history(session_id: uuid.UUID, user: User = Depends(get_current
     return {"reviews": [{"id": str(r.id), "revision": r.revision, "reviewer_id": str(r.reviewer_id), "outcome": r.outcome, "created_at": r.created_at.isoformat()} for r in rows]}
 
 @router.post("/sessions/{session_id}/appeals")
-async def create_appeal(session_id: uuid.UUID, body: AppealRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict:
+async def create_appeal(session_id: uuid.UUID, body: AppealRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     session = (await db.execute(select(InterviewSession).where(InterviewSession.id == session_id).with_for_update())).scalar_one_or_none()
     if not session or session.user_id != user.id:
         raise HTTPException(404, "Session not found")
@@ -83,7 +96,7 @@ async def create_appeal(session_id: uuid.UUID, body: AppealRequest, user: User =
     return {"id": str(row.id), "status": "pending"}
 
 @router.get("/sessions/{session_id}/appeals")
-async def appeals(session_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict:
+async def appeals(session_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     session = await db.get(InterviewSession, session_id)
     if not session or (session.user_id != user.id and user.role != "interviewer"):
         raise HTTPException(404, "Session not found")
@@ -96,12 +109,12 @@ async def appeals(session_id: uuid.UUID, user: User = Depends(get_current_user),
     return {"appeals": result}
 
 @router.post("/appeals/{appeal_id}/decision")
-async def decide_appeal(appeal_id: uuid.UUID, body: AppealDecisionRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict:
+async def decide_appeal(appeal_id: uuid.UUID, body: AppealDecisionRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     require_reviewer(user)
     appeal = (await db.execute(select(InterviewGradeAppeal).where(InterviewGradeAppeal.id == appeal_id).with_for_update())).scalar_one_or_none()
     if not appeal:
         raise HTTPException(404, "Appeal not found")
-    review = await db.get(InterviewGradeReview, appeal.review_id)
+    review = cast(InterviewGradeReview, await db.get(InterviewGradeReview, appeal.review_id))
     if user.id in {appeal.candidate_id, review.reviewer_id}:
         raise HTTPException(403, "Appeals require an independent reviewer")
     if appeal.status != "pending":
@@ -118,11 +131,10 @@ async def decide_appeal(appeal_id: uuid.UUID, body: AppealDecisionRequest, user:
 
 
 @router.post("/sessions/{session_id}/feedback")
-async def feedback(session_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict:
+async def feedback(session_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     from app.core.config import get_settings
     from app.services.interview.grading_feedback import generate_grading_feedback
     from app.services.interview.grading_review import review_context
-    from app.models.interview_session import InterviewEvaluation
     if not get_settings().grading_feedback_enabled:
         raise HTTPException(409, "AI review feedback is disabled")
     evidence = await reviewer_evidence(db, session_id, user)
@@ -150,10 +162,10 @@ async def feedback(session_id: uuid.UUID, user: User = Depends(get_current_user)
 
 
 @router.post("/sessions/{session_id}/retry")
-async def retry_grading(session_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict:
+async def retry_grading(session_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     """Operator retry of exhausted infrastructure work; never rerun a completed grade."""
     from datetime import datetime, timezone
-    from pathlib import Path
+
     from app.models.interview_grading import InterviewGradingJob
     from app.models.interview_session import InterviewEvaluation, InterviewSessionEvent
     from app.services.interview.snapshot import verify_snapshot

@@ -2,9 +2,9 @@
 import os
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
-from app.core.config import _INSECURE_JWT_SECRETS, _looks_like_placeholder
+from app.core.config import _INSECURE_JWT_SECRETS, Settings, _looks_like_placeholder
 
 
 def invalid_deployment_token(value: str) -> bool:
@@ -24,7 +24,7 @@ _PRIVATE_BROKER_HOSTS = {
 }
 
 
-def _same_host_broker_allowed(settings, broker) -> bool:
+def _same_host_broker_allowed(settings: Settings, broker: ParseResult) -> bool:
     """Whether a broker on this Docker host is explicitly permitted.
 
     The invariant this guard protects is that the *application* process never has

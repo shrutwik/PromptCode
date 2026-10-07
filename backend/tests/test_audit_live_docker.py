@@ -164,6 +164,7 @@ def test_live_memory_exhaustion_is_contained(tmp_path):
 
 def test_live_huge_output_is_clipped(tmp_path, monkeypatch):
     import docker
+
     from app.services.interview import runner
     client = docker.from_env(timeout=10)
     collection = client.containers
@@ -225,8 +226,10 @@ def test_fill():
 
 
 def test_live_timeout_removes_container_and_volumes(tmp_path, monkeypatch):
-    import docker
     from types import SimpleNamespace
+
+    import docker
+
     from app.services.interview import runner
     client = docker.from_env(timeout=10)
     collection = client.containers
@@ -259,7 +262,10 @@ def test_live_timeout_removes_container_and_volumes(tmp_path, monkeypatch):
 
 
 def test_live_startup_reaper_after_simulated_crash():
-    import docker,time
+    import time
+
+    import docker
+
     from app.services.interview.runner import reap_expired_runners
     client = docker.from_env(timeout=10)
     containers = []

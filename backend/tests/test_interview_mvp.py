@@ -3,18 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
 from httpx import ASGITransport, AsyncClient
 
-from app.main import app
 from app.services.interview.registry import (
     interviewer_file_roles,
     is_blocked_path,
     list_challenges,
 )
-from app.services.interview.runner import resolve_command, resolve_command_id
 from app.services.interview.rubric import score_session
+from app.services.interview.runner import resolve_command, resolve_command_id
 from app.services.interview.session_analysis import (
     analyze_prompt_quality,
     derive_metrics,
@@ -28,7 +26,6 @@ from app.services.interview.workspace import (
     read_file,
     starter_snapshot_path,
     write_file,
-    workspace_root,
 )
 
 
@@ -165,12 +162,14 @@ def test_metrics_and_signals_from_artificial_timeline():
 def test_interview_challenge_api_hides_solution_content(tmp_path, monkeypatch):
     """API flow with auth — uses isolated sqlite so schema matches models."""
     import asyncio as _asyncio
-    import app.models  # noqa: F401
+
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    import app.models  # noqa: F401
+    from app.core.config import get_settings
     from app.db.base import Base
     from app.db.session import get_db
     from app.main import create_app
-    from app.core.config import get_settings
 
     monkeypatch.setenv("PROMPTCODE_DEBUG", "true")
     monkeypatch.setenv("PROMPTCODE_JWT_SECRET", "test-only-secret-not-used-in-prod")

@@ -43,6 +43,7 @@ test("draft recovery is isolated by account and attempt, and survives reopening"
 });
 
 function page() {
+  let initialise;
   const elements = new Map();
   const events = {};
   const intervals = new Map();
@@ -75,15 +76,83 @@ function page() {
     localStorage: storage(), sessionStorage: storage(),
     crypto: { randomUUID: () => "editor-token-123456" },
     performance: { now: () => 0 }, getComputedStyle: () => ({ getPropertyValue: () => "" }),
-    setInterval(callback, delay) { intervals.set(delay, callback); }, setTimeout() {}, requestAnimationFrame() {}, require() {},
+    setInterval(callback, delay) { intervals.set(delay, callback); }, setTimeout() {}, requestAnimationFrame() {},
+    require(_deps, callback) { initialise = callback; },
     addEventListener: listen, removeEventListener() {}, confirm: () => true,
   };
   context.window = context;
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(__dirname + "/interview-session.js", "utf8"), context);
   vm.runInContext("sessionReady = true; sessionReadOnly = false; editorOwned = true; renderTabs = () => {}; renderTree = () => {};", context);
-  return { context, elements, events, intervals, toasts, run: (code) => vm.runInContext(code, context) };
+  return { context, elements, events, intervals, toasts, initialise: () => initialise(), run: (code) => vm.runInContext(code, context) };
 }
+
+function startupPage() {
+  const p = page();
+  p.context.InterviewAPI.isLoggedIn = () => true;
+  p.context.monaco = {
+    KeyMod: { Shift: 1, CtrlCmd: 2 }, KeyCode: { Tab: 1, KeyS: 2 },
+    Uri: { parse: (value) => value },
+    editor: {
+      defineTheme() {},
+      create: () => ({ addCommand() {}, updateOptions() {}, setModel() {} }),
+      createModel(content) {
+        let value = content;
+        return { getValue: () => value, setValue: (next) => { value = next; },
+          updateOptions() {}, onDidChangeContent() {},
+          getOptions: () => ({ tabSize: 4, insertSpaces: true }) };
+      },
+    },
+  };
+  p.run('sessionReady = false; sessionReadOnly = true; renderLevel = () => {}; renderReadme = (el, text) => { el.textContent = text; };');
+  return p;
+}
+
+test("startup requests run concurrently and README is fetched once before timer resume", async () => {
+  const p = startupPage();
+  const calls = [];
+  const resolve = {};
+  for (const name of ["getSession", "listFiles", "level"]) {
+    p.context.InterviewAPI[name] = () => {
+      calls.push(name);
+      return new Promise((done) => { resolve[name] = done; });
+    };
+  }
+  p.context.InterviewAPI.getFile = async (_, path) => {
+    calls.push(path);
+    return { content: "# Task", revision: 7 };
+  };
+  p.context.InterviewAPI.timer = async (_, action) => {
+    calls.push(action);
+    assert.equal(p.run('models["README.md"].saved'), "# Task");
+    assert.equal(p.run("sessionReady"), true);
+    return { status: "active", timer_running: true, timer_lease_ms: 30000 };
+  };
+  const pending = p.initialise();
+  assert.deepEqual(calls, ["getSession", "listFiles", "level"]);
+  assert.equal(p.run("sessionReady"), false);
+  resolve.getSession({ status: "active", challenge_slug: "test", timer_running: false });
+  resolve.listFiles([{ path: "README.md" }]);
+  resolve.level({});
+  await pending;
+  assert.deepEqual(calls, ["getSession", "listFiles", "level", "README.md", "resume"]);
+  assert.equal(p.run('models["README.md"].revision'), 7);
+});
+
+test("startup tolerates unavailable steps and recovers drafts before resuming", async () => {
+  const p = startupPage();
+  p.context.InterviewAPI.getSession = async () => ({ status: "active", challenge_slug: "test", timer_running: false });
+  p.context.InterviewAPI.listFiles = async () => [{ path: "README.md" }, { path: "src/a.py" }];
+  p.context.InterviewAPI.level = async () => { throw new Error("Unavailable"); };
+  p.context.InterviewAPI.getFile = async (_, path) => ({ content: path === "README.md" ? "# Task" : "saved", revision: 3 });
+  p.run('drafts.write("src/a.py", "unsaved", "saved", 3);');
+  p.context.InterviewAPI.timer = async () => {
+    assert.equal(p.run('models["src/a.py"].model.getValue()'), "unsaved");
+    return { status: "active", timer_running: true, timer_lease_ms: 30000 };
+  };
+  await p.initialise();
+  assert.equal(p.run("sessionReady"), true);
+});
 
 test("save failure prevents submission and preserves the draft", async () => {
   const p = page();

@@ -1,20 +1,25 @@
 """Authenticated executor boundary for immutable, attempt-bound grading."""
 import asyncio
+import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
-import uuid
 
+import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-import pytest
 
 from app import sandbox_executor as executor
 from app.models.interview_grading import InterviewGradingJob
-from app.services.interview import snapshot, workspace, trusted_evaluator
+from app.services.interview import snapshot, trusted_evaluator, workspace
 from app.services.interview.calibration import challenge_version_for
-from app.services.interview.trusted_cases import cases_for, inventory_digest, VERSION, MANUAL_REQUIREMENTS
+from app.services.interview.trusted_cases import (
+    MANUAL_REQUIREMENTS,
+    VERSION,
+    cases_for,
+    inventory_digest,
+)
 
 TOKEN='internal-executor-token'
 KEY='separate-grading-signing-key-at-least-32-bytes'
