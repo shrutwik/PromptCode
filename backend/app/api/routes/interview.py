@@ -58,6 +58,7 @@ from app.schemas.interview import (
     StartSessionRequest,
     TestRunRequest,
     TestRunResponse,
+    WorkspaceBootstrapResponse,
 )
 from app.services.interview.ai_budget import reserve_ai_budget
 from app.services.interview.ai_provider import (
@@ -780,6 +781,36 @@ async def get_session_file(
     revision = await _current_revision(db, session.id, file_path)
     await db.commit()
     return FileContentResponse(path=file_path, content=content, revision=revision)
+
+
+@router.get("/sessions/{session_id}/bootstrap", response_model=WorkspaceBootstrapResponse)
+async def workspace_bootstrap(
+    session_id: uuid.UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> WorkspaceBootstrapResponse:
+    await enforce_rate_limit(
+        db=db, key=f"interview:{client_ip_from_request(request)}",
+        limit=_RATE, window_seconds=_WINDOW,
+    )
+    # The README view event follows the same locked-session path as file reads.
+    session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
+    workspace = await ensure_workspace(db, session)
+    files = await asyncio.to_thread(list_files, workspace)
+    index, tests_on_step = await _level_progress(db, session)
+    view = level_view(session.challenge_slug, index, tests_on_step=tests_on_step)
+    readme = None
+    if any(f["path"] == "README.md" for f in files):
+        content = await asyncio.to_thread(read_file, workspace, "README.md")
+        await _add_event(db, session.id, "file_viewed", {"path": "README.md"}, dedupe_file_view=True)
+        revision = await _current_revision(db, session.id, "README.md")
+        readme = FileContentResponse(path="README.md", content=content, revision=revision)
+    await db.commit()
+    return WorkspaceBootstrapResponse(
+        session=_session_to_response(session), files=[FileEntry(**f) for f in files],
+        level=LevelStepResponse(**view) if view else None, readme=readme,
+    )
 
 
 @router.put("/sessions/{session_id}/files/{file_path:path}", response_model=FileContentResponse)

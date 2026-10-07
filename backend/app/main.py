@@ -48,6 +48,7 @@ from app.core.startup_security import (
     validate_production_startup,
 )
 from app.db.session import engine
+from app.db.timing import reset_database_timing, start_database_timing
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 logger = logging.getLogger(__name__)
@@ -156,6 +157,7 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         rid = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         token = set_request_id(rid)
+        db_token, db_timings = start_database_timing()
         started_at = time.perf_counter()
         client_ip = request.client.host if request.client else "unknown"
         try:
@@ -178,6 +180,7 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                         "path": request.url.path,
                         "status_code": 500,
                         "duration_ms": duration_ms,
+                        **{key: round(value, 2) for key, value in db_timings.items()},
                         "client_ip": client_ip,
                     },
                 )
@@ -196,7 +199,9 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
             response.headers["X-Request-ID"] = rid
             # Browser Network/Timing can distinguish application work from
             # proxy transit and container admission/cold-start waiting.
-            response.headers.append("Server-Timing", f"app;dur={duration_ms}")
+            response.headers.append("Server-Timing", f"app;dur={duration_ms}, db;dur={db_timings['db_ms']:.2f}, "
+                                    f"sql;dur={db_timings['db_sql_ms']:.2f}, "
+                                    f"commit;dur={db_timings['db_commit_ms']:.2f}")
             access_logger.info(
                 "request.complete",
                 extra={
@@ -204,11 +209,13 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                     "path": request.url.path,
                     "status_code": response.status_code,
                     "duration_ms": duration_ms,
+                    **{key: round(value, 2) for key, value in db_timings.items()},
                     "client_ip": client_ip,
                 },
             )
             return response
         finally:
+            reset_database_timing(db_token)
             reset_request_id(token)
 
 

@@ -138,6 +138,13 @@ class FileContentResponse(BaseModel):
     revision: int = 0
 
 
+class WorkspaceBootstrapResponse(BaseModel):
+    session: SessionResponse
+    files: list[FileEntry]
+    level: LevelStepResponse | None = None
+    readme: FileContentResponse | None = None
+
+
 class SaveFileRequest(BaseModel):
     content: str
     base_revision: int | None = Field(default=None, ge=0)

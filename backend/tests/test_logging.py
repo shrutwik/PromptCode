@@ -46,7 +46,9 @@ def test_access_log_middleware_records_request(caplog, monkeypatch):
 
     assert response.status_code == 200
     record = next(record for record in caplog.records if record.name == "app.access")
-    assert response.headers["Server-Timing"] == f"app;dur={record.duration_ms}"
+    assert response.headers["Server-Timing"].startswith(f"app;dur={record.duration_ms}, db;dur=")
+    assert record.db_calls == 0
+    assert record.db_ms == 0
     assert record.getMessage() == "request.complete"
     assert record.method == "GET"
     assert record.path == "/health"

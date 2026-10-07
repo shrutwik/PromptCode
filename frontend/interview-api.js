@@ -2,6 +2,8 @@ const InterviewAPI = {
   base: window.location.origin + "/api/interview",
   authBase: window.location.origin + "/api/auth",
   _refreshPromise: null,
+  _readPending: new Map(),
+  READ_CACHE_MS: 300000,
   editorToken: null,
   pendingWorkspaceRequests: 0,
 
@@ -76,6 +78,7 @@ const InterviewAPI = {
   },
 
   clearAccessAuth() {
+    this.invalidateReads();
     ["access_token", "pc_token", "pc_user", "refresh_token", "pc_refresh_token", "pc_session_token"].forEach(
       (k) => this._remove(k)
     );
@@ -130,12 +133,72 @@ const InterviewAPI = {
     return this._refreshPromise;
   },
 
+  invalidateReads() {
+    try {
+      sessionStorage.setItem("pc_read_generation", String(Number(sessionStorage.getItem("pc_read_generation") || 0) + 1));
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const key = sessionStorage.key(i);
+        if (key?.startsWith("pc_read_v1:")) sessionStorage.removeItem(key);
+      }
+    } catch (_) {}
+    this._readPending.clear();
+  },
+
+  async readCached(path, onUpdate) {
+    let account, generation, key, cached;
+    try {
+      account = JSON.parse(this._get("pc_user") || "null")?.id;
+      if (!account || !this.isLoggedIn()) return this.request(path);
+      generation = sessionStorage.getItem("pc_read_generation") || "0";
+      key = "pc_read_v1:" + account + ":" + path;
+      cached = JSON.parse(sessionStorage.getItem(key) || "null");
+    } catch (_) { return this.request(path); }
+    let pending = this._readPending.get(key);
+    if (!pending) {
+      pending = this.request(path).then((data) => {
+        try {
+          if (generation === (sessionStorage.getItem("pc_read_generation") || "0") &&
+              account === JSON.parse(this._get("pc_user") || "null")?.id && this.isLoggedIn()) {
+            sessionStorage.setItem(key, JSON.stringify({ data, at: Date.now(), generation }));
+          }
+        } catch (_) {}
+        return data;
+      }).finally(() => {
+        if (this._readPending.get(key) === pending) this._readPending.delete(key);
+      });
+      this._readPending.set(key, pending);
+    }
+    if (cached && cached.generation === generation && Date.now() - cached.at < this.READ_CACHE_MS) {
+      // Revalidation never erases a usable cached view on a transient failure.
+      pending.then((data) => {
+        if ((sessionStorage.getItem("pc_read_generation") || "0") === generation &&
+            this.isLoggedIn() && account === JSON.parse(this._get("pc_user") || "null")?.id && onUpdate) onUpdate(data);
+      }).catch(() => {});
+      return cached.data;
+    }
+    return pending;
+  },
+
+  readDashboard(onUpdate) {
+    return this.readCached("/dashboard", onUpdate);
+  },
+
+  readChallengesProgress(onUpdate) {
+    return this.readCached("/challenges/progress", onUpdate);
+  },
+
   async request(path, options = {}, isRetry = false) {
     const writing = options.method && options.method !== "GET" &&
       /\/sessions\//.test(path) && !/\/(timer|events)$/.test(path);
+    const changesProgress = options.method && options.method !== "GET" &&
+      /^(\/sessions$|\/sessions\/[^/]+\/(submit|abandon|feedback)$|\/grading\/)/.test(path);
+    if (changesProgress) this.invalidateReads();
     if (writing) this.pendingWorkspaceRequests += 1;
     try { return await this._request(path, options, isRetry); }
-    finally { if (writing) this.pendingWorkspaceRequests -= 1; }
+    finally {
+      if (writing) this.pendingWorkspaceRequests -= 1;
+      if (changesProgress) this.invalidateReads();
+    }
   },
 
   async _request(path, options = {}, isRetry = false) {
@@ -209,6 +272,19 @@ const InterviewAPI = {
 
   getSession(id) {
     return this.request("/sessions/" + id);
+  },
+
+  async bootstrapSession(id) {
+    try {
+      return await this.request("/sessions/" + id + "/bootstrap");
+    } catch (error) {
+      // Allow frontend/backend deployments to roll independently.
+      if (error.status !== 404) throw error;
+      const [session, files, level] = await Promise.all([
+        this.getSession(id), this.listFiles(id), this.level(id).catch(() => null),
+      ]);
+      return { session, files, level };
+    }
   },
 
   timer(id, action, options = {}) {

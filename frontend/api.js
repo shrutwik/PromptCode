@@ -58,6 +58,7 @@ const PromptCodeAPI = {
     },
 
     clearAuth() {
+        window.InterviewAPI?.invalidateReads();
         this._removeAuthValue('pc_token');
         this._removeAuthValue('access_token');
         this._removeAuthValue('pc_refresh_token');

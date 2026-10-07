@@ -1,3 +1,7 @@
+(function () {
+const pageRoot = document.getElementById("main");
+const scriptEpoch = document.currentScript?.dataset.pcNav;
+if (!pageRoot || (scriptEpoch && scriptEpoch !== pageRoot.dataset.pcNav)) return;
 if (!InterviewAPI.requireAuth("/challenges")) throw new Error("auth");
 
 const esc = PCUI.esc;
@@ -88,10 +92,10 @@ function renderTable(filtered) {
   root.querySelectorAll("tr[data-href]").forEach((tr) => {
     tr.addEventListener("click", (e) => {
       if (e.target.closest("a, button")) return;
-      location.href = tr.dataset.href;
+      window.PCNav ? PCNav.go(tr.dataset.href) : location.assign(tr.dataset.href);
     });
     tr.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && e.target === tr) location.href = tr.dataset.href;
+      if (e.key === "Enter" && e.target === tr) window.PCNav ? PCNav.go(tr.dataset.href) : location.assign(tr.dataset.href);
     });
   });
 }
@@ -107,10 +111,9 @@ function fillSelect(el, values, placeholder) {
   }
 }
 
-async function load() {
-  allItems = InterviewAPI.isLoggedIn()
-    ? await InterviewAPI.listChallengesProgress({})
-    : await InterviewAPI.listChallenges({});
+function renderData(data) {
+  if (!pageRoot.isConnected) return;
+  allItems = data;
 
   if (!filtersReady) {
     const types = new Set();
@@ -129,11 +132,21 @@ async function load() {
   renderTable(applyFilters());
 }
 
+async function load() {
+  const data = InterviewAPI.isLoggedIn()
+    ? await InterviewAPI.readChallengesProgress(renderData)
+    : await InterviewAPI.listChallenges({});
+  renderData(data);
+}
+
 ["typeFilter", "stackFilter", "statusFilter", "diffFilter", "searchFilter"].forEach((id) => {
   const el = document.getElementById(id);
   el.addEventListener(id === "searchFilter" ? "input" : "change", () => renderTable(applyFilters()));
 });
 
 load().catch((e) => {
+  if (!pageRoot.isConnected) return;
   document.getElementById("tableWrap").innerHTML = `<div class="pc-error" role="alert" style="border:0;border-radius:0"><strong>Could not load challenges</strong><div class="pc-error-safe">${esc(e.message)}</div><button class="btn btn-ghost btn-sm" type="button" data-pc-reload>Retry</button></div>`;
 });
+
+})();

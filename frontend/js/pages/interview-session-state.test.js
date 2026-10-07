@@ -127,6 +127,22 @@ test("page data starts before Monaco and is reused when the editor initializes",
   assert.ok(html.indexOf("interview-session-bootstrap.js") < html.indexOf("/min/vs/loader.js"));
 });
 
+test("workspace bootstrap supplies metadata and README without duplicate reads", async () => {
+  const p = startupPage();
+  let bootstraps = 0;
+  p.context.InterviewAPI.bootstrapSession = async () => {
+    bootstraps++;
+    return { session: { status: "active", challenge_slug: "test", timer_running: false },
+      files: [{ path: "README.md" }], level: {}, readme: { path: "README.md", content: "# Task", revision: 9 } };
+  };
+  p.context.InterviewAPI.getFile = async () => { throw new Error("Duplicate README request"); };
+  vm.runInContext(fs.readFileSync(__dirname + "/interview-session-bootstrap.js", "utf8"), p.context);
+  await p.initialise();
+  assert.equal(bootstraps, 1);
+  assert.equal(p.run('models["README.md"].revision'), 9);
+  assert.equal(p.run("sessionReady"), true);
+});
+
 test("early data failure is handled until the editor consumes it", async () => {
   const p = startupPage();
   const failure = new Error("Network unavailable");

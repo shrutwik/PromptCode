@@ -917,7 +917,7 @@ require(["vs/editor/editor.main"], async function () {
   if (readme) {
     let readmeFile;
     try {
-      const file = readmeFile = await InterviewAPI.getFile(sessionId, readme.path);
+      const file = readmeFile = bootstrap?.readme || await InterviewAPI.getFile(sessionId, readme.path);
       const text = typeof file === "string" ? file : (file.content || file.text || "");
       if (!ticketEl.querySelector(".brief")) {
         renderReadme(ticketEl, text.slice(0, 4000) || "No task description.");

@@ -1,3 +1,7 @@
+(function () {
+const pageRoot = document.getElementById("main");
+const scriptEpoch = document.currentScript?.dataset.pcNav;
+if (!pageRoot || (scriptEpoch && scriptEpoch !== pageRoot.dataset.pcNav)) return;
 if (!InterviewAPI.requireAuth("/progress")) throw new Error("auth");
 
 const esc = PCUI.esc;
@@ -96,22 +100,29 @@ function renderFinished(sessions) {
   root.querySelectorAll("tr[data-href]").forEach((tr) => {
     tr.addEventListener("click", (e) => {
       if (e.target.closest("a, button")) return;
-      location.href = tr.dataset.href;
+      window.PCNav ? PCNav.go(tr.dataset.href) : location.assign(tr.dataset.href);
     });
     tr.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && e.target === tr) location.href = tr.dataset.href;
+      if (e.key === "Enter" && e.target === tr) window.PCNav ? PCNav.go(tr.dataset.href) : location.assign(tr.dataset.href);
     });
   });
 }
 
-async function load() {
-  const data = await InterviewAPI.dashboard();
+function renderData(data) {
+  if (!pageRoot.isConnected) return;
   renderScores(data);
   renderFinished(data.sessions || []);
 }
 
+async function load() {
+  renderData(await InterviewAPI.readDashboard(renderData));
+}
+
 load().catch((e) => {
+  if (!pageRoot.isConnected) return;
   document.getElementById("stats").innerHTML = "";
   document.getElementById("skills").innerHTML = "";
   document.getElementById("finished").innerHTML = `<div class="pc-error" role="alert"><strong>Could not load progress</strong><div class="pc-error-safe">Your sessions are safe on the server.</div><button class="btn btn-ghost btn-sm" type="button" data-pc-reload>Retry</button><div class="muted" style="margin-top:8px">${esc(e.message)}</div></div>`;
 });
+
+})();

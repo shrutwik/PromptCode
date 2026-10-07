@@ -1,3 +1,7 @@
+(function () {
+const pageRoot = document.getElementById("main");
+const scriptEpoch = document.currentScript?.dataset.pcNav;
+if (!pageRoot || (scriptEpoch && scriptEpoch !== pageRoot.dataset.pcNav)) return;
 if (!InterviewAPI.requireAuth(location.pathname)) throw new Error("auth");
 const slug = location.pathname.split("/").filter(Boolean).pop();
 const esc = PCUI.esc;
@@ -10,14 +14,19 @@ async function start() {
 }
 
 async function load() {
+  const progress = InterviewAPI.listChallengesProgress({}).then(
+    (cards) => ({ cards }), (error) => ({ error })
+  );
   const c = await InterviewAPI.getChallenge(slug);
-  let card = null;
-  try {
-    const cards = await InterviewAPI.listChallengesProgress({});
-    card = (cards || []).find((item) => item.slug === slug) || null;
-  } catch (_) {
-    card = null;
-  }
+  if (!pageRoot.isConnected) return;
+  render(c, null, "Checking your sessions…");
+  const result = await progress;
+  if (!pageRoot.isConnected) return;
+  const card = (result.cards || []).find((item) => item.slug === slug) || null;
+  render(c, card, result.error ? "Could not check your sessions. Reload to retry." : "");
+}
+
+function render(c, card, pending) {
   const activeId = card && card.active_session_id;
   const startLabel = card && card.attempt_count ? "Start another attempt" : "Start session";
   const main = document.getElementById("main");
@@ -62,7 +71,7 @@ async function load() {
           </ul>
         </div>
         <div class="pc-panel-body">
-          ${activeId
+          ${pending ? `<button class="btn btn-primary btn-lg btn-block" disabled>${esc(pending)}</button>` : activeId
             ? `<a class="btn btn-primary btn-lg btn-block" href="/session/${esc(activeId)}">Resume session</a><button class="btn btn-ghost btn-block" id="restartBtn" type="button">Discard and restart</button>`
             : `<button class="btn btn-primary btn-lg btn-block" id="startBtn" type="button">${startLabel}</button>`}
           <p class="brief-note">${activeId ? "An open session is already saved for this challenge." : "Desktop recommended."}</p>
@@ -101,7 +110,10 @@ async function load() {
 }
 
 load().catch((e) => {
+  if (!pageRoot.isConnected) return;
   const main = document.getElementById("main");
   main.removeAttribute("aria-busy");
   main.innerHTML = `<a class="page-back" href="/challenges">← Challenges</a><div class="pc-error" role="alert"><strong>Could not load this challenge</strong><div class="pc-error-safe">${esc(e.message)}</div><button class="btn btn-ghost btn-sm" type="button" data-pc-reload>Retry</button></div>`;
 });
+
+})();

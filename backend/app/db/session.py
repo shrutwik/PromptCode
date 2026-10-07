@@ -3,6 +3,7 @@ import ssl
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
+from app.db.timing import TimedAsyncSession, install_query_timing
 
 settings = get_settings()
 
@@ -46,9 +47,11 @@ else:
         connect_args=_connect_args,
     )
 
+install_query_timing(engine)
+
 async_session_factory = async_sessionmaker(
     engine,
-    class_=AsyncSession,
+    class_=TimedAsyncSession,
     expire_on_commit=False,
 )
 
