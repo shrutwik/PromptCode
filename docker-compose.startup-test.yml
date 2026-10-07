@@ -1,0 +1,32 @@
+# Disposable startup rehearsal only; never include this file in production.
+services:
+  startup-broker:
+    image: ghcr.io/shrutwik/promptcode/backend:${IMAGE_TAG}
+    command: ["uvicorn", "app.execution_broker:app", "--host", "0.0.0.0", "--port", "8090"]
+    environment:
+      PROMPTCODE_EXECUTION_BROKER_MODE: "true"
+      PROMPTCODE_DEBUG: "true"
+      PROMPTCODE_SANDBOX_EXECUTOR_TOKEN: ${PROMPTCODE_SANDBOX_EXECUTOR_TOKEN}
+      PROMPTCODE_BROKER_NODE_IMAGE: promptcode-startup-node:latest
+      PROMPTCODE_BROKER_PYTHON_IMAGE: promptcode-startup-python:latest
+      PROMPTCODE_INTERVIEW_WORKSPACE_ROOT: /tmp/startup-execution
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      default:
+        aliases: [broker]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:8090/ready',headers={'Authorization':'Bearer '+os.environ['PROMPTCODE_SANDBOX_EXECUTOR_TOKEN']}); urllib.request.urlopen(r,timeout=10).read()"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+  startup-broker-tls:
+    image: caddy:2.10.2-alpine
+    environment:
+      BROKER_DOMAIN: startup-broker-tls
+    volumes:
+      - ./docker/Caddyfile.execution:/etc/caddy/Caddyfile:ro
+      - ${STARTUP_TLS_DIR}:/etc/broker-tls:ro
+    depends_on:
+      startup-broker:
+        condition: service_healthy

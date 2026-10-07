@@ -154,7 +154,8 @@ jobs:
           DOMAIN: api.example.com
           PROMPTCODE_DB_PASSWORD: ci-test-db-password
           PROMPTCODE_JWT_SECRET: ci-prod-jwt-secret-0123456789abcdef
-          PROMPTCODE_SANDBOX_EXECUTOR_TOKEN: ci-sandbox-secret-0123456789
+          PROMPTCODE_SANDBOX_EXECUTOR_TOKEN: ci-sandbox-secret-0123456789abcdef
+          PROMPTCODE_EXECUTION_BROKER_URL: https://broker.example.com
           PROMPTCODE_OPENAI_API_KEY: ci-openai-key
         run: |
           docker compose -f docker-compose.yml -f docker-compose.prod.yml config > /tmp/merged-prod-compose.yml

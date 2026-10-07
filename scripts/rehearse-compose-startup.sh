@@ -9,11 +9,13 @@ PROJECT_NAME="${COMPOSE_PROJECT_NAME:-promptcode-startup-${RANDOM}}"
 IMAGE_TAG="${IMAGE_TAG:-startup-itest-${RANDOM}}"
 BACKEND_IMAGE="ghcr.io/shrutwik/promptcode/backend:${IMAGE_TAG}"
 SANDBOX_WORKDIR="${PROMPTCODE_SANDBOX_HOST_WORKDIR:-/tmp/${PROJECT_NAME}_sandbox}"
+STARTUP_TLS_DIR="$(mktemp -d)"
 EXPECTED_CHALLENGE_COUNT="$(find "${REPO_DIR}/challenges" -mindepth 2 -maxdepth 2 -name challenge.json | wc -l | tr -d ' ')"
 
 cleanup() {
-  COMPOSE_PROJECT_NAME="${PROJECT_NAME}" IMAGE_TAG="${IMAGE_TAG}" docker compose -f "${REPO_DIR}/docker-compose.yml" -f "${REPO_DIR}/docker-compose.prod.yml" down -v --remove-orphans >/dev/null 2>&1 || true
+  compose down -v --remove-orphans >/dev/null 2>&1 || true
   rm -rf "${SANDBOX_WORKDIR}"
+  rm -rf "${STARTUP_TLS_DIR}"
 }
 trap cleanup EXIT
 
@@ -23,25 +25,35 @@ export DOMAIN="${DOMAIN:-api.example.com}"
 export PROMPTCODE_DB_PASSWORD="${PROMPTCODE_DB_PASSWORD:-integration-db-password}"
 export PROMPTCODE_DATABASE_SSL_REQUIRE="${PROMPTCODE_DATABASE_SSL_REQUIRE:-false}"
 export PROMPTCODE_JWT_SECRET="${PROMPTCODE_JWT_SECRET:-integration-jwt-secret-0123456789abcdef}"
-export PROMPTCODE_SANDBOX_EXECUTOR_TOKEN="${PROMPTCODE_SANDBOX_EXECUTOR_TOKEN:-integration-sandbox-secret}"
+export PROMPTCODE_SANDBOX_EXECUTOR_TOKEN="${PROMPTCODE_SANDBOX_EXECUTOR_TOKEN:-integration-sandbox-secret-0123456789}"
+export PROMPTCODE_EXECUTION_BROKER_URL="https://startup-broker-tls"
+export STARTUP_TLS_DIR
+export BROKER_CA_DIR="${STARTUP_TLS_DIR}"
+export PROMPTCODE_EXECUTION_BROKER_CA_FILE="/etc/promptcode/broker-ca/server.crt"
 export PROMPTCODE_OPENAI_API_KEY="${PROMPTCODE_OPENAI_API_KEY:-sk-live-integration-key}"
 export PROMPTCODE_METRICS_TOKEN="${PROMPTCODE_METRICS_TOKEN:-integration-metrics-token}"
 export PROMPTCODE_SANDBOX_HOST_WORKDIR="${SANDBOX_WORKDIR}"
 
 mkdir -p "${SANDBOX_WORKDIR}"
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+  -keyout "${STARTUP_TLS_DIR}/server.key" -out "${STARTUP_TLS_DIR}/server.crt" \
+  -subj '/CN=startup-broker-tls' -addext 'subjectAltName=DNS:startup-broker-tls' >/dev/null 2>&1
+chmod 644 "${STARTUP_TLS_DIR}/server.crt"
 
 docker build -f "${REPO_DIR}/docker/Dockerfile.backend" -t "${BACKEND_IMAGE}" "${REPO_DIR}"
 docker build -f "${REPO_DIR}/docker/Dockerfile.sandbox" -t promptcode-sandbox:latest "${REPO_DIR}"
+docker build -f "${REPO_DIR}/docker/Dockerfile.interview-node" -t promptcode-startup-node:latest "${REPO_DIR}"
+docker build -f "${REPO_DIR}/docker/Dockerfile.interview-python" -t promptcode-startup-python:latest "${REPO_DIR}"
 
 compose() {
-  docker compose -f "${REPO_DIR}/docker-compose.yml" -f "${REPO_DIR}/docker-compose.prod.yml" "$@"
+  docker compose -f "${REPO_DIR}/docker-compose.yml" -f "${REPO_DIR}/docker-compose.prod.yml" -f "${REPO_DIR}/docker-compose.startup-test.yml" "$@"
 }
 
 dump_startup_context() {
   echo "[startup] Current compose service status:" >&2
   compose ps >&2 || true
   echo "[startup] Recent backend-related logs:" >&2
-  compose logs --tail=100 backend sandbox-executor db >&2 || true
+  compose logs --tail=100 backend startup-broker startup-broker-tls db >&2 || true
 }
 
 wait_for_http_ready() {
@@ -91,7 +103,8 @@ wait_for_health() {
 }
 
 echo "[startup] Bringing up backend without workers..."
-compose up -d db sandbox sandbox-executor backend
+compose up -d db startup-broker startup-broker-tls backend
+wait_for_health startup-broker
 wait_for_http_ready "http://127.0.0.1:8000/ready" "backend /ready without workers"
 
 echo "[startup] Bringing up workers..."
