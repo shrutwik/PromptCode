@@ -1,0 +1,165 @@
+{
+  "session_create_ms": 5561.33,
+  "before": [
+    {
+      "attempt": 1,
+      "request": "session",
+      "status": 200,
+      "total_ms": 1414.33
+    },
+    {
+      "attempt": 1,
+      "request": "files",
+      "status": 200,
+      "total_ms": 756.99
+    },
+    {
+      "attempt": 1,
+      "request": "level",
+      "status": 200,
+      "total_ms": 788.98
+    },
+    {
+      "attempt": 1,
+      "request": "readme",
+      "status": 200,
+      "total_ms": 1183.85
+    },
+    {
+      "attempt": 2,
+      "request": "session",
+      "status": 200,
+      "total_ms": 1178.1
+    },
+    {
+      "attempt": 2,
+      "request": "files",
+      "status": 200,
+      "total_ms": 780.98
+    },
+    {
+      "attempt": 2,
+      "request": "level",
+      "status": 200,
+      "total_ms": 698.18
+    },
+    {
+      "attempt": 2,
+      "request": "readme",
+      "status": 200,
+      "total_ms": 947.64
+    },
+    {
+      "attempt": 3,
+      "request": "session",
+      "status": 200,
+      "total_ms": 1173.75
+    },
+    {
+      "attempt": 3,
+      "request": "files",
+      "status": 200,
+      "total_ms": 759.0
+    },
+    {
+      "attempt": 3,
+      "request": "level",
+      "status": 200,
+      "total_ms": 783.82
+    },
+    {
+      "attempt": 3,
+      "request": "readme",
+      "status": 200,
+      "total_ms": 874.89
+    }
+  ],
+  "after": [
+    {
+      "attempt": 1,
+      "request": "session",
+      "status": 200,
+      "total_ms": 273.81
+    },
+    {
+      "attempt": 1,
+      "request": "files",
+      "status": 200,
+      "total_ms": 156.81
+    },
+    {
+      "attempt": 1,
+      "request": "level",
+      "status": 200,
+      "total_ms": 138.8
+    },
+    {
+      "attempt": 1,
+      "request": "readme",
+      "status": 200,
+      "total_ms": 160.41
+    },
+    {
+      "attempt": 2,
+      "request": "session",
+      "status": 200,
+      "total_ms": 173.66
+    },
+    {
+      "attempt": 2,
+      "request": "files",
+      "status": 200,
+      "total_ms": 141.76
+    },
+    {
+      "attempt": 2,
+      "request": "level",
+      "status": 200,
+      "total_ms": 132.69
+    },
+    {
+      "attempt": 2,
+      "request": "readme",
+      "status": 200,
+      "total_ms": 156.72
+    },
+    {
+      "attempt": 3,
+      "request": "session",
+      "status": 200,
+      "total_ms": 164.22
+    },
+    {
+      "attempt": 3,
+      "request": "files",
+      "status": 200,
+      "total_ms": 132.38
+    },
+    {
+      "attempt": 3,
+      "request": "level",
+      "status": 200,
+      "total_ms": 132.91
+    },
+    {
+      "attempt": 3,
+      "request": "readme",
+      "status": 200,
+      "total_ms": 143.77
+    }
+  ],
+  "execution": {
+    "status": 200,
+    "total_ms": 9392.68,
+    "error_code": null,
+    "exit_code": 1,
+    "timed_out": false,
+    "duration_ms": 6825,
+    "counts": {
+      "passed": 3,
+      "failed": 1,
+      "skipped": 0,
+      "total": 4
+    }
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "phase": "after",
+  "samples": [
+    {
+      "ready_ms": 3091.600000023842,
+      "load_ms": 683.7999999523163,
+      "api": [
+        {
+          "path": "/api/interview/sessions/TEST",
+          "start_ms": 650.1000000238419,
+          "duration_ms": 2071.6999999284744
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files",
+          "start_ms": 650.1999999284744,
+          "duration_ms": 1736.5
+        },
+        {
+          "path": "/api/interview/sessions/TEST/level",
+          "start_ms": 650.3999999761581,
+          "duration_ms": 320.39999997615814
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files/README.md",
+          "start_ms": 2728,
+          "duration_ms": 351
+        }
+      ]
+    },
+    {
+      "ready_ms": 1554.2999999523163,
+      "load_ms": 385,
+      "api": [
+        {
+          "path": "/api/interview/sessions/TEST",
+          "start_ms": 356.2999999523163,
+          "duration_ms": 645.5
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files",
+          "start_ms": 356.39999997615814,
+          "duration_ms": 849.6999999284744
+        },
+        {
+          "path": "/api/interview/sessions/TEST/level",
+          "start_ms": 356.59999990463257,
+          "duration_ms": 324.3000000715256
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files/README.md",
+          "start_ms": 1210.5,
+          "duration_ms": 322.1999999284744
+        }
+      ]
+    },
+    {
+      "ready_ms": 2296.6999999284744,
+      "load_ms": 503.2999999523163,
+      "api": [
+        {
+          "path": "/api/interview/sessions/TEST",
+          "start_ms": 384.89999997615814,
+          "duration_ms": 605
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files",
+          "start_ms": 385.10000002384186,
+          "duration_ms": 269
+        },
+        {
+          "path": "/api/interview/sessions/TEST/level",
+          "start_ms": 385.1999999284744,
+          "duration_ms": 382.7000000476837
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files/README.md",
+          "start_ms": 991.6999999284744,
+          "duration_ms": 1287.9000000953674
+        }
+      ]
+    }
+  ]
+}

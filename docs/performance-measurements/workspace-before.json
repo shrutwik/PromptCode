@@ -1,0 +1,98 @@
+{
+  "phase": "before",
+  "samples": [
+    {
+      "ready_ms": 1644.5999999046326,
+      "load_ms": 803.3999999761581,
+      "api": [
+        {
+          "path": "/api/interview/sessions/TEST",
+          "start_ms": 772.5,
+          "duration_ms": 182.19999992847443
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files",
+          "start_ms": 956,
+          "duration_ms": 178.39999997615814
+        },
+        {
+          "path": "/api/interview/sessions/TEST/level",
+          "start_ms": 1135.1999999284744,
+          "duration_ms": 170.39999997615814
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files/README.md",
+          "start_ms": 1307.1999999284744,
+          "duration_ms": 160.80000007152557
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files/README.md",
+          "start_ms": 1469.0999999046326,
+          "duration_ms": 149.70000004768372
+        }
+      ]
+    },
+    {
+      "ready_ms": 1047.2000000476837,
+      "load_ms": 285.7000000476837,
+      "api": [
+        {
+          "path": "/api/interview/sessions/TEST",
+          "start_ms": 258.5,
+          "duration_ms": 169.20000004768372
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files",
+          "start_ms": 429,
+          "duration_ms": 153.5
+        },
+        {
+          "path": "/api/interview/sessions/TEST/level",
+          "start_ms": 583.1000000238419,
+          "duration_ms": 146
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files/README.md",
+          "start_ms": 730.1000000238419,
+          "duration_ms": 137.39999997615814
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files/README.md",
+          "start_ms": 868.7999999523163,
+          "duration_ms": 156.80000007152557
+        }
+      ]
+    },
+    {
+      "ready_ms": 993.6000000238419,
+      "load_ms": 285.6999999284744,
+      "api": [
+        {
+          "path": "/api/interview/sessions/TEST",
+          "start_ms": 257.7999999523163,
+          "duration_ms": 158.89999997615814
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files",
+          "start_ms": 417.6999999284744,
+          "duration_ms": 130.90000009536743
+        },
+        {
+          "path": "/api/interview/sessions/TEST/level",
+          "start_ms": 550.8999999761581,
+          "duration_ms": 129.89999997615814
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files/README.md",
+          "start_ms": 683.5,
+          "duration_ms": 148.5
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files/README.md",
+          "start_ms": 834,
+          "duration_ms": 138.19999992847443
+        }
+      ]
+    }
+  ]
+}

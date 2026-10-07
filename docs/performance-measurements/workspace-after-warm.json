@@ -1,0 +1,83 @@
+{
+  "phase": "after_warm",
+  "samples": [
+    {
+      "ready_ms": 1498.5999999046326,
+      "load_ms": 334.6999999284744,
+      "api": [
+        {
+          "path": "/api/interview/sessions/TEST",
+          "start_ms": 308.6999999284744,
+          "duration_ms": 612.1000000238419
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files",
+          "start_ms": 308.89999997615814,
+          "duration_ms": 275.2999999523163
+        },
+        {
+          "path": "/api/interview/sessions/TEST/level",
+          "start_ms": 308.89999997615814,
+          "duration_ms": 836.5
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files/README.md",
+          "start_ms": 1146.7999999523163,
+          "duration_ms": 328.2000000476837
+        }
+      ]
+    },
+    {
+      "ready_ms": 1677.1000000238419,
+      "load_ms": 241.79999995231628,
+      "api": [
+        {
+          "path": "/api/interview/sessions/TEST",
+          "start_ms": 214.89999997615814,
+          "duration_ms": 685.2000000476837
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files",
+          "start_ms": 215.10000002384186,
+          "duration_ms": 904.5
+        },
+        {
+          "path": "/api/interview/sessions/TEST/level",
+          "start_ms": 215.10000002384186,
+          "duration_ms": 1123.3999999761581
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files/README.md",
+          "start_ms": 1340.1000000238419,
+          "duration_ms": 316.5
+        }
+      ]
+    },
+    {
+      "ready_ms": 3747.5,
+      "load_ms": 465.60000002384186,
+      "api": [
+        {
+          "path": "/api/interview/sessions/TEST",
+          "start_ms": 439.2000000476837,
+          "duration_ms": 494.39999997615814
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files",
+          "start_ms": 439.2999999523163,
+          "duration_ms": 945.8000000715256
+        },
+        {
+          "path": "/api/interview/sessions/TEST/level",
+          "start_ms": 439.39999997615814,
+          "duration_ms": 732
+        },
+        {
+          "path": "/api/interview/sessions/TEST/files/README.md",
+          "start_ms": 1386.5,
+          "duration_ms": 2334.5
+        }
+      ]
+    }
+  ]
+}
