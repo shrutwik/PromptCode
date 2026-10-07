@@ -11,6 +11,14 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
+from app.core.config import Settings
+
+# Match a clean CI checkout; developer deployment credentials and budget caps
+# must not change unit-test behavior. Tests can explicitly select a fixture file.
+Settings.model_config["env_file"] = None
+os.environ.setdefault("PROMPTCODE_JWT_SECRET", "ci-test-secret")
+os.environ.setdefault("PROMPTCODE_DEBUG", "true")
+
 
 def _isolated_artifact_root() -> None:
     """Point the interview artifact root at a throwaway directory for the session.
@@ -29,4 +37,3 @@ def _isolated_artifact_root() -> None:
 
 
 _isolated_artifact_root()
-

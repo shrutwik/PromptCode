@@ -24,6 +24,7 @@ def test_persistent_concurrent_global_user_session_budgets(tmp_path,monkeypatch)
     # Enable it here so this test still covers all four persisted scope rows; the
     # global/user/session caps it asserts are unaffected either way.
     monkeypatch.setenv('PROMPTCODE_AI_TRIAL_ENABLED','true')
+    monkeypatch.setenv('PROMPTCODE_AI_TRIAL_COST_MICROS','5000000')
     async def run():
         engine=create_async_engine('sqlite+aiosqlite:///'+str(tmp_path/'budgets.db'))
         async with engine.begin() as conn: await conn.run_sync(AIBudget.__table__.create)

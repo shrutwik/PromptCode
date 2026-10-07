@@ -52,6 +52,7 @@ def test_trial_budget_survives_daily_reset(tmp_path, monkeypatch):
     # The lifetime/trial ceiling is opt-in now that the hardcoded $5 cap is gone.
     # Enable it here so this test still covers the trial scope it was written against.
     monkeypatch.setenv('PROMPTCODE_AI_TRIAL_ENABLED', 'true')
+    monkeypatch.setenv('PROMPTCODE_AI_TRIAL_COST_MICROS', '5000000')
     monkeypatch.setenv('PROMPTCODE_AI_TRIAL_REQUESTS', '1')
     monkeypatch.setattr(ai_budget.time, 'time', lambda: 86400)
     with ai_budget.billing_identity('user', 'one'):
