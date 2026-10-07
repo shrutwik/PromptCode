@@ -108,6 +108,10 @@ class _FakeStream:
     def __init__(self, data: bytes) -> None:
         self._data = bytearray(data)
 
+    def __iter__(self):
+        while self._data:
+            yield self.read(65536)
+
     def read(self, size: int = -1) -> bytes:
         if not self._data:
             return b""

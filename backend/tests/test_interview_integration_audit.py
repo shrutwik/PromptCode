@@ -280,7 +280,8 @@ def test_deepseek_question_hint_execution_submission_workflow(tmp_path, monkeypa
         assert payload['thinking'] == {'type': 'disabled'}
         assert sum(len(m['content']) for m in payload['messages']) <= 18000
         assert 'README.md' in payload['messages'][1]['content']
-        return httpx.Response(200, json={'model': 'deepseek-flash', 'choices': [{'message': {'content': 'Check what the failing assertion expects.'}}], 'usage': {'prompt_tokens': 3000, 'completion_tokens': 12}})
+        content = 'Check what the failing assertion expects.' if len(calls) == 1 else '{"allowed": true}'
+        return httpx.Response(200, json={'model': 'deepseek-flash', 'choices': [{'message': {'content': content}}], 'usage': {'prompt_tokens': 3000, 'completion_tokens': 12}})
     original = httpx.AsyncClient
     # Test-only local execution; production continues to require Docker.
     monkeypatch.setenv('PROMPTCODE_ALLOW_UNSAFE_LOCAL_RUNNER', '1')
@@ -306,7 +307,8 @@ def test_deepseek_question_hint_execution_submission_workflow(tmp_path, monkeypa
             hint = client.post(f'/api/interview/sessions/{sid}/ai/chat', headers=headers, json={'message': 'Why does this test fail?'})
             assert hint.status_code == 200, hint.text
             assert hint.json()['model'] == 'deepseek-flash'
-            assert len(calls) == 1
+            assert len(calls) == 2  # draft plus independent semantic review
+            assert hint.json()['reply'] == 'Check what the failing assertion expects.'
             # Editing remains an explicit candidate action.
             path = 'app/service.py'
             original_file = client.get(f'/api/interview/sessions/{sid}/files/{path}', headers=headers)
