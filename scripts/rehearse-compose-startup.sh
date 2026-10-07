@@ -30,7 +30,7 @@ export PROMPTCODE_INTERVIEW_INTERNAL_TOKEN="startup-internal-authentication-key-
 export PROMPTCODE_SANDBOX_EXECUTOR_TOKEN="${PROMPTCODE_SANDBOX_EXECUTOR_TOKEN:-integration-sandbox-secret-0123456789}"
 export PROMPTCODE_EXECUTION_BROKER_URL="https://startup-broker-tls"
 export STARTUP_TLS_DIR
-export BROKER_CA_DIR="${STARTUP_TLS_DIR}"
+export BROKER_CA_DIR="${STARTUP_TLS_DIR}/ca"
 export PROMPTCODE_EXECUTION_BROKER_CA_FILE="/etc/promptcode/broker-ca/server.crt"
 export PROMPTCODE_OPENAI_API_KEY="${PROMPTCODE_OPENAI_API_KEY:-sk-live-integration-key}"
 export DEEPSEEK_API_KEY="startup-rehearsal-provider-key"
@@ -44,6 +44,11 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
   -keyout "${STARTUP_TLS_DIR}/server.key" -out "${STARTUP_TLS_DIR}/server.crt" \
   -subj '/CN=startup-broker-tls' -addext 'subjectAltName=DNS:startup-broker-tls' >/dev/null 2>&1
 chmod 644 "${STARTUP_TLS_DIR}/server.crt"
+mkdir -p "${BROKER_CA_DIR}"
+cp "${STARTUP_TLS_DIR}/server.crt" "${BROKER_CA_DIR}/server.crt"
+# Non-root application containers need to traverse the public CA directory.
+# The private key stays outside the application mount and remains owner-only.
+chmod 755 "${STARTUP_TLS_DIR}" "${BROKER_CA_DIR}"
 
 docker build -f "${REPO_DIR}/docker/Dockerfile.backend" -t "${BACKEND_IMAGE}" "${REPO_DIR}"
 docker build -f "${REPO_DIR}/docker/Dockerfile.sandbox" -t promptcode-sandbox:latest "${REPO_DIR}"
