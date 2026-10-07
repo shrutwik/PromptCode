@@ -10,10 +10,16 @@ import pytest
 from fastapi import HTTPException
 
 from app.services.interview.ai_provider import (
-    AIRequest, AIResponse, SYSTEM_PROMPT, REVIEW_SYSTEM_PROMPT,
-    assemble_user_content, bounded_chat_history, review_coaching_reply,
-    screen_assistant_input, OFF_TOPIC_REPLIES,
+    OFF_TOPIC_REPLIES,
+    REVIEW_SYSTEM_PROMPT,
+    SYSTEM_PROMPT,
+    AIRequest,
+    AIResponse,
+    assemble_user_content,
+    bounded_chat_history,
     focused_coaching_request,
+    review_coaching_reply,
+    screen_assistant_input,
 )
 
 
@@ -137,9 +143,10 @@ def test_review_context_and_reply_limits_fail_closed_without_paid_call():
 
 
 def test_recent_history_query_is_session_isolated(tmp_path):
-    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-    from app.models.interview_session import InterviewAIMessage
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
     from app.api.routes.interview import _recent_ai_messages
+    from app.models.interview_session import InterviewAIMessage
     a, b = uuid.uuid4(), uuid.uuid4()
     async def run():
         engine = create_async_engine('sqlite+aiosqlite:///' + str(tmp_path/'history.db'))

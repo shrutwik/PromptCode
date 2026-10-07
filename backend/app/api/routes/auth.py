@@ -40,6 +40,8 @@ from app.schemas.user import (
     UserResponse,
     UserUpdate,
 )
+from app.services.interview.analytics import track_event
+from app.services.interview.beta_access import consume_invite_or_allowlist
 from app.services.password_reset import (
     FORGOT_PASSWORD_MESSAGE,
     PASSWORD_UPDATED_MESSAGE,
@@ -49,8 +51,6 @@ from app.services.password_reset import (
     password_reset_delivery_available,
     reset_password_with_token,
 )
-from app.services.interview.analytics import track_event
-from app.services.interview.beta_access import consume_invite_or_allowlist
 
 router = APIRouter()
 

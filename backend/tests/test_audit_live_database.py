@@ -1,11 +1,12 @@
 """Disposable local Postgres: outage, recovery, pool exhaustion; no application DB touched."""
 import asyncio
 import os
-import time
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -57,11 +58,13 @@ def test_live_database_outage_recovery_and_pool_exhaustion():
                 container.start();ready()
                 async with engine.connect() as conn: assert (await conn.execute(text('SELECT 1'))).scalar_one()==1
                 # Exercise the production-dialect upsert with independent connections.
-                from app.models.rate_limit_counter import RateLimitCounter
-                from app.core.ratelimit import enforce_rate_limit
-                from sqlalchemy.ext.asyncio import async_sessionmaker
-                from fastapi import HTTPException
                 from datetime import datetime, timezone
+
+                from fastapi import HTTPException
+                from sqlalchemy.ext.asyncio import async_sessionmaker
+
+                from app.core.ratelimit import enforce_rate_limit
+                from app.models.rate_limit_counter import RateLimitCounter
                 counters=create_async_engine(url,pool_size=10,max_overflow=0,connect_args={'ssl':False,'timeout':2,'command_timeout':2})
                 try:
                     async with counters.begin() as conn: await conn.run_sync(lambda sync: RateLimitCounter.__table__.create(sync,checkfirst=True))

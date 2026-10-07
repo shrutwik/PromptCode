@@ -79,7 +79,8 @@ def test_sanitize_strips_inline_answer_keys():
 
 
 def test_slow_workspace_creation_does_not_block_other_requests(tmp_path, monkeypatch):
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
+
     from app.api.routes import interview
     from app.core.config import get_settings
     monkeypatch.setenv("PROMPTCODE_INTERVIEW_WORKSPACE_ROOT", str(tmp_path / "workspaces"))
@@ -265,9 +266,11 @@ def test_defend_and_feedback_integration(tmp_path, monkeypatch):
 def test_deepseek_question_hint_execution_submission_workflow(tmp_path, monkeypatch):
     import json
     import os
+
     import httpx
-    from app.services.interview.ai_provider import ProductionAIProvider
+
     from app.api.routes import interview as route
+    from app.services.interview.ai_provider import ProductionAIProvider
     calls = []
     def respond(request):
         payload = json.loads(request.content)

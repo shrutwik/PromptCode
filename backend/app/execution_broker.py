@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import hmac
 import logging
-import os
 import re
 import tempfile
 import time
@@ -23,11 +22,15 @@ from pydantic import BaseModel, Field
 from app.core.capacity_queue import CapacityExceeded, CapacityQueue, CapacityTimeout
 from app.core.config import get_settings
 from app.core.logging import configure_logging
-from app.services.interview.execution_transfer import SourceBundle, MAX_REQUEST_BYTES
+from app.services.interview.execution_transfer import MAX_REQUEST_BYTES, SourceBundle
 from app.services.interview.registry import get_challenge, get_runner_config
-from app.services.interview.runner import IsolatedRunner, resolve_command_id, reap_expired_runners
+from app.services.interview.runner import (
+    IsolatedRunner,
+    reap_expired_runners,
+    resolve_command_id,
+)
+from app.services.interview.trusted_cases import VERSION, cases_for
 from app.services.interview.trusted_evaluator import _run_probe
-from app.services.interview.trusted_cases import cases_for, VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -91,8 +94,9 @@ class BrokerBoundary:
 
 def reap_broker_resources():
     """Only remove our expired containers and aged transfer directories."""
-    import docker
     import shutil
+
+    import docker
     reap_expired_runners()
     client = docker.from_env(timeout=5)
     try:
@@ -315,7 +319,8 @@ async def probes(payload: ProbeRequest):
 # Legacy candidates call a short-lived local relay. The app worker performs the
 # provider call, retaining both provider credentials and shared billing checks.
 import threading
-from app.services.sandbox.relay import SandboxLLMRelay, RelayError
+
+from app.services.sandbox.relay import RelayError, SandboxLLMRelay
 
 
 class LegacyRequest(BaseModel):
@@ -399,7 +404,7 @@ def _legacy_job(job_id: uuid.UUID):
 
 @app.post('/v1/legacy/jobs')
 async def start_legacy(payload: LegacyRequest):
-    from app.services.sandbox.runner import _run_in_sandbox_local, _is_safe_entrypoint
+    from app.services.sandbox.runner import _is_safe_entrypoint, _run_in_sandbox_local
     if not _is_safe_entrypoint(payload.entrypoint):
         raise HTTPException(400, 'Invalid entrypoint')
     settings = _settings()

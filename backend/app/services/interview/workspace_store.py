@@ -230,7 +230,10 @@ def verified_job_source(job, *, require_ownership: bool = True):
     submission by digest only, so they pass ``False`` and keep that contract rather
     than gaining a new 409.
     """
-    from app.services.interview.object_store import durable_submission_required, submission_prefix
+    from app.services.interview.object_store import (
+        durable_submission_required,
+        submission_prefix,
+    )
 
     session_id = str(job.session_id)
     digest = str(job.source_digest)

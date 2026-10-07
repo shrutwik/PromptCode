@@ -126,7 +126,7 @@ def _run_in_sandbox_local(
     run_id: str | None = None, input_overrides: dict[str, Any] | None = None,
     relay_factory=None,
 ) -> SandboxResult:
-    from app.services.runner_capacity import execution_slot, RunnerBusy
+    from app.services.runner_capacity import RunnerBusy, execution_slot
     try:
         with execution_slot():
             return _run_in_sandbox_with_slot(code, entrypoint, challenge_config, run_id=run_id, input_overrides=input_overrides, relay_factory=relay_factory)
@@ -254,7 +254,7 @@ def _run_in_sandbox_with_slot(
                 telemetry=[],
                 error="Sandbox image not found. Contact an administrator.",
             )
-        except Exception as exc:
+        except Exception:
             logger.exception("Unexpected sandbox error")
             return SandboxResult(
                 success=False,

@@ -10,8 +10,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from app.services.interview.registry import get_challenge, interviewer_file_roles
-from app.services.interview.workspace import compute_diff_stats, list_files
+from app.services.interview.registry import interviewer_file_roles
+from app.services.interview.workspace import compute_diff_stats
 
 
 def analyze_prompt_quality(prompt: str) -> dict[str, Any]:

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from app.services.interview.execution_feedback import advisory_scoring
-
 import re
 from typing import Any
 
+from app.services.interview.execution_feedback import advisory_scoring
 from app.services.interview.registry import challenge_dir, interviewer_file_roles
 from app.services.interview.session_analysis import (
     analyze_prompt_quality,
@@ -298,7 +297,7 @@ def apply_communication_score(rubric: dict, texts: list[str]) -> tuple[dict, flo
         for key, value in (rubric or {}).items()
     }
     updated["F_communication"] = {"score": score, "max": 10, "evidence": evidence}
-    total = round(
+    _total = round(
         sum(
             float(value["score"])
             for value in updated.values()

@@ -6,15 +6,19 @@ import uuid
 from typing import Any
 
 import httpx
-from app.core.execution_transport import broker_tls_context, broker_json
 
+from app.core.execution_transport import broker_json, broker_tls_context
 from app.services.sandbox.relay import RelayError, SandboxLLMRelay
 
 
 def run_legacy_broker(code: str, entrypoint: str, challenge_config: dict[str, Any], *,
                       settings, run_id: str | None = None,
                       input_overrides: dict[str, Any] | None = None):
-    from app.services.sandbox.runner import SandboxResult, _build_sandbox_llm_budget, _is_safe_entrypoint
+    from app.services.sandbox.runner import (
+        SandboxResult,
+        _build_sandbox_llm_budget,
+        _is_safe_entrypoint,
+    )
     telemetry = []
 
     def failed(message):

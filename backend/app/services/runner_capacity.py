@@ -1,7 +1,8 @@
 """Host-wide execution slots. All workers must share this private lock directory."""
-from contextlib import contextmanager
 import fcntl
+from contextlib import contextmanager
 from pathlib import Path
+
 from app.core.config import get_settings
 
 

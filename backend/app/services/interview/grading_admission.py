@@ -1,12 +1,14 @@
 """Bound pending grading work before freezing more submitted source."""
 from __future__ import annotations
+
 from fastapi import HTTPException
 from sqlalchemy import func, select, text
+
 from app.core.config import get_settings
-from app.models.user import User
-from app.models.interview_session import InterviewSession
-from app.models.interview_grading import InterviewGradingJob
 from app.models.evaluation_job import EvaluationJob
+from app.models.interview_grading import InterviewGradingJob
+from app.models.interview_session import InterviewSession
+from app.models.user import User
 
 MAX_PENDING_GRADING_PER_USER = 3
 

@@ -24,10 +24,6 @@ from pathlib import Path
 import pytest
 from sqlalchemy import select, update
 
-from app.models.interview_grading import InterviewGradingJob
-from app.models.interview_session import InterviewSession
-from app.services.interview import workspace_store
-
 # The stub doubles and fixture live in the workflow integration file; pytest puts
 # this file's directory on sys.path, so the sibling module is importable as-is.
 from test_managed_workflow_integration import (  # noqa: I001
@@ -35,9 +31,14 @@ from test_managed_workflow_integration import (  # noqa: I001
     _run_grading_worker,
     _signup,
     _start_session,
-    managed,  # noqa: F401 - re-exported fixture
+)
+from test_managed_workflow_integration import (
+    managed as managed,
 )
 
+from app.models.interview_grading import InterviewGradingJob
+from app.models.interview_session import InterviewSession
+from app.services.interview import workspace_store
 
 # --- helpers ----------------------------------------------------------------- #
 

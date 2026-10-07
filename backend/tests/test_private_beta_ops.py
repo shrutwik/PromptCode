@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import uuid
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 

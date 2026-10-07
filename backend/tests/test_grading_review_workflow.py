@@ -1,23 +1,31 @@
 import asyncio
-import uuid
 from types import SimpleNamespace
+
 import pytest
 from fastapi import FastAPI
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
-from app.db.base import Base
-import app.models
-from app.models.user import User
-from app.models.interview_session import InterviewSession, InterviewEvaluation, InterviewSessionEvent
-from app.models.interview_grading import InterviewGradingJob, InterviewGradeReview
-from app.services.interview.grading import pending_assessment, DIMENSIONS, HumanReview
-from app.services.interview.grading_review import review_context, append_review
-from app.services.interview.trusted_evaluator import sign_result, VERSION
-from app.services.interview.trusted_cases import cases_for, inventory_digest, MANUAL_REQUIREMENTS
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
 from app.api.routes.interview_grading import router
 from app.core.deps import get_current_user
+from app.db.base import Base
 from app.db.session import get_db
+from app.models.interview_grading import InterviewGradeReview, InterviewGradingJob
+from app.models.interview_session import (
+    InterviewEvaluation,
+    InterviewSession,
+    InterviewSessionEvent,
+)
+from app.models.user import User
+from app.services.interview.grading import DIMENSIONS, HumanReview, pending_assessment
+from app.services.interview.grading_review import append_review, review_context
+from app.services.interview.trusted_cases import (
+    MANUAL_REQUIREMENTS,
+    cases_for,
+    inventory_digest,
+)
+from app.services.interview.trusted_evaluator import VERSION, sign_result
 
 KEY='test-grading-signing-key-at-least-32-bytes'
 
@@ -108,9 +116,9 @@ def test_http_auth_appeal_ownership_independence_and_single_decision(tmp_path,mo
 
 
 def test_publication_gate_defense_revision_and_appeal_invalidate_outcome(tmp_path,monkeypatch):
-    from app.services.interview.grading_review import candidate_review_status
-    from app.services.interview.grading import revise_defense
     from app.models.interview_grading import InterviewGradeAppeal
+    from app.services.interview.grading import revise_defense
+    from app.services.interview.grading_review import candidate_review_status
     async def run():
         engine,factory,users,session,job=await setup(tmp_path,monkeypatch)
         async with factory() as db:
@@ -173,6 +181,7 @@ def test_manual_coverage_gaps_must_be_reviewed_and_cannot_be_overridden(tmp_path
 
 def test_snapshot_tampering_prevents_staff_review_and_candidate_publication(tmp_path,monkeypatch):
     from pathlib import Path
+
     from app.services.interview.grading_review import candidate_review_status
     async def run():
         engine,factory,users,session,job=await setup(tmp_path,monkeypatch)
@@ -261,7 +270,8 @@ def test_batch_projection_matches_single_session_projection(tmp_path,monkeypatch
     """The dashboard batch must answer the same question as the per-session call."""
     from app.models.interview_grading import InterviewGradeAppeal
     from app.services.interview.grading_review import (
-        candidate_review_status, published_reviews_for_sessions,
+        candidate_review_status,
+        published_reviews_for_sessions,
     )
     async def run():
         engine,factory,users,session,job=await setup(tmp_path,monkeypatch)

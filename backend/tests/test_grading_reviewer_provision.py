@@ -4,8 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.base import Base
-from app.models.user import User
 from app.models.beta_ops import ProductAnalyticsEvent
+from app.models.user import User
 from scripts import manage_grading_reviewer as provisioner
 
 

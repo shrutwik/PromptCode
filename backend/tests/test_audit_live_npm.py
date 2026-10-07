@@ -1,7 +1,9 @@
 """Local offline npm attacks; disposable bounded mounts and test fixtures only."""
 import json
 import os
+
 import pytest
+
 from app.services.interview.runner import restore_node_manifests
 
 pytestmark=pytest.mark.skipif(os.getenv('PROMPTCODE_AUDIT_DOCKER')!='1',reason='Live local Docker audit opt-in required')

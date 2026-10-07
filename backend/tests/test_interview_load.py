@@ -4,6 +4,7 @@ import time
 from argparse import Namespace
 
 import pytest
+
 from benchmarks.interview_load import Measurements, load_accounts, parse_args, user_flow
 
 

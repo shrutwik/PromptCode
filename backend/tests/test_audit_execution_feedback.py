@@ -1,5 +1,6 @@
 import pytest
-from app.services.interview.execution_feedback import complete_report, advisory_scoring
+
+from app.services.interview.execution_feedback import advisory_scoring, complete_report
 
 
 def report(ids=('tests/test_a.py::test_a',)):

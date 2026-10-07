@@ -7,7 +7,6 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-
 def limit_from_env(name: str, default: int) -> int:
     """Read a positive integer limit from the environment, otherwise use default."""
     raw = os.getenv(name, "").strip()
@@ -25,6 +24,7 @@ async def enforce_rate_limit(*, db: AsyncSession, key: str, limit: int,
     """Atomic fixed-window counter; no advisory lock or event-table scan."""
     import hashlib
     import hmac
+
     from app.core.config import get_settings
     from app.models.rate_limit_counter import RateLimitCounter
     if limit < 1 or window_seconds < 1:

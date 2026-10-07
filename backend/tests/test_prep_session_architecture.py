@@ -5,6 +5,9 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
 import app.models  # noqa: F401
 from app.db.base import Base
 from app.db.session import get_db
@@ -16,8 +19,6 @@ from app.services.interview.rubric import (
     previous_attempt_for,
     score_session_v2,
 )
-from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 _PASSWORD = "Str0ng!P@ssw0rd"
 _ROOT = Path(__file__).resolve().parents[2]
@@ -39,9 +40,9 @@ def test_system_prompt_withholds_the_answer():
 
 def test_input_guardrail_blocks_manipulation_and_off_topic_before_the_model():
     from app.services.interview.ai_provider import (
-        AIRequest,
-        REFUSAL_MANIPULATION,
         OFF_TOPIC_REPLIES,
+        REFUSAL_MANIPULATION,
+        AIRequest,
         apply_assistant_guardrails,
         assemble_user_content,
         screen_assistant_input,

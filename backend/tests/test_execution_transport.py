@@ -4,7 +4,11 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from app.core.execution_transport import broker_json, broker_json_async, broker_tls_context
+from app.core.execution_transport import (
+    broker_json,
+    broker_json_async,
+    broker_tls_context,
+)
 
 
 def test_sync_broker_response_stops_reading_and_closes_on_limit():

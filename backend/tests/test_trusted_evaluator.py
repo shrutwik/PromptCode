@@ -1,13 +1,20 @@
 from __future__ import annotations
+
 import copy
 import json
 import os
-from pathlib import Path
 import uuid
+
 import pytest
+
 from app.services.interview import trusted_evaluator as evaluator
-from app.services.interview.trusted_cases import cases_for, inventory_digest, VERSION, MANUAL_REQUIREMENTS
 from app.services.interview.registry import list_challenges
+from app.services.interview.trusted_cases import (
+    MANUAL_REQUIREMENTS,
+    VERSION,
+    cases_for,
+    inventory_digest,
+)
 
 KEY='test-grading-signing-key-32-bytes-minimum'
 SID=str(uuid.uuid4());JID=str(uuid.uuid4());DIGEST='a'*64
@@ -158,6 +165,7 @@ def test_live_independent_inventory_rejects_plausible_wrong_fix(slug,tmp_path):
 @pytest.mark.parametrize('slug',['order-hold-reason','invoice-status-transition'])
 def test_live_immutable_snapshot_end_to_end_signed_result(slug,tmp_path,monkeypatch):
     from trusted_reference_fixtures import reference_snapshot
+
     from app.services.interview import snapshot
     sid=str(uuid.uuid4());jid=str(uuid.uuid4())
     workspace=reference_snapshot(slug,tmp_path/sid)

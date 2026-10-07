@@ -1,14 +1,20 @@
 import asyncio
 import json
-from pathlib import Path
+
 import httpx
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import create_async_engine,async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
 from app.models.ai_budget import AIBudget
 from app.services.interview.ai_budget import reserve_ai_budget
-from app.services.interview.ai_provider import ProductionAIProvider,AIProviderError,AIRequest,assemble_user_content
+from app.services.interview.ai_provider import (
+    AIProviderError,
+    AIRequest,
+    ProductionAIProvider,
+    assemble_user_content,
+)
 
 
 def test_persistent_concurrent_global_user_session_budgets(tmp_path,monkeypatch):

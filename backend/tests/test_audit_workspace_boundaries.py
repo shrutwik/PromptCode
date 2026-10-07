@@ -1,5 +1,4 @@
 """Regression checks for candidate filesystem boundaries; no product fixtures."""
-from pathlib import Path
 
 import pytest
 

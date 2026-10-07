@@ -1,16 +1,17 @@
 import asyncio
+import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
-import uuid
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
 from app.db.base import Base
-from app.models.user import User
-from app.models.interview_session import InterviewSession
 from app.models.interview_grading import InterviewGradingJob
+from app.models.interview_session import InterviewSession
+from app.models.user import User
 from app.services.interview.grading_admission import require_grading_capacity
 
 
@@ -82,7 +83,7 @@ def test_global_cap_counts_legacy_retry_jobs(monkeypatch):
 
 def test_submit_denied_before_snapshot_and_enqueue(monkeypatch):
     from app.api.routes import interview
-    from app.services.interview import grading_admission,snapshot
+    from app.services.interview import grading_admission, snapshot
     from app.workers import interview_grading
     owner=SimpleNamespace(id=uuid.uuid4())
     session=SimpleNamespace(id=uuid.uuid4(),user_id=owner.id,status='active',expires_at=None,challenge_slug='order-hold-reason')
@@ -100,7 +101,7 @@ def test_submit_denied_before_snapshot_and_enqueue(monkeypatch):
 
 def test_staff_retry_denied_before_requeue_and_integrity_work(monkeypatch):
     from app.api.routes import interview_grading as route
-    from app.services.interview import grading_admission,snapshot
+    from app.services.interview import grading_admission, snapshot
     staff=SimpleNamespace(id=uuid.uuid4(),role='interviewer')
     session=SimpleNamespace(id=uuid.uuid4(),user_id=uuid.uuid4(),challenge_slug='order-hold-reason',challenge_version='1')
     job=SimpleNamespace(status='failed')
@@ -118,7 +119,7 @@ def test_staff_retry_denied_before_requeue_and_integrity_work(monkeypatch):
 
 def test_staff_retry_rejects_registry_version_drift(monkeypatch):
     from app.api.routes import interview_grading as route
-    from app.services.interview import grading_admission,snapshot
+    from app.services.interview import grading_admission, snapshot
     staff=SimpleNamespace(id=uuid.uuid4(),role='interviewer')
     session=SimpleNamespace(id=uuid.uuid4(),user_id=uuid.uuid4(),challenge_slug='order-hold-reason',challenge_version='old')
     job=SimpleNamespace(status='failed',challenge_slug=session.challenge_slug,challenge_version='old')

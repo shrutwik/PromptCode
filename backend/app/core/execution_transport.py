@@ -1,6 +1,6 @@
 """TLS verification for the private execution management connection."""
-import ssl
 import json
+import ssl
 
 
 def broker_tls_context(settings):

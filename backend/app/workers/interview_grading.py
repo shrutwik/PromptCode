@@ -3,11 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import secrets
-import shutil
-import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from types import SimpleNamespace
 
 import httpx

@@ -14,8 +14,9 @@ from app.services.interview.runner import IsolatedRunner
 
 
 def test_api_delegates_only_session_and_command(monkeypatch, tmp_path):
-    from app.core import config
     import json
+
+    from app.core import config
     sid = uuid.uuid4()
     monkeypatch.setattr(config, 'get_settings', lambda: SimpleNamespace(sandbox_executor_url='http://executor:8090', sandbox_executor_token='internal-token'))
     def respond(request):

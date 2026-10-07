@@ -1,24 +1,24 @@
 """Disposable PostgreSQL verifies real grading migrations, leases and row locking."""
 import asyncio
-from datetime import datetime, timedelta, timezone
 import os
-from pathlib import Path
 import socket
 import subprocess
 import sys
 import time
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from test_grading_snapshots_jobs import signed_result
 
 from app.models.interview_grading import InterviewGradingJob
-from app.models.interview_session import InterviewSession, InterviewEvaluation
+from app.models.interview_session import InterviewEvaluation, InterviewSession
 from app.models.user import User
 from app.services.interview.grading import pending_assessment, revise_defense
 from app.workers import interview_grading as jobs
-from test_grading_snapshots_jobs import signed_result
 
 pytestmark = pytest.mark.skipif(os.getenv("PROMPTCODE_AUDIT_DOCKER") != "1",
                                reason="Disposable live PostgreSQL opt-in required")
@@ -165,6 +165,7 @@ def test_live_postgres_finish_waits_for_defense_lock_and_preserves_answer(migrat
 def test_live_postgres_concurrent_grading_admission_has_exact_three_slots(migrated_postgres):
     async def exercise():
         from fastapi import HTTPException
+
         from app.services.interview.grading_admission import require_grading_capacity
         engine = create_async_engine(migrated_postgres, pool_size=8, max_overflow=0,
                                      connect_args={"ssl": False, "command_timeout": 10})

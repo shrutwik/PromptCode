@@ -5,8 +5,8 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
+from app.services.interview.grading import DIMENSIONS, _digest, pending_assessment
 from scripts import export_grading_calibration as exporter
-from app.services.interview.grading import DIMENSIONS, pending_assessment, _digest
 
 
 class Result:

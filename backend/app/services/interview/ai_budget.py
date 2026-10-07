@@ -1,7 +1,9 @@
 """Atomic conservative reservations; failures/retries never refund possibly billed calls."""
 import os
 import time
+
 from fastapi import HTTPException
+
 from app.models.ai_budget import AIBudget
 
 
@@ -49,8 +51,10 @@ async def reserve_ai_budget(db, user_id, session_id, input_bytes, output_tokens=
     if _trial_enabled():
         scopes.insert(0, ('trial:all', 'TRIAL', 1000000, 1000000000, 5000000))
     dialect=db.get_bind().dialect.name
-    if dialect=='postgresql': from sqlalchemy.dialects.postgresql import insert
-    elif dialect=='sqlite': from sqlalchemy.dialects.sqlite import insert
+    if dialect=='postgresql':
+        from sqlalchemy.dialects.postgresql import insert
+    elif dialect=='sqlite':
+        from sqlalchemy.dialects.sqlite import insert
     else: raise HTTPException(503,'Unsupported AI budget database')
     try:
         for key,scope,requests_cap,tokens_cap,cost_cap in scopes:
@@ -98,8 +102,9 @@ def reserve_worker_budget(messages, output_tokens, *, identity=None):
     input_bytes = len(json.dumps(messages).encode("utf-8"))
 
     async def reserve():
-        from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
         from sqlalchemy.pool import NullPool
+
         from app.core.config import get_settings
         from app.db.session import _connect_args
         # A fresh pool avoids moving asyncpg connections across thread event loops.

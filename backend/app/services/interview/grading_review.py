@@ -1,18 +1,30 @@
 """Authenticated review service. External evidence is verified, never accepted by HTTP."""
 from __future__ import annotations
+
 import asyncio
 import copy
 import uuid
-from pathlib import Path
+
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import get_settings
-from app.models.interview_grading import InterviewGradingJob, InterviewGradeReview
-from app.models.interview_session import InterviewEvaluation, InterviewSession, InterviewSessionEvent, InterviewAIMessage
+from app.models.interview_grading import InterviewGradeReview, InterviewGradingJob
+from app.models.interview_session import (
+    InterviewAIMessage,
+    InterviewEvaluation,
+    InterviewSession,
+    InterviewSessionEvent,
+)
 from app.models.user import User
-from app.services.interview.grading import DimensionReview, HumanReview, _digest, score_reviewed_assessment
+from app.services.interview.grading import (
+    DimensionReview,
+    HumanReview,
+    _digest,
+    score_reviewed_assessment,
+)
 
 
 def require_reviewer(user: User) -> None:
@@ -179,8 +191,8 @@ async def published_reviews_for_sessions(db: AsyncSession, session_ids: list[uui
     question in a constant number of queries. A session is omitted from the result
     when it has no published review, matching the single-session contract.
     """
-    from app.services.interview.grading_calibration import publication_allowed
     from app.models.interview_grading import InterviewGradeAppeal
+    from app.services.interview.grading_calibration import publication_allowed
     if not publication_allowed() or not session_ids:
         return {}
     reviews = (await db.execute(
@@ -213,8 +225,8 @@ async def published_reviews_for_sessions(db: AsyncSession, session_ids: list[uui
 
 async def candidate_review_status(db: AsyncSession, session_id: uuid.UUID) -> dict | None:
     """Internal candidate projection; no raw evaluator/source/guides are returned."""
-    from app.services.interview.grading_calibration import publication_allowed
     from app.models.interview_grading import InterviewGradeAppeal
+    from app.services.interview.grading_calibration import publication_allowed
     if not publication_allowed():
         return None
     try:

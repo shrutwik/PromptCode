@@ -3,23 +3,23 @@ from __future__ import annotations
 import asyncio
 import hmac
 import logging
-from contextlib import asynccontextmanager, suppress
 import tempfile
 import uuid
-from pathlib import Path
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timezone
+from pathlib import Path
 from threading import Lock
 from typing import Any, Literal
 
 import docker
 from docker.errors import DockerException, ImageNotFound
-from fastapi import FastAPI, Header, HTTPException, Depends
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.db.session import get_db
-from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.sandbox.runner import _run_in_sandbox_local, _sandbox_temp_root
 
 
@@ -294,13 +294,13 @@ async def grade_interview(payload: InterviewGradeRequest,
         raise HTTPException(401, "Invalid sandbox executor token")
     from app.models.interview_grading import InterviewGradingJob
     from app.services.interview.snapshot import verify_snapshot
-    from app.services.interview.workspace import workspace_root
     from app.services.interview.trusted_evaluator import evaluate_snapshot
+    from app.services.interview.workspace import workspace_root
     job = await db.get(InterviewGradingJob, payload.job_id)
     if job is None:
         raise HTTPException(404, "Grading job not found")
-    from app.services.interview.registry import get_challenge
     from app.services.interview.calibration import challenge_version_for
+    from app.services.interview.registry import get_challenge
     if (get_challenge(job.challenge_slug) is None
             or job.challenge_version != challenge_version_for(job.challenge_slug)):
         raise HTTPException(409, "Challenge evaluation version changed; review requires a new attempt")
@@ -338,7 +338,6 @@ class InterviewRunRequest(BaseModel):
 
 
 from app.db.session import get_db
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @app.post("/v1/interview/run")
@@ -351,10 +350,10 @@ async def run_interview(payload: InterviewRunRequest,
     if not hmac.compare_digest(authorization or "", "Bearer " + expected):
         raise HTTPException(401, "Invalid sandbox executor token.")
     from app.models.interview_session import InterviewSession
-    from app.services.interview.registry import get_challenge, get_runner_config
-    from app.services.interview.workspace import workspace_root
     from app.services.interview.lifecycle import require_mutable
+    from app.services.interview.registry import get_challenge, get_runner_config
     from app.services.interview.runner import IsolatedRunner, resolve_command_id
+    from app.services.interview.workspace import workspace_root
     session = await db.get(InterviewSession, payload.session_id)
     if session is None:
         raise HTTPException(404, "Session not found")

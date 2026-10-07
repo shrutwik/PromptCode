@@ -308,6 +308,7 @@ class SandboxLLMRelay:
             raise RelayError(HTTPStatus.BAD_GATEWAY, "Sandbox relay is missing an upstream API key.")
 
         from fastapi import HTTPException
+
         from app.services.interview.ai_budget import reserve_worker_budget
         try:
             reserve_worker_budget(payload["messages"], payload["max_tokens"], identity=self._billing_identity)

@@ -4,6 +4,7 @@ Only the isolated executor calls evaluate_snapshot. A completed result proves th
 listed behavioral checks, not that all requirements or human rubric dimensions pass.
 """
 from __future__ import annotations
+
 import hashlib
 import hmac
 import json
@@ -11,7 +12,8 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any
-from .trusted_cases import VERSION, MANUAL_REQUIREMENTS, cases_for, inventory_digest
+
+from .trusted_cases import MANUAL_REQUIREMENTS, VERSION, cases_for, inventory_digest
 
 MAX_OUTPUT_BYTES = 65536
 PROBE_TIMEOUT_SECONDS = 12
@@ -202,12 +204,14 @@ def evaluate_snapshot(snapshot_path: str|Path, *, session_id: str, job_id: str,
     remote = None
     if getattr(settings, "execution_broker_url", ""):
         import httpx
+
         from .execution_transfer import bundle_source
         bundle = bundle_source(path)
         if bundle.digest != source_digest:
             raise ValueError("Submitted source integrity check failed")
-        from app.core.execution_transport import broker_tls_context, broker_json
         import random
+
+        from app.core.execution_transport import broker_json, broker_tls_context
         retry_deadline = time.monotonic() + min(30, settings.grading_job_timeout_seconds / 2)
         with httpx.Client(timeout=settings.grading_job_timeout_seconds, trust_env=False, verify=broker_tls_context(settings)) as client:
             while True:

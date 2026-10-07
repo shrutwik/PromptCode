@@ -25,15 +25,27 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api.routes import auth, challenges, chat, interview, leaderboard, submissions, users, interview_grading
-from app.core.config import get_settings
+from app.api.routes import (
+    auth,
+    challenges,
+    chat,
+    interview,
+    interview_grading,
+    leaderboard,
+    submissions,
+    users,
+)
 from app.core.body_limit import BodyLimitMiddleware
-from app.core.startup_security import invalid_deployment_token, validate_production_startup
+from app.core.config import get_settings
 from app.core.logging import configure_logging, reset_request_id, set_request_id
 from app.core.metrics import (
     get_metrics_registry,
     http_request_duration_seconds,
     http_requests_total,
+)
+from app.core.startup_security import (
+    invalid_deployment_token,
+    validate_production_startup,
 )
 from app.db.session import engine
 
@@ -218,7 +230,7 @@ async def _sandbox_executor_ready(settings) -> bool:
         return True
 
     try:
-        from app.core.execution_transport import broker_tls_context, broker_json_async
+        from app.core.execution_transport import broker_json_async, broker_tls_context
         async with httpx.AsyncClient(timeout=5.0, trust_env=False,
                                      verify=broker_tls_context(settings) if broker_url else True) as client:
             headers = {"Authorization": f"Bearer {settings.sandbox_executor_token}"} if broker_url else {}
@@ -375,8 +387,9 @@ def create_app() -> FastAPI:
             supplied, f"Bearer {token}".encode("utf-8")
         ):
             return PlainTextResponse("Unauthorized", status_code=401)
-        from app.core.metrics import operational_metrics
         from sqlalchemy.exc import SQLAlchemyError
+
+        from app.core.metrics import operational_metrics
         try:
             operational = await operational_metrics(engine)
         except SQLAlchemyError:

@@ -1,18 +1,30 @@
 """Staff evidence review and owner-scoped practice rating appeals."""
 from __future__ import annotations
+
 import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.deps import get_current_user
 from app.db.session import get_db
-from app.models.user import User
+from app.models.interview_grading import (
+    InterviewAppealDecision,
+    InterviewGradeAppeal,
+    InterviewGradeReview,
+)
 from app.models.interview_session import InterviewSession
-from app.models.interview_grading import InterviewGradeReview, InterviewGradeAppeal, InterviewAppealDecision
-from app.services.interview.grading import DimensionReview, HumanReview, RUBRIC_VERSION
-from app.services.interview.grading_review import append_review, candidate_review_status, require_reviewer, reviewer_evidence
+from app.models.user import User
+from app.services.interview.grading import RUBRIC_VERSION, DimensionReview, HumanReview
+from app.services.interview.grading_review import (
+    append_review,
+    candidate_review_status,
+    require_reviewer,
+    reviewer_evidence,
+)
 
 router = APIRouter(prefix="/interview/grading", tags=["interview grading"])
 
@@ -122,7 +134,6 @@ async def feedback(session_id: uuid.UUID, user: User = Depends(get_current_user)
     from app.core.config import get_settings
     from app.services.interview.grading_feedback import generate_grading_feedback
     from app.services.interview.grading_review import review_context
-    from app.models.interview_session import InterviewEvaluation
     if not get_settings().grading_feedback_enabled:
         raise HTTPException(409, "AI review feedback is disabled")
     evidence = await reviewer_evidence(db, session_id, user)
@@ -153,7 +164,7 @@ async def feedback(session_id: uuid.UUID, user: User = Depends(get_current_user)
 async def retry_grading(session_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict:
     """Operator retry of exhausted infrastructure work; never rerun a completed grade."""
     from datetime import datetime, timezone
-    from pathlib import Path
+
     from app.models.interview_grading import InterviewGradingJob
     from app.models.interview_session import InterviewEvaluation, InterviewSessionEvent
     from app.services.interview.snapshot import verify_snapshot

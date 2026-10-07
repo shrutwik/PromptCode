@@ -5,14 +5,15 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from app.models.interview_session import InterviewEvaluation, InterviewSession
-from app.models.user import User
-from app.services.interview import lifecycle
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from test_interview_multidevice import _build_test_app, _cleanup, _signup
+
+from app.models.interview_session import InterviewEvaluation, InterviewSession
+from app.models.user import User
+from app.services.interview import lifecycle
 
 
 @pytest.fixture
