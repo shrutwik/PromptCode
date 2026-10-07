@@ -410,8 +410,8 @@ test("session offers leave choices without manual timer controls", () => {
   const html = fs.readFileSync(__dirname + "/../../interview-session.html", "utf8");
   assert.doesNotMatch(html, /resumeTimerBtn|pauseSessionBtn/);
   assert.match(html, /id="abandonBtn">Leave session/);
-  assert.match(html, /id="pauseAndLeave">Save and come back/);
-  assert.match(html, /id="confirmAbandon">Discard and start fresh next time/);
+  assert.match(html, /id="pauseAndLeave">Save and return/);
+  assert.match(html, /id="confirmAbandon">Discard attempt/);
 });
 
 test("timer reconnects automatically after a failed heartbeat", async () => {
