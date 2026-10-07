@@ -3,6 +3,8 @@
 .env
 .env.*
 .pytest_cache
+.venv/
+**/node_modules/
 __pycache__/
 *.py[cod]
 *.log
