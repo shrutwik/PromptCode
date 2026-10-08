@@ -2,6 +2,15 @@
  * Load order on every page: fonts → pc-tokens.css → pc-components.css → page stylesheet.
  * Page stylesheets (interview.css, pc-landing.css, inline page blocks) may only add layout. */
 
+/* Keep full-page departures, including logout, visually continuous. */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition { navigation: auto; }
+  ::view-transition-old(root), ::view-transition-new(root) {
+    animation-duration: 180ms;
+    animation-timing-function: ease-out;
+  }
+}
+
 /* ── Base ─────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }

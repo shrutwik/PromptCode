@@ -49,6 +49,48 @@ test("cache cannot cross accounts or survive logout", async () => {
   api.clearAccessAuth();
   assert.equal([...Array(sessionStorage.length)].some((_, i) => sessionStorage.key(i).startsWith("pc_read_v1:")), false);
 });
+
+test("logout clears auth immediately and revokes across navigation without waiting", async () => {
+  const { api, context } = client();
+  api._set("pc_refresh_token", "refresh");
+  let sent;
+  context.fetch = (url, options) => {
+    sent = { url, options };
+    return new Promise(() => {});
+  };
+  await api.logout();
+  assert.equal(api.isLoggedIn(), false);
+  assert.equal(api.getRefreshToken(), null);
+  assert.equal(sent.url, "https://app.test/api/auth/logout");
+  assert.equal(sent.options.keepalive, true);
+  assert.equal(sent.options.headers.Authorization, "Bearer token");
+  assert.equal(JSON.parse(sent.options.body).refresh_token, "refresh");
+});
+
+test("logout succeeds locally when server revocation fails", async () => {
+  const { api, context } = client();
+  api._set("refresh_token", "refresh");
+  context.fetch = async () => { throw new Error("offline"); };
+  await api.logout();
+  assert.equal(api.isLoggedIn(), false);
+});
+
+test("legacy logout clears credentials and reaches the landing page without waiting", async () => {
+  const context = { sessionStorage: storage(), localStorage: storage(),
+    window: { location: { origin: "https://app.test", href: "/profile.html" } },
+    document: { addEventListener() {} } };
+  let sent;
+  context.fetch = (_, options) => { sent = options; return new Promise(() => {}); };
+  context.sessionStorage.setItem("pc_token", "token");
+  context.sessionStorage.setItem("pc_refresh_token", "refresh");
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(__dirname + "/api.js", "utf8"), context);
+  await vm.runInContext("PromptCodeAPI.logout()", context);
+  assert.equal(context.window.location.href, "/");
+  assert.equal(context.sessionStorage.getItem("pc_token"), null);
+  assert.equal(sent.keepalive, true);
+  assert.equal(sent.headers.Authorization, "Bearer token");
+});
 test("mutation invalidation stops an older in-flight response from repopulating cache", async () => {
   const { api, sessionStorage } = client();
   let finish;

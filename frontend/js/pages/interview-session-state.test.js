@@ -65,6 +65,7 @@ function page() {
       _get: () => JSON.stringify({ id: "owner" }), pendingWorkspaceRequests: 0,
       timer: async (_, action) => ({ status: "active", elapsed_ms: 5000, timer_running: action !== "pause", timer_lease_ms: 30000 }),
       postEvent: async () => {},
+      invalidateReads() {},
     },
     PCUI: { toast: (message) => toasts.push(message), loadPanelSizes: (_, defaults) => defaults, createCommandPalette: () => ({}) },
     document: {
@@ -468,6 +469,55 @@ test("save and come back saves changes and pauses at the saved elapsed time", as
   assert.equal(p.run("sessionClock.value()"), 12000);
   assert.equal(p.run("sessionClock.running()"), false);
   assert.equal(p.context.location.href, "/dashboard");
+});
+
+test("save and return reconnects a paused editor before saving its draft", async () => {
+  const p = page();
+  const actions = [];
+  p.context.InterviewAPI.saveFile = async () => { actions.push("save"); return { revision: 2 }; };
+  p.context.InterviewAPI.timer = async (_, action) => {
+    actions.push(action);
+    return { status: "active", elapsed_ms: 12000, timer_running: action !== "pause", timer_lease_ms: 30000 };
+  };
+  p.run('sessionReadOnly = true; editorOwned = false; models["src/a.py"] = { model: { getValue: () => "draft" }, saved: "old", dirty: true, revision: 1 }; openAbandon();');
+  await p.elements.get("pauseAndLeave").onclick();
+  assert.deepEqual(actions, ["resume", "save", "pause"]);
+  assert.equal(p.context.location.href, "/dashboard");
+});
+
+test("save and return waits for autosave and prevents duplicate exits", async () => {
+  const p = page();
+  let finish;
+  let pauses = 0;
+  p.context.InterviewAPI.saveFile = async () => {
+    p.context.InterviewAPI.pendingWorkspaceRequests++;
+    await new Promise(resolve => { finish = resolve; });
+    p.context.InterviewAPI.pendingWorkspaceRequests--;
+    return { revision: 2 };
+  };
+  p.context.InterviewAPI.timer = async (_, action) => {
+    if (action === "pause") pauses++;
+    return { status: "active", elapsed_ms: 12000, timer_running: action !== "pause", timer_lease_ms: 30000 };
+  };
+  p.run('models["src/a.py"] = { model: { getValue: () => "draft" }, saved: "old", dirty: true, revision: 1 }; enqueueSave("src/a.py"); openAbandon();');
+  await new Promise(setImmediate);
+  const leaving = p.elements.get("pauseAndLeave").onclick();
+  assert.equal(p.elements.get("pauseAndLeave").disabled, true);
+  await p.elements.get("pauseAndLeave").onclick();
+  finish();
+  await leaving;
+  assert.equal(pauses, 1);
+  assert.equal(p.context.location.href, "/dashboard");
+});
+
+test("save and return preserves the draft and stays when reconnect is rejected", async () => {
+  const p = page();
+  p.context.InterviewAPI.timer = async () => { throw new Error("Another tab owns this session"); };
+  p.run('sessionReadOnly = true; editorOwned = false; drafts.write("src/a.py", "draft", "old", 1); openAbandon();');
+  await p.elements.get("pauseAndLeave").onclick();
+  assert.equal(p.context.location.href, "/session/test");
+  assert.equal(p.run('drafts.read("src/a.py").value'), "draft");
+  assert.equal(p.elements.get("pauseAndLeave").disabled, false);
 });
 
 test("discard ends the attempt, clears recovery drafts and returns to practice", async () => {

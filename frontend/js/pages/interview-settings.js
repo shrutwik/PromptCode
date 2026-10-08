@@ -27,10 +27,7 @@ form.addEventListener("submit", async (e) => {
     btn.disabled = false;
   }
 });
-document.getElementById("logout").addEventListener("click", async () => {
-  await InterviewAPI.logout();
-  location.href = "/";
-});
+document.getElementById("logout").addEventListener("click", () => PCUI.logout());
 document.getElementById("copyFb").addEventListener("click", async () => {
   const text = document.getElementById("productFb").value.trim();
   const hint = document.getElementById("fbHint");

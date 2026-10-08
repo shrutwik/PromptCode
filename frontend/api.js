@@ -281,25 +281,23 @@ const PromptCodeAPI = {
     async logout() {
         const rt = this.getRefreshToken();
         const token = this.getToken();
+        this.clearAuth();
         if (rt && token) {
             try {
-                await Promise.race([
-                    fetch(API_BASE + '/auth/logout', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`,
-                        },
-                        body: JSON.stringify({ refresh_token: rt }),
-                    }),
-                    new Promise(resolve => setTimeout(resolve, 3000)),
-                ]);
+                fetch(API_BASE + '/auth/logout', {
+                    method: 'POST',
+                    keepalive: true,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ refresh_token: rt }),
+                }).catch(() => {});
             } catch (_) {
                 // best-effort: local logout always proceeds
             }
         }
-        this.clearAuth();
-        window.location.href = '/index.html';
+        window.location.href = '/';
     },
 
     updateNavAuth() {

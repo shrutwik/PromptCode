@@ -647,20 +647,35 @@ function openAbandon() {
   document.getElementById("closeAbandon").onclick = close;
   document.getElementById("cancelAbandon").onclick = close;
   document.getElementById("pauseAndLeave").onclick = async () => {
-    if (hasPendingWork()) { PCUI.toast("Wait for the current action to finish.", { tone: "info" }); return; }
+    const btn = document.getElementById("pauseAndLeave");
+    if (btn.disabled) return;
+    if (endingSession || runPending) { PCUI.toast("Wait for the current action to finish.", { tone: "info" }); return; }
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = "Saving…";
     try {
+      // Finish autosaves first; retry any failed save in the final save pass.
+      await saveQueue.catch(() => {});
+      if (InterviewAPI.pendingWorkspaceRequests > 0) throw new Error("Wait for the current action to finish.");
+      if (sessionReadOnly) await timerAction("resume", { requireSuccess: true });
       requireEditing();
       endingSession = true;
       setEditable(false);
       await saveDirtyModels({ finishing: true });
       await timerAction("pause", { requireSuccess: true });
       if (sessionClock.running()) throw new Error("Could not pause the session. Try again.");
+      InterviewAPI.invalidateReads();
       allowNavigation = true;
       location.href = "/dashboard";
     } catch (error) {
       endingSession = false;
       await timerAction("resume");
       PCUI.toast(error.message, { tone: "danger" });
+    } finally {
+      if (!allowNavigation) {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
     }
   };
   document.getElementById("confirmAbandon").onclick = async () => {

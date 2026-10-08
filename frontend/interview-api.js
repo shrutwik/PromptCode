@@ -476,18 +476,20 @@ const InterviewAPI = {
   },
 
   async logout() {
-    const refresh = this._get("refresh_token");
-    try {
-      if (refresh) {
-        await fetch(this.authBase + "/logout", {
+    const refresh = this.getRefreshToken();
+    const headers = this.authHeaders();
+    this.clearAccessAuth();
+    if (refresh) {
+      try {
+        // Deliver revocation across navigation without delaying local sign-out.
+        fetch(this.authBase + "/logout", {
           method: "POST",
+          keepalive: true,
           credentials: "include",
-          headers: this.authHeaders(),
+          headers,
           body: JSON.stringify({ refresh_token: refresh }),
-        });
-      }
-    } finally {
-      this.clearAccessAuth();
+        }).catch(() => {});
+      } catch (_) {}
     }
   },
 };
