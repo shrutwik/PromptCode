@@ -115,6 +115,8 @@ function findRecoverySequences(events) {
   return seqs;
 }
 
+let gradingPollCount = 0;
+
 async function load() {
   const [r, sessionMeta] = await Promise.all([
     InterviewAPI.report(sessionId),
@@ -126,15 +128,22 @@ async function load() {
   } catch (_) {}
 
   const events = r.timeline || [];
-  const reviewed = r.assessment?.status === "reviewed_practice" && Number.isFinite(r.assessment?.total_score);
+  const automated = r.assessment?.grader_kind === "ai";
+  const reviewed = ["reviewed_practice", "automated_practice"].includes(r.assessment?.status) && Number.isFinite(r.assessment?.total_score);
+  const autoStatus = r.assessment?.auto_grading_status || (automated ? r.assessment?.status : null);
+  const autoNote = { waiting_defense: "Complete your defense answers to start automatic grading.",
+    queued: "Automatic grading is queued. This report updates when it finishes.",
+    running: "Two AI grading passes are reviewing your evidence.",
+    retry_pending: "Grading was temporarily unavailable. A bounded retry is scheduled.",
+    needs_review: "The graders could not establish a sufficiently supported final score. No zero or failing grade has been assigned." }[autoStatus] || "";
   const gradeLabel = reviewed ? `${r.assessment.total_score} / 100` : "Not assessed";
   const categories = r.assessment?.dimensions || r.rubric || {};
   const rubricHtml = Object.entries(categories).map(([k, v]) => {
     const label = v.label || k.replace(/^[A-Z]_/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()).replace(/\bAi\b/, "AI");
     const categoryStatus = v.status === "not_applicable" ? "Not applicable"
-      : reviewed && Number.isInteger(v.rating) ? `${v.rating} / 4` : "Not assessed";
+      : (reviewed || v.status === "automated") && Number.isFinite(v.rating) ? `${v.rating} / 4` : "Not assessed";
     return `<div class="rubric-row"><div><div class="name">${esc(label)}${Number.isFinite(v.weight) ? ` · ${esc(v.weight)}%` : ""}</div>
-      <div class="evidence">${esc(v.status === "not_applicable" ? "AI judgment was not observed for this attempt; this criterion is excluded." : reviewed ? v.rationale : "Evidence requires review before a rating can be given.")}</div></div>
+      <div class="evidence">${esc(v.status === "not_applicable" ? "AI judgment was not observed for this attempt; this criterion is excluded." : (reviewed || v.status === "automated") ? v.rationale : "Evidence requires review before a rating can be given.")}</div></div>
       <div class="v">${categoryStatus}</div></div>`;
   }).join("") || `<div class="pc-panel-body muted">No assessment yet</div>`;
 
@@ -220,7 +229,7 @@ async function load() {
     : executionStatus ? `Evaluation ${executionStatus}` : `Advisory tests ${testsOk ? "passed" : "failed"}`;
   const prev = r.previous_attempt || null;
   const rubricLabel = (k) => k.replace(/^[A-Z]_/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()).replace(/\bAi\b/, "AI");
-  const scoreCell = (field, available) => available && Number.isInteger(field?.rating) ? `${field.rating} / 4` : "Not assessed";
+  const scoreCell = (field, available) => available && Number.isFinite(field?.rating) ? `${field.rating} / 4` : "Not assessed";
   const compareRows = Object.keys(categories).map((k) => {
     const cur = categories[k] || {};
     const old = (prev && prev.rubric && prev.rubric[k]) || {};
@@ -260,7 +269,7 @@ async function load() {
           <span class="tag">${esc(executionLabel)}</span>
           <span class="tag">hidden tests not leaked</span>
         </div>
-        <p class="report-hero-note">${reviewed ? "Human-reviewed practice rating based on submitted evidence. This is not a validated hiring assessment." : "Practice evidence is awaiting evaluation or review; no grade has been issued."} ${events.length} logged events across ${phases.filter((p) => (grouped[p] || []).length).length} workflow categories.</p>
+        <p class="report-hero-note">${reviewed ? (automated ? "Automated AI practice assessment, supported by independent tests and two grading passes. This is not a validated hiring assessment." : "Human-reviewed practice rating based on submitted evidence. This is not a validated hiring assessment.") : (autoNote || "Practice evidence is awaiting evaluation or review; no grade has been issued.")} ${events.length} logged events across ${phases.filter((p) => (grouped[p] || []).length).length} workflow categories.</p>
       </div>
     </section>
 
@@ -271,11 +280,14 @@ async function load() {
       <section class="pc-panel" aria-labelledby="rubricTitle">
         <div class="pc-panel-head"><h2 id="rubricTitle">Assessment criteria</h2></div>
         ${r.assessment?.comparison_notice ? `<p class="pc-panel-body">${esc(r.assessment.comparison_notice)}</p>` : ""}
-        ${(r.assessment?.review_flags || []).length ? `<p class="pc-panel-body">Required behavior remains unmet. Review the behavioral results and manual coverage checks; the overall rating does not override these failures.</p>` : ""}
+        ${(r.assessment?.review_flags || []).length ? `<p class="pc-panel-body">Required behavior is unmet or has coverage gaps. Review the behavioral results and limitations; the overall rating does not override them.</p>` : ""}
+        ${Number.isFinite(r.assessment?.behavioral_score_percent) ? `<p class="pc-panel-body">Independent behavioral checks: ${esc(r.assessment.behavioral_score_percent)}%. This result is separate from the overall practice rating.</p>` : ""}
         ${rubricHtml}
       </section>
       <section class="pc-panel"><div class="pc-panel-head"><h2>Review or appeal</h2></div><div class="pc-panel-body">
         <p id="appealStatus" role="status"></p>
+        ${automated ? `<p>AI grades are provisional practice feedback. Grader agreement does not prove accuracy. Review the evidence and limitations.</p>` : ""}
+        ${autoStatus === "needs_review" ? '<button class="btn" type="button" id="retryAutoGrade">Retry automatic grading</button>' : ""}
         ${reviewed && r.assessment.review_id ? `<form id="appealForm"><label for="appealReason">Explain which evidence or rating should be reconsidered.</label><textarea id="appealReason" required minlength="20" maxlength="4000"></textarea><button class="btn" type="submit">Request an independent review</button></form>` : "<p>Appeals become available when a reviewed rating is published.</p>"}
         <div id="appealHistory"></div>
       </div></section>
@@ -545,6 +557,19 @@ async function load() {
         defendForm.requestSubmit();
       }
     });
+  }
+  const retryGrade = document.getElementById("retryAutoGrade");
+  if (retryGrade) retryGrade.onclick = async () => {
+    retryGrade.disabled = true;
+    try {
+      await InterviewAPI.request(`/sessions/${sessionId}/grade/retry`, { method: "POST" });
+      gradingPollCount = 0;
+      await load();
+    } catch (error) { document.getElementById("appealStatus").textContent = error.message; retryGrade.disabled = false; }
+  };
+  if (["queued", "running", "retry_pending"].includes(autoStatus) && gradingPollCount < 120 && typeof window.setTimeout === "function") {
+    gradingPollCount += 1;
+    window.setTimeout(() => load().catch(() => {}), 5000);
   }
   const fbSend = document.getElementById("fbSend");
   if (fbSend) {

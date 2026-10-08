@@ -164,6 +164,8 @@ class Settings(BaseSettings):
     interview_workspace_root: str = ""  # optional override for session workspaces
     grading_signing_key: str = ""
     grading_feedback_enabled: bool = False
+    grading_auto_enabled: bool = False
+    grading_auto_model: str = "deepseek-flash"
     grading_publish_reviewed_scores: bool = False
     grading_calibration_report_path: str = ""
     grading_job_timeout_seconds: int = Field(default=600, ge=30, le=3600)

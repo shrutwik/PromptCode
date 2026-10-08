@@ -39,7 +39,7 @@ def _trial_enabled():
     return bool(getattr(get_settings(), 'ai_trial_enabled', False))
 
 
-async def reserve_ai_budget(db: AsyncSession, user_id: UUID | str, session_id: UUID | str, input_bytes: int, output_tokens: int = 2048, attempts: int = 2) -> None:
+async def reserve_ai_budget(db: AsyncSession, user_id: UUID | str, session_id: UUID | str, input_bytes: int, output_tokens: int = 2048, attempts: int = 2, *, purpose: str = "assistant") -> None:
     if not enabled(): raise HTTPException(503,'AI assistant is temporarily disabled')
     if not (0 <= input_bytes <= 256000 and 1 <= output_tokens <= 4096 and 1 <= attempts <= 8):
         raise HTTPException(400,'AI request exceeds budget size')
@@ -50,6 +50,11 @@ async def reserve_ai_budget(db: AsyncSession, user_id: UUID | str, session_id: U
     scopes=[('global:'+str(day),'GLOBAL',1000,10000000,20000000),
             (f'user:{user_id}:{day}','USER',100,1000000,5000000),
             (f'session:{session_id}','SESSION',20,200000,2000000)]
+    if purpose == 'grading':
+        # Shared global/user ceilings remain; grading cannot consume the chat's session allowance.
+        scopes[-1] = (f'grading-session:{session_id}', 'GRADING_SESSION', 12, 600000, 2000000)
+    elif purpose != 'assistant':
+        raise HTTPException(400, 'Unknown AI budget purpose')
     if _trial_enabled():
         scopes.insert(0, ('trial:all', 'TRIAL', 1000000, 1000000000, 5000000))
     dialect=db.get_bind().dialect.name

@@ -82,7 +82,7 @@ function render(c, card, pending) {
           <div class="brief-label">Rules</div>
           <ul class="brief-rules">
             <li>${CHECK}<span>Timed interview simulation — the clock starts when the workspace is ready and pauses while you’re away.</span></li>
-            <li>${CHECK}<span>AI assistant allowed. Human review considers how you inspect and verify its output.</span></li>
+            <li>${CHECK}<span>AI assistant allowed. The rubric considers how you inspect and verify its output.</span></li>
             <li>${CHECK}<span>Follow the stated task parts. Optional changed-requirement discussion is ungraded.</span></li>
             <li>${CHECK}<span>Visible tests run in the workspace; hidden tests run on submit.</span></li>
             <li>${CHECK}<span>After submitting you’ll defend your changes in four short questions.</span></li>

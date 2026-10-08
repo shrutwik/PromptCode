@@ -82,7 +82,7 @@ env_secret = modal.Secret.from_name(_ENV_SECRET_NAME)
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install_from_requirements(str(BACKEND_DIR / "requirements.txt"))
-    .env({"PYTHONPATH": _BACKEND_REMOTE_DIR})
+    .env({"PYTHONPATH": _BACKEND_REMOTE_DIR, "PROMPTCODE_GRADING_AUTO_ENABLED": "true"})
     # Public CA certificate used to verify Supabase's database TLS connection.
     .add_local_file(
         str(BACKEND_DIR / "supabase-ca.crt"),
@@ -122,6 +122,7 @@ async def _drain_grading_queue(*, budget_seconds: float) -> int:
     """
     from app.core.ratelimit import cleanup_expired_counters
     from app.db.session import async_session_factory, engine
+    from app.workers.interview_ai_grading import process_one_ai_grade
     from app.workers.interview_grading import process_one_grading_job
 
     deadline = time.monotonic() + max(0.0, budget_seconds)
@@ -131,9 +132,11 @@ async def _drain_grading_queue(*, budget_seconds: float) -> int:
             await cleanup_expired_counters(db=db)
             await db.commit()
         while time.monotonic() < deadline:
-            if not await process_one_grading_job():
+            behavior_work = await process_one_grading_job()
+            ai_work = await process_one_ai_grade()
+            if not behavior_work and not ai_work:
                 break
-            processed += 1
+            processed += int(behavior_work) + int(ai_work)
     finally:
         # Each invocation runs in its own fresh event loop; pooled asyncpg
         # connections must not be reused across loops.
@@ -205,9 +208,8 @@ def supabase_keepalive() -> str:
     Gated on ``PROMPTCODE_SUPABASE_KEEPALIVE_ENABLED``: the schedule stays deployed
     but the run is a no-op when the setting is false.
     """
-    from sqlalchemy import text
-
     from app.core.config import get_settings
+    from sqlalchemy import text
 
     settings = get_settings()
     if not settings.supabase_keepalive_enabled:

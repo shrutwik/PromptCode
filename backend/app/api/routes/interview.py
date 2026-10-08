@@ -357,7 +357,14 @@ async def _evaluation_response(
     practice = advisory_scoring({"rubric": evaluation.rubric, "metrics": evaluation.metrics or {}})
     from app.services.interview.grading_review import candidate_review_status
     published_review = await candidate_review_status(db, session.id)
-    assessment = published_review or (evaluation.metrics or {}).get("assessment")
+    from app.workers.interview_ai_grading import candidate_auto_assessment
+    automatic = candidate_auto_assessment(evaluation)
+    assessment = published_review or automatic or (evaluation.metrics or {}).get("assessment")
+    auto_state = (evaluation.metrics or {}).get("auto_grading") or {}
+    if assessment and not published_review and not automatic:
+        assessment = {**assessment, "auto_grading_status": auto_state.get("status") or
+                          ("waiting_defense" if get_settings().grading_auto_enabled else None),
+                      "auto_grading_reason": auto_state.get("reason")}
     if assessment and not published_review:
         from app.models.interview_grading import InterviewGradingJob
         grading_job = (await db.execute(select(InterviewGradingJob).where(
@@ -365,10 +372,10 @@ async def _evaluation_response(
         if grading_job:
             assessment = {**assessment, "execution_status": grading_job.status}
     return EvaluationResponse(
-        total_score=published_review["total_score"] if published_review else 0.0,
+        total_score=(assessment.get("total_score") or 0.0) if assessment else 0.0,
         assessment=assessment,
         rubric=practice["rubric"],
-        metrics={k: v for k, v in practice["metrics"].items() if k != "answer_guides"},
+        metrics={k: v for k, v in practice["metrics"].items() if k not in {"answer_guides", "auto_grading", "auto_grading_history"}},
         insights=evaluation.insights,
         test_summary=advisory_summary(evaluation.test_summary),
         defend_questions=[
@@ -1623,6 +1630,39 @@ async def submit_session(
     return await _evaluation_response(db, session, evaluation)
 
 
+@router.post("/sessions/{session_id}/grade/retry")
+async def retry_automatic_grade(
+    session_id: uuid.UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    session = await _load_owned_session(db=db, session_id=session_id, user=user)
+    if not get_settings().grading_auto_enabled or session.status != "submitted":
+        raise HTTPException(409, "Automatic grading is not available")
+    await enforce_rate_limit(db=db, key=f"grade-retry:{user.id}", limit=3, window_seconds=3600)
+    session = await _load_owned_session(db=db, session_id=session_id, user=user, lock=True)
+    evaluation = (await db.execute(select(InterviewEvaluation).where(
+        InterviewEvaluation.session_id == session_id).with_for_update())).scalar_one_or_none()
+    if not evaluation or evaluation.scoring_version != SCORING_VERSION:
+        raise HTTPException(409, "This attempt uses a different rubric version")
+    from app.workers.interview_ai_grading import defense_complete, queue_state
+    metrics = dict(evaluation.metrics or {})
+    if not defense_complete(evaluation):
+        raise HTTPException(409, "Complete the defense answers before grading")
+    if (metrics.get("auto_grading") or {}).get("status") not in {"needs_review", "retry_pending"}:
+        raise HTTPException(409, "A retry is not needed")
+    if metrics.get("auto_grade_retries", 0) >= 1:
+        raise HTTPException(409, "Retry limit reached; retain this report for review")
+    prior = metrics.get("auto_grading")
+    metrics["auto_grading_history"] = [*(metrics.get("auto_grading_history") or []), prior][-5:]
+    metrics["auto_grade_retries"] = metrics.get("auto_grade_retries", 0) + 1
+    metrics["auto_grading"] = queue_state(evaluation)
+    evaluation.metrics = metrics
+    await db.commit()
+    return {"status": "queued"}
+
+
 @router.get("/sessions/{session_id}/diff", response_model=DiffSummaryResponse)
 async def session_diff_summary(
     session_id: uuid.UUID,
@@ -1742,6 +1782,14 @@ async def post_defend_answer(
     if ev.scoring_version in {"v3-evidence", SCORING_VERSION}:
         from app.services.interview.grading import revise_defense
         metrics["assessment"] = revise_defense(metrics["assessment"], answers)
+        if get_settings().grading_auto_enabled:
+            from app.workers.interview_ai_grading import queue_state
+            previous = metrics.get("auto_grading")
+            if previous and previous.get("outcome"):
+                metrics["auto_grading_history"] = [*(metrics.get("auto_grading_history") or []), previous][-5:]
+            # New answers invalidate in-flight jobs and prior AI ratings.
+            ev.metrics = metrics
+            metrics["auto_grading"] = queue_state(ev)
     ev.metrics = metrics
     questions = _defend_questions_for_user(user, ev, session.challenge_slug)
     if len(answers) >= len(questions):
@@ -1804,11 +1852,15 @@ async def dashboard(
     # One batch query for every row instead of a projection call per session.
     from app.services.interview.grading_review import published_reviews_for_sessions
     published = await published_reviews_for_sessions(db, [s.id for s in sessions])
+    from app.workers.interview_ai_grading import candidate_auto_assessment
+    auto_evaluations = (await db.execute(select(InterviewEvaluation).where(
+        InterviewEvaluation.session_id.in_([s.id for s in sessions])))).scalars().all() if sessions else []
+    auto_scores = {str(e.session_id): candidate_auto_assessment(e) for e in auto_evaluations}
     items: list[DashboardSessionItem] = []
     for s in sessions:
         maybe_expire_session(s)
         meta = get_challenge(s.challenge_slug) or {}
-        published_review = published.get(str(s.id))
+        published_review = published.get(str(s.id)) or auto_scores.get(str(s.id))
         items.append(
             DashboardSessionItem(
                 id=s.id,

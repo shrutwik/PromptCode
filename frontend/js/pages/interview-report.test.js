@@ -70,5 +70,28 @@ test("adjusted AI mode and unmet requirements remain explicit beside a score", a
   } });
   assert.match(html, /Verification · 20%/);
   assert.match(html, /adjusted total excludes this dimension/);
-  assert.match(html, /Required behavior remains unmet/);
+  assert.match(html, /Required behavior is unmet or has coverage gaps/);
+});
+
+
+test("automatic assessment shows half anchors and separate behavioral results", async () => {
+  const html = await render({ timeline: [], assessment: {
+    status: "automated_practice", grader_kind: "ai", total_score: 87.5,
+    behavioral_score_percent: 100,
+    dimensions: { C_fix_quality: { label: "Fix quality", rating: 3.5,
+      status: "automated", rationale: "Verified change with relevant limitations." } }
+  } });
+  assert.match(html, /87.5 \/ 100/);
+  assert.match(html, /3.5 \/ 4/);
+  assert.match(html, /Independent behavioral checks: 100%/);
+  assert.match(html, /Automated AI practice assessment/);
+  assert.doesNotMatch(html, /Human-reviewed practice rating/);
+});
+
+test("automatic uncertainty withholds a total and offers retry", async () => {
+  const html = await render({ timeline: [], assessment: {
+    status: "needs_review", grader_kind: "ai", total_score: null, dimensions: {}
+  } });
+  assert.match(html, /Retry automatic grading/);
+  assert.doesNotMatch(html, /0\s*\/\s*100/);
 });

@@ -94,8 +94,12 @@ DIMENSION_ANCHORS = {'A_correctness': {0: 'Demonstrably breaks the core contract
 
 def public_rubric() -> dict:
     """Public criteria only; never include evaluator fixtures or answer guides."""
+    from app.core.config import get_settings
+    auto_enabled = get_settings().grading_auto_enabled
     return {"version": RUBRIC_VERSION, "status": "research_informed_pilot",
-            "notice": "Human-reviewed practice rubric; not a validated hiring assessment. "
+            "grading_mode": "automated_ai" if auto_enabled else "human_review",
+            "notice": ("Automated AI practice rubric; not a validated hiring assessment. " if auto_enabled
+                       else "Human-reviewed practice rubric; not a validated hiring assessment. ") +
                       "Test results are separate. Optional discussion is ungraded. "
                       "Prompt count, model brand and verbosity do not earn points.",
             "dimensions": {key: {"label": label, "weight": weight,
