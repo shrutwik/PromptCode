@@ -208,7 +208,7 @@ def test_defend_and_feedback_integration(tmp_path, monkeypatch):
             assert assessment["status"] == "pending_review"
             assert assessment["total_score"] is None
             assert assessment["packet"]["session_id"] == sid
-            assert submit.json()["scoring_version"] == "v3-evidence"
+            assert submit.json()["scoring_version"] == "v4-research-pilot"
             for q in submit.json()["defend_questions"]:
                 assert "answer_guide" not in q
                 assert " A:" not in q["question"]

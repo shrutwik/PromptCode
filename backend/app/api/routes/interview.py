@@ -1739,7 +1739,7 @@ async def post_defend_answer(
         "defend_answer",
         {"index": body.index, "chars": len(body.answer), "answer": body.answer[:4000]},
     )
-    if ev.scoring_version == "v3-evidence":
+    if ev.scoring_version in {"v3-evidence", SCORING_VERSION}:
         from app.services.interview.grading import revise_defense
         metrics["assessment"] = revise_defense(metrics["assessment"], answers)
     ev.metrics = metrics
