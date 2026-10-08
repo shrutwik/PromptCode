@@ -32,6 +32,9 @@
     { "source": "/practice", "destination": "/dashboard", "permanent": false }
   ],
   "rewrites": [
+    { "source": "/favicon.ico", "destination": "/frontend/favicon.ico" },
+    { "source": "/favicon.svg", "destination": "/frontend/favicon.svg" },
+    { "source": "/apple-touch-icon.png", "destination": "/frontend/apple-touch-icon.png" },
     {
       "source": "/api/:path*",
       "destination": "https://shrutwik2006--promptcode-fastapi-app.modal.run/api/:path*"
