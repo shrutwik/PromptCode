@@ -211,10 +211,14 @@ def test_interview_challenge_api_hides_solution_content(tmp_path, monkeypatch):
             detail = await client.get(f"/api/interview/challenges/{slug}")
             assert detail.status_code == 200
             body = detail.json()
+            assert body["featured_rank"] == data[0]["featured_rank"]
             assert "readme" in body
             assert "SOLUTION" not in body["readme"]
             assert "interviewer" not in body
             assert "command_ids" in body
+            extra = await client.get(f"/api/interview/challenges/{data[-1]['slug']}")
+            assert extra.status_code == 200
+            assert extra.json()["featured_rank"] is None
 
             unauth = await client.post(
                 "/api/interview/sessions",

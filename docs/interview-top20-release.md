@@ -26,4 +26,6 @@ The ordinary backend run skips conditional Docker/live-service tests; the separa
 
 ## Publication
 
-The repository's `main` push triggers Backend CI. Deployment depends on backend, schema, Docker, browser and startup integration checks. A Git push alone is not evidence that the live website has updated: check that exact commit's workflow and deployment outcome. No database migration is introduced by this release.
+The repository's `main` push triggers Backend CI and Vercel's frontend deployment. The live Vercel configuration proxies `/api/*` to Modal; that backend requires `modal deploy backend/modal_app.py`. The Docker-host deployment in Backend CI is a separate path and may skip an unreachable host. A Git push alone is not evidence that the live catalogue has updated. No database migration is introduced by this release.
+
+Live verification confirmed 25 available questions and core ranks 1–20. It also caught a missing rank field on the individual brief endpoint, which was corrected with featured/extra API regression assertions; all 12 relevant tests pass. The final release checks must use the commit containing that correction.

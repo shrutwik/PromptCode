@@ -558,6 +558,7 @@ async def interview_get_challenge(
             "slug", "title", "type", "stack", "difficulty",
             "estimated_minutes", "summary", "test_command", "entry_files",
         )},
+        featured_rank=meta.get("featured_rank"),
         readme=candidate_readme(slug),
         command_ids=["run_tests", "run_targeted_tests", "run_benchmark"],
     )
