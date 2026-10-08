@@ -22,7 +22,8 @@ def limit_from_env(name: str, default: int) -> int:
 
 
 async def enforce_rate_limit(*, db: AsyncSession, key: str, limit: int,
-                             window_seconds: int, now: datetime | None = None) -> None:
+                             window_seconds: int, now: datetime | None = None,
+                             commit: bool = True) -> None:
     """Atomic fixed-window counter; no advisory lock or event-table scan."""
     import hashlib
     import hmac
@@ -50,7 +51,9 @@ async def enforce_rate_limit(*, db: AsyncSession, key: str, limit: int,
                                      set_={"count": RateLimitCounter.count + 1},
                                      where=RateLimitCounter.count < limit).returning(RateLimitCounter.count)
     accepted = (await db.execute(returning)).scalar_one_or_none()
-    await db.commit()
+    # Rejected checks must persist earlier counters before the route rolls back.
+    if commit or accepted is None:
+        await db.commit()
     if accepted is None:
         retry = max(1, bucket + window_seconds - current)
         raise HTTPException(429, "Rate limit exceeded. Please retry later.", headers={"Retry-After": str(retry)})

@@ -182,25 +182,48 @@ def _build_test_app(tmp_path, monkeypatch):
     return app, test_engine
 
 
-def test_auth_rate_limit_blocks_on_eleventh_attempt(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    ("ip_limit", "allowed_attempts", "expected_counts"),
+    [(120, 10, [10, 11]), (1, 1, [1, 1])],
+)
+def test_auth_rate_limit_persists_attempts_with_one_commit(
+    tmp_path, monkeypatch, ip_limit, allowed_attempts, expected_counts,
+):
+    from sqlalchemy import event, select
+
+    from app.api.routes import auth
+    from app.models.rate_limit_counter import RateLimitCounter
+
+    monkeypatch.setattr(auth, "_AUTH_RATE_LIMIT", ip_limit)
     app, test_engine = _build_test_app(tmp_path, monkeypatch)
+    commits = []
 
     with TestClient(app) as client:
-        # First 10 attempts: wrong creds → 401
-        for i in range(10):
+        event.listen(test_engine.sync_engine, "commit", lambda conn: commits.append(1))
+        # Allowed attempts still count when credentials are wrong.
+        for i in range(allowed_attempts):
             r = client.post(
                 "/api/auth/login",
                 json={"email": "x@example.com", "password": "Wr0ng!Passw0rd"},
             )
             assert r.status_code == 401, f"attempt {i + 1}: expected 401, got {r.status_code}"
+            assert len(commits) == i + 1
 
-        # 11th attempt: rate limited → 429
+        # Both the account cap and IP cap stop the next attempt.
         r = client.post(
             "/api/auth/login",
             json={"email": "x@example.com", "password": "Wr0ng!Passw0rd"},
         )
         assert r.status_code == 429
         assert "Retry-After" in r.headers
+        assert len(commits) == allowed_attempts + 1
+
+    async def _check_attempts_persisted() -> None:
+        async with async_sessionmaker(test_engine)() as session:
+            counters = (await session.execute(select(RateLimitCounter))).scalars().all()
+            assert sorted(counter.count for counter in counters) == expected_counts
+
+    asyncio.run(_check_attempts_persisted())
 
     from app.core.config import get_settings
     get_settings.cache_clear()
@@ -324,11 +347,22 @@ def test_signup_normalizes_email_and_blocks_case_variant_duplicate(tmp_path, mon
 
 
 def test_login_accepts_case_insensitive_email_match(tmp_path, monkeypatch):
+    from sqlalchemy import event, select
+
+    from app.api.routes import auth
+    from app.models.beta_ops import ProductAnalyticsEvent
+    from app.models.user import User
+
+    def verify_off_loop(plain: str, hashed: str) -> bool:
+        with pytest.raises(RuntimeError, match="no running event loop"):
+            asyncio.get_running_loop()
+        return verify_password(plain, hashed)
+
+    monkeypatch.setattr(auth, "verify_password", verify_off_loop)
     app, test_engine = _build_test_app(tmp_path, monkeypatch)
 
     async def _seed_user() -> None:
         from app.db import session as session_module
-        from app.models.user import User
 
         async with session_module.async_session_factory() as session:
             session.add(
@@ -342,6 +376,13 @@ def test_login_accepts_case_insensitive_email_match(tmp_path, monkeypatch):
 
     asyncio.run(_seed_user())
 
+    user_reads = []
+
+    @event.listens_for(test_engine.sync_engine, "before_cursor_execute")
+    def count_user_reads(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().startswith("SELECT") and "FROM users" in statement:
+            user_reads.append(statement)
+
     with TestClient(app) as client:
         login = client.post(
             "/api/auth/login",
@@ -349,6 +390,18 @@ def test_login_accepts_case_insensitive_email_match(tmp_path, monkeypatch):
         )
         assert login.status_code == 200
         assert login.json()["user"]["email"] == "CaseLogin@example.com"
+        assert login.json()["user"]["last_login_at"] is not None
+        assert len(user_reads) == 1
+
+    async def _check_login_persisted() -> None:
+        async with async_sessionmaker(test_engine, expire_on_commit=False)() as session:
+            user = (await session.execute(select(User))).scalar_one()
+            assert user.last_login_at is not None
+            analytics = (await session.execute(select(ProductAnalyticsEvent))).scalar_one()
+            assert analytics.event_name == "logged_in"
+            assert analytics.user_id == user.id
+
+    asyncio.run(_check_login_persisted())
 
     from app.core.config import get_settings
     get_settings.cache_clear()

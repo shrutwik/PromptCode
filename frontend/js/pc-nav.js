@@ -5,6 +5,8 @@
     progress: "interview-progress.js", brief: "interview-challenge.js",
   };
   const pages = new Map();
+  const warmed = new Map();
+  const cachePrefix = "pc_nav_v20261008a:";
   let epoch = 0;
   function route(url) {
     if (url.origin !== location.origin) return null;
@@ -18,18 +20,50 @@
     const key = url.pathname + url.search;
     const cached = pages.get(key);
     if (cached && Date.now() - cached.at < 300000) return cached.promise;
-    const promise = fetch(key, { credentials: "same-origin" }).then(async (resp) => {
-      if (!resp.ok) throw new Error("Could not load page");
-      const parsed = new DOMParser().parseFromString(await resp.text(), "text/html");
+    let at = Date.now();
+    const promise = (async () => {
+      let html, stored = false;
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(cachePrefix + key) || "null");
+        if (saved && Date.now() - saved.at >= 0 && Date.now() - saved.at < 300000 && typeof saved.html === "string") {
+          html = saved.html;
+          at = saved.at;
+          stored = true;
+        }
+      } catch (_) {}
+      if (!html) {
+        const resp = await fetch(key, { credentials: "same-origin" });
+        if (!resp.ok) throw new Error("Could not load page");
+        html = await resp.text();
+      }
+      const parsed = new DOMParser().parseFromString(html, "text/html");
       const main = parsed.getElementById("main");
       const expected = "/static/js/pages/" + controllers[route(url)];
       const script = [...parsed.querySelectorAll("script[src]")].find((s) => new URL(s.src, url).pathname === expected);
       if (!main || !script) throw new Error("Unsupported page");
+      // Persist only fetched public templates, never the rendered account view.
+      try {
+        if (!stored) {
+          const cacheKey = cachePrefix + key;
+          if (!sessionStorage.getItem(cacheKey)) {
+            const keys = [];
+            for (let i = 0; i < sessionStorage.length; i++) {
+              const item = sessionStorage.key(i);
+              if (item?.startsWith(cachePrefix)) keys.push(item);
+            }
+            if (keys.length >= 20) sessionStorage.removeItem(keys[0]);
+          }
+          sessionStorage.setItem(cacheKey, JSON.stringify({ html, at: Date.now() }));
+        }
+      } catch (_) {}
       return { main, script: new URL(script.getAttribute("src"), url).href, title: parsed.title };
-    });
-    pages.set(key, { at: Date.now(), promise });
+    })();
+    pages.set(key, { at, promise });
     if (pages.size > 20) pages.delete(pages.keys().next().value);
-    promise.catch(() => { if (pages.get(key)?.promise === promise) pages.delete(key); });
+    promise.catch(() => {
+      if (pages.get(key)?.promise === promise) pages.delete(key);
+      try { sessionStorage.removeItem(cachePrefix + key); } catch (_) {}
+    });
     return promise;
   }
   async function go(href, pop = false) {
@@ -91,7 +125,26 @@
   const prefetch = (event) => {
     if (navigator.connection?.saveData || /(^|-)2g$/.test(navigator.connection?.effectiveType || "")) return;
     const url = linkFor(event);
-    if (url) page(url).catch(() => {});
+    if (!url) return;
+    page(url).catch(() => {});
+    if (typeof InterviewAPI === "undefined" || !InterviewAPI.isLoggedIn()) return;
+    const kind = route(url);
+    const paths = kind === "brief"
+      ? [url.pathname.replace(/\/$/, ""), "/challenges/progress"]
+      : [kind === "challenges" ? "/challenges/progress" : "/dashboard"];
+    for (const path of paths) {
+      let key;
+      try {
+        key = (sessionStorage.getItem("pc_user") || "") + ":" +
+          (sessionStorage.getItem("pc_read_generation") || "0") + ":" + path;
+      } catch (_) { return; }
+      if (Date.now() - warmed.get(key) < 300000) continue;
+      warmed.set(key, Date.now());
+      if (warmed.size > 20) warmed.delete(warmed.keys().next().value);
+      InterviewAPI.readCached(path, undefined, {
+        skipAuthRedirect: kind === "brief" && path !== "/challenges/progress",
+      }).catch(() => warmed.delete(key));
+    }
   };
   document.addEventListener("pointerover", prefetch);
   document.addEventListener("focusin", prefetch);

@@ -14,16 +14,22 @@ async function start() {
 }
 
 async function load() {
-  const progress = InterviewAPI.listChallengesProgress({}).then(
-    (cards) => ({ cards }), (error) => ({ error })
-  );
-  const c = await InterviewAPI.getChallenge(slug);
-  if (!pageRoot.isConnected) return;
-  render(c, null, "Checking your sessions…");
-  const result = await progress;
-  if (!pageRoot.isConnected) return;
-  const card = (result.cards || []).find((item) => item.slug === slug) || null;
-  render(c, card, result.error ? "Could not check your sessions. Reload to retry." : "");
+  let challenge, card = null, pending = "Checking your sessions…";
+  const show = () => {
+    if (challenge && pageRoot.isConnected) render(challenge, card, pending);
+  };
+  const updateProgress = (cards) => {
+    card = cards.find((item) => item.slug === slug) || null;
+    pending = "";
+    show();
+  };
+  const progress = InterviewAPI.readChallengesProgress(updateProgress).then(updateProgress, () => {
+    pending = "Could not check your sessions. Reload to retry.";
+    show();
+  });
+  challenge = await InterviewAPI.getChallenge(slug, (data) => { challenge = data; show(); });
+  show();
+  await progress;
 }
 
 function render(c, card, pending) {

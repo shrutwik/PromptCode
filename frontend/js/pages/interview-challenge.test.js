@@ -9,8 +9,8 @@ function page() {
     document: { getElementById: (id) => id === "main" ? main : null },
     PCUI: { esc: (v) => String(v ?? "") }, window: {},
     InterviewAPI: { requireAuth: () => true,
-      getChallenge: () => { calls.push("detail"); return new Promise((resolve) => { resolves.detail = resolve; }); },
-      listChallengesProgress: () => { calls.push("progress"); return new Promise((resolve, reject) => { resolves.progress = resolve; resolves.fail = reject; }); } } };
+      getChallenge: (_, update) => { calls.push("detail"); resolves.updateDetail = update; return new Promise((resolve) => { resolves.detail = resolve; }); },
+      readChallengesProgress: (update) => { calls.push("progress"); resolves.updateProgress = update; return new Promise((resolve, reject) => { resolves.progress = resolve; resolves.fail = reject; }); } } };
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(__dirname + "/interview-challenge.js", "utf8"), context);
   return { main, calls, resolves };
@@ -42,6 +42,22 @@ test("late response cannot render into a different route", async () => {
   p.resolves.progress([]);
   await new Promise(setImmediate);
   assert.equal(p.main.innerHTML, "");
+});
+test("cached brief and progress render immediately and accept background updates", async () => {
+  const p = page();
+  p.resolves.progress([{ slug: "demo", active_session_id: "owned" }]);
+  p.resolves.detail({ title: "Cached task", readme: "Cached description" });
+  await new Promise(setImmediate);
+  assert.match(p.main.innerHTML, /Cached description/);
+  assert.match(p.main.innerHTML, /Resume session/);
+  p.resolves.updateDetail({ title: "Updated task", readme: "New description" });
+  p.resolves.updateProgress([]);
+  assert.match(p.main.innerHTML, /New description/);
+  assert.match(p.main.innerHTML, /id="startBtn"/);
+  p.main.isConnected = false;
+  const before = p.main.innerHTML;
+  p.resolves.updateDetail({ title: "Late update" });
+  assert.equal(p.main.innerHTML, before);
 });
 
 test("candidate sees rubric weights and anchors before starting", async () => {
