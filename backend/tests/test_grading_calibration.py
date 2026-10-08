@@ -12,7 +12,7 @@ from app.services.interview.grading_calibration import (
 
 def record(index, rating):
     return {"attempt_id": str(index), "challenge_slug": "question", "challenge_version": "1",
-        "rubric_version": "v3-evidence", "synthetic": False, "external_verified": True,
+        "rubric_version": "v4-research-pilot", "synthetic": False, "external_verified": True,
         "snapshot_digest": "s", "packet_digest": "p", "evaluator_version": "e",
         "inventory_digest": "i", "ai_available": True,
         "reviews": [{"reviewer_id": name, "reviewer_kind": "human", "packet_digest": "p",

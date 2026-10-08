@@ -6,10 +6,18 @@
   const status = document.getElementById('status');
   const announce = text => { status.textContent = text; };
   const request = (path, body) => InterviewAPI.request('/grading' + path, body ? { method: 'POST', body: JSON.stringify(body) } : {});
-  function criterion(key, label, weight, manual) {
+  function criterion(key, label, weight, manual, anchors = {}) {
     const field = document.createElement('fieldset');
     field.dataset.key = key; field.dataset.manual = String(manual);
     const legend = document.createElement('legend'); legend.textContent = label + (weight ? ` (${weight}%)` : ''); field.append(legend);
+    if (Object.keys(anchors).length) {
+      const guide = document.createElement('details'), title = document.createElement('summary');
+      title.textContent = 'Scoring anchors'; guide.append(title);
+      for (const [rating, anchor] of Object.entries(anchors)) {
+        const line = document.createElement('p'); line.textContent = `${rating} / 4: ${anchor}`; guide.append(line);
+      }
+      field.append(guide);
+    }
     for (const [name, caption, type] of [['rating','Rating 0–4','number'],['rationale','Evidence-based rationale','textarea'],['evidence','Evidence IDs, separated by commas','text']]) {
       const labelEl = document.createElement('label'); labelEl.textContent = caption + ' ';
       const input = document.createElement(type === 'textarea' ? 'textarea' : 'input');
@@ -46,7 +54,7 @@
       const data = await request(`/sessions/${session}/evidence`); packet = data.assessment;
       document.getElementById('facts').textContent = JSON.stringify(data,null,2);
       const area = document.getElementById('criteria'); area.replaceChildren();
-      for (const [key,value] of Object.entries(packet.dimensions)) if (value.status !== 'not_applicable') area.append(criterion(key,value.label,value.weight,false));
+      for (const [key,value] of Object.entries(packet.dimensions)) if (value.status !== 'not_applicable') area.append(criterion(key,value.label,value.weight,false,packet.dimension_anchors?.[key]));
       for (const gap of data.external_evaluation.payload.manual_requirements) area.append(criterion(gap,gap,null,true));
       document.getElementById('evidence').hidden = false; await refreshHistory(); announce('Evidence loaded. Review all applicable criteria and coverage gaps.');
     } catch (error) { document.getElementById('evidence').hidden = true; announce(error.message); }

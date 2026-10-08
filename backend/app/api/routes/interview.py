@@ -553,7 +553,10 @@ async def interview_get_challenge(
         challenge_slug=slug,
         commit=True,
     )
+    from app.services.interview.grading import public_rubric
+
     return InterviewChallengeDetail(
+        grading_criteria=public_rubric(),
         **{k: meta[k] for k in (
             "slug", "title", "type", "stack", "difficulty",
             "estimated_minutes", "summary", "test_command", "entry_files",

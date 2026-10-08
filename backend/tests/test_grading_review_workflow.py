@@ -57,7 +57,7 @@ async def setup(tmp_path, monkeypatch, slug="order-hold-reason"):
 
 
 def review(assessment,user):
-    return HumanReview(reviewer_id=str(user.id),reviewer_kind='human',packet_digest=assessment['packet_digest'],rubric_version='v3-evidence',dimensions={key:{'rating':3,'rationale':'Examined the submitted source and verified evaluation evidence.','evidence_ids':['evaluation:trusted'] if key=='A_correctness' else ['defend:0'] if key=='F_communication' else ['source:submitted']} for key in DIMENSIONS if key!='D_ai_leverage'})
+    return HumanReview(reviewer_id=str(user.id),reviewer_kind='human',packet_digest=assessment['packet_digest'],rubric_version='v4-research-pilot',dimensions={key:{'rating':3,'rationale':'Examined the submitted source and verified evaluation evidence.','evidence_ids':['evaluation:trusted'] if key=='A_correctness' else ['defend:0'] if key=='F_communication' else ['source:submitted']} for key in DIMENSIONS if key!='D_ai_leverage'})
 
 
 def test_reviews_reject_candidate_selfreview_forged_provenance_stale_and_append(tmp_path,monkeypatch):
@@ -158,7 +158,8 @@ def test_signed_functional_failures_cannot_be_overridden_by_reviewer(tmp_path,mo
             with pytest.raises(Exception) as exc: await append_review(db,session.id,users[1],proposed)
             assert exc.value.status_code==422
             proposed.dimensions['A_correctness'].rating=0 if all_failed else 2
-            await append_review(db,session.id,users[1],proposed)
+            row = await append_review(db,session.id,users[1],proposed)
+            assert row.outcome['review_flags'] == ['unmet_behavioral_requirements']
         await engine.dispose()
     asyncio.run(run())
 
@@ -176,7 +177,8 @@ def test_manual_coverage_gaps_must_be_reviewed_and_cannot_be_overridden(tmp_path
             with pytest.raises(Exception) as exc: await append_review(db,session.id,users[1],proposed,checks)
             assert exc.value.status_code==422
             proposed.dimensions['A_correctness'].rating=2
-            await append_review(db,session.id,users[1],proposed,checks)
+            row = await append_review(db,session.id,users[1],proposed,checks)
+            assert row.outcome['review_flags'] == ['unmet_manual_requirements']
         await engine.dispose()
     asyncio.run(run())
 

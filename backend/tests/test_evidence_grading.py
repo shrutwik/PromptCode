@@ -32,7 +32,7 @@ def externally_evaluated(ai=True):
 
 def review_for(assessment, rating=3):
     return HumanReview(reviewer_id="staff", reviewer_kind="human",
-                       packet_digest=assessment["packet_digest"], rubric_version="v3-evidence",
+                       packet_digest=assessment["packet_digest"], rubric_version="v4-research-pilot",
                        dimensions={key: {"rating": rating,
                                          "rationale": "Reviewed the cited task-specific evidence.",
                                          "evidence_ids": ["external:job" if key == "A_correctness"
@@ -120,3 +120,53 @@ def test_local_refusal_is_not_an_opportunity_to_demonstrate_ai_oversight():
                                             "payload": {"provider": "guardrail"}}],
                                    test_summary={})
     assert assessment["dimensions"]["D_ai_leverage"]["status"] == "not_applicable"
+
+
+def test_research_weights_and_dimension_anchors_are_public_without_private_evidence():
+    from app.services.interview.grading import RUBRIC_VERSION, public_rubric
+    public = public_rubric()
+    assert public['version'] == RUBRIC_VERSION == 'v4-research-pilot'
+    assert [v['weight'] for v in public['dimensions'].values()] == [30, 15, 15, 10, 20, 10]
+    assert sum(v['weight'] for v in public['dimensions'].values()) == 100
+    assert all(set(v['anchors']) == set(range(5)) for v in public['dimensions'].values())
+    assert 'packet' not in public and 'evidence' not in public
+
+
+def test_mixed_ratings_distinguish_new_weights_from_previous_rubric():
+    assessment = externally_evaluated()
+    review = review_for(assessment)
+    for key, rating in zip(DIMENSIONS, [3, 3, 3, 2, 4, 2]):
+        review.dimensions[key].rating = rating
+    assert score_reviewed_assessment(assessment, review)['total_score'] == 75
+    review.dimensions['A_correctness'].rating = 0
+    review.dimensions['E_verification'].rating = 4
+    assert score_reviewed_assessment(assessment, review)['total_score'] == 52.5
+
+
+def test_no_ai_mode_is_not_a_claim_of_unavailability_or_equal_competence():
+    assessment = externally_evaluated(ai=False)
+    assert assessment['packet']['ai_context']['availability'] == 'unknown'
+    assert assessment['packet']['ai_context']['required'] is False
+    outcome = score_reviewed_assessment(assessment, review_for(assessment))
+    assert outcome['ai_context']['assessment_mode'] == 'ai_not_observed'
+    assert 'does not establish equivalent' in outcome['comparison_notice']
+
+
+def test_old_packet_cannot_be_regraded_using_new_weights():
+    assessment = externally_evaluated()
+    assessment['packet']['rubric_version'] = 'v3-evidence'
+    assessment['packet_digest'] = _digest(assessment['packet'])
+    with pytest.raises(ValueError, match='revision'):
+        score_reviewed_assessment(assessment, review_for(assessment))
+
+
+def test_all_featured_questions_have_reviewer_guidance_without_graded_discussion():
+    from app.services.interview.question_parts import review_guidance_for
+    from app.services.interview.registry import list_challenges
+    featured = [c for c in list_challenges() if c.get('featured_rank') is not None]
+    assert len(featured) == 20
+    for challenge in featured:
+        guidance = review_guidance_for(challenge['slug'])
+        assert guidance['invariant']
+        assert [part['number'] for part in guidance['baseline_parts']] == [1, 2, 3]
+        assert all('case_ids' not in part for part in guidance['baseline_parts'])

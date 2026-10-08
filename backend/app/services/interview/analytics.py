@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.beta_ops import ProductAnalyticsEvent
 from app.models.interview_session import InterviewEvaluation, InterviewSession
+from app.services.interview.grading import RUBRIC_VERSION
 
 # Product-level only — not Monaco/file/test chatter.
 KNOWN_EVENTS = frozenset(
@@ -32,7 +33,7 @@ KNOWN_EVENTS = frozenset(
     }
 )
 
-SCORING_VERSION = "v3-evidence"
+SCORING_VERSION = RUBRIC_VERSION
 
 
 async def track_event(

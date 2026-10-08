@@ -133,8 +133,8 @@ async function load() {
     const label = v.label || k.replace(/^[A-Z]_/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()).replace(/\bAi\b/, "AI");
     const categoryStatus = v.status === "not_applicable" ? "Not applicable"
       : reviewed && Number.isInteger(v.rating) ? `${v.rating} / 4` : "Not assessed";
-    return `<div class="rubric-row"><div><div class="name">${esc(label)}</div>
-      <div class="evidence">${esc(v.status === "not_applicable" ? "AI assistance was not available for this attempt." : reviewed ? v.rationale : "Evidence requires review before a rating can be given.")}</div></div>
+    return `<div class="rubric-row"><div><div class="name">${esc(label)}${Number.isFinite(v.weight) ? ` · ${esc(v.weight)}%` : ""}</div>
+      <div class="evidence">${esc(v.status === "not_applicable" ? "AI judgment was not observed for this attempt; this criterion is excluded." : reviewed ? v.rationale : "Evidence requires review before a rating can be given.")}</div></div>
       <div class="v">${categoryStatus}</div></div>`;
   }).join("") || `<div class="pc-panel-body muted">No assessment yet</div>`;
 
@@ -270,6 +270,8 @@ async function load() {
       ${compareHtml}
       <section class="pc-panel" aria-labelledby="rubricTitle">
         <div class="pc-panel-head"><h2 id="rubricTitle">Assessment criteria</h2></div>
+        ${r.assessment?.comparison_notice ? `<p class="pc-panel-body">${esc(r.assessment.comparison_notice)}</p>` : ""}
+        ${(r.assessment?.review_flags || []).length ? `<p class="pc-panel-body">Required behavior remains unmet. Review the behavioral results and manual coverage checks; the overall rating does not override these failures.</p>` : ""}
         ${rubricHtml}
       </section>
       <section class="pc-panel"><div class="pc-panel-head"><h2>Review or appeal</h2></div><div class="pc-panel-body">

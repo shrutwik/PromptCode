@@ -16,3 +16,10 @@ def _reviewed_parts():
 def parts_for(slug: str) -> list[dict]:
     return [deepcopy({key: part[key] for key in PUBLIC_FIELDS})
             for part in _reviewed_parts().get(slug, {}).get('parts', [])]
+
+
+def review_guidance_for(slug: str) -> dict:
+    """Reviewer context from the same contract, excluding optional discussion."""
+    question = _reviewed_parts().get(slug, {})
+    return {"invariant": question.get("invariant"),
+            "baseline_parts": [part for part in parts_for(slug) if part["mode"] == "baseline"]}

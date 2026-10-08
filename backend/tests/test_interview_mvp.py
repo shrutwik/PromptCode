@@ -216,6 +216,12 @@ def test_interview_challenge_api_hides_solution_content(tmp_path, monkeypatch):
             assert "SOLUTION" not in body["readme"]
             assert "interviewer" not in body
             assert "command_ids" in body
+            criteria = body['grading_criteria']
+            assert criteria['version'] == 'v4-research-pilot'
+            assert criteria['dimensions']['A_correctness']['weight'] == 30
+            assert criteria['dimensions']['E_verification']['weight'] == 20
+            assert '3' in criteria['dimensions']['B_investigation']['anchors']
+            assert 'packet' not in criteria
             extra = await client.get(f"/api/interview/challenges/{data[-1]['slug']}")
             assert extra.status_code == 200
             assert extra.json()["featured_rank"] is None

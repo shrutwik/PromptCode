@@ -46,6 +46,17 @@ function render(c, card, pending) {
           </div>
           <p class="brief-summary">${esc(c.summary)}</p>
         </header>
+        <section class="pc-panel" aria-labelledby="criteriaTitle">
+          <div class="pc-panel-head"><h2 id="criteriaTitle">How your work is assessed</h2></div>
+          <div class="pc-panel-body">
+            <p>${esc(c.grading_criteria?.notice || "Test results and human review are separate. Optional discussion is ungraded.")}</p>
+            ${Object.values(c.grading_criteria?.dimensions || {}).map((criterion) => `<details>
+              <summary>${esc(criterion.label)} · ${esc(criterion.weight)}%</summary>
+              <dl>${Object.entries(criterion.anchors || {}).map(([rating, anchor]) => `<dt>${esc(rating)} / 4</dt><dd>${esc(anchor)}</dd>`).join("")}</dl>
+            </details>`).join("")}
+            <p>Missing evidence is not a zero. AI use is optional; when AI judgment is not observed, the report identifies its exclusion. Model brand, prompt count and verbosity do not earn points.</p>
+          </div>
+        </section>
         <section class="pc-panel" aria-labelledby="ticketTitle">
           <div class="pc-panel-head"><h2 id="ticketTitle">Task</h2><span class="section-meta mono">README.md</span></div>
           <pre class="brief-readme">${esc(c.readme)}</pre>
@@ -65,8 +76,8 @@ function render(c, card, pending) {
           <div class="brief-label">Rules</div>
           <ul class="brief-rules">
             <li>${CHECK}<span>Timed interview simulation — the clock starts when the workspace is ready and pauses while you’re away.</span></li>
-            <li>${CHECK}<span>AI assistant allowed. What you ask and accept is logged and scored.</span></li>
-            <li>${CHECK}<span>The task opens one step at a time: the bug, then each feature level after you run the tests.</span></li>
+            <li>${CHECK}<span>AI assistant allowed. Human review considers how you inspect and verify its output.</span></li>
+            <li>${CHECK}<span>Follow the stated task parts. Optional changed-requirement discussion is ungraded.</span></li>
             <li>${CHECK}<span>Visible tests run in the workspace; hidden tests run on submit.</span></li>
             <li>${CHECK}<span>After submitting you’ll defend your changes in four short questions.</span></li>
           </ul>

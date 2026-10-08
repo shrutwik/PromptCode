@@ -143,6 +143,11 @@ async def append_review(db: AsyncSession, session_id: uuid.UUID, user: User, rev
         if correctness and correctness.rating > 2 and (external_score < 100 or any(check.rating < 3 for check in checks.values())):
             raise ValueError("Unmet functional or manual requirements cap correctness at partial")
         outcome = score_reviewed_assessment(assessment, review)
+        # A weighted total must not conceal unmet behavioral/coverage requirements.
+        outcome["review_flags"] = (
+            (["unmet_behavioral_requirements"] if external_score < 100 else [])
+            + (["unmet_manual_requirements"] if any(c.rating < 3 for c in checks.values()) else [])
+        )
         outcome["manual_checks"] = {key: value.model_dump() for key, value in checks.items()}
         if "source:submitted" not in review.dimensions["C_fix_quality"].evidence_ids:
             raise ValueError("Implementation quality requires submitted source evidence")
@@ -176,7 +181,10 @@ async def reviewer_evidence(db: AsyncSession, session_id: uuid.UUID, user: User)
         raise HTTPException(409, "Submitted source integrity check failed") from None
     events = (await db.execute(select(InterviewSessionEvent).where(InterviewSessionEvent.session_id == session_id).order_by(InterviewSessionEvent.created_at))).scalars().all()
     messages = (await db.execute(select(InterviewAIMessage).where(InterviewAIMessage.session_id == session_id).order_by(InterviewAIMessage.created_at))).scalars().all()
-    return {"session_id": str(session.id), "assessment": assessment, "source_digest": job.source_digest,
+    from app.services.interview.question_parts import review_guidance_for
+
+    return {"session_id": str(session.id), "assessment": assessment,
+        "task_guidance": review_guidance_for(job.challenge_slug), "source_digest": job.source_digest,
         "source": source, "external_evaluation": job.result,
         "events": [{"id": str(e.id), "event_type": e.event_type, "payload": e.payload} for e in events],
         "ai_transcript": [{"role": m.role, "content": m.content} for m in messages],

@@ -59,3 +59,16 @@ test("published human practice ratings are shown while historical heuristics sta
   assert.match(html, /Request an independent review/);
   assert.doesNotMatch(html, /0\s*\/\s*100|scoreRing/);
 });
+
+test("adjusted AI mode and unmet requirements remain explicit beside a score", async () => {
+  const html = await render({ timeline: [], assessment: {
+    status: "reviewed_practice", total_score: 75,
+    comparison_notice: "AI judgment was not observed; adjusted total excludes this dimension.",
+    review_flags: ["unmet_behavioral_requirements"],
+    dimensions: { E_verification: { label: "Verification", weight: 20, rating: 4,
+      status: "reviewed", rationale: "Independent counterexample checked." } }
+  } });
+  assert.match(html, /Verification · 20%/);
+  assert.match(html, /adjusted total excludes this dimension/);
+  assert.match(html, /Required behavior remains unmet/);
+});

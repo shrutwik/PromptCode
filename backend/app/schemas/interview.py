@@ -19,6 +19,7 @@ class InterviewChallengeCard(BaseModel):
 
 
 class InterviewChallengeDetail(InterviewChallengeCard):
+    grading_criteria: dict[str, Any] = Field(default_factory=dict)
     readme: str
     test_command: str
     entry_files: list[str] = Field(default_factory=list)

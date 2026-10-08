@@ -43,3 +43,19 @@ test("late response cannot render into a different route", async () => {
   await new Promise(setImmediate);
   assert.equal(p.main.innerHTML, "");
 });
+
+test("candidate sees rubric weights and anchors before starting", async () => {
+  const p = page();
+  p.resolves.detail({ title: "Task", grading_criteria: {
+    notice: "Research-informed pilot; optional discussion is ungraded.",
+    dimensions: { A_correctness: { label: "Functional correctness", weight: 30,
+      anchors: { 0: "Core behavior fails", 3: "Meets the stated contract" } },
+      E_verification: { label: "Verification", weight: 20, anchors: { 4: "Independent counterexample" } } }
+  } });
+  await new Promise(setImmediate);
+  assert.match(p.main.innerHTML, /Functional correctness · 30%/);
+  assert.match(p.main.innerHTML, /Verification · 20%/);
+  assert.match(p.main.innerHTML, /Meets the stated contract/);
+  assert.match(p.main.innerHTML, /optional discussion is ungraded/);
+  assert.doesNotMatch(p.main.innerHTML, /What you ask and accept is logged and scored/);
+});

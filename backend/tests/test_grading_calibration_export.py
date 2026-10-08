@@ -30,7 +30,7 @@ def fixture(monkeypatch, *, same_reviewer=False):
     first, second = uuid4(), uuid4()
     rows = []
     for index, reviewer in enumerate((first, first if same_reviewer else second)):
-        data = {"reviewer_id": str(reviewer), "reviewer_kind": "human", "rubric_version": "v3-evidence",
+        data = {"reviewer_id": str(reviewer), "reviewer_kind": "human", "rubric_version": "v4-research-pilot",
             "packet_digest": assessment["packet_digest"], "dimensions": {
                 key: {"rating": 3, "rationale": "Independent review of evidence for the requirement.",
                       "evidence_ids": ["evaluation:trusted"]} for key in DIMENSIONS if key != "D_ai_leverage"},
