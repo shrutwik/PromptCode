@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Literal, TypedDict, cast
@@ -151,6 +152,7 @@ async def _check_auth_rate_limit(
         limit=_AUTH_RATE_LIMIT,
         window_seconds=_AUTH_RATE_WINDOW,
         now=now,
+        commit=not identity,
     )
     if identity:
         import hmac
@@ -230,7 +232,7 @@ async def login(
     await _check_auth_rate_limit(request, db=db, identity=payload.email)
     result = await db.execute(select(User).where(func.lower(User.email) == payload.email))
     user = result.scalar_one_or_none()
-    if not user or not verify_password(payload.password, user.password_hash):
+    if not user or not await asyncio.to_thread(verify_password, payload.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -247,7 +249,6 @@ async def login(
     access_token = create_access_token(user.id, settings.jwt_secret)
     refresh_token = create_refresh_token(user.id, settings.jwt_secret)
     await db.commit()
-    await db.refresh(user)
     _set_auth_cookies(response, access=access_token, refresh=refresh_token)
     return TokenResponse(
         access_token=access_token,

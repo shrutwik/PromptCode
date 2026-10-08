@@ -3,6 +3,13 @@
  * API used by interview-session / report / dashboard.
  */
 (function (global) {
+  // Keep first paint and page scripts independent of the external font CSS.
+  document.querySelectorAll("link[data-pc-fonts]").forEach((link) => {
+    const apply = () => { link.media = "all"; };
+    if (link.sheet) apply();
+    else link.addEventListener("load", apply, { once: true });
+  });
+
   const reduced = () =>
     global.matchMedia && global.matchMedia("(prefers-reduced-motion: reduce)").matches;
 

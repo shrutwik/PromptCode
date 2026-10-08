@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
-function shell() {
+function shell(sessionStorage = storage(), api) {
   const listeners = {}, requests = [], resolves = {}, loaded = [], fullNavigations = [];
   const location = { origin: "https://app.test", href: "https://app.test/dashboard", pathname: "/dashboard", search: "" };
   location.assign = (href) => fullNavigations.push(href);
@@ -19,7 +19,7 @@ function shell() {
   };
   const history = { state: {}, replaceState(state) { this.state = state; },
     pushState(state, _, href) { this.state = state; const u = new URL(href, location.href); Object.assign(location, { href: u.href, pathname: u.pathname, search: u.search }); } };
-  const context = { document, location, history, URL, navigator: {}, scrollX: 0, scrollY: 0, scrollTo() {},
+  const context = { document, location, history, URL, sessionStorage, InterviewAPI: api, navigator: {}, scrollX: 0, scrollY: 0, scrollTo() {},
     DOMParser: class { parseFromString(name) {
       return { title: name, getElementById: () => root(),
         querySelectorAll: () => [{ src: "/static/js/pages/interview-" + name + ".js", getAttribute() { return this.src; } }] };
@@ -30,8 +30,14 @@ function shell() {
   context.window = context;
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(__dirname + "/pc-nav.js", "utf8"), context);
-  return { nav: context.PCNav, document, history, listeners, requests, resolves, loaded, fullNavigations, location,
+  return { nav: context.PCNav, context, document, history, listeners, requests, resolves, loaded, fullNavigations, location,
     get main() { return main; } };
+}
+function storage() {
+  const values = new Map();
+  return { get length() { return values.size; }, key: (i) => [...values.keys()][i],
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, String(value)), removeItem: (key) => values.delete(key) };
 }
 test("navigation keeps the document and reuses cached route markup", async () => {
   const p = shell(), doc = p.document;
@@ -81,4 +87,53 @@ test("back navigation does not add another history entry", async () => {
   await back;
   assert.equal(p.fullNavigations.length, 0);
   assert.equal(p.loaded.length, 1);
+});
+test("link intent warms read data once per account and mutation generation", async () => {
+  const reads = [], values = storage();
+  values.setItem("pc_user", '{"id":"owner"}');
+  const p = shell(values, { isLoggedIn: () => true, readCached: async (path) => { reads.push(path); } });
+  const target = { closest: () => ({ href: "https://app.test/challenges/demo", hasAttribute: () => false }) };
+  p.listeners.pointerover({ target });
+  p.listeners.focusin({ target });
+  assert.deepEqual(reads, ["/challenges/demo", "/challenges/progress"]);
+  assert.equal(p.requests.length, 1);
+  values.setItem("pc_read_generation", "1");
+  p.listeners.pointerover({ target });
+  assert.equal(reads.length, 4);
+  values.setItem("pc_user", '{"id":"other"}');
+  p.listeners.pointerover({ target });
+  assert.equal(reads.length, 6);
+  p.context.navigator.connection = { saveData: true };
+  target.closest = () => ({ href: "https://app.test/progress", hasAttribute: () => false });
+  p.listeners.pointerover({ target });
+  assert.equal(reads.length, 6);
+  assert.equal(p.requests.length, 1);
+  p.resolves["/challenges/demo"]("challenge");
+  await new Promise(setImmediate);
+});
+test("public templates survive a workspace document reload without fetching HTML again", async () => {
+  const values = storage();
+  values.setItem("pc_user", "private account");
+  const first = shell(values);
+  const visit = first.nav.go("/challenges");
+  first.resolves["/challenges"]("challenges");
+  await visit;
+  const next = shell(values);
+  await next.nav.go("/challenges");
+  assert.equal(next.requests.length, 0);
+  assert.equal(next.loaded.length, 1);
+  assert.equal(values.getItem("pc_user"), "private account");
+});
+test("expired and unsupported stored templates fall back to normal requests", async () => {
+  const values = storage();
+  values.setItem("pc_nav_v20261008a:/challenges", JSON.stringify({ html: "challenges", at: 0 }));
+  const p = shell(values);
+  const visit = p.nav.go("/challenges");
+  assert.equal(p.requests.length, 1);
+  p.resolves["/challenges"]("challenges");
+  await visit;
+  values.setItem("pc_nav_v20261008a:/progress", JSON.stringify({ html: "unsupported", at: Date.now() }));
+  await p.nav.go("/progress");
+  assert.equal(values.getItem("pc_nav_v20261008a:/progress"), null);
+  assert.deepEqual(p.fullNavigations, ["https://app.test/progress"]);
 });

@@ -144,22 +144,30 @@ const InterviewAPI = {
     this._readPending.clear();
   },
 
-  async readCached(path, onUpdate) {
+  async readCached(path, onUpdate, options = {}) {
+    const publicRead = options.skipAuthRedirect && path !== "/challenges/progress" &&
+      /^\/challenges(?:\/[^/?]+)?$/.test(path);
     let account, generation, key, cached;
     try {
       account = JSON.parse(this._get("pc_user") || "null")?.id;
-      if (!account || !this.isLoggedIn()) return this.request(path);
+      if (!publicRead && (!account || !this.isLoggedIn())) return this.request(path, options);
       generation = sessionStorage.getItem("pc_read_generation") || "0";
-      key = "pc_read_v1:" + account + ":" + path;
+      key = publicRead ? "pc_public_read_v1:" + path : "pc_read_v1:" + account + ":" + path;
       cached = JSON.parse(sessionStorage.getItem(key) || "null");
-    } catch (_) { return this.request(path); }
+    } catch (_) { return this.request(path, options); }
     let pending = this._readPending.get(key);
     if (!pending) {
-      pending = this.request(path).then((data) => {
+      pending = this.request(path, options).then((data) => {
         try {
-          if (generation === (sessionStorage.getItem("pc_read_generation") || "0") &&
-              account === JSON.parse(this._get("pc_user") || "null")?.id && this.isLoggedIn()) {
+          if (publicRead || (generation === (sessionStorage.getItem("pc_read_generation") || "0") &&
+              account === JSON.parse(this._get("pc_user") || "null")?.id && this.isLoggedIn())) {
             sessionStorage.setItem(key, JSON.stringify({ data, at: Date.now(), generation }));
+            if (path === "/challenges/progress" && Array.isArray(data)) {
+              // Only public metadata survives starting, submitting or leaving a session.
+              const cards = data.map(({ slug, title, summary, type, stack, difficulty, estimated_minutes, featured_rank }) =>
+                ({ slug, title, summary, type, stack, difficulty, estimated_minutes, featured_rank }));
+              sessionStorage.setItem("pc_public_read_v1:/challenges", JSON.stringify({ data: cards, at: Date.now() }));
+            }
           }
         } catch (_) {}
         return data;
@@ -168,7 +176,8 @@ const InterviewAPI = {
       });
       this._readPending.set(key, pending);
     }
-    if (cached && cached.generation === generation && Date.now() - cached.at < this.READ_CACHE_MS) {
+    if (cached && (publicRead || cached.generation === generation) &&
+        Date.now() - cached.at < (publicRead ? 86400000 : this.READ_CACHE_MS)) {
       // Revalidation never erases a usable cached view on a transient failure.
       pending.then((data) => {
         if ((sessionStorage.getItem("pc_read_generation") || "0") === generation &&
@@ -185,6 +194,14 @@ const InterviewAPI = {
 
   readChallengesProgress(onUpdate) {
     return this.readCached("/challenges/progress", onUpdate);
+  },
+
+  getCachedCatalog() {
+    try {
+      const cached = JSON.parse(sessionStorage.getItem("pc_public_read_v1:/challenges") || "null");
+      if (cached && Date.now() - cached.at < 86400000 && Array.isArray(cached.data)) return cached.data;
+    } catch (_) {}
+    return null;
   },
 
   async request(path, options = {}, isRetry = false) {
@@ -253,8 +270,8 @@ const InterviewAPI = {
     return this.request("/challenges/progress" + (qs ? "?" + qs : ""));
   },
 
-  getChallenge(slug) {
-    return this.request("/challenges/" + encodeURIComponent(slug), { skipAuthRedirect: true });
+  getChallenge(slug, onUpdate) {
+    return this.readCached("/challenges/" + encodeURIComponent(slug), onUpdate, { skipAuthRedirect: true });
   },
 
   startSession(slug) {

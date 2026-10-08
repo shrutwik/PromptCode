@@ -96,3 +96,38 @@ test("a late cached refresh cannot render data after the account changes", async
   await new Promise(setImmediate);
   assert.equal(rendered, false);
 });
+test("public challenge text survives mutations and a longer workspace visit", async () => {
+  const { api, sessionStorage } = client();
+  api.request = async () => ({ readme: "Public task" });
+  await api.getChallenge("demo");
+  const key = "pc_public_read_v1:/challenges/demo";
+  const cached = JSON.parse(sessionStorage.getItem(key));
+  cached.at = Date.now() - 30 * 60000;
+  sessionStorage.setItem(key, JSON.stringify(cached));
+  api.invalidateReads();
+  const next = client(sessionStorage);
+  let finish;
+  next.api.request = (path, options) => {
+    assert.equal(path, "/challenges/demo");
+    assert.equal(options.skipAuthRedirect, true);
+    return new Promise((resolve) => { finish = resolve; });
+  };
+  assert.equal((await next.api.getChallenge("demo")).readme, "Public task");
+  finish({ readme: "Updated public task" });
+  await new Promise(setImmediate);
+  assert.equal(JSON.parse(sessionStorage.getItem(key)).data.readme, "Updated public task");
+});
+test("catalog fallback retains public metadata without session IDs, attempts or scores", async () => {
+  const { api, sessionStorage } = client();
+  api.request = async () => [{ slug: "demo", title: "Task", stack: "Python", type: "bugfix",
+    active_session_id: "private-session", best_score: 80, attempt_count: 3, progress: "in_progress" }];
+  await api.readChallengesProgress();
+  api.clearAccessAuth();
+  assert.equal(sessionStorage.getItem("pc_read_v1:owner:/challenges/progress"), null);
+  const cards = api.getCachedCatalog();
+  assert.equal(cards[0].title, "Task");
+  assert.equal(cards[0].active_session_id, undefined);
+  assert.equal(cards[0].best_score, undefined);
+  assert.equal(cards[0].attempt_count, undefined);
+  assert.equal(cards[0].progress, undefined);
+});

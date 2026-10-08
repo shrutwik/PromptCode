@@ -16,6 +16,7 @@ let filtersReady = false;
 
 const DIFF_TONE = { easy: "success", hard: "danger" };
 const PROGRESS = {
+  checking: ["Checking…", "idle"],
   not_started: ["Not started", "idle"],
   in_progress: ["In progress", "info"],
   completed: ["Completed", "success"],
@@ -32,7 +33,7 @@ function applyFilters() {
     if (stack && c.stack !== stack) return false;
     if (diff && c.difficulty !== diff) return false;
     const progress = c.progress || "not_started";
-    if (status && progress !== status) return false;
+    if (status && progress !== "checking" && progress !== status) return false;
     if (q) {
       const hay = `${c.title} ${c.summary} ${c.slug || ""} ${c.type} ${c.stack}`.toLowerCase();
       if (!hay.includes(q)) return false;
@@ -134,6 +135,8 @@ function renderData(data) {
 }
 
 async function load() {
+  const catalog = InterviewAPI.getCachedCatalog();
+  if (catalog) renderData(catalog.map((card) => ({ ...card, progress: "checking" })));
   const data = InterviewAPI.isLoggedIn()
     ? await InterviewAPI.readChallengesProgress(renderData)
     : await InterviewAPI.listChallenges({});
@@ -147,6 +150,10 @@ async function load() {
 
 load().catch((e) => {
   if (!pageRoot.isConnected) return;
+  if (allItems.length) {
+    document.getElementById("authHint").innerHTML = `<span class="pc-error" role="alert"><strong>Could not check session status</strong> <span class="pc-error-safe">${esc(e.message)}</span> <button class="btn btn-ghost btn-sm" type="button" data-pc-reload>Retry</button></span>`;
+    return;
+  }
   document.getElementById("tableWrap").innerHTML = `<div class="pc-error" role="alert" style="border:0;border-radius:0"><strong>Could not load challenges</strong><div class="pc-error-safe">${esc(e.message)}</div><button class="btn btn-ghost btn-sm" type="button" data-pc-reload>Retry</button></div>`;
 });
 
