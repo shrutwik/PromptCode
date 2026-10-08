@@ -74,3 +74,17 @@ Before using ratings beyond practice, build a consented expert-labeled corpus st
 Measure per-dimension weighted agreement with reviewers, mean absolute error, behavioral failure false-positive rates, overall and subgroup deferral rates, citation rejection rates, repeatability, latency, usage and cost. Test style-only perturbations separately from semantic changes. Select models and thresholds on development cases, report held-out uncertainty intervals, and rerun after model/prompt/rubric/task changes. Do not infer protected traits from submissions. No such local calibration corpus or human agreement result is claimed for this release.
 
 Operational follow-up: monitor queued age, expired leases, retries, provider/schema failures, budget denials, disagreement and manual-coverage flags through persisted states; add alerting and a reviewed dashboard when volume warrants it. Diverse-provider judging, calibrated thresholds, workload scaling and stronger adversarial evaluation remain justified next improvements. None should be presented as already implemented.
+
+
+## Release verification receipt
+
+Implementation commit: `542bb0c`, integrated with concurrent published website changes. Modal backend and its existing scheduled grading function deployed successfully; Vercel reported a successful deployment.
+
+- Isolated implementation regression suite: **1,091 passed, 180 skipped**. Skips remain visible and are not claimed as exercised coverage.
+- After integrating concurrent commits: **74 targeted backend tests passed**, repository backend lint passed, and the configured strict type check passed for 29 source files.
+- **29 integrated frontend tests passed**, including automatic grading rendering and concurrent navigation/cache behavior. The initial isolated frontend run also passed 42 tests.
+- Real provider smoke check: two DeepSeek passes returned strict, citation-validated five-dimension output for synthetic non-AI evidence. The first probe revealed an extra JSON key; the prompt was clarified and the strict validator was retained.
+- Live website audit: all **25** registered challenges advertised automated grading and the current rubric; the updated report asset was present.
+- Live end-to-end QA account: a minimal `order-hold-reason` repair passed seven visible tests, completed all four defense answers, was independently evaluated, and received an **automated_practice** report with **75/100** overall and **100%** behavioral checks. Unobserved AI judgment was not applicable. Private automatic grading state was absent from the candidate response. This session is explicitly identified as deployment QA, not real candidate performance.
+
+These checks demonstrate operation of the pipeline, not psychometric validity, provider superiority or accuracy across every task family. CI status is reported separately; a local pass is not a substitute for a completed hosted check. A versioned report asset prevents existing browser caching from retaining the prior grading UI after navigation to refreshed markup.
