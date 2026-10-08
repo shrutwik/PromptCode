@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
+from app.services.interview.calibration import challenge_version_for
 from app.services.interview.grading import DIMENSIONS, _digest, pending_assessment
 from scripts import export_grading_calibration as exporter
 
@@ -17,12 +18,13 @@ class Result:
 
 def fixture(monkeypatch, *, same_reviewer=False):
     owner, identity = uuid4(), uuid4()
+    version = challenge_version_for("order-hold-reason")
     session = SimpleNamespace(id=identity, user_id=owner)
     assessment = pending_assessment(session_id=str(identity), challenge_slug="order-hold-reason",
-                                    challenge_version="1", events=[], test_summary={})
+                                    challenge_version=version, events=[], test_summary={})
     assessment["packet"]["evidence"].append({"id": "evaluation:trusted", "kind": "external_evaluation"})
     assessment["packet_digest"] = _digest(assessment["packet"])
-    job = SimpleNamespace(challenge_slug="order-hold-reason", challenge_version="1", source_digest="source",
+    job = SimpleNamespace(challenge_slug="order-hold-reason", challenge_version=version, source_digest="source",
         result={"payload": {"evaluator_version": exporter.VERSION,
                              "inventory_digest": exporter.inventory_digest("order-hold-reason")}})
     first, second = uuid4(), uuid4()

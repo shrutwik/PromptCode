@@ -29,10 +29,10 @@ from app.services.interview.workspace import (
 )
 
 
-def test_registry_has_ten_medium_challenges():
+def test_registry_has_twenty_five_challenges_with_valid_difficulties():
     items = list_challenges()
-    assert len(items) == 10
-    assert all(c["difficulty"] == "medium" for c in items)
+    assert len(items) == 25
+    assert all(c["difficulty"] in {"easy", "medium", "hard"} for c in items)
 
 
 def test_solution_paths_blocked():
@@ -204,7 +204,9 @@ def test_interview_challenge_api_hides_solution_content(tmp_path, monkeypatch):
             r = await client.get("/api/interview/challenges")
             assert r.status_code == 200, r.text
             data = r.json()
-            assert len(data) >= 1
+            assert len(data) == 25
+            assert [c['featured_rank'] for c in data[:20]] == list(range(1, 21))
+            assert all(c['featured_rank'] is None for c in data[20:])
             slug = data[0]["slug"]
             detail = await client.get(f"/api/interview/challenges/{slug}")
             assert detail.status_code == 200

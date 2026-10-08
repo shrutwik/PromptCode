@@ -5,11 +5,17 @@ These are test-only, never included in candidate images or workspace files.
 import shutil
 from pathlib import Path
 
+from expansion_reference_fixtures import REFERENCE_SOURCES
+
 from app.services.interview.registry import challenge_dir
 
 
 def reference_snapshot(slug: str, dest: Path) -> Path:
     shutil.copytree(challenge_dir(slug),dest,ignore=shutil.ignore_patterns('node_modules','.venv','venv','__pycache__','.pytest_cache','.git'))
+    if slug in REFERENCE_SOURCES:
+        for file, source in REFERENCE_SOURCES[slug].items():
+            (dest / file).write_text(source)
+        return dest
     def replace(file,old,new):
         p=dest/file;s=p.read_text();assert old in s,(slug,file);p.write_text(s.replace(old,new))
     if slug=='invoice-status-transition':

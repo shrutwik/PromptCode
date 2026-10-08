@@ -52,3 +52,11 @@ def test_optional_reason_and_repeat_release():
         assert released.status_code == 200
         assert released.json()['status'] == 'open'
         assert released.json()['hold_reason'] is None
+
+def test_hold_release_and_rehold_use_current_persisted_reason():
+    client.post('/orders/ord_new/hold', json={'hold_reason': 'first'})
+    client.post('/orders/ord_new/release')
+    assert client.get('/orders/ord_new').json()['hold_reason'] is None
+    client.post('/orders/ord_new/hold', json={'hold_reason': 'second'})
+    saved = client.get('/orders/ord_new').json()
+    assert (saved['status'], saved['hold_reason'], saved['total_cents']) == ('on_hold', 'second', 2500)

@@ -20,3 +20,43 @@ Someone says the React list key is wrong. That is a hypothesis.
 npm install
 npm test
 ```
+
+## Interview parts
+
+Parts 1–3 organize the existing baseline contract; complete them in one ticket. The full suite remains the acceptance bar. Part 4 is discussion-only, has no extra coding requirement and does not affect the automated behavioral score.
+
+Underlying invariant: Each async completion merges into current state and must converge with rendered rows and badge.
+
+### Part 1 — Establish observable state
+
+Reproduce one mark and verify both stored read state and the rendered count, including already-read rows.
+
+Evidence to show:
+
+- Stored read state and rendered badge agree after one action, including an already-read row.
+
+### Part 2 — Merge concurrent successes
+
+Repair two distinct and repeated quick actions without replacing another action’s update.
+
+Evidence to show:
+
+- Distinct and repeated concurrent successes converge without overwriting another action’s update.
+
+### Part 3 — Pressure-test the model
+
+Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.
+
+Evidence to show:
+
+- A failed concurrent mark must not erase two successful independent updates.
+
+### Part 4 — Changed requirement — optional discussion
+
+A refresh started before a mark completes afterward. Define request-generation or merge semantics and prove a stale response cannot undo a successful mark; discuss which server guarantees are needed.
+
+Evidence to show:
+
+- Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation.
+
+Keep supplied tests and runner files intact. Show observed verification and one AI suggestion you checked or rejected; use scratch files for additional experiments. Explanations require reviewer judgment; a passing behavioral run does not certify understanding.

@@ -35,3 +35,27 @@ def test_cross_tenant_get_is_404():
     assert "secret-globex" not in res.text
 def test_cross_tenant_patch_is_404():
     assert client.patch("/documents/doc_globex_1", headers={"Authorization": "Bearer tok_acme"}, json={"title": "hacked"}).status_code == 404
+
+def test_authorized_patch_preserves_other_tenant_and_untouched_fields():
+    before = db.get_by_id('doc_globex_1')
+    other = (before.title, before.body, before.tenant_id)
+    response = client.patch('/documents/doc_acme_1', headers={'Authorization': 'Bearer tok_acme'}, json={'body': 'own updated'})
+    assert response.status_code == 200
+    saved = client.get('/documents/doc_acme_1', headers={'Authorization': 'Bearer tok_acme'}).json()
+    assert saved['body'] == 'own updated'
+    assert saved['title'] == 'Acme Plan'
+    foreign = db.get_by_id('doc_globex_1')
+    assert (foreign.title, foreign.body, foreign.tenant_id) == other
+
+def test_part_three_pressure_case():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app import db
+    from app.models import Document
+    db.reset();db.seed(Document('a','tenant_acme','A','original'));db.seed(Document('b','tenant_globex','B','foreign'));c=TestClient(app)
+    ac={'Authorization':'Bearer tok_acme'};other={'Authorization':'Bearer tok_globex'}
+    first=c.patch('/documents/a',headers=other,json={'body':'attack'}).status_code
+    own=c.patch('/documents/a',headers=ac,json={'body':'updated'}).status_code
+    last=c.patch('/documents/a',headers=other,json={'title':'attack'}).status_code
+    result=[first,own,last,c.get('/documents/a',headers=ac).json()['body'],db.get_by_id('a').title,db.get_by_id('b').body]
+    assert result == [404, 200, 404, 'updated', 'A', 'foreign']

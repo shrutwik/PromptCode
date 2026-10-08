@@ -77,6 +77,7 @@ function renderTable(filtered) {
         const cta = c.active_session_id ? "Resume" : "Open";
         return `<tr data-href="${esc(brief)}" tabindex="0" aria-label="${esc(c.title)}">
           <td class="title-cell"><a href="${esc(brief)}" tabindex="-1">${esc(c.title)}</a>
+            <span class="sub">${c.featured_rank != null ? `Core #${esc(c.featured_rank)}` : "More practice"}</span>
             ${c.best_score != null ? `<span class="sub">best ${esc(c.best_score)}</span>` : ""}
           </td>
           <td>${esc(c.type)}</td>

@@ -250,6 +250,21 @@ jobs:
       - name: Run frontend state and editor helper checks
         run: node --test frontend/js/pages/*.test.js
 
+      - name: Type-check featured TypeScript questions
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { spawnSync } from 'node:child_process';
+          const registry = JSON.parse(fs.readFileSync('challenges/interview-registry.json', 'utf8'));
+          for (const question of registry.challenges.filter(q => q.featured_rank)) {
+            const folder = path.join('challenges', question.slug);
+            if (!fs.existsSync(path.join(folder, 'tsconfig.json'))) continue;
+            const result = spawnSync('node', [path.join(folder, 'node_modules/typescript/bin/tsc'), '--noEmit', '-p', folder], { stdio: 'inherit' });
+            if (result.status !== 0) process.exit(1);
+          }
+          JS
+
       - name: Install test browsers
         working-directory: qa/browser
         run: npx playwright install --with-deps chromium firefox webkit

@@ -1,0 +1,2685 @@
+{
+  "research_date": "2026-10-07",
+  "scope": "Public research and local repository snapshot; not employer-private tests",
+  "practice_scenarios_are_original": true,
+  "proposed_exercises": [
+    {
+      "number": 1,
+      "title": "Maze serialization and topology",
+      "question": "Saving then loading a maze changes its topology. Repair the codec without changing its public interface.",
+      "contract": "Original contract: nodes have unique string ids and coordinates; edges are undirected and serialized once in sorted endpoint order; portals are separately identified directed links. Encode/decode preserves every node, edge and portal. Unknown references, duplicate ids and unsupported versions raise CodecError before publishing a partially loaded maze. Wall cells have no nodes. Version 1 is the only accepted version initially.",
+      "starter_files": "Python models.py, codec.py, render.py; fixtures with isolated nodes and portals; test_codec.py. Supply a working model and renderer and a defective codec.",
+      "stages": "1 reproduce a bad round trip; 2 preserve topology and reject corrupt references; 3 deterministic encoding; 4 introduce an explicit version migration.",
+      "likely_failures": "Dropping isolated cells; reconstructing adjacency from coordinates despite walls; turning a portal into an ordinary edge; partially mutating the model on errors.",
+      "complexity": "O(V+E+P) decoding; canonical sorting adds O(E log E + P log P). Compare graph meaning rather than incidental JSON key order.",
+      "debrief": "Why are connectivity and coordinates distinct? Which fields must survive a round trip? How would a version migration preserve old files?",
+      "test_scenarios": [
+        {
+          "id": "P01-01",
+          "input": "nodes A@(0,0), B@(0,1); edge A-B; encode then decode",
+          "expected": "same nodes and undirected adjacency A↔B"
+        },
+        {
+          "id": "P01-02",
+          "input": "isolated A and B; no edges",
+          "expected": "both nodes retained; no inferred connection"
+        },
+        {
+          "id": "P01-03",
+          "input": "nodes A,B; portal p: A→B",
+          "expected": "portal p retained with the same direction; no B→A portal inferred"
+        },
+        {
+          "id": "P01-04",
+          "input": "edge A-Z with no node Z",
+          "expected": "CodecError; no partial loaded model"
+        },
+        {
+          "id": "P01-05",
+          "input": "two nodes with id A",
+          "expected": "CodecError"
+        },
+        {
+          "id": "P01-06",
+          "input": "same graph supplied with reversed node and edge order",
+          "expected": "identical canonical encoded representation"
+        },
+        {
+          "id": "P01-07",
+          "input": "version=99",
+          "expected": "CodecError: unsupported version"
+        },
+        {
+          "id": "P01-08",
+          "input": "empty node/edge/portal lists at version=1",
+          "expected": "valid empty maze; round trip remains empty"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Shortest paths, portals and rendering",
+      "question": "Repair or implement a shortest route and render it without overwriting the entrance and exit.",
+      "contract": "Original contract: rectangular grid; # blocks movement, . is open, S/E mark endpoints; four neighbors in U,R,D,L order. Return coordinates including both endpoints; None means unreachable. A supplied start may equal the exit. Optional portal jumps are directed, cost one move and are considered after ordinary neighbors. Rendering marks internal route cells * but preserves S/E/#. Reject ragged grids or missing endpoints.",
+      "starter_files": "Reuse maze models/codec; solver.py, render.py, test_solver.py and test_render.py; a working grid loader and known defective baseline.",
+      "stages": "1 endpoint-preserving rendering; 2 BFS correctness; 3 directed passages; 4 portal-cost extension. These combine reported and public-practice themes, not an exact employer stage sequence.",
+      "likely_failures": "Visited state marked too late; DFS mistaken for shortest path; inconsistent portal cost; overwriting endpoints; nondeterministic neighbor iteration.",
+      "complexity": "Unit-cost BFS O(V+E), memory O(V). Use 0–1 BFS for zero/one costs or Dijkstra for other nonnegative costs only if requirements change.",
+      "debrief": "What makes BFS correct here? Where is a node marked visited? How would zero-cost portals change the algorithm?",
+      "test_scenarios": [
+        {
+          "id": "P02-01",
+          "input": "grid [S.E]",
+          "expected": "[(0,0),(0,1),(0,2)]; rendering S*E"
+        },
+        {
+          "id": "P02-02",
+          "input": "grid [S#E]",
+          "expected": "None; rendering unchanged"
+        },
+        {
+          "id": "P02-03",
+          "input": "grid [S.,.E]",
+          "expected": "[(0,0),(0,1),(1,1)] under U,R,D,L ties"
+        },
+        {
+          "id": "P02-04",
+          "input": "open 2×2 grid; start=exit=(0,0)",
+          "expected": "[(0,0)]; zero moves"
+        },
+        {
+          "id": "P02-05",
+          "input": "grid [S...,###.,E...]",
+          "expected": "[(0,0),(0,1),(0,2),(0,3),(1,3),(2,3),(2,2),(2,1),(2,0)]"
+        },
+        {
+          "id": "P02-06",
+          "input": "grid [S#E]; portal (0,0)→(0,2)",
+          "expected": "[(0,0),(0,2)]; one move"
+        },
+        {
+          "id": "P02-07",
+          "input": "grid [S#E]; portal (0,2)→(0,0)",
+          "expected": "None; reverse traversal forbidden"
+        },
+        {
+          "id": "P02-08",
+          "input": "grid [S.,E]",
+          "expected": "validation error: ragged grid"
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Keys, doors and stateful graph search",
+      "question": "Extend the maze solver so key collection changes which doors can be traversed.",
+      "contract": "Original contract: lowercase a–f are reusable keys, uppercase A–F are matching doors (E is reserved for the exit, so key e/door E are not supported). A door requires its key before entry; collecting a key costs no extra move. Search state is (row,column,key_mask). U,R,D,L ties; return a shortest coordinate route or None. Directed edges constrain moves independently of keys.",
+      "starter_files": "Same maze repository; tile parser, solver state representation, key-door fixtures and tests. Supply the stage-2 solver as a starting snapshot.",
+      "stages": "1 parse keys/doors; 2 expand state and revisit coordinates; 3 shortest legal route; 4 introduce directed edges or consumable-key semantics explicitly.",
+      "likely_failures": "A visited set containing only coordinates; unlocking every door after any key; counting key pickup as an extra step; treating E as both a door and exit.",
+      "complexity": "O(V·2^K + E·2^K) time and O(V·2^K) memory for K reusable key types. Consumable keys need a different state definition.",
+      "debrief": "Show why revisiting a coordinate with a different inventory is necessary. Which dominance pruning is sound and which could destroy a shorter path?",
+      "test_scenarios": [
+        {
+          "id": "P03-01",
+          "input": "grid [SaAE]",
+          "expected": "[(0,0),(0,1),(0,2),(0,3)]"
+        },
+        {
+          "id": "P03-02",
+          "input": "grid [SAE]",
+          "expected": "None; A cannot be entered"
+        },
+        {
+          "id": "P03-03",
+          "input": "grid [aS.AE]",
+          "expected": "[(0,1),(0,0),(0,1),(0,2),(0,3),(0,4)]"
+        },
+        {
+          "id": "P03-04",
+          "input": "grid [SbAE]",
+          "expected": "None; key b does not unlock A"
+        },
+        {
+          "id": "P03-05",
+          "input": "grid [SaAbBE]",
+          "expected": "all six coordinates in order; both locks opened"
+        },
+        {
+          "id": "P03-06",
+          "input": "grid [SaAAE]",
+          "expected": "all five coordinates in order; key a is reusable"
+        },
+        {
+          "id": "P03-07",
+          "input": "grid [SAE,###,a..]",
+          "expected": "None; unreachable key is not collected"
+        },
+        {
+          "id": "P03-08",
+          "input": "grid [SaAE]; edge (0,1)→(0,2) explicitly forbidden",
+          "expected": "None despite holding a"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Two-heap load balancing",
+      "question": "Assign jobs to workers, retaining queued jobs and deterministic tie behavior.",
+      "contract": "Original contract: workers numbered 0..k−1; arrivals sorted by (arrival,input_index); duration is a positive integer; requests queue FIFO when no worker is free. Release completions with finish≤dispatch_time before selecting the smallest free worker id. Each output is (job,worker,start,finish). Reject k≤0 or invalid duration before scheduling.",
+      "starter_files": "Python scheduler.py, models.py, fake clock, a slow reference simulator and fixtures; tests compare assignments rather than heap layout.",
+      "stages": "1 clarify queuing versus dropping; 2 idle-id and busy-(finish,id) heaps; 3 simultaneous events; 4 weighted workers or cancellation.",
+      "likely_failures": "Releasing only one of several completed workers; finish<arrival instead of ≤; losing queued work; tie policy implicit in heap tuple order.",
+      "complexity": "After sorting, O(n log k); O(k+n) output/storage. A simulator provides an independent oracle for randomized small workloads.",
+      "debrief": "Why two heaps? How are queued jobs ordered? Does a worker completing at t accept a job arriving at t?",
+      "test_scenarios": [
+        {
+          "id": "P04-01",
+          "input": "k=2; A(0,5),B(0,2),C(0,1)",
+          "expected": "A→0[0,5), B→1[0,2), C→1[2,3)"
+        },
+        {
+          "id": "P04-02",
+          "input": "k=1; A(0,2),B(2,1)",
+          "expected": "A→0[0,2), B→0[2,3)"
+        },
+        {
+          "id": "P04-03",
+          "input": "k=2; A(0,2),B(0,2),C(2,1)",
+          "expected": "C→0[2,3); both workers released before choice"
+        },
+        {
+          "id": "P04-04",
+          "input": "k=1; A(0,3),B(1,1),C(1,1)",
+          "expected": "starts A=0,B=3,C=4; FIFO preserved"
+        },
+        {
+          "id": "P04-05",
+          "input": "k=3; no jobs",
+          "expected": "[]"
+        },
+        {
+          "id": "P04-06",
+          "input": "k=0; one job",
+          "expected": "validation error"
+        },
+        {
+          "id": "P04-07",
+          "input": "k=1; duration=0",
+          "expected": "validation error"
+        },
+        {
+          "id": "P04-08",
+          "input": "k=2; A(10,1),B(10,1),C(12,1)",
+          "expected": "workers A=0,B=1,C=0; idle gap handled"
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Configurable logger and failure isolation",
+      "question": "Build a configurable structured logger and demonstrate working output destinations.",
+      "contract": "Original contract: DEBUG<INFO<WARN<ERROR; threshold includes its own level. Records contain level,message,timestamp,context; context is copied at emission. Inject the clock and sinks. Unknown levels/configurations are rejected atomically. Default sink policy: continue to remaining sinks and return an error list; no recursive logging. Reconfiguration affects subsequent calls, not existing records.",
+      "starter_files": "TypeScript logger.ts, config.ts, formatters.ts, sinks.ts, demo.ts; fake clock and in-memory/failing sinks. No filesystem permission assumptions in unit tests.",
+      "stages": "1 requirements and interfaces; 2 threshold/formatting; 3 multiple sinks and failure policy; 4 runtime configuration or buffered writes.",
+      "likely_failures": "Severity order reversed; mutating caller context; errors swallowed invisibly; recursive failure logging; file streams left open.",
+      "complexity": "O(S+C) per emitted record for S sinks and C context size; buffering requires explicit backpressure and shutdown-flush semantics.",
+      "debrief": "What does successful logging mean if one sink fails? Who closes a file sink? How would secrets be redacted consistently?",
+      "test_scenarios": [
+        {
+          "id": "P05-01",
+          "input": "threshold INFO; log DEBUG",
+          "expected": "zero sink writes"
+        },
+        {
+          "id": "P05-02",
+          "input": "threshold INFO; log INFO hello at fixed time 100",
+          "expected": "one record with INFO,hello,timestamp=100"
+        },
+        {
+          "id": "P05-03",
+          "input": "threshold ERROR; log WARN then ERROR",
+          "expected": "only ERROR emitted"
+        },
+        {
+          "id": "P05-04",
+          "input": "two sinks; first throws; second captures",
+          "expected": "second receives record; result reports first sink failure"
+        },
+        {
+          "id": "P05-05",
+          "input": "context {requestId:r1}; log; then mutate original to r2",
+          "expected": "stored record retains r1"
+        },
+        {
+          "id": "P05-06",
+          "input": "configure level VERBOSE",
+          "expected": "configuration error; previous settings retained"
+        },
+        {
+          "id": "P05-07",
+          "input": "threshold WARN; reconfigure DEBUG; log INFO",
+          "expected": "INFO now emitted once"
+        },
+        {
+          "id": "P05-08",
+          "input": "message containing a newline and quote; JSON formatter",
+          "expected": "parseable JSON; original message recovered after parsing"
+        }
+      ]
+    },
+    {
+      "number": 6,
+      "title": "Canvas editor and document state",
+      "question": "Build a small shape editor with selection, movement, styling and persistence.",
+      "contract": "Original contract: shapes have unique ids,type,x,y,width,height,color; coordinates are in canvas space; toolbar insertion creates one shape, selection is by id, drag affects only the selected shape. Stored schema version=1; validate before replacing state. Undo/redo records completed actions, not every pointer movement. Failed loads preserve the current design.",
+      "starter_files": "React Canvas.tsx, Toolbar.tsx, Inspector.tsx, designStore.ts, serialization.ts; pointer-event helpers, local-storage adapter and component tests.",
+      "stages": "1 usable insertion/rendering; 2 selection and dragging; 3 styles and save/reload; 4 undo/redo or zoom-coordinate mapping.",
+      "likely_failures": "Using viewport coordinates after zoom/scroll; multiple shapes moving; stale selection; accepting malformed storage; pointer release outside canvas losing the drag.",
+      "complexity": "Rendering O(n) without virtualization; id lookup O(1) with a map. History memory depends on snapshots versus commands and should be bounded.",
+      "debrief": "Where is the single source of truth? How do pointer coordinates become document coordinates? What constitutes one undo action?",
+      "test_scenarios": [
+        {
+          "id": "P06-01",
+          "input": "insert rectangle into empty design",
+          "expected": "one rectangle with a unique id; selected id points to it"
+        },
+        {
+          "id": "P06-02",
+          "input": "A@(10,20), B@(50,50); drag selected A by (5,−2)",
+          "expected": "A@(15,18); B unchanged"
+        },
+        {
+          "id": "P06-03",
+          "input": "A selected; set color #112233",
+          "expected": "only A color changes"
+        },
+        {
+          "id": "P06-04",
+          "input": "save two shapes then reload version-1 document",
+          "expected": "same ids,positions,dimensions,colors and order"
+        },
+        {
+          "id": "P06-05",
+          "input": "load width=−1",
+          "expected": "validation error; existing design unchanged"
+        },
+        {
+          "id": "P06-06",
+          "input": "delete selected A",
+          "expected": "A removed; selection cleared"
+        },
+        {
+          "id": "P06-07",
+          "input": "insert A, drag A, undo then redo",
+          "expected": "undo restores pre-drag position; redo restores post-drag position"
+        },
+        {
+          "id": "P06-08",
+          "input": "zoom=2; pointer moves 20 screen pixels horizontally",
+          "expected": "shape moves 10 canvas units horizontally"
+        }
+      ]
+    },
+    {
+      "number": 7,
+      "title": "Team portal and persistence",
+      "question": "Add member search and persisted role editing to an existing portal.",
+      "contract": "Original contract: roles are member/admin; only a team admin may edit roles for their own team. Search is trimmed case-insensitive substring matching on display name; role changes require server acceptance before showing success. Unknown member→404, invalid role→400, unauthorized mutation→403; rejected mutations preserve stored state. Preserve the search query across a refresh.",
+      "starter_files": "React MembersPage.tsx, MemberForm.tsx, api.ts; Express members route/service and seeded store; request and UI tests.",
+      "stages": "1 understand API and UI state; 2 compose search and role editing; 3 errors and reload; 4 invitation or last-admin constraints if added explicitly.",
+      "likely_failures": "Updating only component state; missing authorization in the server; stale optimistic state after rejection; accidental edits to another team.",
+      "complexity": "O(n) search in the small starter; query indexing and paginated APIs are follow-ups, not prerequisites.",
+      "debrief": "Where must authorization live? What happens if a save fails? Can an administrator remove the last administrator under the stated contract?",
+      "test_scenarios": [
+        {
+          "id": "P07-01",
+          "input": "members Alice,Bob; search \" ALI \"",
+          "expected": "Alice only"
+        },
+        {
+          "id": "P07-02",
+          "input": "admin changes Alice member→admin then reloads",
+          "expected": "GET and UI both show admin"
+        },
+        {
+          "id": "P07-03",
+          "input": "role=owner",
+          "expected": "400; previous role retained"
+        },
+        {
+          "id": "P07-04",
+          "input": "ordinary member changes another member role",
+          "expected": "403; no mutation"
+        },
+        {
+          "id": "P07-05",
+          "input": "admin for team T edits member of team U",
+          "expected": "403; no mutation"
+        },
+        {
+          "id": "P07-06",
+          "input": "save receives server 500",
+          "expected": "error displayed; no success message; prior role retained"
+        },
+        {
+          "id": "P07-07",
+          "input": "search zzz",
+          "expected": "empty-results state without an exception"
+        },
+        {
+          "id": "P07-08",
+          "input": "open page with ?q=bob then refresh",
+          "expected": "search remains bob; Bob visible"
+        }
+      ]
+    },
+    {
+      "number": 8,
+      "title": "Watchlist write/read round trip",
+      "question": "An add action reports success but later reads omit the movie. Trace the full request path and fix persistence.",
+      "contract": "Original contract: unique (user_id,movie_id) membership; authenticated user derived from the token; first insert→201, repeat→200 with the same membership id. Unknown movie→404. Store failure→500 and no success state. GET reads committed membership for that user. Concurrent duplicate requests create exactly one membership.",
+      "starter_files": "Spring Boot controller/service/repository/entity/DTO; React watchlist page and API client; integration database and injected-failure tests. Express or Django can implement the same exercise contract.",
+      "stages": "1 reproduce add→GET; 2 trace DTO/service/transaction/store; 3 repair persistence; 4 duplicates and concurrent inserts.",
+      "likely_failures": "Saving a detached object; omitting repository write; reading a different store; trusting user_id from the body; hiding failed writes behind 200.",
+      "complexity": "Unique constraint provides durable deduplication; transactions and exception handling must align with response semantics.",
+      "debrief": "Which response proves a commit? How is uniqueness enforced under concurrency? Which layer caused the disappearing item?",
+      "test_scenarios": [
+        {
+          "id": "P08-01",
+          "input": "U adds existing M, then GET /watchlist",
+          "expected": "201; GET includes M once"
+        },
+        {
+          "id": "P08-02",
+          "input": "U adds M twice",
+          "expected": "statuses 201,200; same membership id; one row"
+        },
+        {
+          "id": "P08-03",
+          "input": "U adds missing movie",
+          "expected": "404; no membership inserted"
+        },
+        {
+          "id": "P08-04",
+          "input": "U1 adds M; U2 reads watchlist",
+          "expected": "U2 list remains empty"
+        },
+        {
+          "id": "P08-05",
+          "input": "unauthenticated add",
+          "expected": "401; no write"
+        },
+        {
+          "id": "P08-06",
+          "input": "repository throws before commit",
+          "expected": "500; GET still empty; UI shows failure"
+        },
+        {
+          "id": "P08-07",
+          "input": "two concurrent U/M adds",
+          "expected": "one membership row; one 201 and one 200"
+        },
+        {
+          "id": "P08-08",
+          "input": "authenticated U1 submits body user_id=U2",
+          "expected": "membership belongs to U1; U2 remains unchanged"
+        }
+      ]
+    },
+    {
+      "number": 9,
+      "title": "Search/filter composition and deep links",
+      "question": "Repair combined filters, refresh behavior and direct navigation in a movie application.",
+      "contract": "Original contract: case-insensitive title search; genre and minYear filters combine with AND. URL is canonical view state; q values are encoded/decoded once. Positive page numbers, page size=2, stable id ascending after filtering. A direct /movies/:id URL loads the record or a 404 screen. Missing/invalid filters are rejected or normalized according to the explicit parser, not silently interpreted differently by UI and API.",
+      "starter_files": "React MovieList.tsx, queryState.ts, routes.tsx; search endpoint/repository; seeded movies and browser-route/request tests.",
+      "stages": "1 API filtering correctness; 2 URL/UI synchronization; 3 refresh and deep links; 4 pagination and stale-response prevention.",
+      "likely_failures": "OR instead of AND; double URL decoding; filtering after pagination; client-only route fallback absent; page not reset on changed filters.",
+      "complexity": "O(n) reference filtering for correctness; indexes can be a follow-up. Browser history and server route fallback need integration tests.",
+      "debrief": "Which state lives in the URL? In what order are filtering, sorting and pagination applied? Why can a route work after a click but fail on refresh?",
+      "test_scenarios": [
+        {
+          "id": "P09-01",
+          "input": "A:Orbit/drama/2020; B:Orbit/comedy/2022; C:Other/drama/2023; q=orbit,genre=drama",
+          "expected": "A only"
+        },
+        {
+          "id": "P09-02",
+          "input": "same fixture; q=orbit,minYear=2021",
+          "expected": "B only"
+        },
+        {
+          "id": "P09-03",
+          "input": "q=\"A&B\" encoded as A%26B",
+          "expected": "API sees literal A&B once decoded"
+        },
+        {
+          "id": "P09-04",
+          "input": "refresh /movies?q=orbit&genre=drama",
+          "expected": "same filters and result A"
+        },
+        {
+          "id": "P09-05",
+          "input": "open /movies/A directly",
+          "expected": "detail A loads without prior list navigation"
+        },
+        {
+          "id": "P09-06",
+          "input": "open /movies/missing directly",
+          "expected": "404 screen"
+        },
+        {
+          "id": "P09-07",
+          "input": "five matching ids A,B,C,D,E; page=2,size=2",
+          "expected": "C,D; total=5"
+        },
+        {
+          "id": "P09-08",
+          "input": "page=3; change q",
+          "expected": "page resets to 1 before issuing query"
+        }
+      ]
+    },
+    {
+      "number": 10,
+      "title": "Per-user fixed-window rate limiter",
+      "question": "Repair cross-user interference and boundary errors in request throttling.",
+      "contract": "Original contract: fixed windows [floor(t/W)·W,(floor(t/W)+1)·W); limit L applies per authenticated user. First L requests allowed; later requests return 429 and Retry-After=ceil(window_end−t) seconds. Rejecting a request does not consume another allowance. Updates must be atomic. W=10 seconds,L=2 in fixtures.",
+      "starter_files": "Middleware, rateLimitStore.ts or equivalent, auth identity adapter, fake clock and deterministic concurrency tests.",
+      "stages": "1 independent keys; 2 exact reset boundary; 3 headers/error behavior; 4 distributed atomic store.",
+      "likely_failures": "Single global counter; inclusive right endpoint; read-increment-write race; time units mixed; IP used despite a per-user contract.",
+      "complexity": "O(1) counter operations; bounded old-window cleanup. Multiple instances require an atomic shared operation, not an in-process lock alone.",
+      "debrief": "Is this fixed-window, sliding-window or token-bucket policy? Where is atomicity guaranteed? What happens at t=10?",
+      "test_scenarios": [
+        {
+          "id": "P10-01",
+          "input": "U requests at t=0,1,2",
+          "expected": "allow,allow,429; Retry-After=8 on third"
+        },
+        {
+          "id": "P10-02",
+          "input": "U exhausts window; V requests at t=2",
+          "expected": "V allowed"
+        },
+        {
+          "id": "P10-03",
+          "input": "U exhausts [0,10); request at t=10",
+          "expected": "allowed in new window"
+        },
+        {
+          "id": "P10-04",
+          "input": "U exhausts [0,10); request at t=9.2",
+          "expected": "429; Retry-After=1"
+        },
+        {
+          "id": "P10-05",
+          "input": "three simultaneous U requests in empty window",
+          "expected": "exactly two allowed, one rejected"
+        },
+        {
+          "id": "P10-06",
+          "input": "five rejected requests then t=10 request",
+          "expected": "new-window request allowed"
+        },
+        {
+          "id": "P10-07",
+          "input": "W=0 or L=−1",
+          "expected": "configuration error"
+        },
+        {
+          "id": "P10-08",
+          "input": "same user uses two application instances with shared atomic store",
+          "expected": "combined allowance remains two"
+        }
+      ]
+    },
+    {
+      "number": 11,
+      "title": "Consistent password policy",
+      "question": "Make registration and password-change validation obey the same documented rules.",
+      "contract": "Original practice policy: password must be a string of 8–64 Unicode code points inclusive; no trimming or silent truncation. Missing/non-string→400 INVALID_TYPE; out-of-range→400 INVALID_LENGTH. Both endpoints share validation; a rejected request does not modify credentials. This is an exercise contract, not a recommended production password policy.",
+      "starter_files": "Auth routes, shared password validator, schemas/service and endpoint tests; inject a fake credential writer rather than testing cryptography.",
+      "stages": "1 find all entry points; 2 centralize existing policy; 3 identical boundaries and errors; 4 explicitly revisit Unicode semantics.",
+      "likely_failures": "JavaScript UTF-16 length mistaken for code-point length; trimming passwords; frontend-only validation; changing one endpoint only.",
+      "complexity": "O(password length); counting code points differs from graphemes and bytes. State the intended measure before changing code.",
+      "debrief": "Why must server validation remain authoritative? What does length mean for emoji? How do you preserve an existing valid credential on failure?",
+      "test_scenarios": [
+        {
+          "id": "P11-01",
+          "input": "both endpoints; 7 ASCII characters",
+          "expected": "400 INVALID_LENGTH; no credential write"
+        },
+        {
+          "id": "P11-02",
+          "input": "both endpoints; 8 ASCII characters",
+          "expected": "accepted; one credential write"
+        },
+        {
+          "id": "P11-03",
+          "input": "both endpoints; 64 ASCII characters",
+          "expected": "accepted"
+        },
+        {
+          "id": "P11-04",
+          "input": "both endpoints; 65 ASCII characters",
+          "expected": "400 INVALID_LENGTH"
+        },
+        {
+          "id": "P11-05",
+          "input": "password missing or null",
+          "expected": "400 INVALID_TYPE"
+        },
+        {
+          "id": "P11-06",
+          "input": "password numeric 12345678",
+          "expected": "400 INVALID_TYPE"
+        },
+        {
+          "id": "P11-07",
+          "input": "password=8 emoji, each one Unicode code point",
+          "expected": "accepted as length 8"
+        },
+        {
+          "id": "P11-08",
+          "input": "password has valid leading/trailing spaces",
+          "expected": "stored exactly as submitted; no trimming"
+        }
+      ]
+    },
+    {
+      "number": 12,
+      "title": "Delivery accounting and cutoff payments",
+      "question": "Compute delivery costs precisely and separate total cost from unpaid completed work.",
+      "contract": "Original contract: driver rate stored in integer cents/hour; delivery has unique id,driver,start,end, with end>start in integer seconds. Cost=roundHalfUp(rate·duration/3600) once per delivery. Pay-up-to(cutoff) marks unpaid deliveries whose end≤cutoff; repeating a payment is idempotent. Peak counts distinct drivers, not delivery rows, using [start,end) intervals.",
+      "starter_files": "drivers.ts, deliveries.ts, costCalculator.ts, paymentLedger.ts, clock.ts; fake timestamps, integer-money fixtures and event-sweep tests.",
+      "stages": "1 sub-hour precision; 2 total and unpaid aggregates; 3 cutoff/idempotency; 4 peak distinct active drivers.",
+      "likely_failures": "Truncating hours; rounding aggregated instead of per delivery; paying partially completed work; double-paying; counting overlapping deliveries from one driver twice.",
+      "complexity": "O(n) totals; peak O(n log n) event sweep with per-driver active counts. End events occur before start events at equal timestamps.",
+      "debrief": "Why round once per delivery? What does a payment cutoff mean? How do overlapping deliveries for one driver affect peak count?",
+      "test_scenarios": [
+        {
+          "id": "P12-01",
+          "input": "rate=1200; duration=1800s",
+          "expected": "cost=600 cents"
+        },
+        {
+          "id": "P12-02",
+          "input": "rate=1200; duration=5400s",
+          "expected": "cost=1800 cents"
+        },
+        {
+          "id": "P12-03",
+          "input": "rate=1; duration=1800s",
+          "expected": "cost=1 cent by half-up rounding"
+        },
+        {
+          "id": "P12-04",
+          "input": "delivery end=10; cutoff=9 then 10",
+          "expected": "unpaid at 9; paid at 10"
+        },
+        {
+          "id": "P12-05",
+          "input": "pay cutoff=10 twice",
+          "expected": "second payment pays zero additional cents"
+        },
+        {
+          "id": "P12-06",
+          "input": "unknown driver or end≤start",
+          "expected": "validation error; ledger unchanged"
+        },
+        {
+          "id": "P12-07",
+          "input": "D1 deliveries [0,10),[5,15); D2 [8,12)",
+          "expected": "peak distinct drivers=2"
+        },
+        {
+          "id": "P12-08",
+          "input": "D1 [0,10); D2 [10,20)",
+          "expected": "peak=1, not 2"
+        }
+      ]
+    },
+    {
+      "number": 13,
+      "title": "Hand parsing and extensible comparison",
+      "question": "Parse cards correctly, compare hands using supplied rules, then add a rule variant.",
+      "contract": "Original mini-game contract: exactly three distinct physical cards; ranks 2..10,J,Q,K,A mapped 2..14; suits C,D,H,S are identity only. Categories: triple>pair>all-distinct. Triple key=[rank]; pair key=[pair_rank,kicker]; distinct key=ranks descending. Categories then keys compare lexicographically; ties allowed across different suits. No straight or flush in this original rule set. Partial-hand behavior must be added separately.",
+      "starter_files": "Python card.py, hand.py, rules.py, game.py; deterministic deck and parser/comparison tests. Do not silently substitute five-card poker.",
+      "stages": "1 repair multi-character rank parsing; 2 complete comparison; 3 specify partial hands; 4 alternate rule object and seeded simulation.",
+      "likely_failures": "Parsing 10H as rank 1; accidental suit tie-break; duplicate physical cards; category ordering inconsistent; importing poker rules not requested.",
+      "complexity": "O(h log h) sorting for hand size h; h=3 is constant. Keep identity validation separate from comparison strategy.",
+      "debrief": "Which rules are given and which did you invent? What is the complete comparison key? Can different physical hands tie?",
+      "test_scenarios": [
+        {
+          "id": "P13-01",
+          "input": "parse 10H",
+          "expected": "rank=10,suit=H"
+        },
+        {
+          "id": "P13-02",
+          "input": "parse AS",
+          "expected": "rank=14,suit=S"
+        },
+        {
+          "id": "P13-03",
+          "input": "parse 1H or 10X",
+          "expected": "validation error"
+        },
+        {
+          "id": "P13-04",
+          "input": "hand [2H,2H,3S]",
+          "expected": "duplicate-card error"
+        },
+        {
+          "id": "P13-05",
+          "input": "[2H,2D,2C] vs [AH,AD,KS]",
+          "expected": "first wins: triple outranks pair"
+        },
+        {
+          "id": "P13-06",
+          "input": "[7H,7D,AS] vs [7C,7S,KH]",
+          "expected": "first wins by kicker A>K"
+        },
+        {
+          "id": "P13-07",
+          "input": "[AH,KD,2S] vs [AC,QD,JS]",
+          "expected": "first wins: [14,13,2]>[14,12,11]"
+        },
+        {
+          "id": "P13-08",
+          "input": "[AH,KD,2S] vs [AC,KS,2D]",
+          "expected": "tie; suits do not break it"
+        }
+      ]
+    },
+    {
+      "number": 14,
+      "title": "Six composable frontend features",
+      "question": "Add search, status filtering, sorting, pagination, a detail drawer and saved settings to an existing dashboard.",
+      "contract": "Original contract: title substring search, exact status filter, sort by title then id, page size=2; apply search→filter→sort→paginate. Filter changes reset page=1. Persist validated view settings but not open drawer state. API responses carry request generation ids; only latest generation may replace rows. Errors and loading are visible.",
+      "starter_files": "React Dashboard.tsx, Table.tsx, FilterBar.tsx, DetailDrawer.tsx, viewState.ts, mock API and interaction tests. These six feature choices are original; the account does not list its six.",
+      "stages": "1 map components/data flow; 2 implement two features coherently; 3 complete composition and saved state; 4 out-of-order responses.",
+      "likely_failures": "Six individually working features that conflict; stale requests winning; pagination before filtering; corrupt settings crashing startup; drawer carrying the wrong selected row.",
+      "complexity": "O(n log n) client-side reference view. Test interaction composition, not only isolated handlers.",
+      "debrief": "Which feature invalidates pagination? What makes a response stale? How do saved settings evolve when their schema changes?",
+      "test_scenarios": [
+        {
+          "id": "P14-01",
+          "input": "A Alpha/open, B Beta/closed, C Bravo/open; search b,status=open",
+          "expected": "C only"
+        },
+        {
+          "id": "P14-02",
+          "input": "titles Zulu,Alpha,Beta; ascending sort",
+          "expected": "Alpha,Beta,Zulu"
+        },
+        {
+          "id": "P14-03",
+          "input": "ids 1..5 in sorted order; page=2",
+          "expected": "ids 3,4"
+        },
+        {
+          "id": "P14-04",
+          "input": "page=3; status filter changes",
+          "expected": "page=1; filtered first page"
+        },
+        {
+          "id": "P14-05",
+          "input": "save status=open and sort=title; reload",
+          "expected": "same settings restored; drawer closed"
+        },
+        {
+          "id": "P14-06",
+          "input": "invalid saved page=−2",
+          "expected": "normalize to page 1; page remains usable"
+        },
+        {
+          "id": "P14-07",
+          "input": "query old sent before new; old response arrives last",
+          "expected": "new-query rows remain visible"
+        },
+        {
+          "id": "P14-08",
+          "input": "detail A open; API errors on reload",
+          "expected": "error state shown; no success claim or unrelated detail"
+        }
+      ]
+    },
+    {
+      "number": 15,
+      "title": "LRU, expiration, resize and atomic creation",
+      "question": "Extend an LRU cache without breaking access order; keep TTL and progressive-cache variants explicit.",
+      "contract": "Original contract: capacity≥0; get hit promotes key; miss returns None without changing order; put updates/promotes. TTL is absolute from put, with expiry t≥expires_at; get does not extend it. Expired entries are removed before eviction. resize evicts least-recently-used until compliant. get_or_put serializes same-key creation so one factory runs; errors are not cached.",
+      "starter_files": "Python cache.py, clock.py, synchronized wrapper and tests. Public progressive practice covers resize/get_or_put; TTL is our independent extension.",
+      "stages": "1 get promotes; 2 eviction; 3 choose TTL or resize variant; 4 concurrent atomic get_or_put.",
+      "likely_failures": "Insertion order used as recency; expired keys consume capacity; get unexpectedly refreshes TTL; duplicate factories under a race; exception cached as a value.",
+      "complexity": "O(1) get/put with hashmap+doubly linked list; expired-entry sweeps may be O(n) unless an expiry index is added.",
+      "debrief": "Does get extend TTL? How do resize and expiry interact? Is factory execution at-most-once, and what happens if it fails?",
+      "test_scenarios": [
+        {
+          "id": "P15-01",
+          "input": "capacity=2; put A,B; get A; put C",
+          "expected": "B evicted; order least→most A,C"
+        },
+        {
+          "id": "P15-02",
+          "input": "capacity=2; put A,B; get missing; put C",
+          "expected": "A evicted; miss does not promote anything"
+        },
+        {
+          "id": "P15-03",
+          "input": "put A at t=0,ttl=5; get at 4 then 5",
+          "expected": "hit at 4; miss at 5"
+        },
+        {
+          "id": "P15-04",
+          "input": "capacity=1; expired A then put B",
+          "expected": "B retained; A removed"
+        },
+        {
+          "id": "P15-05",
+          "input": "put A=1 then A=2",
+          "expected": "one entry A=2; A most recent"
+        },
+        {
+          "id": "P15-06",
+          "input": "capacity=0; put A then get A",
+          "expected": "None; cache remains empty"
+        },
+        {
+          "id": "P15-07",
+          "input": "order A,B,C; resize to 1",
+          "expected": "C only"
+        },
+        {
+          "id": "P15-08",
+          "input": "two simultaneous get_or_put(A,factory)",
+          "expected": "factory called once; both receive same value"
+        }
+      ]
+    },
+    {
+      "number": 16,
+      "title": "Verification expiry and one-time use",
+      "question": "Repair verification codes that remain usable at expiry or after successful consumption.",
+      "contract": "Original contract: one active code per user; expires at issued+TTL; valid only now<expires. Correct verification atomically consumes the code; wrong code does not consume it. Resend invalidates old code. Return a uniform verification-failed result for missing,wrong,expired or consumed codes. Inject the clock; do not log codes.",
+      "starter_files": "FastAPI verification route/service, token_store.py, fake clock, transaction/in-memory adapter and request tests.",
+      "stages": "1 expiry boundary; 2 one-time consumption; 3 resend and wrong-user isolation; 4 concurrent attempts.",
+      "likely_failures": "Using ≤ expiry; checking then consuming nonatomically; resetting expiry on attempts; mixing user scopes; leaking codes in logs.",
+      "complexity": "O(1) keyed lookup; correctness depends on atomic conditional consumption, not the speed of the lookup.",
+      "debrief": "Where is the check-and-consume atomic? Does a wrong attempt consume the token? What policy is deliberately outside this exercise?",
+      "test_scenarios": [
+        {
+          "id": "P16-01",
+          "input": "issued=0,TTL=60; correct code at 59",
+          "expected": "success; code consumed"
+        },
+        {
+          "id": "P16-02",
+          "input": "fresh code; correct code at 60",
+          "expected": "verification-failed"
+        },
+        {
+          "id": "P16-03",
+          "input": "successful code used again",
+          "expected": "verification-failed"
+        },
+        {
+          "id": "P16-04",
+          "input": "wrong code then correct code before expiry",
+          "expected": "failure then success"
+        },
+        {
+          "id": "P16-05",
+          "input": "U1 code used for U2",
+          "expected": "failure; U1 code remains active"
+        },
+        {
+          "id": "P16-06",
+          "input": "resend U1 code A→B; verify A then B",
+          "expected": "failure then success"
+        },
+        {
+          "id": "P16-07",
+          "input": "two simultaneous correct verifications",
+          "expected": "exactly one success"
+        },
+        {
+          "id": "P16-08",
+          "input": "unknown user/code",
+          "expected": "same verification-failed result; no state mutation"
+        }
+      ]
+    },
+    {
+      "number": 17,
+      "title": "Transactional wallet transfers and retries",
+      "question": "Fix duplicate debits and partial transfers while preserving total funds.",
+      "contract": "Original contract: integer positive cents, distinct existing source/destination; each request has globally unique id. One transaction updates both balances and persists request result. Same id+same payload returns original result; same id+different payload→409. Insufficient funds→422 with no changes. Injected failures roll back all effects; concurrent transfers cannot overdraw.",
+      "starter_files": "FastAPI routes/service, SQLite transactional ledger and idempotency table; injected failure points and barrier-controlled concurrency tests.",
+      "stages": "1 reproduce partial write; 2 atomic transfer; 3 idempotency and conflict; 4 concurrent debits.",
+      "likely_failures": "In-memory deduplication lost on restart; idempotency stored before failed transaction; retry checking id but not payload; balance check outside lock/transaction.",
+      "complexity": "Indexed request-id and account lookups; transaction isolation/locking determines concurrency safety. Money conservation is necessary but does not establish correct recipient.",
+      "debrief": "What is the transaction boundary? Why store the result with the balances? How do identical retries differ from conflicting reuse?",
+      "test_scenarios": [
+        {
+          "id": "P17-01",
+          "input": "A=100,B=0; transfer 30 id=r1",
+          "expected": "A=70,B=30; success"
+        },
+        {
+          "id": "P17-02",
+          "input": "retry r1 with same payload",
+          "expected": "same result; balances remain 70,30"
+        },
+        {
+          "id": "P17-03",
+          "input": "reuse r1 with amount=40",
+          "expected": "409; balances unchanged"
+        },
+        {
+          "id": "P17-04",
+          "input": "A=20,B=0; transfer 30",
+          "expected": "422; balances remain 20,0"
+        },
+        {
+          "id": "P17-05",
+          "input": "failure injected after debit before credit",
+          "expected": "rollback; A=100,B=0; no successful r1 recorded"
+        },
+        {
+          "id": "P17-06",
+          "input": "A=100; concurrent transfers 70 to B and C",
+          "expected": "one success, one insufficient-funds; A=30; total=100"
+        },
+        {
+          "id": "P17-07",
+          "input": "amount=0,negative or noninteger",
+          "expected": "400; no ledger mutation"
+        },
+        {
+          "id": "P17-08",
+          "input": "source=destination or unknown destination",
+          "expected": "400 or 404 respectively; no mutation"
+        }
+      ]
+    },
+    {
+      "number": 18,
+      "title": "Maximum unique-character subset",
+      "question": "Repair validation, find an optimal compatible subset, then scale to larger lists.",
+      "contract": "Original contract: lowercase a–z strings; concatenated selected words contain no repeated character. Empty selection is legal. Select input indices so repeated equal strings are distinct occurrences; each index at most once. Maximize total character count; any optimum accepted. A validator checks legality only, not optimality. Nonalphabetic input is rejected. Empty words contribute zero.",
+      "starter_files": "Python max_unique.py/selector.py, subset_utils.py/validator.py; brute-force small-input oracle and larger generated fixtures.",
+      "stages": "1 validator correctness; 2 exact baseline solver; 3 bitmask pruning/compatible-state search; 4 measured larger dataset.",
+      "likely_failures": "Treating a legal suboptimal selection as invalid; ignoring repetition within a word; set membership instead of occurrence accounting; greedy longest-first loses optimality.",
+      "complexity": "Bitmasks make compatibility O(1) over a 26-letter alphabet; worst-case subset search remains exponential. Explain pruning without claiming polynomial worst-case exact search.",
+      "debrief": "What is legality versus optimality? Can a word be chosen twice? Why is longest-word-first not generally optimal?",
+      "test_scenarios": [
+        {
+          "id": "P18-01",
+          "input": "words [ab,cd,ae]; choose indices [0,1]",
+          "expected": "valid; length=4; optimum=4"
+        },
+        {
+          "id": "P18-02",
+          "input": "same words; choose [0]",
+          "expected": "valid but suboptimal length=2"
+        },
+        {
+          "id": "P18-03",
+          "input": "words [aa,b]; solve",
+          "expected": "choose [1]; optimum=1"
+        },
+        {
+          "id": "P18-04",
+          "input": "words [ab,bc]; choose both",
+          "expected": "invalid shared b; optimum=2"
+        },
+        {
+          "id": "P18-05",
+          "input": "words [ab,ab]; choose both",
+          "expected": "invalid; optimum=2 from either occurrence"
+        },
+        {
+          "id": "P18-06",
+          "input": "words []; solve",
+          "expected": "[]; optimum=0"
+        },
+        {
+          "id": "P18-07",
+          "input": "words [abc,de,f]; solve",
+          "expected": "all indices; optimum=6"
+        },
+        {
+          "id": "P18-08",
+          "input": "words [abc,ad,be,cf]; solve",
+          "expected": "indices [1,2,3]; optimum=6, beating greedy abc"
+        }
+      ]
+    },
+    {
+      "number": 19,
+      "title": "Toy runway event scheduler",
+      "question": "Build a scheduling simulation with explicit priority and exclusion rules.",
+      "contract": "Original contract: one runway, positive occupancy duration; no preemption after a flight starts. At each free instant pick arrived emergency first, then landing, then takeoff; ties use arrival then id. Arrivals at a finish time are eligible immediately. Cancellation removes only waiting flights; closure [a,b) prohibits any scheduled occupancy overlapping it. This is an interview simulation, not operational aviation guidance.",
+      "starter_files": "Python aircraft.py, runway.py, scheduler.py, events.py; fake clock, seeded requests and event-log assertions.",
+      "stages": "1 requirements and model; 2 exclusion and priorities; 3 cancellation/closure; 4 second runway with defined eligibility.",
+      "likely_failures": "Preempting active flights without a requirement; ranking future arrivals ahead of ready work; interval-overlap errors; nondeterministic emergency ties.",
+      "complexity": "O(n log n) event/ready queues for the basic model; closure search needs a documented interval strategy.",
+      "debrief": "Which policy is an assumption? Can emergencies preempt? What event order applies at a closure boundary?",
+      "test_scenarios": [
+        {
+          "id": "P19-01",
+          "input": "takeoff T and landing L arrive 0, each duration 2",
+          "expected": "L[0,2),T[2,4)"
+        },
+        {
+          "id": "P19-02",
+          "input": "emergency X and ordinary landing L arrive 0",
+          "expected": "X scheduled first"
+        },
+        {
+          "id": "P19-03",
+          "input": "T starts 0 duration5; emergency X arrives1",
+          "expected": "T completes5; X starts5; no preemption"
+        },
+        {
+          "id": "P19-04",
+          "input": "A finishes5; B arrives5",
+          "expected": "B may start5"
+        },
+        {
+          "id": "P19-05",
+          "input": "waiting B cancelled before dispatch",
+          "expected": "B produces no occupancy"
+        },
+        {
+          "id": "P19-06",
+          "input": "closure [5,10); flight arrives4 duration3",
+          "expected": "flight starts10; cannot overlap closure"
+        },
+        {
+          "id": "P19-07",
+          "input": "closure [5,10); flight arrives2 duration3",
+          "expected": "flight occupies [2,5); legal touching boundary"
+        },
+        {
+          "id": "P19-08",
+          "input": "two emergency flights arrive0 ids B,A",
+          "expected": "A before B"
+        }
+      ]
+    },
+    {
+      "number": 20,
+      "title": "Test-contract disagreement and diagnosis",
+      "question": "Investigate a failed test and determine which side violates the written contract before editing.",
+      "contract": "Original parser contract: tokens match [+-]?[0-9]+ after trimming ASCII outer whitespace; output a safe integer in ±(2^53−1). Leading zeros and + are allowed; decimals, empty input, trailing junk and nonstrings are rejected. A deliberately faulty test expects 007 to be rejected. Correct that test with written justification and independent cases; do not broadly weaken validation.",
+      "starter_files": "TypeScript parser.ts, schema.ts, contract.md, a small consumer and independently authored test fixtures.",
+      "stages": "1 reconcile test and contract; 2 smallest justified correction; 3 independent regressions; 4 changed requirement with explicit migration.",
+      "likely_failures": "Editing production code to satisfy a wrong assertion; parseInt accepting suffixes; Number accepting empty strings; assuming implementation is the spec despite a contradictory explicit contract.",
+      "complexity": "O(token length); bound checking must happen before accepting a result. The exercise evaluates evidence and restraint more than algorithm novelty.",
+      "debrief": "What proves the test was wrong? Which counterexample would detect an overpermissive parser? How would you handle a newly required no-leading-zero rule?",
+      "test_scenarios": [
+        {
+          "id": "P20-01",
+          "input": "input \"007\"",
+          "expected": "7; faulty rejection expectation must be corrected"
+        },
+        {
+          "id": "P20-02",
+          "input": "input \"  -12  \"",
+          "expected": "−12"
+        },
+        {
+          "id": "P20-03",
+          "input": "input \"+0\"",
+          "expected": "0"
+        },
+        {
+          "id": "P20-04",
+          "input": "input \"12x\"",
+          "expected": "parse error"
+        },
+        {
+          "id": "P20-05",
+          "input": "input \"1.5\"",
+          "expected": "parse error"
+        },
+        {
+          "id": "P20-06",
+          "input": "input empty or whitespace only",
+          "expected": "parse error"
+        },
+        {
+          "id": "P20-07",
+          "input": "input \"9007199254740992\"",
+          "expected": "range error"
+        },
+        {
+          "id": "P20-08",
+          "input": "input number 12 rather than string",
+          "expected": "type error"
+        }
+      ]
+    },
+    {
+      "number": 31,
+      "title": "Three-card sum-15 strategy",
+      "question": "Repair selection validation, implement a legal baseline chooser and compare strategies under controlled simulation.",
+      "contract": "Original contract: cards have unique physical ids plus amount1..9 and mark; a move contains exactly three distinct table ids with total15. Marks do not affect legality. A chooser returns a legal triple or None when none exists. For our benchmark only, score one point per successful triple, remove those cards, refill from a seeded deck, and report legal moves and score separately. Publisher scoring/refresh details were not obtained.",
+      "starter_files": "Python engine.py, pieces.py, strategies.py, seeded deck and validation/simulation tests.",
+      "stages": "1 membership/multiplicity bug; 2 baseline combination enumeration; 3 reproducible measurement; 4 improve strategy under a specified score.",
+      "likely_failures": "Membership as a set while reusing one physical card; inventing a missing card with matching value; optimizing before legality; comparing strategies on different random decks.",
+      "complexity": "Enumerating triples O(m³) for m visible cards; value-group lookup can reduce search. Strategy quality requires multiple shared seeds and uncertainty, not one lucky run.",
+      "debrief": "Are identity and card value interchangeable? What is the scoring objective? How do you make a fair strategy comparison?",
+      "test_scenarios": [
+        {
+          "id": "P31-01",
+          "input": "table a=4,b=5,c=6; choose a,b,c",
+          "expected": "valid total15"
+        },
+        {
+          "id": "P31-02",
+          "input": "same table; choose a,b,missing",
+          "expected": "invalid membership"
+        },
+        {
+          "id": "P31-03",
+          "input": "table a=5,b=5,c=5; choose a,a,b",
+          "expected": "invalid repeated physical id"
+        },
+        {
+          "id": "P31-04",
+          "input": "table a=5,b=5,c=5; choose a,b,c",
+          "expected": "valid despite equal values"
+        },
+        {
+          "id": "P31-05",
+          "input": "table a=1,b=2,c=3; chooser",
+          "expected": "None; no valid triple"
+        },
+        {
+          "id": "P31-06",
+          "input": "table a=4,b=5,c=6; choose a,b",
+          "expected": "invalid length"
+        },
+        {
+          "id": "P31-07",
+          "input": "table a=4,b=5,c=7; choose all",
+          "expected": "invalid total16"
+        },
+        {
+          "id": "P31-08",
+          "input": "same strategy,deck,seed run twice",
+          "expected": "same move sequence, legal-move count and score"
+        }
+      ]
+    },
+    {
+      "number": 32,
+      "title": "Friend recommendation validity and ranking",
+      "question": "Reject invalid recommendations, create a baseline and improve recommendation quality.",
+      "contract": "Original contract: undirected known-user graph without self edges; recommendations exclude self,current friends,unknown ids and duplicates. Rank eligible users by mutual-friend count descending, then user id ascending; return at most k, with k=0→[]. The public practice mentions strategy evaluation but its exact quality metric is not available. Our benchmark uses withheld edges and precision@k only when a held-out positive set exists.",
+      "starter_files": "Python social_graph.py, recommenders.py, graph fixtures, validator and withheld-edge benchmark.",
+      "stages": "1 validator exclusions; 2 baseline recommendations; 3 define offline metric; 4 mutual-friend ranking and larger graphs.",
+      "likely_failures": "Only checking direct friends; unknown ids accepted; test leakage from withheld edges; popularity accidentally replacing the requested metric.",
+      "complexity": "Candidate generation through friends-of-friends costs sum of neighbor degrees; sorting candidates O(c log c). Isolated-user fallback is a specified product choice.",
+      "debrief": "What does a recommendation score mean? How do you avoid evaluation leakage? What should an isolated user see?",
+      "test_scenarios": [
+        {
+          "id": "P32-01",
+          "input": "users A,B,C,D; edges A-B,B-C; recommend A,k=2",
+          "expected": "[C,D]; mutual counts1,0"
+        },
+        {
+          "id": "P32-02",
+          "input": "same graph; validate [A] for A",
+          "expected": "invalid self"
+        },
+        {
+          "id": "P32-03",
+          "input": "same graph; validate [B] for A",
+          "expected": "invalid existing friend"
+        },
+        {
+          "id": "P32-04",
+          "input": "same graph; validate [C,C]",
+          "expected": "invalid duplicates"
+        },
+        {
+          "id": "P32-05",
+          "input": "same graph; validate [Z]",
+          "expected": "invalid unknown user"
+        },
+        {
+          "id": "P32-06",
+          "input": "users A,B,C; A isolated; k=2",
+          "expected": "[B,C]; tie id ascending"
+        },
+        {
+          "id": "P32-07",
+          "input": "k=0",
+          "expected": "[]"
+        },
+        {
+          "id": "P32-08",
+          "input": "users A,B,C; A friends with B and C",
+          "expected": "[]; no eligible candidates"
+        }
+      ]
+    },
+    {
+      "number": 33,
+      "title": "Straight-line compiler cost and liveness",
+      "question": "Repair fixture metadata loading, analyze a small program, remove dead assignments and fold constants.",
+      "contract": "Original contract: SSA-style arithmetic assignments and aliases; final output res; +,−,*,/ integer operations with per-fixture costs. Our fixture metadata is a JSON header, not a recovered publisher file format. Fold pure constants with division truncating toward zero; reject division by zero. For our liveness model, a new arithmetic temporary is allocated before last-used operands are freed; inputs/constants allocate no temporaries; aliases share storage. Preserve evaluation order of retained instructions.",
+      "starter_files": "Python compiler_optimizer.py, optimizer_utils.py, tests/data; parser, dependency graph, cost analyzer and an independent tiny interpreter.",
+      "stages": "1 metadata loader; 2 basic cost/liveness; 3 backward dead-code elimination from res; 4 constant propagation/folding. Negative division and memory conventions must be specified by the exercise author.",
+      "likely_failures": "Hardcoded operator costs; single-digit metadata parsing; counting input variables as temporary memory; dead-code removal by textual names rather than dependencies; ambiguous reuse convention.",
+      "complexity": "O(I+dependencies) passes for I instructions; liveness tracks future uses. Optimize correctness and semantic equivalence before comparing cost totals.",
+      "debrief": "When is a temporary live? Does res alias allocate storage? What happens to exceptions in dead code under the language contract?",
+      "test_scenarios": [
+        {
+          "id": "P33-01",
+          "input": "cost+=2,*=3; a=x+1; res=a",
+          "expected": "time2,peak1"
+        },
+        {
+          "id": "P33-02",
+          "input": "same costs; a=x+1; b=a*2; res=b",
+          "expected": "time5,peak2 under allocate-before-release"
+        },
+        {
+          "id": "P33-03",
+          "input": "cost+=2; a=x+1; b=y+1; res=a+b",
+          "expected": "time6,peak3"
+        },
+        {
+          "id": "P33-04",
+          "input": "a=x+1; unused=y*9; res=a",
+          "expected": "dead-code elimination removes unused; optimized time2,peak1"
+        },
+        {
+          "id": "P33-05",
+          "input": "a=2+3; res=a*4",
+          "expected": "constant result20; optimized time0,peak0"
+        },
+        {
+          "id": "P33-06",
+          "input": "res=−7/2 with constants",
+          "expected": "constant result−3; time0,peak0"
+        },
+        {
+          "id": "P33-07",
+          "input": "metadata expectedTime=123,expectedMemory=12; costs include *=17",
+          "expected": "all multi-digit values preserved; not truncated"
+        },
+        {
+          "id": "P33-08",
+          "input": "res=1/0",
+          "expected": "compile-time validation error under this original contract"
+        }
+      ]
+    },
+    {
+      "number": 34,
+      "title": "Dependency impact from changed paths",
+      "question": "Normalize paths, identify directly affected services and propagate impact to dependents.",
+      "contract": "Original contract: absolute case-sensitive POSIX paths; collapse repeated separators and trailing slash except /. Reject . and .. segments rather than silently resolve them. ancestor(A,B) holds when A=B or B begins A+/; / is ancestor of all valid paths. Each service owns watched paths; a changed file affects a watcher of its ancestor. A deleted directory affects watched descendants too. Dependency A→B means A depends on B, so impact propagates from B to A. Cycles terminate.",
+      "starter_files": "Python path_utils.py, service_dependency.py, watched-path and dependency graph fixtures; normalization and transitive-impact tests.",
+      "stages": "1 path helper; 2 direct file impact; 3 deleted subtrees; 4 reverse dependency closure.",
+      "likely_failures": "/app matching /apple by string prefix; root lost during trimming; traversing dependency edges in the wrong direction; cycles; treating deletes as ordinary file edits.",
+      "complexity": "O(S·W) straightforward path matching plus O(V+E) closure; a path trie is an optional scale extension.",
+      "debrief": "Why is dependency direction important? How does directory deletion differ from a file edit? Is this path syntax or filesystem resolution?",
+      "test_scenarios": [
+        {
+          "id": "P34-01",
+          "input": "normalize //app///src/",
+          "expected": "/app/src"
+        },
+        {
+          "id": "P34-02",
+          "input": "normalize ////",
+          "expected": "/"
+        },
+        {
+          "id": "P34-03",
+          "input": "ancestor /app vs /apple/x",
+          "expected": "false"
+        },
+        {
+          "id": "P34-04",
+          "input": "ancestor / vs /app/x",
+          "expected": "true"
+        },
+        {
+          "id": "P34-05",
+          "input": "service B watches /lib; file /lib/a changes; A depends on B",
+          "expected": "affected {A,B}"
+        },
+        {
+          "id": "P34-06",
+          "input": "B watches /lib/sub/a; directory /lib deleted",
+          "expected": "B affected even though watched path is below deletion"
+        },
+        {
+          "id": "P34-07",
+          "input": "A depends B and B depends A; B directly affected",
+          "expected": "{A,B} once each; termination"
+        },
+        {
+          "id": "P34-08",
+          "input": "normalize /app/../secret",
+          "expected": "validation error"
+        }
+      ]
+    },
+    {
+      "number": 35,
+      "title": "Meeting scheduler and atomic reservations",
+      "question": "Repair overlap checks, find the earliest free slot and prevent concurrent double booking.",
+      "contract": "Original contract: intervals [start,end), positive integer duration. Search within [earliest,latestEnd] for a slot fully inside the window. Bookings may overlap in input; search uses their occupied union and leaves input unmodified. Return (start,end) or None. Reservation performs search and insert atomically for a single room. Existing bookings returned sorted by start,end,id.",
+      "starter_files": "Python booking_utils.py, scheduler.py, fake clock and in-memory locked store; interval and concurrency tests.",
+      "stages": "1 touching-boundary overlap; 2 earliest slot; 3 sorted persistent bookings; 4 atomic reserve.",
+      "likely_failures": "Closed intervals forbid adjacent meetings; gaps smaller than duration accepted; mutation during sorting; check then insert race; wrong handling of nested bookings.",
+      "complexity": "O(n log n) initial sort then O(n) gap scan; O(n) insertion into a list. A lock/transaction protects the full reserve operation.",
+      "debrief": "Where does half-open semantics matter? What changes for multiple rooms? What part of reserve must be atomic?",
+      "test_scenarios": [
+        {
+          "id": "P35-01",
+          "input": "overlap [0,10),[10,20)",
+          "expected": "false"
+        },
+        {
+          "id": "P35-02",
+          "input": "overlap [0,20),[5,10)",
+          "expected": "true"
+        },
+        {
+          "id": "P35-03",
+          "input": "bookings [0,5),[10,15); duration5,window[0,20]",
+          "expected": "earliest [5,10)"
+        },
+        {
+          "id": "P35-04",
+          "input": "same bookings; duration6,window[0,20]",
+          "expected": "None"
+        },
+        {
+          "id": "P35-05",
+          "input": "no bookings; duration3,window[2,10]",
+          "expected": "[2,5)"
+        },
+        {
+          "id": "P35-06",
+          "input": "unsorted overlapping [5,10),[0,8); duration2,window[0,20]",
+          "expected": "[10,12); input order unchanged"
+        },
+        {
+          "id": "P35-07",
+          "input": "duration0 or end<start",
+          "expected": "validation error"
+        },
+        {
+          "id": "P35-08",
+          "input": "two simultaneous reservations, duration10,window[0,10]",
+          "expected": "one [0,10) reservation; one None"
+        }
+      ]
+    },
+    {
+      "number": 36,
+      "title": "Crawler priority, readiness and retry queue",
+      "question": "Fix stable priority ordering, then add readiness and bounded retry behavior.",
+      "contract": "Original contract: unique job ids; higher integer priority first; FIFO original enqueue sequence breaks equal-priority ties. pop_ready(now) considers only ready_at≤now and leases one job, counting an attempt. A failed attempt requeues at now+5 preserving priority and original sequence; after two total attempts mark dead. Completed/dead jobs cannot be popped again. Empty/no-ready result=None. URLs are opaque; URL deduplication is out of scope.",
+      "starter_files": "Python crawl_queue.py, heap_utils.py, fake clock and job store; baseline ordered-list oracle and heap implementation.",
+      "stages": "1 tie comparator; 2 push/pop; 3 choose ready jobs despite a delayed higher-priority head; 4 cooldown and retry exhaustion.",
+      "likely_failures": "Heap head blocks ready lower-priority work; priorities inverted; retry loses FIFO order; leased job still available; unbounded retries.",
+      "complexity": "One heap alone cannot efficiently serve priority among ready jobs with arbitrary readiness; split delayed-time and ready-priority heaps. Typical push/pop O(log n).",
+      "debrief": "How can a delayed high-priority job hide ready work? Which order survives retries? What happens if a worker dies after leasing?",
+      "test_scenarios": [
+        {
+          "id": "P36-01",
+          "input": "A priority1 seq0,B priority3 seq1 both ready",
+          "expected": "B then A"
+        },
+        {
+          "id": "P36-02",
+          "input": "A priority3 seq0,B priority3 seq1",
+          "expected": "A then B"
+        },
+        {
+          "id": "P36-03",
+          "input": "A priority9 ready_at10,B priority1 ready_at0; now0",
+          "expected": "B; delayed A does not block it"
+        },
+        {
+          "id": "P36-04",
+          "input": "A ready_at5; pop at4 then5",
+          "expected": "None then A"
+        },
+        {
+          "id": "P36-05",
+          "input": "A fails first attempt at0; pop at4 then5",
+          "expected": "None then A on attempt2"
+        },
+        {
+          "id": "P36-06",
+          "input": "A fails second attempt at5; pop later",
+          "expected": "A dead; None"
+        },
+        {
+          "id": "P36-07",
+          "input": "push duplicate active id A",
+          "expected": "validation error; one A remains"
+        },
+        {
+          "id": "P36-08",
+          "input": "lease A then second pop before completion",
+          "expected": "A not returned again"
+        }
+      ]
+    },
+    {
+      "number": 37,
+      "title": "Expense rules and grouped decisions",
+      "question": "Repair numeric amount comparison, then compose per-expense and per-trip rules.",
+      "contract": "Original contract: amounts are nonnegative decimal strings with at most two fractional digits, parsed to integer cents without float comparisons. Expense exceeds a threshold only when amount>threshold, so equality passes. Trips sum their expense amounts; reject duplicate expense ids and malformed currency. AND/OR rule composition uses explicit booleans; return violations in stable (trip,id,rule) order. No currency conversion in this exercise.",
+      "starter_files": "Python expense_engine.py, expense_rules.py, schema/decimal parser and fixtures containing per-item and per-trip rules.",
+      "stages": "1 numeric versus lexical comparison; 2 per-expense rules; 3 aggregate/composite checks; 4 deterministic large-input evaluation.",
+      "likely_failures": "Lexicographic ordering; binary-float boundary error; grouping globally instead of by trip; rounding each amount differently; duplicate charges in sums.",
+      "complexity": "O(n·r) direct rule checks and O(n) grouping; precompile rules only when workload warrants it.",
+      "debrief": "Why integer cents? Is equality a violation? How are individual and trip rules combined and explained?",
+      "test_scenarios": [
+        {
+          "id": "P37-01",
+          "input": "amount=\"100.00\",threshold=\"20.00\"",
+          "expected": "violation; 10000>2000 cents"
+        },
+        {
+          "id": "P37-02",
+          "input": "amount=\"9.00\",threshold=\"100.00\"",
+          "expected": "no violation"
+        },
+        {
+          "id": "P37-03",
+          "input": "amount=\"20.00\",threshold=\"20.00\"",
+          "expected": "no violation"
+        },
+        {
+          "id": "P37-04",
+          "input": "trip T amounts10.10 and0.20,trip limit10.30",
+          "expected": "no violation; sum=1030 cents exactly"
+        },
+        {
+          "id": "P37-05",
+          "input": "same trip; limit10.29",
+          "expected": "trip violation; sum exceeds by1 cent"
+        },
+        {
+          "id": "P37-06",
+          "input": "T1=7,T2=7; each trip limit10",
+          "expected": "no violation; do not combine trips"
+        },
+        {
+          "id": "P37-07",
+          "input": "amount=\"1.001\" or \"NaN\"",
+          "expected": "validation error"
+        },
+        {
+          "id": "P37-08",
+          "input": "rule (amount>10 AND category=meal); expense12,category=travel",
+          "expected": "no violation; AND requires both"
+        }
+      ]
+    },
+    {
+      "number": 38,
+      "title": "Contained-string search and progressive scaling",
+      "question": "Find a string containing another list entry, then add shortest-container and all-pairs variants.",
+      "contract": "Original contract: nonempty case-sensitive strings; containment must use different list positions. Equal strings at different indices count. Baseline returns any valid container index or None; shortest variant minimizes length then index. All-pairs variant returns sorted directed (container_index,contained_index) pairs; overlapping substring occurrences still produce one pair. Do not confuse containing one entry with containing every entry.",
+      "starter_files": "Python substring_finder.py, benchmark.py, oracle fixtures and generated large lists; a slow pairwise baseline is supplied.",
+      "stages": "1 basic correctness; 2 shortest valid container; 3 larger inputs; 4 all valid directed pairs.",
+      "likely_failures": "Self-containment incorrectly accepted; duplicates removed before evaluation; case normalization changes semantics; substring occurrence count confused with pair count.",
+      "complexity": "Baseline O(n²·L) with implementation-dependent substring-search cost. Multi-pattern matching can improve work, but output may itself contain Θ(n²) pairs.",
+      "debrief": "Can two identical strings count? What is the output-size lower bound for all pairs? Does a faster algorithm preserve shortest-container ties?",
+      "test_scenarios": [
+        {
+          "id": "P38-01",
+          "input": "strings [catalog,log]",
+          "expected": "container index0; pair (0,1)"
+        },
+        {
+          "id": "P38-02",
+          "input": "strings [sun,moon]",
+          "expected": "None; pairs[]"
+        },
+        {
+          "id": "P38-03",
+          "input": "strings [solo]",
+          "expected": "None; self-match excluded"
+        },
+        {
+          "id": "P38-04",
+          "input": "strings [echo,echo]",
+          "expected": "either container; all pairs[(0,1),(1,0)]"
+        },
+        {
+          "id": "P38-05",
+          "input": "strings [ABC,bc]",
+          "expected": "None; case-sensitive"
+        },
+        {
+          "id": "P38-06",
+          "input": "strings [longabc,abc,xabc]; shortest variant",
+          "expected": "index2 xabc, length4"
+        },
+        {
+          "id": "P38-07",
+          "input": "strings [ababa,aba,ba]; all-pairs",
+          "expected": "[(0,1),(0,2),(1,2)]"
+        },
+        {
+          "id": "P38-08",
+          "input": "strings [abc,xabc,yabc]; shortest variant",
+          "expected": "index1 xabc wins equal-length tie"
+        }
+      ]
+    }
+  ],
+  "public_practice_examples": [
+    {
+      "title": "Maze",
+      "url": "https://algo.monster/ai-coding-interview/maze_solver",
+      "filenames": "main.py, maze.py, mazes.py, solver.py",
+      "stages": "rendering → solver → directional edges → keys/doors",
+      "visible_test_names": [
+        "test_render_with_path_preserves_start_and_end",
+        "test_render_with_path_marks_open_cells"
+      ],
+      "exercise_mapping": "1–3"
+    },
+    {
+      "title": "Unique characters",
+      "url": "https://algo.monster/ai-coding-interview/max-unique-characters-subset",
+      "filenames": "max_unique.py, subset_utils.py",
+      "stages": "validator → solver → bigger inputs → full dataset",
+      "visible_test_names": [
+        "test_accepts_legal_but_suboptimal_selection",
+        "test_accepts_single_word",
+        "test_accepts_single_character_words",
+        "test_accepts_all_words_when_disjoint",
+        "test_rejects_internal_duplicate_word_accepts_clean_word",
+        "test_rejects_global_character_overlap_accepts_disjoint_words",
+        "test_rejects_words_not_in_input_accepts_listed_words",
+        "test_empty_selection_is_valid"
+      ],
+      "exercise_mapping": "18"
+    },
+    {
+      "title": "Sum-15 cards",
+      "url": "https://algo.monster/ai-coding-interview/card-game-15-opt",
+      "filenames": "engine.py, pieces.py, strategies.py",
+      "stages": "validator → baseline → measurement → improvement",
+      "visible_test_names": [
+        "test_rejects_card_not_on_table",
+        "test_rejects_using_same_single_card_twice",
+        "test_accepts_real_triple_from_table"
+      ],
+      "exercise_mapping": "31"
+    },
+    {
+      "title": "Friend recommendation",
+      "url": "https://algo.monster/ai-coding-interview/friend-recommendation",
+      "filenames": "recommenders.py, social_graph.py",
+      "stages": "validator → baseline → measurement → improvement",
+      "visible_test_names": [
+        "test_rejects_self_recommendation",
+        "test_rejects_existing_friend",
+        "test_rejects_duplicates",
+        "test_accepts_clean_candidate_list"
+      ],
+      "exercise_mapping": "32"
+    },
+    {
+      "title": "Compiler cost",
+      "url": "https://algo.monster/ai-coding-interview/compiler-optimization",
+      "filenames": "compiler_optimizer.py, optimizer_utils.py",
+      "stages": "metadata → analyzer → dead code → constant folding",
+      "visible_test_names": [
+        "test_reads_per_file_operator_costs",
+        "test_reads_multi_digit_metadata_values",
+        "test_ignores_comments_and_blank_lines_in_program_body"
+      ],
+      "exercise_mapping": "33"
+    },
+    {
+      "title": "Delivery dashboard",
+      "url": "https://algo.monster/ai-coding-interview/delivery-cost-dashboard",
+      "filenames": "delivery_dashboard.py, delivery_models.py",
+      "stages": "duration precision → live totals → payment cutoff → peak drivers",
+      "visible_test_names": [
+        "test_ninety_minutes_is_not_truncated_to_one_hour",
+        "test_half_hour_uses_second_precision"
+      ],
+      "exercise_mapping": "12"
+    },
+    {
+      "title": "Dependency impact",
+      "url": "https://algo.monster/ai-coding-interview/service-dependency-impact",
+      "filenames": "path_utils.py, service_dependency.py",
+      "stages": "normalize → direct impact → deleted subtrees → dependents",
+      "visible_test_names": [
+        "test_collapses_repeated_slashes_and_trailing_slash",
+        "test_preserves_root_path",
+        "test_ancestor_check_uses_normalized_paths"
+      ],
+      "exercise_mapping": "34"
+    },
+    {
+      "title": "Progressive LRU",
+      "url": "https://algo.monster/ai-coding-interview/lru-cache-progressive",
+      "filenames": "lru_cache.py",
+      "stages": "recency → eviction → resize → atomic get_or_put",
+      "visible_test_names": [
+        "test_get_refreshes_recently_used_key"
+      ],
+      "exercise_mapping": "15"
+    },
+    {
+      "title": "Hand comparator",
+      "url": "https://algo.monster/ai-coding-interview/card-hand-comparator",
+      "filenames": "card_hand.py, hand_utils.py",
+      "stages": "rank parsing → comparison → partial hands → rule extension",
+      "visible_test_names": [
+        "test_parses_ten_as_a_two_character_rank",
+        "test_parses_face_cards"
+      ],
+      "exercise_mapping": "13"
+    },
+    {
+      "title": "Expense rules",
+      "url": "https://algo.monster/ai-coding-interview/expense-rule-engine",
+      "filenames": "expense_engine.py, expense_rules.py",
+      "stages": "numeric amounts → item rules → trip/composite rules → scale",
+      "visible_test_names": [
+        "test_amounts_are_compared_numerically",
+        "test_small_amounts_do_not_exceed_large_thresholds"
+      ],
+      "exercise_mapping": "37"
+    },
+    {
+      "title": "Meeting scheduler",
+      "url": "https://algo.monster/ai-coding-interview/meeting-scheduler",
+      "filenames": "booking_utils.py, scheduler.py",
+      "stages": "overlap → earliest slot → sorted bookings → atomic reserve",
+      "visible_test_names": [
+        "test_touching_intervals_do_not_overlap",
+        "test_nested_intervals_overlap",
+        "test_partial_overlap_is_detected"
+      ],
+      "exercise_mapping": "35"
+    },
+    {
+      "title": "Crawler queue",
+      "url": "https://algo.monster/ai-coding-interview/crawler-frontier-queue",
+      "filenames": "crawl_queue.py, heap_utils.py",
+      "stages": "FIFO ties → push/pop → ready jobs → cooldown",
+      "visible_test_names": [
+        "test_earlier_sequence_wins_when_priority_matches"
+      ],
+      "exercise_mapping": "36"
+    },
+    {
+      "title": "Contained strings",
+      "url": "https://algo.monster/ai-coding-interview/shared-substring-in-string-list",
+      "filenames": "benchmark.py, substring_finder.py",
+      "stages": "one container → shortest → larger data → all pairs",
+      "visible_test_names": [
+        "test_returns_container_for_example",
+        "test_returns_none_when_no_pair_exists",
+        "test_single_string_returns_none",
+        "test_duplicates_count_as_containment",
+        "test_is_case_sensitive",
+        "test_returns_a_valid_container_on_mixed_list"
+      ],
+      "exercise_mapping": "38"
+    }
+  ],
+  "trusted_version": "behavioral-2026-10-v2",
+  "local_challenges": [
+    {
+      "number": 21,
+      "slug": "tenant-document-acl",
+      "readme": "/Users/shrutwik/Desktop/PromptCode/challenges/tenant-document-acl/README.md",
+      "visible_files": [
+        {
+          "path": "/Users/shrutwik/Desktop/PromptCode/challenges/tenant-document-acl/tests/conftest.py",
+          "sha256": "7d0f0cfff1f69cf7fe9c941dabb75817fba459fb8ca145154d6af928b1665023",
+          "test_names": [],
+          "source": "import pytest\nfrom app import db\nfrom app.models import Document\n@pytest.fixture(autouse=True)\ndef seed_docs():\n    db.reset()\n    db.seed(Document(\"doc_acme_1\", \"tenant_acme\", \"Acme Plan\", \"secret-acme\"))\n    db.seed(Document(\"doc_globex_1\", \"tenant_globex\", \"Globex Plan\", \"secret-globex\"))\n"
+        },
+        {
+          "path": "/Users/shrutwik/Desktop/PromptCode/challenges/tenant-document-acl/tests/test_acl.py",
+          "sha256": "b00dca41d73041ccfdab5b4bfef3341a6ee5e5a791f0e91c5fdb8149c02c6699",
+          "test_names": [
+            "test_cross_tenant_update_preserves_all_fields",
+            "test_unauthenticated_update_preserves_document",
+            "test_list_is_tenant_scoped",
+            "test_owner_can_read_own_doc",
+            "test_missing_doc_is_404",
+            "test_cross_tenant_get_is_404",
+            "test_cross_tenant_patch_is_404"
+          ],
+          "source": "from fastapi.testclient import TestClient\nimport pytest\nfrom app import db\nfrom app.main import app\nclient = TestClient(app)\n\n@pytest.mark.parametrize('token,foreign_id', [('tok_acme', 'doc_globex_1'), ('tok_globex', 'doc_acme_1')])\ndef test_cross_tenant_update_preserves_all_fields(token, foreign_id):\n    doc = db.get_by_id(foreign_id)\n    before = (doc.title, doc.body, doc.tenant_id)\n    headers = {'Authorization': f'Bearer {token}'}\n    read = client.get(f'/documents/{foreign_id}', headers=headers)\n    assert read.status_code == 404\n    assert doc.body not in read.text\n    update = client.patch(f'/documents/{foreign_id}', headers=headers, json={'title': 'hacked', 'body': 'hacked'})\n    assert update.status_code == 404\n    saved = db.get_by_id(foreign_id)\n    assert (saved.title, saved.body, saved.tenant_id) == before\n\n@pytest.mark.parametrize('headers', [{}, {'Authorization': 'Bearer unknown'}])\ndef test_unauthenticated_update_preserves_document(headers):\n    response = client.patch('/documents/doc_acme_1', headers=headers, json={'body': 'hacked'})\n    assert response.status_code == 401\n    assert db.get_by_id('doc_acme_1').body == 'secret-acme'\ndef test_list_is_tenant_scoped():\n    res = client.get(\"/documents\", headers={\"Authorization\": \"Bearer tok_acme\"})\n    assert {d[\"id\"] for d in res.json()} == {\"doc_acme_1\"}\ndef test_owner_can_read_own_doc():\n    assert client.get(\"/documents/doc_acme_1\", headers={\"Authorization\": \"Bearer tok_acme\"}).json()[\"body\"] == \"secret-acme\"\ndef test_missing_doc_is_404():\n    assert client.get(\"/documents/nope\", headers={\"Authorization\": \"Bearer tok_acme\"}).status_code == 404\ndef test_cross_tenant_get_is_404():\n    res = client.get(\"/documents/doc_globex_1\", headers={\"Authorization\": \"Bearer tok_acme\"})\n    assert res.status_code == 404\n    assert \"secret-globex\" not in res.text\ndef test_cross_tenant_patch_is_404():\n    assert client.patch(\"/documents/doc_globex_1\", headers={\"Authorization\": \"Bearer tok_acme\"}, json={\"title\": \"hacked\"}).status_code == 404\n"
+        }
+      ],
+      "trusted_cases": [
+        {
+          "id": "cross-tenant-get",
+          "weight": 4,
+          "probe": "from fastapi.testclient import TestClient\nfrom app.main import app\nfrom app import db\nfrom app.models import Document\ndb.reset()\ndb.seed(Document('ours','tenant_acme','Acme','own'))\ndb.seed(Document('foreign','tenant_globex','SECRET TITLE','SECRET BODY'))\nc=TestClient(app)\nh={'Authorization':'Bearer tok_acme'}\nr=c.get('/documents/foreign',headers=h)\nresult=[r.status_code,'SECRET' in r.text]",
+          "expected": [
+            404,
+            false
+          ]
+        },
+        {
+          "id": "cross-tenant-patch",
+          "weight": 4,
+          "probe": "from fastapi.testclient import TestClient\nfrom app.main import app\nfrom app import db\nfrom app.models import Document\ndb.reset()\ndb.seed(Document('ours','tenant_acme','Acme','own'))\ndb.seed(Document('foreign','tenant_globex','SECRET TITLE','SECRET BODY'))\nc=TestClient(app)\nh={'Authorization':'Bearer tok_acme'}\nr=c.patch('/documents/foreign',headers=h,json={'body':'attacked'})\nresult=[r.status_code,db.get_by_id('foreign').body]",
+          "expected": [
+            404,
+            "SECRET BODY"
+          ]
+        },
+        {
+          "id": "own-list-and-get",
+          "weight": 2,
+          "probe": "from fastapi.testclient import TestClient\nfrom app.main import app\nfrom app import db\nfrom app.models import Document\ndb.reset()\ndb.seed(Document('ours','tenant_acme','Acme','own'))\ndb.seed(Document('foreign','tenant_globex','SECRET TITLE','SECRET BODY'))\nc=TestClient(app)\nh={'Authorization':'Bearer tok_acme'}\nresult=[c.get('/documents/ours',headers=h).status_code,[r['id'] for r in c.get('/documents',headers=h).json()]]",
+          "expected": [
+            200,
+            [
+              "ours"
+            ]
+          ]
+        },
+        {
+          "id": "unauthenticated",
+          "weight": 2,
+          "probe": "from fastapi.testclient import TestClient\nfrom app.main import app\nfrom app import db\nfrom app.models import Document\ndb.reset()\ndb.seed(Document('ours','tenant_acme','Acme','own'))\ndb.seed(Document('foreign','tenant_globex','SECRET TITLE','SECRET BODY'))\nc=TestClient(app)\nh={'Authorization':'Bearer tok_acme'}\nresult=[c.get('/documents').status_code,c.get('/documents',headers={'Authorization':'Bearer unknown'}).status_code]",
+          "expected": [
+            401,
+            401
+          ]
+        },
+        {
+          "id": "other-tenant-own",
+          "weight": 1,
+          "probe": "from fastapi.testclient import TestClient\nfrom app.main import app\nfrom app import db\nfrom app.models import Document\ndb.reset()\ndb.seed(Document('ours','tenant_acme','Acme','own'))\ndb.seed(Document('foreign','tenant_globex','SECRET TITLE','SECRET BODY'))\nc=TestClient(app)\nh={'Authorization':'Bearer tok_acme'}\nresult=c.get('/documents/foreign',headers={'Authorization':'Bearer tok_globex'}).status_code",
+          "expected": 200
+        },
+        {
+          "id": "own-patch",
+          "weight": 2,
+          "probe": "from fastapi.testclient import TestClient\nfrom app.main import app\nfrom app import db\nfrom app.models import Document\ndb.reset()\ndb.seed(Document('ours','tenant_acme','Acme','own'))\ndb.seed(Document('foreign','tenant_globex','SECRET TITLE','SECRET BODY'))\nc=TestClient(app)\nh={'Authorization':'Bearer tok_acme'}\nr=c.patch('/documents/ours',headers=h,json={'body':'updated own'})\nresult=[r.status_code,c.get('/documents/ours',headers=h).json().get('body')]",
+          "expected": [
+            200,
+            "updated own"
+          ]
+        },
+        {
+          "id": "missing-id",
+          "weight": 1,
+          "probe": "from fastapi.testclient import TestClient\nfrom app.main import app\nfrom app import db\nfrom app.models import Document\ndb.reset()\ndb.seed(Document('ours','tenant_acme','Acme','own'))\ndb.seed(Document('foreign','tenant_globex','SECRET TITLE','SECRET BODY'))\nc=TestClient(app)\nh={'Authorization':'Bearer tok_acme'}\nresult=c.get('/documents/missing',headers=h).status_code",
+          "expected": 404
+        },
+        {
+          "id": "reverse-tenant-isolation",
+          "weight": 4,
+          "probe": "from fastapi.testclient import TestClient\nfrom app.main import app\nfrom app import db\nfrom app.models import Document\ndb.reset()\ndb.seed(Document('ours','tenant_acme','Acme','own'))\ndb.seed(Document('foreign','tenant_globex','SECRET TITLE','SECRET BODY'))\nc=TestClient(app)\nh={'Authorization':'Bearer tok_acme'}\nother={'Authorization':'Bearer tok_globex'}\nr=c.patch('/documents/ours',headers=other,json={'title':'attacked','body':'attacked'})\nresult=[c.get('/documents/ours',headers=other).status_code,r.status_code,db.get_by_id('ours').title,db.get_by_id('ours').body,[d['id'] for d in c.get('/documents',headers=other).json()]]",
+          "expected": [
+            404,
+            404,
+            "Acme",
+            "own",
+            [
+              "foreign"
+            ]
+          ]
+        },
+        {
+          "id": "unauthenticated-mutations",
+          "weight": 3,
+          "probe": "from fastapi.testclient import TestClient\nfrom app.main import app\nfrom app import db\nfrom app.models import Document\ndb.reset()\ndb.seed(Document('ours','tenant_acme','Acme','own'))\ndb.seed(Document('foreign','tenant_globex','SECRET TITLE','SECRET BODY'))\nc=TestClient(app)\nh={'Authorization':'Bearer tok_acme'}\nresult=[c.patch('/documents/ours',json={'body':'attacked'}).status_code,c.patch('/documents/ours',headers={'Authorization':'Bearer unknown'},json={'title':'attacked'}).status_code,db.get_by_id('ours').title,db.get_by_id('ours').body]",
+          "expected": [
+            401,
+            401,
+            "Acme",
+            "own"
+          ]
+        }
+      ],
+      "manual_requirements": [],
+      "inventory_digest": "d6e84d8e82831886e2e63b728f146450f3700d63269559a62920f3a35d28ac04"
+    },
+    {
+      "number": 22,
+      "slug": "webhook-delivery-retry",
+      "readme": "/Users/shrutwik/Desktop/PromptCode/challenges/webhook-delivery-retry/README.md",
+      "visible_files": [
+        {
+          "path": "/Users/shrutwik/Desktop/PromptCode/challenges/webhook-delivery-retry/tests/worker.test.ts",
+          "sha256": "db076386526f7037a057bb9b9a31f970d9825b803fa8d823414eab82173cf8ae",
+          "test_names": [
+            "caps failed attempts and charges an exhausted delivery only once",
+            "preserves mixed batch result order and handles an empty batch",
+            "eventually succeeds after transient failures",
+            "does not charge more than once per successful delivery id",
+            "bounds concurrent outbound posts when delivering a batch"
+          ],
+          "source": "import { describe, it, expect, beforeEach } from 'vitest';\nimport { deliverOne, deliverAll, resetConcurrencyStats, wrapClientWithStats, getMaxInFlight } from '../src/worker.js';\nimport { flakyClient } from '../src/httpMock.js';\nimport { resetCharges, chargeCount } from '../src/sideEffects.js';\nimport type { DeliveryJob } from '../src/types.js';\nfunction job(id: string): DeliveryJob { return { id, url: `https://example.test/${id}`, payload: { id }, attempts: 0 }; }\nbeforeEach(() => { resetCharges(); resetConcurrencyStats(); });\ndescribe('deliverOne', () => {\n  it('caps failed attempts and charges an exhausted delivery only once', async () => {\n    let calls = 0;\n    const client = { post: async () => { calls++; return { ok: false, status: 500 }; } };\n    expect(await deliverOne(job('failed'), client, { maxAttempts: 4, backoffMs: 0 })).toBe(false);\n    expect(calls).toBe(4);\n    expect(chargeCount('failed')).toBe(1);\n  });\n  it('preserves mixed batch result order and handles an empty batch', async () => {\n    const jobs = Array.from({ length: 12 }, (_, i) => job(String(i)));\n    const client = { post: async (url: string) => {\n      const ok = Number(url.split('/').pop()) % 2 === 0;\n      return { ok, status: ok ? 200 : 500 };\n    } };\n    expect(await deliverAll(jobs, client, { maxAttempts: 2, backoffMs: 0 })).toEqual(jobs.map((_, i) => i % 2 === 0));\n    expect(chargeCount()).toBe(12);\n    expect(await deliverAll([], client, { maxAttempts: 2, backoffMs: 0 })).toEqual([]);\n  });\n  it('eventually succeeds after transient failures', async () => {\n    const client = flakyClient(new Map([['d1', 2]]));\n    expect(await deliverOne(job('d1'), client, { maxAttempts: 3, backoffMs: 0 })).toBe(true);\n  });\n});\ndescribe('idempotency and concurrency', () => {\n  it('does not charge more than once per successful delivery id', async () => {\n    const client = flakyClient(new Map([['d2', 2]]));\n    await deliverOne(job('d2'), client, { maxAttempts: 3, backoffMs: 0 });\n    expect(chargeCount('d2')).toBe(1);\n  });\n  it('bounds concurrent outbound posts when delivering a batch', async () => {\n    const fail = new Map<string, number>();\n    const jobs = Array.from({ length: 20 }, (_, i) => { fail.set(`j${i}`, 0); return job(`j${i}`); });\n    const client = wrapClientWithStats(flakyClient(fail));\n    await deliverAll(jobs, client, { maxAttempts: 1, backoffMs: 0 });\n    expect(getMaxInFlight()).toBeLessThanOrEqual(5);\n  });\n});\n"
+        }
+      ],
+      "trusted_cases": [
+        {
+          "id": "retry-charge-once",
+          "weight": 4,
+          "probe": "import {deliverOne,deliverAll} from './src/worker';import {chargeCount,resetCharges} from './src/sideEffects';resetCharges();let calls=0;const client={post:async()=>({ok:++calls===3,status:calls===3?200:500})};const ok=await deliverOne({id:'job',url:'http://receiver',payload:{},attempts:0},client,{maxAttempts:3,backoffMs:0});return [ok,calls,chargeCount('job')];",
+          "expected": [
+            true,
+            3,
+            1
+          ]
+        },
+        {
+          "id": "repeat-delivery-idempotent",
+          "weight": 2,
+          "probe": "import {deliverOne,deliverAll} from './src/worker';import {chargeCount,resetCharges} from './src/sideEffects';resetCharges();const job={id:'same',url:'http://receiver',payload:{},attempts:0};const client={post:async()=>({ok:true,status:200})};await deliverOne(job,client,{maxAttempts:1,backoffMs:0});await deliverOne(job,client,{maxAttempts:1,backoffMs:0});return chargeCount('same');",
+          "expected": 1
+        },
+        {
+          "id": "attempts-bounded",
+          "weight": 3,
+          "probe": "import {deliverOne,deliverAll} from './src/worker';import {chargeCount,resetCharges} from './src/sideEffects';resetCharges();let calls=0;const ok=await deliverOne({id:'job',url:'http://receiver',payload:{},attempts:0},{post:async()=>{calls++;return {ok:false,status:500}}},{maxAttempts:2,backoffMs:0});return [ok,calls];",
+          "expected": [
+            false,
+            2
+          ]
+        },
+        {
+          "id": "flush-concurrency",
+          "weight": 3,
+          "probe": "import {deliverOne,deliverAll} from './src/worker';import {chargeCount,resetCharges} from './src/sideEffects';resetCharges();let active=0,max=0;const client={post:async()=>{active++;max=Math.max(max,active);await new Promise(r=>setTimeout(r,5));active--;return {ok:true,status:200}}};const jobs=Array.from({length:19},(_,i)=>({id:'j'+i,url:'http://receiver',payload:{},attempts:0}));const results=await deliverAll(jobs,client,{maxAttempts:1,backoffMs:0});return [results.every(Boolean),max<=5,chargeCount()];",
+          "expected": [
+            true,
+            true,
+            19
+          ]
+        },
+        {
+          "id": "exhausted-retries-charge-once",
+          "weight": 3,
+          "probe": "import {deliverOne,deliverAll} from './src/worker';import {chargeCount,resetCharges} from './src/sideEffects';resetCharges();let calls=0;const ok=await deliverOne({id:'failed',url:'http://receiver',payload:{},attempts:0},{post:async()=>{calls++;return {ok:false,status:500}}},{maxAttempts:4,backoffMs:0});return [ok,calls,chargeCount('failed')];",
+          "expected": [
+            false,
+            4,
+            1
+          ]
+        },
+        {
+          "id": "mixed-batch-result-order",
+          "weight": 3,
+          "probe": "import {deliverOne,deliverAll} from './src/worker';import {chargeCount,resetCharges} from './src/sideEffects';resetCharges();const jobs=Array.from({length:12},(_,i)=>({id:'j'+i,url:'http://receiver/'+i,payload:{},attempts:0}));const client={post:async(url)=>{const ok=Number(url.split('/').pop())%2===0;return {ok,status:ok?200:500};}};const results=await deliverAll(jobs,client,{maxAttempts:2,backoffMs:0});return [results,chargeCount(),await deliverAll([],client,{maxAttempts:2,backoffMs:0})];",
+          "expected": [
+            [
+              true,
+              false,
+              true,
+              false,
+              true,
+              false,
+              true,
+              false,
+              true,
+              false,
+              true,
+              false
+            ],
+            12,
+            []
+          ]
+        }
+      ],
+      "manual_requirements": [],
+      "inventory_digest": "5ebee11e39ae2f7b06051f802f5b34fd8b23ec7f2e19a434987580a17130164a"
+    },
+    {
+      "number": 23,
+      "slug": "invoice-status-transition",
+      "readme": "/Users/shrutwik/Desktop/PromptCode/challenges/invoice-status-transition/README.md",
+      "visible_files": [
+        {
+          "path": "/Users/shrutwik/Desktop/PromptCode/challenges/invoice-status-transition/tests/statusMachine.test.ts",
+          "sha256": "509e10b5ccecdbd26dbc14dd8624785c1f35789e60cc8d4cac7dddc9eea86c13",
+          "test_names": [
+            "refused API changes preserve the invoice including money",
+            "missing status is a validation error with no mutation",
+            "draft can go to sent",
+            "sent can go to paid",
+            "paid can go to void",
+            "void has no targets",
+            "API returns 409 for sent -> draft",
+            "rejects paid -> draft"
+          ],
+          "source": "import { describe, it, expect, beforeEach } from 'vitest';\nimport { canTransition, allowedTargets } from '../src/statusMachine.js';\nimport { transitionInvoice } from '../src/invoiceService.js';\nimport { resetStore, seedInvoice, getInvoice } from '../src/store.js';\nimport { handleRequest } from '../src/api.js';\nbeforeEach(() => {\n  resetStore();\n  seedInvoice({ id: 'inv_1', customerId: 'cus_1', amountCents: 5000, status: 'draft', issuedAt: '2024-06-01T15:00:00.000Z', updatedAt: '2024-06-01T15:00:00.000Z' });\n  seedInvoice({ id: 'inv_paid', customerId: 'cus_1', amountCents: 1200, status: 'paid', issuedAt: '2024-05-01T12:00:00.000Z', updatedAt: '2024-05-02T12:00:00.000Z' });\n});\ndescribe('allowed transitions', () => {\n  it('refused API changes preserve the invoice including money', () => {\n    const before = { ...getInvoice('inv_paid')! };\n    expect(handleRequest({ method: 'POST', path: '/invoices/inv_paid/transition', body: { status: 'draft' } }).status).toBe(409);\n    expect(getInvoice('inv_paid')).toEqual(before);\n  });\n  it('missing status is a validation error with no mutation', () => {\n    const before = { ...getInvoice('inv_1')! };\n    expect(handleRequest({ method: 'POST', path: '/invoices/inv_1/transition', body: {} }).status).toBe(400);\n    expect(getInvoice('inv_1')).toEqual(before);\n  });\n  it('draft can go to sent', () => { expect(canTransition('draft', 'sent')).toBe(true); expect(transitionInvoice('inv_1', 'sent').status).toBe('sent'); });\n  it('sent can go to paid', () => { transitionInvoice('inv_1', 'sent'); expect(transitionInvoice('inv_1', 'paid').status).toBe('paid'); });\n  it('paid can go to void', () => { expect(transitionInvoice('inv_paid', 'void').status).toBe('void'); });\n  it('void has no targets', () => { expect(allowedTargets('void')).toEqual([]); });\n  it('API returns 409 for sent -> draft', () => {\n    transitionInvoice('inv_1', 'sent');\n    expect(handleRequest({ method: 'POST', path: '/invoices/inv_1/transition', body: { status: 'draft' } }).status).toBe(409);\n  });\n  it('rejects paid -> draft', () => {\n    expect(canTransition('paid', 'draft')).toBe(false);\n    expect(() => transitionInvoice('inv_paid', 'draft')).toThrow(/Illegal transition/);\n  });\n});\n"
+        }
+      ],
+      "trusted_cases": [
+        {
+          "id": "legal-graph",
+          "weight": 4,
+          "probe": "import {canTransition} from './src/statusMachine'; import {handleRequest} from './src/api'; import {resetStore,seedInvoice,getInvoice} from './src/store';return ['draft','sent','paid','void'].flatMap(a=>['draft','sent','paid','void'].map(b=>canTransition(a,b)));",
+          "expected": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            false,
+            false,
+            true,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "id": "illegal-preserves-paid",
+          "weight": 4,
+          "probe": "import {canTransition} from './src/statusMachine'; import {handleRequest} from './src/api'; import {resetStore,seedInvoice,getInvoice} from './src/store';resetStore();seedInvoice({id:'probe',status:'paid',amountCents:197,issuedAt:'2026-01-01',updatedAt:'2026-01-01'});return [handleRequest({method:'POST',path:'/invoices/probe/transition',body:{status:'draft'}}).status,getInvoice('probe').status];",
+          "expected": [
+            409,
+            "paid"
+          ]
+        },
+        {
+          "id": "legal-api-transition",
+          "weight": 2,
+          "probe": "import {canTransition} from './src/statusMachine'; import {handleRequest} from './src/api'; import {resetStore,seedInvoice,getInvoice} from './src/store';resetStore();seedInvoice({id:'probe',status:'sent',amountCents:197,issuedAt:'2026-01-01',updatedAt:'2026-01-01'});const r=handleRequest({method:'POST',path:'/invoices/probe/transition',body:{status:'paid'}});return [r.status,getInvoice('probe').status,getInvoice('probe').amountCents];",
+          "expected": [
+            200,
+            "paid",
+            197
+          ]
+        },
+        {
+          "id": "missing-distinct",
+          "weight": 1,
+          "probe": "import {canTransition} from './src/statusMachine'; import {handleRequest} from './src/api'; import {resetStore,seedInvoice,getInvoice} from './src/store';resetStore();return handleRequest({method:'POST',path:'/invoices/missing/transition',body:{status:'sent'}}).status;",
+          "expected": 404
+        },
+        {
+          "id": "api-transition-matrix",
+          "weight": 4,
+          "probe": "import {canTransition} from './src/statusMachine'; import {handleRequest} from './src/api'; import {resetStore,seedInvoice,getInvoice} from './src/store';return ['draft','sent','paid','void'].flatMap(a=>['draft','sent','paid','void'].map(b=>{resetStore();seedInvoice({id:'matrix',status:a,amountCents:731,issuedAt:'2026-01-01',updatedAt:'2026-01-01'});const r=handleRequest({method:'POST',path:'/invoices/matrix/transition',body:{status:b}});const saved=getInvoice('matrix');return [r.status,saved.status,saved.amountCents];}));",
+          "expected": [
+            [
+              409,
+              "draft",
+              731
+            ],
+            [
+              200,
+              "sent",
+              731
+            ],
+            [
+              409,
+              "draft",
+              731
+            ],
+            [
+              200,
+              "void",
+              731
+            ],
+            [
+              409,
+              "sent",
+              731
+            ],
+            [
+              409,
+              "sent",
+              731
+            ],
+            [
+              200,
+              "paid",
+              731
+            ],
+            [
+              200,
+              "void",
+              731
+            ],
+            [
+              409,
+              "paid",
+              731
+            ],
+            [
+              409,
+              "paid",
+              731
+            ],
+            [
+              409,
+              "paid",
+              731
+            ],
+            [
+              200,
+              "void",
+              731
+            ],
+            [
+              409,
+              "void",
+              731
+            ],
+            [
+              409,
+              "void",
+              731
+            ],
+            [
+              409,
+              "void",
+              731
+            ],
+            [
+              409,
+              "void",
+              731
+            ]
+          ]
+        },
+        {
+          "id": "missing-status-preserves-state",
+          "weight": 2,
+          "probe": "import {canTransition} from './src/statusMachine'; import {handleRequest} from './src/api'; import {resetStore,seedInvoice,getInvoice} from './src/store';resetStore();seedInvoice({id:'probe',status:'sent',amountCents:731,issuedAt:'2026-01-01',updatedAt:'2026-01-01'});return [handleRequest({method:'POST',path:'/invoices/probe/transition',body:{}}).status,getInvoice('probe').status];",
+          "expected": [
+            400,
+            "sent"
+          ]
+        }
+      ],
+      "manual_requirements": [],
+      "inventory_digest": "94e6c1bb7e55928cc2cf6079cc0360e108ad74adf3b0ec9e68e853ffeedab21b"
+    },
+    {
+      "number": 24,
+      "slug": "subscription-proration-boundary",
+      "readme": "/Users/shrutwik/Desktop/PromptCode/challenges/subscription-proration-boundary/README.md",
+      "visible_files": [
+        {
+          "path": "/Users/shrutwik/Desktop/PromptCode/challenges/subscription-proration-boundary/tests/test_proration.py",
+          "sha256": "df26baf63580742ba7f280e1b5f3039c6369fd8be7e91d8becaa656b6d2fa705",
+          "test_names": [
+            "test_mid_period_cancel_gets_credit",
+            "test_cancel_before_period_no_credit",
+            "test_contains_start_inclusive",
+            "test_cancel_exactly_at_period_end_no_credit",
+            "test_display_helper_smoke",
+            "test_adjacent_periods_have_one_owner_at_timezone_equivalent_boundary",
+            "test_microsecond_boundaries"
+          ],
+          "source": "from datetime import datetime, timezone\nfrom proration.period import Period, contains, period_from_iso\nfrom proration.billing import Subscription, proration_credit\n\ndef test_mid_period_cancel_gets_credit():\n    period = period_from_iso(\"2024-01-01T00:00:00Z\", \"2024-02-01T00:00:00Z\")\n    sub = Subscription(\"s1\", 3100, period)\n    assert proration_credit(sub, \"2024-01-16T00:00:00Z\") == 1600\n\ndef test_cancel_before_period_no_credit():\n    period = period_from_iso(\"2024-01-01T00:00:00Z\", \"2024-02-01T00:00:00Z\")\n    sub = Subscription(\"s1\", 3100, period)\n    assert proration_credit(sub, \"2023-12-31T23:00:00Z\") == 0\n\ndef test_contains_start_inclusive():\n    period = period_from_iso(\"2024-01-01T00:00:00Z\", \"2024-02-01T00:00:00Z\")\n    assert contains(period, datetime(2024, 1, 1, tzinfo=timezone.utc)) is True\n\ndef test_cancel_exactly_at_period_end_no_credit():\n    period = period_from_iso(\"2024-01-01T00:00:00Z\", \"2024-02-01T00:00:00Z\")\n    sub = Subscription(\"s1\", 3100, period)\n    assert contains(period, period.end) is False\n    assert proration_credit(sub, \"2024-02-01T00:00:00Z\") == 0\n\ndef test_display_helper_smoke():\n    from proration.timeutil import format_display, parse_utc\n    assert \"2024\" in format_display(parse_utc(\"2024-01-01T06:00:00Z\"))\n\ndef test_adjacent_periods_have_one_owner_at_timezone_equivalent_boundary():\n    from proration.timeutil import parse_utc\n    previous = period_from_iso('2026-01-01T00:00:00Z', '2026-02-01T00:00:00Z')\n    following = period_from_iso('2026-02-01T00:00:00Z', '2026-03-01T00:00:00Z')\n    instant = parse_utc('2026-02-01T01:00:00+01:00')\n    assert not contains(previous, instant)\n    assert contains(following, instant)\n    assert proration_credit(Subscription('next', 2800, following), '2026-02-01T01:00:00+01:00') == 2800\n\ndef test_microsecond_boundaries():\n    from proration.timeutil import parse_utc\n    period = period_from_iso('2026-01-01T00:00:00Z', '2026-02-01T00:00:00Z')\n    assert contains(period, parse_utc('2026-01-31T23:59:59.999999Z'))\n    assert not contains(period, parse_utc('2026-02-01T00:00:00.000001Z'))\n    assert not contains(period, parse_utc('2025-12-31T23:59:59.999999Z'))\n"
+        }
+      ],
+      "trusted_cases": [
+        {
+          "id": "end-excluded",
+          "weight": 4,
+          "probe": "from proration.period import period_from_iso,contains\nfrom proration.timeutil import parse_utc\nfrom proration.billing import Subscription,proration_credit\np=period_from_iso('2026-01-01T00:00:00Z','2026-02-01T00:00:00Z')\ns=Subscription('probe',3100,p)\nresult=[contains(p,p.end),proration_credit(s,'2026-02-01T00:00:00Z')]",
+          "expected": [
+            false,
+            0
+          ]
+        },
+        {
+          "id": "start-included",
+          "weight": 2,
+          "probe": "from proration.period import period_from_iso,contains\nfrom proration.timeutil import parse_utc\nfrom proration.billing import Subscription,proration_credit\np=period_from_iso('2026-01-01T00:00:00Z','2026-02-01T00:00:00Z')\ns=Subscription('probe',3100,p)\nresult=[contains(p,p.start),proration_credit(s,'2026-01-01T00:00:00Z')]",
+          "expected": [
+            true,
+            3100
+          ]
+        },
+        {
+          "id": "mid-period-credit",
+          "weight": 2,
+          "probe": "from proration.period import period_from_iso,contains\nfrom proration.timeutil import parse_utc\nfrom proration.billing import Subscription,proration_credit\np=period_from_iso('2026-01-01T00:00:00Z','2026-02-01T00:00:00Z')\ns=Subscription('probe',3100,p)\nresult=proration_credit(s,'2026-01-16T00:00:00Z')",
+          "expected": 1600
+        },
+        {
+          "id": "before-period",
+          "weight": 2,
+          "probe": "from proration.period import period_from_iso,contains\nfrom proration.timeutil import parse_utc\nfrom proration.billing import Subscription,proration_credit\np=period_from_iso('2026-01-01T00:00:00Z','2026-02-01T00:00:00Z')\ns=Subscription('probe',3100,p)\nresult=proration_credit(s,'2025-12-31T23:59:59Z')",
+          "expected": 0
+        },
+        {
+          "id": "timezone-equivalence",
+          "weight": 1,
+          "probe": "from proration.period import period_from_iso,contains\nfrom proration.timeutil import parse_utc\nfrom proration.billing import Subscription,proration_credit\np=period_from_iso('2026-01-01T00:00:00Z','2026-02-01T00:00:00Z')\ns=Subscription('probe',3100,p)\nresult=contains(p,parse_utc('2026-01-31T19:00:00-05:00'))",
+          "expected": false
+        },
+        {
+          "id": "adjacent-period-single-membership",
+          "weight": 3,
+          "probe": "from proration.period import period_from_iso,contains\nfrom proration.timeutil import parse_utc\nfrom proration.billing import Subscription,proration_credit\np=period_from_iso('2026-01-01T00:00:00Z','2026-02-01T00:00:00Z')\ns=Subscription('probe',3100,p)\nnext_p=period_from_iso('2026-02-01T00:00:00Z','2026-03-01T00:00:00Z')\ninstant=parse_utc('2026-02-01T01:00:00+01:00')\nresult=[contains(p,instant),contains(next_p,instant),proration_credit(Subscription('next',2800,next_p),'2026-02-01T01:00:00+01:00')]",
+          "expected": [
+            false,
+            true,
+            2800
+          ]
+        },
+        {
+          "id": "microsecond-boundaries",
+          "weight": 3,
+          "probe": "from proration.period import period_from_iso,contains\nfrom proration.timeutil import parse_utc\nfrom proration.billing import Subscription,proration_credit\np=period_from_iso('2026-01-01T00:00:00Z','2026-02-01T00:00:00Z')\ns=Subscription('probe',3100,p)\nresult=[contains(p,parse_utc('2026-01-31T23:59:59.999999Z')),contains(p,parse_utc('2026-02-01T00:00:00.000001Z')),contains(p,parse_utc('2025-12-31T23:59:59.999999Z')),proration_credit(s,'2026-01-31T23:59:59.999999Z')]",
+          "expected": [
+            true,
+            false,
+            false,
+            0
+          ]
+        }
+      ],
+      "manual_requirements": [],
+      "inventory_digest": "35da89ca4ba4f485046fe6fe70a1603df2270f94fac8fdda6ef184b24d8ab6db"
+    },
+    {
+      "number": 25,
+      "slug": "shipment-csv-merge",
+      "readme": "/Users/shrutwik/Desktop/PromptCode/challenges/shipment-csv-merge/README.md",
+      "visible_files": [
+        {
+          "path": "/Users/shrutwik/Desktop/PromptCode/challenges/shipment-csv-merge/tests/test_merge.py",
+          "sha256": "acfe4b9565c30e05d954cd7bb49d37f450354d0a82b319bea4d5194ac110f3ff",
+          "test_names": [
+            "test_basic_timeline_order_happy_path",
+            "test_quantity_single_batch",
+            "test_duplicate_event_id_across_batches_not_double_counted",
+            "test_same_status_different_event_ids_kept_in_ts_order",
+            "test_timestamp_ties_negative_deltas_and_duplicates",
+            "test_next_merge_replaces_previous_totals"
+          ],
+          "source": "from shipment_merge.parse import parse_csv\nfrom shipment_merge.summarize import summarize\nfrom shipment_merge.models import ShipmentEvent\nfrom shipment_merge.merge import merge_events, total_quantity\nDAY1 = \"\"\"event_id,shipment_id,status,ts,quantity_delta\ne1,s1,created,2024-01-01T10:00:00Z,1\ne2,s1,picked,2024-01-01T15:00:00Z,0\n\"\"\"\nDAY2 = \"\"\"event_id,shipment_id,status,ts,quantity_delta\ne3,s1,shipped,2024-01-02T09:00:00Z,0\ne4,s1,delivered,2024-01-02T18:00:00Z,0\n\"\"\"\ndef test_basic_timeline_order_happy_path():\n    assert summarize([parse_csv(DAY1), parse_csv(DAY2)])[\"timelines\"][\"s1\"] == [\"created\", \"picked\", \"shipped\", \"delivered\"]\ndef test_quantity_single_batch():\n    events = [ShipmentEvent(\"a\",\"s2\",\"created\",\"2024-01-01T10:00:00Z\",2), ShipmentEvent(\"b\",\"s2\",\"picked\",\"2024-01-01T11:00:00Z\",0)]\n    assert summarize([events])[\"quantities\"][\"s2\"] == 2\ndef test_duplicate_event_id_across_batches_not_double_counted():\n    day1=[ShipmentEvent(\"e9\",\"s1\",\"created\",\"2024-01-01T23:30:00Z\",1)]\n    day2=[ShipmentEvent(\"e9\",\"s1\",\"created\",\"2024-01-01T23:30:00Z\",1)]\n    assert summarize([day1, day2])[\"quantities\"][\"s1\"] == 1\ndef test_same_status_different_event_ids_kept_in_ts_order():\n    events=[ShipmentEvent(\"e1\",\"s1\",\"picked\",\"2024-01-01T10:00:00Z\",0), ShipmentEvent(\"e2\",\"s1\",\"picked\",\"2024-01-01T12:00:00Z\",0)]\n    assert [e.event_id for e in merge_events([events])] == [\"e1\",\"e2\"]\n\ndef test_timestamp_ties_negative_deltas_and_duplicates():\n    a = ShipmentEvent('a', 'ship', 'scan', '2026-01-01', 5)\n    b = ShipmentEvent('b', 'ship', 'scan', '2026-01-01', -2)\n    assert [e.event_id for e in merge_events([[b, a], [], [a, b, a]])] == ['a', 'b']\n    assert total_quantity('ship') == 3\n\ndef test_next_merge_replaces_previous_totals():\n    merge_events([[ShipmentEvent('old', 'old-ship', 'scan', '2026-01-01', 9)]])\n    merge_events([[ShipmentEvent('new', 'new-ship', 'scan', '2026-01-02', 4)]])\n    assert total_quantity('old-ship') == 0\n    assert total_quantity('new-ship') == 4\n    assert merge_events([]) == []\n    assert total_quantity('new-ship') == 0\n"
+        }
+      ],
+      "trusted_cases": [
+        {
+          "id": "same-status-distinct-id",
+          "weight": 4,
+          "probe": "from shipment_merge.models import ShipmentEvent\nfrom shipment_merge.merge import merge_events,total_quantity\nrows=merge_events([[ShipmentEvent('b','ship','scan','2026-01-02',3)],[ShipmentEvent('a','ship','scan','2026-01-01',2)]])\nresult=[[r.event_id for r in rows],total_quantity('ship')]",
+          "expected": [
+            [
+              "a",
+              "b"
+            ],
+            5
+          ]
+        },
+        {
+          "id": "duplicate-id-once",
+          "weight": 4,
+          "probe": "from shipment_merge.models import ShipmentEvent\nfrom shipment_merge.merge import merge_events,total_quantity\ne=ShipmentEvent('unique','ship','packed','2026-01-01',7)\nrows=merge_events([[e],[e]])\nresult=[len(rows),total_quantity('ship')]",
+          "expected": [
+            1,
+            7
+          ]
+        },
+        {
+          "id": "independent-shipments",
+          "weight": 1,
+          "probe": "from shipment_merge.models import ShipmentEvent\nfrom shipment_merge.merge import merge_events,total_quantity\nrows=merge_events([[ShipmentEvent('a','s1','x','2026-01-01',2),ShipmentEvent('b','s2','x','2026-01-01',4)]])\nresult=[total_quantity('s1'),total_quantity('s2')]",
+          "expected": [
+            2,
+            4
+          ]
+        },
+        {
+          "id": "empty-clears-state",
+          "weight": 1,
+          "probe": "from shipment_merge.models import ShipmentEvent\nfrom shipment_merge.merge import merge_events,total_quantity\nmerge_events([[ShipmentEvent('a','s1','x','2026-01-01',2)]])\nresult=[merge_events([]),total_quantity('s1')]",
+          "expected": [
+            [],
+            0
+          ]
+        },
+        {
+          "id": "ties-negative-and-multi-file-dedup",
+          "weight": 3,
+          "probe": "from shipment_merge.models import ShipmentEvent\nfrom shipment_merge.merge import merge_events,total_quantity\na=ShipmentEvent('a','ship','scan','2026-01-01',5)\nb=ShipmentEvent('b','ship','scan','2026-01-01',-2)\nrows=merge_events([[b,a],[],[a,b,a]])\nresult=[[r.event_id for r in rows],total_quantity('ship')]",
+          "expected": [
+            [
+              "a",
+              "b"
+            ],
+            3
+          ]
+        },
+        {
+          "id": "next-merge-replaces-totals",
+          "weight": 2,
+          "probe": "from shipment_merge.models import ShipmentEvent\nfrom shipment_merge.merge import merge_events,total_quantity\nmerge_events([[ShipmentEvent('old','old-ship','x','2026-01-01',9)]])\nrows=merge_events([[ShipmentEvent('new','new-ship','x','2026-01-02',4)]])\nresult=[[r.event_id for r in rows],total_quantity('old-ship'),total_quantity('new-ship'),total_quantity('missing')]",
+          "expected": [
+            [
+              "new"
+            ],
+            0,
+            4,
+            0
+          ]
+        }
+      ],
+      "manual_requirements": [],
+      "inventory_digest": "945c4c64d7dd9b33e98f9f1574c00b73b9b16771709367e7a6f42acbdaa5d4e7"
+    },
+    {
+      "number": 26,
+      "slug": "notification-feed-stale",
+      "readme": "/Users/shrutwik/Desktop/PromptCode/challenges/notification-feed-stale/README.md",
+      "visible_files": [
+        {
+          "path": "/Users/shrutwik/Desktop/PromptCode/challenges/notification-feed-stale/tests/feed.test.tsx",
+          "sha256": "4270be8a758f108770922521bec42b3da6690b5ee0ec03bb04424936452f96bb",
+          "test_names": [
+            "shows unread count",
+            "marks one read",
+            "coalesces repeated concurrent marks without losing other updates",
+            "keeps the snapshot intact when a mark fails",
+            "marks two without clobber"
+          ],
+          "source": "import React from 'react';\nimport { describe, it, expect, beforeEach, afterEach } from 'vitest';\nimport { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react';\nimport { NotificationList } from '../src/NotificationList';\nimport { seedServer } from '../src/api';\nimport { resetStore, loadFeed, markAsRead, unreadCount, getSnapshot } from '../src/feedStore';\nafterEach(() => { cleanup(); });\nbeforeEach(() => {\n  resetStore();\n  seedServer([\n    { id: 'n1', title: 'Welcome', read: false },\n    { id: 'n2', title: 'Invoice', read: false },\n    { id: 'n3', title: 'Ship', read: true },\n  ]);\n});\ndescribe('UI', () => {\n  it('shows unread count', async () => {\n    render(<NotificationList />);\n    await waitFor(() => expect(screen.getByTestId('unread-count').textContent).toBe('2'));\n  });\n  it('marks one read', async () => {\n    render(<NotificationList />);\n    await waitFor(() => screen.getByTestId('mark-n1'));\n    fireEvent.click(screen.getByTestId('mark-n1'));\n    await waitFor(() => expect(screen.getByTestId('unread-count').textContent).toBe('1'));\n  });\n});\ndescribe('concurrency', () => {\n  it('coalesces repeated concurrent marks without losing other updates', async () => {\n    await loadFeed();\n    await Promise.all(['n1', 'n2', 'n1', 'n3', 'n2'].map(markAsRead));\n    expect(unreadCount()).toBe(0);\n    expect(getSnapshot().map(n => [n.id, n.read])).toEqual([['n1', true], ['n2', true], ['n3', true]]);\n  });\n  it('keeps the snapshot intact when a mark fails', async () => {\n    await loadFeed();\n    const before = JSON.stringify(getSnapshot());\n    await expect(markAsRead('missing')).rejects.toThrow('not found');\n    expect(JSON.stringify(getSnapshot())).toBe(before);\n    expect(unreadCount()).toBe(2);\n  });\n  it('marks two without clobber', async () => {\n    await loadFeed();\n    await Promise.all([markAsRead('n1'), markAsRead('n2')]);\n    expect(unreadCount()).toBe(0);\n    expect(getSnapshot().filter(n => n.id !== 'n3').every(n => n.read)).toBe(true);\n  });\n});\n"
+        }
+      ],
+      "trusted_cases": [
+        {
+          "id": "loaded-count",
+          "weight": 2,
+          "probe": "import * as api from './src/api';import * as store from './src/feedStore';store.resetStore();api.seedServer([{id:'a',title:'A',read:false},{id:'b',title:'B',read:false},{id:'c',title:'C',read:true}]);await store.loadFeed();return store.unreadCount();",
+          "expected": 2
+        },
+        {
+          "id": "one-mark",
+          "weight": 2,
+          "probe": "import * as api from './src/api';import * as store from './src/feedStore';store.resetStore();api.seedServer([{id:'a',title:'A',read:false},{id:'b',title:'B',read:false},{id:'c',title:'C',read:true}]);await store.loadFeed();await store.markAsRead('a');return [store.unreadCount(),store.getSnapshot().map(x=>x.read)];",
+          "expected": [
+            1,
+            [
+              true,
+              false,
+              true
+            ]
+          ]
+        },
+        {
+          "id": "concurrent-marks",
+          "weight": 4,
+          "probe": "import * as api from './src/api';import * as store from './src/feedStore';store.resetStore();api.seedServer([{id:'a',title:'A',read:false},{id:'b',title:'B',read:false},{id:'c',title:'C',read:true}]);await store.loadFeed();await Promise.all([store.markAsRead('a'),store.markAsRead('b')]);return [store.unreadCount(),store.getSnapshot().map(x=>x.read)];",
+          "expected": [
+            0,
+            [
+              true,
+              true,
+              true
+            ]
+          ]
+        },
+        {
+          "id": "already-read",
+          "weight": 1,
+          "probe": "import * as api from './src/api';import * as store from './src/feedStore';store.resetStore();api.seedServer([{id:'a',title:'A',read:false},{id:'b',title:'B',read:false},{id:'c',title:'C',read:true}]);await store.loadFeed();await store.markAsRead('c');return store.unreadCount();",
+          "expected": 2
+        },
+        {
+          "id": "duplicate-concurrent-marks",
+          "weight": 3,
+          "probe": "import * as api from './src/api';import * as store from './src/feedStore';store.resetStore();api.seedServer([{id:'a',title:'A',read:false},{id:'b',title:'B',read:false},{id:'c',title:'C',read:true}]);await store.loadFeed();await Promise.all(['a','b','a','c','b'].map(id=>store.markAsRead(id)));return [store.unreadCount(),store.getSnapshot().map(x=>[x.id,x.read])];",
+          "expected": [
+            0,
+            [
+              [
+                "a",
+                true
+              ],
+              [
+                "b",
+                true
+              ],
+              [
+                "c",
+                true
+              ]
+            ]
+          ]
+        },
+        {
+          "id": "failed-mark-preserves-state",
+          "weight": 2,
+          "probe": "import * as api from './src/api';import * as store from './src/feedStore';store.resetStore();api.seedServer([{id:'a',title:'A',read:false},{id:'b',title:'B',read:false},{id:'c',title:'C',read:true}]);await store.loadFeed();const before=JSON.stringify(store.getSnapshot());let rejected=false;try{await store.markAsRead('missing');}catch{rejected=true;}return [rejected,JSON.stringify(store.getSnapshot())===before,store.unreadCount()];",
+          "expected": [
+            true,
+            true,
+            2
+          ]
+        }
+      ],
+      "manual_requirements": [
+        "React rendered badge matches store"
+      ],
+      "inventory_digest": "fcff10b0e8edfe3143a5bde57c661f805bbeb8040b35172b3e13d51cd2438232"
+    },
+    {
+      "number": 27,
+      "slug": "order-hold-reason",
+      "readme": "/Users/shrutwik/Desktop/PromptCode/challenges/order-hold-reason/README.md",
+      "visible_files": [
+        {
+          "path": "/Users/shrutwik/Desktop/PromptCode/challenges/order-hold-reason/tests/test_orders.py",
+          "sha256": "790754c35e787198df339a2c921977cf5b5c33d3be9fde046a39420599337c78",
+          "test_names": [
+            "test_get_legacy_order_shape",
+            "test_hold_sets_status",
+            "test_release_clears_hold",
+            "test_hold_reason_round_trip_and_legacy_null",
+            "test_replacing_reason_preserves_money_and_other_orders",
+            "test_optional_reason_and_repeat_release"
+          ],
+          "source": "from fastapi.testclient import TestClient\nfrom app.main import app\nfrom app import db\nfrom app.models import Order\n\nclient = TestClient(app)\n\ndef setup_function():\n    db.reset()\n    db.seed(Order(id=\"ord_legacy\", customer_id=\"c1\", total_cents=1000, status=\"open\", hold_reason=None))\n    db.seed(Order(id=\"ord_new\", customer_id=\"c2\", total_cents=2500, status=\"open\", hold_reason=None))\n\ndef test_get_legacy_order_shape():\n    res = client.get(\"/orders/ord_legacy\")\n    assert res.status_code == 200\n    assert res.json()[\"id\"] == \"ord_legacy\"\n\ndef test_hold_sets_status():\n    res = client.post(\"/orders/ord_new/hold\", json={\"hold_reason\": \"fraud_review\"})\n    assert res.status_code == 200\n    assert res.json()[\"status\"] == \"on_hold\"\n\ndef test_release_clears_hold():\n    client.post(\"/orders/ord_new/hold\", json={\"hold_reason\": \"stock\"})\n    res = client.post(\"/orders/ord_new/release\")\n    assert res.status_code == 200\n    assert res.json()[\"status\"] == \"open\"\n\ndef test_hold_reason_round_trip_and_legacy_null():\n    assert client.get(\"/orders/ord_legacy\").json().get(\"hold_reason\") is None\n    client.post(\"/orders/ord_new/hold\", json={\"hold_reason\": \"fraud_review\"})\n    assert client.get(\"/orders/ord_new\").json()[\"hold_reason\"] == \"fraud_review\"\n\ndef test_replacing_reason_preserves_money_and_other_orders():\n    client.post('/orders/ord_new/hold', json={'hold_reason': 'first'})\n    response = client.post('/orders/ord_new/hold', json={'hold_reason': 'Révision 仓库'})\n    assert response.status_code == 200\n    saved = client.get('/orders/ord_new').json()\n    assert saved['hold_reason'] == 'Révision 仓库'\n    assert saved['total_cents'] == 2500\n    assert saved['customer_id'] == 'c2'\n    legacy = client.get('/orders/ord_legacy').json()\n    assert legacy['status'] == 'open'\n    assert legacy['hold_reason'] is None\n\ndef test_optional_reason_and_repeat_release():\n    held = client.post('/orders/ord_new/hold', json={})\n    assert held.status_code == 200\n    assert held.json()['hold_reason'] is None\n    for _ in range(2):\n        released = client.post('/orders/ord_new/release')\n        assert released.status_code == 200\n        assert released.json()['status'] == 'open'\n        assert released.json()['hold_reason'] is None\n"
+        }
+      ],
+      "trusted_cases": [
+        {
+          "id": "reason-persists",
+          "weight": 4,
+          "probe": "from fastapi.testclient import TestClient\nfrom app.main import app\nfrom app import db\nfrom app.models import Order\ndb.reset()\ndb.seed(Order('probe','buyer',197))\nc=TestClient(app)\nr=c.post('/orders/probe/hold',json={'hold_reason':'warehouse review 73'});g=c.get('/orders/probe'); result=[r.status_code,r.json().get('hold_reason'),g.json().get('hold_reason'),g.json().get('status'),g.json().get('total_cents')]",
+          "expected": [
+            200,
+            "warehouse review 73",
+            "warehouse review 73",
+            "on_hold",
+            197
+          ]
+        },
+        {
+          "id": "legacy-null",
+          "weight": 2,
+          "probe": "from fastapi.testclient import TestClient\nfrom app.main import app\nfrom app import db\nfrom app.models import Order\ndb.reset()\ndb.seed(Order('probe','buyer',197))\nc=TestClient(app)\nresult=c.get('/orders/probe').json().get('hold_reason','MISSING')",
+          "expected": null
+        },
+        {
+          "id": "release-clears",
+          "weight": 2,
+          "probe": "from fastapi.testclient import TestClient\nfrom app.main import app\nfrom app import db\nfrom app.models import Order\ndb.reset()\ndb.seed(Order('probe','buyer',197))\nc=TestClient(app)\nc.post('/orders/probe/hold',json={'hold_reason':'review'});r=c.post('/orders/probe/release');result=[r.json().get('status'),c.get('/orders/probe').json().get('hold_reason','MISSING')]",
+          "expected": [
+            "open",
+            null
+          ]
+        },
+        {
+          "id": "missing-order",
+          "weight": 1,
+          "probe": "from fastapi.testclient import TestClient\nfrom app.main import app\nfrom app import db\nfrom app.models import Order\ndb.reset()\ndb.seed(Order('probe','buyer',197))\nc=TestClient(app)\nresult=c.post('/orders/absent/hold',json={'hold_reason':'x'}).status_code",
+          "expected": 404
+        },
+        {
+          "id": "reason-overwrite-and-isolation",
+          "weight": 3,
+          "probe": "from fastapi.testclient import TestClient\nfrom app.main import app\nfrom app import db\nfrom app.models import Order\ndb.reset()\ndb.seed(Order('probe','buyer',197))\nc=TestClient(app)\ndb.seed(Order('other','second',503))\nc.post('/orders/probe/hold',json={'hold_reason':'first'})\nc.post('/orders/probe/hold',json={'hold_reason':'Révision 仓库'})\na=c.get('/orders/probe').json(); b=c.get('/orders/other').json()\nresult=[a.get('hold_reason'),a.get('customer_id'),a.get('total_cents'),b.get('status'),b.get('hold_reason','MISSING'),b.get('total_cents')]",
+          "expected": [
+            "Révision 仓库",
+            "buyer",
+            197,
+            "open",
+            null,
+            503
+          ]
+        },
+        {
+          "id": "optional-reason-and-repeat-release",
+          "weight": 2,
+          "probe": "from fastapi.testclient import TestClient\nfrom app.main import app\nfrom app import db\nfrom app.models import Order\ndb.reset()\ndb.seed(Order('probe','buyer',197))\nc=TestClient(app)\nr=c.post('/orders/probe/hold',json={})\nc.post('/orders/probe/release'); r2=c.post('/orders/probe/release')\nresult=[r.status_code,r.json().get('status'),r.json().get('hold_reason','MISSING'),r2.status_code,r2.json().get('status'),r2.json().get('hold_reason','MISSING')]",
+          "expected": [
+            200,
+            "on_hold",
+            null,
+            200,
+            "open",
+            null
+          ]
+        }
+      ],
+      "manual_requirements": [],
+      "inventory_digest": "7f310f06f99fc4e69bcae422baab2ee681521b5ab6746236ba1f27d4bac5b481"
+    },
+    {
+      "number": 28,
+      "slug": "workspace-label-propagation",
+      "readme": "/Users/shrutwik/Desktop/PromptCode/challenges/workspace-label-propagation/README.md",
+      "visible_files": [
+        {
+          "path": "/Users/shrutwik/Desktop/PromptCode/challenges/workspace-label-propagation/tests/client.test.tsx",
+          "sha256": "dccd11d669bee105cd90829cba4d437f093cc5cf00a9396550dc86eb65b94ce9",
+          "test_names": [
+            "loads selected from ticket.labelIds"
+          ],
+          "source": "// @vitest-environment jsdom\nimport React from 'react';\nimport { describe, it, expect, beforeEach, vi } from 'vitest';\nimport { render, screen, waitFor } from '@testing-library/react';\nimport { TicketLabels } from '../client/TicketLabels';\nimport { setBaseUrl } from '../client/api';\nbeforeEach(() => {\n  setBaseUrl('http://example.test');\n  vi.stubGlobal('fetch', vi.fn(async (url: string) => {\n    const u = String(url);\n    if (u.includes('/tickets/t1') && !u.includes('/labels')) {\n      return { ok: true, json: async () => ({ id: 't1', workspaceId: 'ws1', title: 'Login broken', labelIds: ['lbl_bug'] }) };\n    }\n    if (u.includes('/workspaces/')) {\n      return { ok: true, json: async () => [{ id: 'lbl_bug', name: 'Bug' }, { id: 'lbl_urgent', name: 'Urgent' }] };\n    }\n    return { ok: true, json: async () => ({}) };\n  }));\n});\nit('loads selected from ticket.labelIds', async () => {\n  render(<TicketLabels ticketId=\"t1\" />);\n  await waitFor(() => expect(screen.getByTestId('title').textContent).toBe('Login broken'));\n  await waitFor(() => expect(screen.getByTestId('selected').textContent).toBe('lbl_bug'));\n});\n"
+        },
+        {
+          "path": "/Users/shrutwik/Desktop/PromptCode/challenges/workspace-label-propagation/tests/labels.roundtrip.test.ts",
+          "sha256": "418fe63aa5b002e5184976b1f8810ce63d1302b4f4784c2514f4792767c21d74",
+          "test_names": [
+            "round trips labelIds"
+          ],
+          "source": "import { describe, it, expect, beforeEach } from 'vitest';\nimport request from 'supertest';\nimport { createApp } from '../server/app.js';\nimport * as db from '../server/db.js';\nconst app = createApp();\nbeforeEach(() => {\n  db.resetDb();\n  db.seedWorkspace('ws1', [{ id: 'lbl_bug', name: 'Bug' }, { id: 'lbl_urgent', name: 'Urgent' }]);\n  db.seedTicket({ id: 't1', workspaceId: 'ws1', title: 'Login broken', labelIds: [] });\n});\nit('round trips labelIds', async () => {\n  const put = await request(app).put('/tickets/t1/labels').send({ labelIds: ['lbl_bug', 'lbl_urgent'] });\n  expect(put.status).toBe(200);\n  expect(put.body.labelIds).toEqual(['lbl_bug', 'lbl_urgent']);\n  expect((await request(app).get('/tickets/t1')).body.labelIds).toEqual(['lbl_bug', 'lbl_urgent']);\n});\n"
+        },
+        {
+          "path": "/Users/shrutwik/Desktop/PromptCode/challenges/workspace-label-propagation/tests/server.test.ts",
+          "sha256": "e017325fce8621a5b3d3a1fc0928789858967718585f304ae1b3b4f54f899bb3",
+          "test_names": [
+            "rejects mixed foreign labels without erasing saved labels",
+            "clears persisted labels with an empty list",
+            "gets core fields",
+            "rejects unknown labels",
+            "lists labels"
+          ],
+          "source": "import { describe, it, expect, beforeEach } from 'vitest';\nimport request from 'supertest';\nimport { createApp } from '../server/app.js';\nimport * as db from '../server/db.js';\nconst app = createApp();\nbeforeEach(() => {\n  db.resetDb();\n  db.seedWorkspace('ws1', [{ id: 'lbl_bug', name: 'Bug' }, { id: 'lbl_urgent', name: 'Urgent' }]);\n  db.seedTicket({ id: 't1', workspaceId: 'ws1', title: 'Login broken', labelIds: ['lbl_bug'] });\n});\ndescribe('API', () => {\n  it('rejects mixed foreign labels without erasing saved labels', async () => {\n    db.seedWorkspace('other', [{ id: 'private', name: 'Private' }]);\n    const before = db.getTicket('t1');\n    const response = await request(app).put('/tickets/t1/labels').send({ labelIds: ['lbl_urgent', 'private'] });\n    expect(response.status).toBe(400);\n    expect(db.getTicket('t1')).toEqual(before);\n    expect((await request(app).get('/tickets/t1')).body.labelIds).toEqual(['lbl_bug']);\n  });\n  it('clears persisted labels with an empty list', async () => {\n    expect((await request(app).put('/tickets/t1/labels').send({ labelIds: [] })).status).toBe(200);\n    expect((await request(app).get('/tickets/t1')).body.labelIds).toEqual([]);\n  });\n  it('gets core fields', async () => {\n    const res = await request(app).get('/tickets/t1');\n    expect(res.status).toBe(200);\n    expect(res.body.title).toBe('Login broken');\n  });\n  it('rejects unknown labels', async () => {\n    expect((await request(app).put('/tickets/t1/labels').send({ labelIds: ['nope'] })).status).toBe(400);\n  });\n  it('lists labels', async () => {\n    expect((await request(app).get('/workspaces/ws1/labels')).body).toHaveLength(2);\n  });\n});\n"
+        }
+      ],
+      "trusted_cases": [
+        {
+          "id": "persist-roundtrip",
+          "weight": 4,
+          "probe": "import request from 'supertest';import {createApp} from './server/app';import * as db from './server/db';db.resetDb();db.seedWorkspace('ours',[{id:'a',name:'Urgent'},{id:'b',name:'Review'}]);db.seedWorkspace('other',[{id:'foreign',name:'Private'}]);db.seedTicket({id:'ticket',workspaceId:'ours',title:'T'});const api=request(createApp());const put=await api.put('/tickets/ticket/labels').send({labelIds:['b','a']});const get=await api.get('/tickets/ticket');return [put.status,put.body.labelIds,get.body.labelIds];",
+          "expected": [
+            200,
+            [
+              "b",
+              "a"
+            ],
+            [
+              "b",
+              "a"
+            ]
+          ]
+        },
+        {
+          "id": "cross-workspace-rejected",
+          "weight": 3,
+          "probe": "import request from 'supertest';import {createApp} from './server/app';import * as db from './server/db';db.resetDb();db.seedWorkspace('ours',[{id:'a',name:'Urgent'},{id:'b',name:'Review'}]);db.seedWorkspace('other',[{id:'foreign',name:'Private'}]);db.seedTicket({id:'ticket',workspaceId:'ours',title:'T'});const api=request(createApp());const put=await api.put('/tickets/ticket/labels').send({labelIds:['foreign']});return [put.status,db.getTicket('ticket').labelIds];",
+          "expected": [
+            400,
+            []
+          ]
+        },
+        {
+          "id": "clear-labels",
+          "weight": 2,
+          "probe": "import request from 'supertest';import {createApp} from './server/app';import * as db from './server/db';db.resetDb();db.seedWorkspace('ours',[{id:'a',name:'Urgent'},{id:'b',name:'Review'}]);db.seedWorkspace('other',[{id:'foreign',name:'Private'}]);db.seedTicket({id:'ticket',workspaceId:'ours',title:'T'});const api=request(createApp());await api.put('/tickets/ticket/labels').send({labelIds:['a']});await api.put('/tickets/ticket/labels').send({labelIds:[]});return (await api.get('/tickets/ticket')).body.labelIds;",
+          "expected": []
+        },
+        {
+          "id": "invalid-update-preserves-labels",
+          "weight": 3,
+          "probe": "import request from 'supertest';import {createApp} from './server/app';import * as db from './server/db';db.resetDb();db.seedWorkspace('ours',[{id:'a',name:'Urgent'},{id:'b',name:'Review'}]);db.seedWorkspace('other',[{id:'foreign',name:'Private'}]);db.seedTicket({id:'ticket',workspaceId:'ours',title:'T'});const api=request(createApp());await api.put('/tickets/ticket/labels').send({labelIds:['a']});const r=await api.put('/tickets/ticket/labels').send({labelIds:['b','foreign']});return [r.status,(await api.get('/tickets/ticket')).body.labelIds];",
+          "expected": [
+            400,
+            [
+              "a"
+            ]
+          ]
+        },
+        {
+          "id": "workspace-list-isolation",
+          "weight": 2,
+          "probe": "import request from 'supertest';import {createApp} from './server/app';import * as db from './server/db';db.resetDb();db.seedWorkspace('ours',[{id:'a',name:'Urgent'},{id:'b',name:'Review'}]);db.seedWorkspace('other',[{id:'foreign',name:'Private'}]);db.seedTicket({id:'ticket',workspaceId:'ours',title:'T'});const api=request(createApp());return [(await api.get('/workspaces/ours/labels')).body,(await api.put('/tickets/missing/labels').send({labelIds:['a']})).status];",
+          "expected": [
+            [
+              {
+                "id": "a",
+                "name": "Urgent"
+              },
+              {
+                "id": "b",
+                "name": "Review"
+              }
+            ],
+            404
+          ]
+        }
+      ],
+      "manual_requirements": [
+        "React screen displays persisted labels"
+      ],
+      "inventory_digest": "ca96550c6762e0112f21593a87ec45930ce2abdd1a9f7d5416e75c974dd56a75"
+    },
+    {
+      "number": 29,
+      "slug": "catalog-suggest-latency",
+      "readme": "/Users/shrutwik/Desktop/PromptCode/challenges/catalog-suggest-latency/README.md",
+      "visible_files": [
+        {
+          "path": "/Users/shrutwik/Desktop/PromptCode/challenges/catalog-suggest-latency/tests/suggest.test.ts",
+          "sha256": "9785270e8e6221765c1a3464258648bbcd6cbaff04334e423e70d61e4136c1fd",
+          "test_names": [
+            "handles empty input, whitespace queries, and an explicit zero limit",
+            "ranks multiple normalized tokens without mutating the catalog",
+            "deterministic ids",
+            "compareRank ordering",
+            "warmed median suggest latency stays under 200ms on 10k",
+            "scan work grows linearly across catalog sizes",
+            "fewer than 20k scans on 10k catalog"
+          ],
+          "source": "import { describe, it, expect, beforeEach } from 'vitest';\nimport { buildCatalog } from '../src/catalog.js';\nimport { suggest } from '../src/suggest.js';\nimport { scoreProduct, compareRank } from '../src/rank.js';\nimport { globalCounter } from '../src/queryCounter.js';\nimport { resetCatalog, suggestProducts, scanCount } from '../src/service.js';\nbeforeEach(() => { globalCounter.reset(); resetCatalog(10_000); });\ndescribe('ranking', () => {\n  it('handles empty input, whitespace queries, and an explicit zero limit', () => {\n    const rows = [{ id: 'a', title: 'A', category: 'phone', popularity: 1, tokens: ['phone'] }];\n    expect(suggest([], 'phone')).toEqual([]);\n    expect(suggest(rows, '   ')).toEqual([]);\n    expect(suggest(rows, 'phone', { limit: 0 })).toEqual([]);\n  });\n  it('ranks multiple normalized tokens without mutating the catalog', () => {\n    const rows = [{ id: 'b', title: 'B', category: 'x', popularity: 100, tokens: ['phone'] },\n      { id: 'a', title: 'A', category: 'case', popularity: 1, tokens: ['phone', 'case'] }];\n    const before = JSON.stringify(rows);\n    expect(suggest(rows, ' PHONE   case ').map(row => row.id)).toEqual(['a', 'b']);\n    expect(JSON.stringify(rows)).toBe(before);\n  });\n  it('deterministic ids', () => {\n    const catalog = buildCatalog(500);\n    globalCounter.reset();\n    const a = suggest(catalog, 'kitchen item', { limit: 5 }).map((p) => p.id);\n    globalCounter.reset();\n    const b = suggest(catalog, 'kitchen item', { limit: 5 }).map((p) => p.id);\n    expect(a).toEqual(b);\n  });\n  it('compareRank ordering', () => {\n    const catalog = buildCatalog(20);\n    const rows = catalog.map((product) => ({ score: scoreProduct(['tools'], product), product }));\n    rows.sort(compareRank);\n    for (let i = 1; i < rows.length; i++) expect(compareRank(rows[i - 1], rows[i])).toBeLessThanOrEqual(0);\n  });\n});\ndescribe('latency and scans', () => {\n  it('warmed median suggest latency stays under 200ms on 10k', () => {\n    for (let i = 0; i < 3; i++) suggestProducts('electronics item', 10);\n    const samples = Array.from({ length: 7 }, () => {\n      const start = performance.now();\n      const results = suggestProducts('electronics item', 10);\n      const elapsed = performance.now() - start;\n      expect(results.length).toBe(10);\n      return elapsed;\n    }).sort((a, b) => a - b);\n    expect(samples[3]).toBeLessThan(200);\n  });\n  it('scan work grows linearly across catalog sizes', () => {\n    for (const size of [100, 1000, 10000]) {\n      resetCatalog(size);\n      suggestProducts('garden item', 10);\n      expect(scanCount()).toBeGreaterThanOrEqual(size);\n      expect(scanCount()).toBeLessThanOrEqual(size * 2);\n    }\n  });\n  it('fewer than 20k scans on 10k catalog', () => {\n    suggestProducts('garden item', 10);\n    expect(scanCount()).toBeLessThan(20_000);\n  });\n});\n"
+        }
+      ],
+      "trusted_cases": [
+        {
+          "id": "ranking-ties",
+          "weight": 4,
+          "probe": "import {suggest} from './src/suggest';const rows=[{id:'b',title:'B',category:'x',popularity:7,tokens:['phone']},{id:'a',title:'A',category:'x',popularity:7,tokens:['phone']},{id:'z',title:'Z',category:'phone',popularity:99,tokens:[]},{id:'c',title:'C',category:'phone',popularity:1,tokens:['phone']}];return suggest(rows,' PHONE ').map(r=>r.id);",
+          "expected": [
+            "c",
+            "a",
+            "b",
+            "z"
+          ]
+        },
+        {
+          "id": "no-match-and-limit",
+          "weight": 2,
+          "probe": "import {suggest} from './src/suggest';const rows=Array.from({length:31},(_,i)=>({id:String(i).padStart(3,'0'),title:'a',category:'x',popularity:i,tokens:['word']}));return [suggest(rows,'absent'),suggest(rows,'word',{limit:3}).map(r=>r.id)];",
+          "expected": [
+            [],
+            [
+              "030",
+              "029",
+              "028"
+            ]
+          ]
+        },
+        {
+          "id": "large-catalog-ranking",
+          "weight": 3,
+          "probe": "import {suggest} from './src/suggest';const rows=Array.from({length:10000},(_,i)=>({id:String(i).padStart(5,'0'),title:'item',category:'x',popularity:i,tokens:['word']}));return suggest(rows,'word',{limit:3}).map(r=>r.id);",
+          "expected": [
+            "09999",
+            "09998",
+            "09997"
+          ]
+        },
+        {
+          "id": "empty-query-and-zero-limit",
+          "weight": 2,
+          "probe": "import {suggest} from './src/suggest';const rows=[{id:'a',title:'A',category:'phone',popularity:1,tokens:['phone']}];return [suggest([],'phone'),suggest(rows,'   '),suggest(rows,'phone',{limit:0})];",
+          "expected": [
+            [],
+            [],
+            []
+          ]
+        },
+        {
+          "id": "multi-token-no-input-mutation",
+          "weight": 3,
+          "probe": "import {suggest} from './src/suggest';const rows=[{id:'b',title:'B',category:'x',popularity:100,tokens:['phone']},{id:'a',title:'A',category:'case',popularity:1,tokens:['phone','case']}];const before=JSON.stringify(rows);const ids=suggest(rows,' PHONE   case ').map(r=>r.id);return [ids,JSON.stringify(rows)===before];",
+          "expected": [
+            [
+              "a",
+              "b"
+            ],
+            true
+          ]
+        }
+      ],
+      "manual_requirements": [
+        "200ms latency under calibrated load",
+        "scan instrumentation cannot be self-attested"
+      ],
+      "inventory_digest": "92acac499d2ee80190b887d020dbfcd2081e28c6aa0092da9f8499f3f5728b69"
+    },
+    {
+      "number": 30,
+      "slug": "pricing-rule-extract",
+      "readme": "/Users/shrutwik/Desktop/PromptCode/challenges/pricing-rule-extract/README.md",
+      "visible_files": [
+        {
+          "path": "/Users/shrutwik/Desktop/PromptCode/challenges/pricing-rule-extract/tests/pricing.test.ts",
+          "sha256": "593b6584f397d8d33da4ea71dc99e12e14af1422012c9bdbf75316720143b9c3",
+          "test_names": [
+            "rounds half cents up for both discounts and surcharges",
+            "does not mutate rules across repeated quotes",
+            "applies percent then amount then surcharge",
+            "half-up rounding",
+            "empty rules",
+            "zero base non-negative",
+            "applyRules matches quote"
+          ],
+          "source": "import { describe, it, expect } from 'vitest';\nimport { quote, applyRules } from '../src/pricingEngine.js';\nimport { roundHalfUp } from '../src/money.js';\ndescribe('golden quotes', () => {\n  it('rounds half cents up for both discounts and surcharges', () => {\n    expect(applyRules(5, [{ type: 'percent_off', pct: 10, code: 'p' }])).toEqual({ finalCents: 4, applied: ['p'] });\n    expect(quote({ baseCents: 5, rules: [{ type: 'surcharge_percent', pct: 10, code: 's' }] })).toEqual({ finalCents: 6, applied: ['s'] });\n  });\n  it('does not mutate rules across repeated quotes', () => {\n    const input = { baseCents: 100, rules: [{ type: 'surcharge_percent' as const, pct: 10, code: 's' },\n      { type: 'amount_off' as const, cents: 7, code: 'a' }] };\n    const before = JSON.stringify(input);\n    const expected = { finalCents: 102, applied: ['a', 's'] };\n    expect(quote(input)).toEqual(expected);\n    expect(applyRules(input.baseCents, input.rules)).toEqual(expected);\n    expect(JSON.stringify(input)).toBe(before);\n  });\n  it('applies percent then amount then surcharge', () => {\n    const result = quote({\n      baseCents: 10000,\n      rules: [\n        { type: 'surcharge_percent', pct: 10, code: 'surch' },\n        { type: 'amount_off', cents: 500, code: 'flat' },\n        { type: 'percent_off', pct: 15, code: 'vip' },\n      ],\n    });\n    expect(result.finalCents).toBe(8800);\n    expect(result.applied).toEqual(['vip', 'flat', 'surch']);\n  });\n  it('half-up rounding', () => {\n    expect(roundHalfUp(2.5)).toBe(3);\n    const result = quote({ baseCents: 1001, rules: [{ type: 'percent_off', pct: 10, code: 'p' }] });\n    expect(result.finalCents).toBe(1001 - roundHalfUp((1001 * 10) / 100));\n  });\n  it('empty rules', () => { expect(quote({ baseCents: 42, rules: [] }).finalCents).toBe(42); });\n  it('zero base non-negative', () => {\n    expect(quote({ baseCents: 0, rules: [{ type: 'amount_off', cents: 50, code: 'x' }] }).finalCents).toBe(0);\n  });\n  it('applyRules matches quote', () => {\n    const rules = [{ type: 'percent_off' as const, pct: 5, code: 'a' }, { type: 'amount_off' as const, cents: 10, code: 'b' }];\n    expect(applyRules(2000, rules)).toEqual(quote({ baseCents: 2000, rules }));\n  });\n});\n"
+        }
+      ],
+      "trusted_cases": [
+        {
+          "id": "order-and-rounding",
+          "weight": 4,
+          "probe": "import {quote,applyRules} from './src/pricingEngine';const rules=[{type:'surcharge_percent',pct:5,code:'s'},{type:'amount_off',cents:17,code:'a'},{type:'percent_off',pct:10,code:'p'}];return [applyRules(105,rules),quote({baseCents:105,rules})];",
+          "expected": [
+            {
+              "finalCents": 81,
+              "applied": [
+                "p",
+                "a",
+                "s"
+              ]
+            },
+            {
+              "finalCents": 81,
+              "applied": [
+                "p",
+                "a",
+                "s"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "floor-zero",
+          "weight": 2,
+          "probe": "import {quote,applyRules} from './src/pricingEngine';return applyRules(5,[{type:'amount_off',cents:9,code:'discount'}]);",
+          "expected": {
+            "finalCents": 0,
+            "applied": [
+              "discount"
+            ]
+          }
+        },
+        {
+          "id": "empty-preserves",
+          "weight": 2,
+          "probe": "import {quote,applyRules} from './src/pricingEngine';return applyRules(137,[]);",
+          "expected": {
+            "finalCents": 137,
+            "applied": []
+          }
+        },
+        {
+          "id": "same-type-order",
+          "weight": 2,
+          "probe": "import {quote,applyRules} from './src/pricingEngine';return applyRules(100,[{type:'amount_off',cents:2,code:'z'},{type:'amount_off',cents:3,code:'a'}]);",
+          "expected": {
+            "finalCents": 95,
+            "applied": [
+              "a",
+              "z"
+            ]
+          }
+        },
+        {
+          "id": "half-cent-rounding",
+          "weight": 3,
+          "probe": "import {quote,applyRules} from './src/pricingEngine';return [applyRules(5,[{type:'percent_off',pct:10,code:'p'}]),quote({baseCents:5,rules:[{type:'surcharge_percent',pct:10,code:'s'}]})];",
+          "expected": [
+            {
+              "finalCents": 4,
+              "applied": [
+                "p"
+              ]
+            },
+            {
+              "finalCents": 6,
+              "applied": [
+                "s"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "repeated-call-no-input-mutation",
+          "weight": 2,
+          "probe": "import {quote,applyRules} from './src/pricingEngine';const rules=[{type:'surcharge_percent',pct:10,code:'s'},{type:'amount_off',cents:7,code:'a'}];const before=JSON.stringify(rules);return [applyRules(100,rules),quote({baseCents:100,rules}),JSON.stringify(rules)===before];",
+          "expected": [
+            {
+              "finalCents": 102,
+              "applied": [
+                "a",
+                "s"
+              ]
+            },
+            {
+              "finalCents": 102,
+              "applied": [
+                "a",
+                "s"
+              ]
+            },
+            true
+          ]
+        }
+      ],
+      "manual_requirements": [
+        "quote delegates to extracted applyRules; source review"
+      ],
+      "inventory_digest": "dba4f84db380149d2f0b6e28342393d288349d82a054f4a4d2a610e7612db5ea"
+    }
+  ]
+}

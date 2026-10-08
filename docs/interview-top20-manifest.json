@@ -1,0 +1,131 @@
+{
+  "source": "ai-assisted-interview-scoring.json",
+  "selection": "top twenty overall, original reviewed weights and tie-breaks",
+  "registry_version": 4,
+  "evaluator_version": "behavioral-2026-10-v5",
+  "total_available": 25,
+  "featured_count": 20,
+  "calibration": "New durations and difficulties remain provisional. Scores are editorial selection scores, not candidate grades.",
+  "questions": [
+    {
+      "rank": 1,
+      "research_name": "Staged maze",
+      "slug": "warehouse-route-planner",
+      "selection_score": 93.0
+    },
+    {
+      "rank": 2,
+      "research_name": "Webhook retry",
+      "slug": "webhook-delivery-retry",
+      "selection_score": 91.0
+    },
+    {
+      "rank": 3,
+      "research_name": "Delivery accounting",
+      "slug": "courier-payment-ledger",
+      "selection_score": 88.0
+    },
+    {
+      "rank": 4,
+      "research_name": "Tenant document access",
+      "slug": "tenant-document-acl",
+      "selection_score": 85.0
+    },
+    {
+      "rank": 5,
+      "research_name": "Two-heap load balancer",
+      "slug": "worker-job-dispatch",
+      "selection_score": 84.0
+    },
+    {
+      "rank": 6,
+      "research_name": "Catalog suggestions",
+      "slug": "catalog-suggest-latency",
+      "selection_score": 83.0
+    },
+    {
+      "rank": 7,
+      "research_name": "Progressive LRU cache",
+      "slug": "bounded-recency-cache",
+      "selection_score": 82.0
+    },
+    {
+      "rank": 8,
+      "research_name": "Maximum unique-character subset",
+      "slug": "unique-word-selection",
+      "selection_score": 81.0
+    },
+    {
+      "rank": 9,
+      "research_name": "Service dependency impact",
+      "slug": "service-impact-analysis",
+      "selection_score": 81.0
+    },
+    {
+      "rank": 10,
+      "research_name": "Canvas editor",
+      "slug": "canvas-document-editor",
+      "selection_score": 80.0
+    },
+    {
+      "rank": 11,
+      "research_name": "Shipment CSV merge",
+      "slug": "shipment-csv-merge",
+      "selection_score": 80.0
+    },
+    {
+      "rank": 12,
+      "research_name": "Compiler cost and optimization",
+      "slug": "expression-cost-analysis",
+      "selection_score": 77.0
+    },
+    {
+      "rank": 13,
+      "research_name": "Configurable logger",
+      "slug": "structured-event-logger",
+      "selection_score": 77.0
+    },
+    {
+      "rank": 14,
+      "research_name": "Extensible hand comparison",
+      "slug": "extensible-hand-comparison",
+      "selection_score": 76.0
+    },
+    {
+      "rank": 15,
+      "research_name": "Meeting scheduler",
+      "slug": "room-reservation-scheduler",
+      "selection_score": 76.0
+    },
+    {
+      "rank": 16,
+      "research_name": "Notification feed",
+      "slug": "notification-feed-stale",
+      "selection_score": 76.0
+    },
+    {
+      "rank": 17,
+      "research_name": "Toy runway scheduler",
+      "slug": "runway-event-scheduler",
+      "selection_score": 75.0
+    },
+    {
+      "rank": 18,
+      "research_name": "Search, filters and routing",
+      "slug": "movie-search-routing",
+      "selection_score": 75.0
+    },
+    {
+      "rank": 19,
+      "research_name": "Invoice transitions",
+      "slug": "invoice-status-transition",
+      "selection_score": 74.0
+    },
+    {
+      "rank": 20,
+      "research_name": "Transactional wallet transfers",
+      "slug": "transactional-wallet-transfer",
+      "selection_score": 73.0
+    }
+  ]
+}

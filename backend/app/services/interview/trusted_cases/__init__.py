@@ -13,8 +13,10 @@ class Case:
     probe: str
     expected: object
 
-VERSION = 'behavioral-2026-10-v2'
+VERSION = 'behavioral-2026-10-v5'
 MANUAL_REQUIREMENTS = {
+    'canvas-document-editor': ['React rendered selection, dragging, history and save/reload'],
+    'movie-search-routing': ['React URL hydration, direct detail/404 and stale-response behavior'],
     'catalog-suggest-latency': ['200ms latency under calibrated load', 'scan instrumentation cannot be self-attested'],
     'notification-feed-stale': ['React rendered badge matches store'],
     'workspace-label-propagation': ['React screen displays persisted labels'],

@@ -42,6 +42,7 @@ function render(c, card, pending) {
             <span class="tag">${esc(c.type)}</span>
             <span class="tag">${esc(c.stack)}</span>
             <span class="tag">${esc(c.estimated_minutes)} min</span>
+            ${c.featured_rank != null ? `<span class="tag">Core #${esc(c.featured_rank)}</span>` : ""}
           </div>
           <p class="brief-summary">${esc(c.summary)}</p>
         </header>

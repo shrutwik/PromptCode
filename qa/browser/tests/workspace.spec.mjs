@@ -156,6 +156,8 @@ test('submit dialog traps keyboard focus, closes with Escape, and has accessible
   await page.getByRole('button', { name: 'Submit', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Submit for advisory feedback' });
   await expect(dialog).toBeVisible();
+  // Contrast must be measured after the translucent entrance animation finishes.
+  await expect(dialog.locator('.modal-card')).toHaveCSS('opacity', '1');
   await page.keyboard.press('Tab');
   expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
   const audit = await new AxeBuilder({ page }).include('#submitModal').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();

@@ -73,8 +73,32 @@ Validates ticket causal claim before coding.
 ## Derived Timeline Metrics
 Reproduce <10m; correct file <15m; green <30m.
 
+## Parts and reviewer evidence
+
+Transition legality is a directed graph; rejected writes preserve the entire stored invoice.
+
+- Part 1 (Establish the legal graph): legal-graph, missing-distinct.
+- Part 2 (Apply legal lifecycle changes): legal-api-transition, api-transition-matrix.
+- Part 3 (Pressure-test the model): illegal-preserves-paid, missing-status-preserves-state, terminal-sequence-preserves.
+
+Part 3 checks this contract property: The complete legal lifecycle must end in a terminal state whose rejected edit preserves every field. A behavioral pass observes these cases; it does not certify the candidate’s explanation. Existing declared manual review gaps remain.
+
+Plausible wrong assumption to challenge: Blocking one paid-to-draft edge establishes a complete lifecycle and terminal-state policy. Ask for a concrete counterexample; the selected automated wrong-repair fixtures remain the declared regression evidence.
+
+Optional changed requirement: Two users attempt different transitions from the same revision. Design a compare-and-set/version check and explain which loser receives a conflict without overwriting the winner. This is discussion-only and must not silently become a baseline coding requirement.
+
 ## Defend-Your-Code (4)
 1. Q: Why not timezone? A: Not on mutation path.
 2. Q: Keep paid→void? A: Encoded finance need.
 3. Q: 409 vs 400? A: Conflict with resource state.
 4. Q: Admin reopen? A: Out of scope / dangerous.
+
+## Deeper assessment insight
+
+Transition legality is a directed graph; rejected writes must preserve the entire invoice.
+
+Use the full four-by-four transition matrix, including same-state rejection, terminal void and preservation of amount on 409.
+
+Plausible wrong repair: Blocking every transition from paid also blocks the legal paid-to-void operation. Ask the candidate for a concrete failing example, not just an assertion that the shortcut is bad.
+
+Changed requirement: Discuss how adding an audited reopen operation changes the graph and migration policy; it is not a baseline permission. Keep this separate from baseline scoring and record the candidate reasoning and verification evidence.

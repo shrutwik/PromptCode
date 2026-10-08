@@ -36,3 +36,21 @@ def test_next_merge_replaces_previous_totals():
     assert total_quantity('new-ship') == 4
     assert merge_events([]) == []
     assert total_quantity('new-ship') == 0
+
+def test_repartitioning_files_preserves_results_and_input_batches():
+    a = ShipmentEvent('one', 'ship', 'scan', '2026-01-01', 5)
+    b = ShipmentEvent('two', 'ship', 'scan', '2026-01-02', -2)
+    batches = [[b, a], [a]]
+    first = [(e.event_id, e.quantity_delta) for e in merge_events(batches)]
+    quantity = total_quantity('ship')
+    second = [(e.event_id, e.quantity_delta) for e in merge_events([[a], [b], [a]])]
+    assert first == second == [('one', 5), ('two', -2)]
+    assert quantity == total_quantity('ship') == 3
+    assert batches == [[b, a], [a]]
+
+def test_part_three_pressure_case():
+    from shipment_merge.models import ShipmentEvent
+    from shipment_merge.merge import merge_events,total_quantity
+    a=ShipmentEvent('a','one','scan','2026-01-01',8);b=ShipmentEvent('b','one','scan','2026-01-02',-2);c=ShipmentEvent('c','two','scan','2026-01-01',9)
+    base=merge_events([[a,b]]);before=total_quantity('one');merged=merge_events([[c,a],[b,a]]);result=[[e.event_id for e in merged if e.shipment_id=='one'],before,total_quantity('one'),total_quantity('two')]
+    assert result == [['a', 'b'], 6, 6, 9]

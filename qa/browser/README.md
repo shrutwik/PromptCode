@@ -18,11 +18,18 @@ the starters remain intentionally buggy. All fixture files are removed on exit.
 
 Coverage: save-before-run and revisions, reload draft recovery, offline/reconnect,
 lease conflicts, capacity retries, failed-run status, completed-attempt controls,
-white Terminal text, dialog focus/Escape and WCAG AA dialog contrast. Both React
+white Terminal text, dialog focus/Escape and WCAG AA dialog contrast. React
 questions are rendered in real browsers, including starter regression detection
 and reference label persistence through a mocked API. Chromium, Firefox and
 WebKit run the same assertions without retries. Failures retain traces and
 screenshots; the report is in `report/`, artifacts in `results/`.
+
+The ranked library checks verify twenty ordered core questions, five retained
+additional exercises, filtering and navigation, plus four-part workspace briefs
+with an explicitly ungraded optional discussion. Canvas and movie-search fixtures
+use actual starter/reference components: zoomed dragging, undo, validated loading
+and stale successful response handling must distinguish the starter from its
+reviewed repair. These add to the existing feed and label browser checks.
 
 These are frontend integration checks. The separate Docker release checks cover
 real question APIs, reviewed practice suites, signed independent evaluation and

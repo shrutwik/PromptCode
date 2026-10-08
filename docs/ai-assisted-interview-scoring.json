@@ -1,0 +1,953 @@
+{
+  "date": "2026-10-07",
+  "ratings_are_editorial": true,
+  "weights_percent": {
+    "depth": 30,
+    "coverage": 25,
+    "evidence": 15,
+    "grading": 20,
+    "readiness": 10
+  },
+  "score_formula": "6*depth + 5*coverage + 3*evidence + 4*grading + 2*readiness",
+  "tie_break": "depth, coverage, grading, evidence, readiness descending; exercise id ascending",
+  "rows": [
+    {
+      "exercise_ids": [
+        1,
+        2,
+        3
+      ],
+      "name": "Staged maze",
+      "status": "New",
+      "ratings": {
+        "depth": 5,
+        "coverage": 5,
+        "evidence": 4,
+        "grading": 5,
+        "readiness": 3
+      },
+      "weighted_score": 93.0,
+      "rationale": {
+        "depth": "Codec, shortest paths and key-state search supply multiple interacting stages",
+        "coverage": "Graph/state-space progression is absent from the ten",
+        "evidence": "Firsthand maze theme and public staged practice; exact contracts remain original",
+        "grading": "BFS and tiny exhaustive-state oracles allow deterministic correctness checks",
+        "readiness": "New Python scaffold and staged grading are needed; no implemented family yet"
+      },
+      "overall_rank": 1,
+      "new_rank": 1,
+      "quality_without_readiness": 96.67,
+      "quality_rank": 1
+    },
+    {
+      "exercise_ids": [
+        22
+      ],
+      "name": "Webhook retry",
+      "status": "Existing",
+      "ratings": {
+        "depth": 5,
+        "coverage": 5,
+        "evidence": 2,
+        "grading": 5,
+        "readiness": 5
+      },
+      "weighted_score": 91.0,
+      "rationale": {
+        "depth": "Retry effects, attempt bounds and bounded flush exercise interacting invariants",
+        "coverage": "Unique retry-delivery system among the other nine",
+        "evidence": "Documented local challenge; external employer use is not established",
+        "grading": "Six independent probes plus visible tests cover clear deterministic requirements",
+        "readiness": "Implemented starter and existing runner/test wiring; not freshly release-certified"
+      },
+      "overall_rank": 2,
+      "existing_rank": 1,
+      "quality_without_readiness": 90.0,
+      "quality_rank": 3
+    },
+    {
+      "exercise_ids": [
+        12
+      ],
+      "name": "Delivery accounting",
+      "status": "New",
+      "ratings": {
+        "depth": 5,
+        "coverage": 4,
+        "evidence": 4,
+        "grading": 5,
+        "readiness": 3
+      },
+      "weighted_score": 88.0,
+      "rationale": {
+        "depth": "Payments, totals, precision and distinct-driver activity interact",
+        "coverage": "Adds evolving object modeling beyond existing isolated money bugs",
+        "evidence": "Firsthand delivery theme and detailed public practice; not authenticated employer tests",
+        "grading": "Integer-money and interval-sweep oracles support exact outcomes",
+        "readiness": "New service and event fixtures; existing runtimes can be reused"
+      },
+      "overall_rank": 3,
+      "new_rank": 2,
+      "quality_without_readiness": 91.11,
+      "quality_rank": 2
+    },
+    {
+      "exercise_ids": [
+        21
+      ],
+      "name": "Tenant document access",
+      "status": "Existing",
+      "ratings": {
+        "depth": 4,
+        "coverage": 5,
+        "evidence": 2,
+        "grading": 5,
+        "readiness": 5
+      },
+      "weighted_score": 85.0,
+      "rationale": {
+        "depth": "Read/write authorization, non-disclosure and mutation preservation",
+        "coverage": "Only dedicated security-isolation ticket among the other nine",
+        "evidence": "Documented local challenge, not authenticated employer question",
+        "grading": "Nine trusted probes with bidirectional isolation and rejected-state checks",
+        "readiness": "Existing scaffold, fixtures and evaluator wiring"
+      },
+      "overall_rank": 4,
+      "existing_rank": 2,
+      "quality_without_readiness": 83.33,
+      "quality_rank": 7
+    },
+    {
+      "exercise_ids": [
+        4
+      ],
+      "name": "Two-heap load balancer",
+      "status": "New",
+      "ratings": {
+        "depth": 4,
+        "coverage": 5,
+        "evidence": 3,
+        "grading": 5,
+        "readiness": 3
+      },
+      "weighted_score": 84.0,
+      "rationale": {
+        "depth": "Queue policy, completions and deterministic ties require event reasoning",
+        "coverage": "Heap/event scheduling is absent from the current ten",
+        "evidence": "Firsthand AI-permitted load-balancer report; dispatch semantics are ours",
+        "grading": "A simple independent event simulator can establish exact assignments",
+        "readiness": "Focused new scaffold and heap/reference comparison tests"
+      },
+      "overall_rank": 5,
+      "new_rank": 3,
+      "quality_without_readiness": 86.67,
+      "quality_rank": 4
+    },
+    {
+      "exercise_ids": [
+        29
+      ],
+      "name": "Catalog suggestions",
+      "status": "Existing",
+      "ratings": {
+        "depth": 5,
+        "coverage": 5,
+        "evidence": 2,
+        "grading": 3,
+        "readiness": 5
+      },
+      "weighted_score": 83.0,
+      "rationale": {
+        "depth": "Optimization must preserve multi-key ranking and input behavior",
+        "coverage": "Only dedicated performance ticket among the other nine",
+        "evidence": "Documented local challenge; external use unknown",
+        "grading": "Five probes check output; latency/counter integrity need calibrated review",
+        "readiness": "Existing workload, starter and grading hooks; review gaps remain"
+      },
+      "overall_rank": 6,
+      "existing_rank": 3,
+      "quality_without_readiness": 81.11,
+      "quality_rank": 10
+    },
+    {
+      "exercise_ids": [
+        15
+      ],
+      "name": "Progressive LRU cache",
+      "status": "New",
+      "ratings": {
+        "depth": 5,
+        "coverage": 4,
+        "evidence": 2,
+        "grading": 5,
+        "readiness": 3
+      },
+      "weighted_score": 82.0,
+      "rationale": {
+        "depth": "Recency, resize and atomic creation combine data structures with concurrency",
+        "coverage": "Adds a distinct cache system while sharing some concurrency concepts",
+        "evidence": "Detailed public practice; TTL is a separate original extension",
+        "grading": "Fake clocks and controlled factories make invariants deterministic",
+        "readiness": "New cache scaffold and thread/interleaving tests; standard Python runtime"
+      },
+      "overall_rank": 7,
+      "new_rank": 4,
+      "quality_without_readiness": 84.44,
+      "quality_rank": 5
+    },
+    {
+      "exercise_ids": [
+        18
+      ],
+      "name": "Maximum unique-character subset",
+      "status": "New",
+      "ratings": {
+        "depth": 4,
+        "coverage": 5,
+        "evidence": 2,
+        "grading": 5,
+        "readiness": 3
+      },
+      "weighted_score": 81.0,
+      "rationale": {
+        "depth": "Validator versus optimizer and exact-search scaling supply distinct stages",
+        "coverage": "Adds combinatorial search beyond existing ticket debugging",
+        "evidence": "Detailed public practice; no verified exact employer prompt",
+        "grading": "Exhaustive small-list oracle establishes legality and optimum independently",
+        "readiness": "Focused solver/validator scaffold and generated fixtures"
+      },
+      "overall_rank": 8,
+      "new_rank": 5,
+      "quality_without_readiness": 83.33,
+      "quality_rank": 8
+    },
+    {
+      "exercise_ids": [
+        34
+      ],
+      "name": "Service dependency impact",
+      "status": "New",
+      "ratings": {
+        "depth": 4,
+        "coverage": 5,
+        "evidence": 2,
+        "grading": 5,
+        "readiness": 3
+      },
+      "weighted_score": 81.0,
+      "rationale": {
+        "depth": "Path normalization, subtree deletion and graph closure interact",
+        "coverage": "Adds dependency analysis missing from current product tickets",
+        "evidence": "Detailed public practice; no authenticated employer attribution",
+        "grading": "Small explicit graphs and path boundaries permit independent oracles",
+        "readiness": "New Python graph/path scaffold and cases; runtime reuse"
+      },
+      "overall_rank": 9,
+      "new_rank": 6,
+      "quality_without_readiness": 83.33,
+      "quality_rank": 9
+    },
+    {
+      "exercise_ids": [
+        6
+      ],
+      "name": "Canvas editor",
+      "status": "New",
+      "ratings": {
+        "depth": 5,
+        "coverage": 5,
+        "evidence": 3,
+        "grading": 3,
+        "readiness": 2
+      },
+      "weighted_score": 80.0,
+      "rationale": {
+        "depth": "Selection, pointer coordinates, persistence and history require coherent design",
+        "coverage": "No comparable open-ended graphical build in the ten",
+        "evidence": "Firsthand editor account; our storage and undo extensions are original",
+        "grading": "State oracles help, but interaction and usable-output checks need browser/manual review",
+        "readiness": "Substantial frontend scaffold, interaction harness and scope calibration"
+      },
+      "overall_rank": 10,
+      "new_rank": 7,
+      "quality_without_readiness": 84.44,
+      "quality_rank": 6
+    },
+    {
+      "exercise_ids": [
+        25
+      ],
+      "name": "Shipment CSV merge",
+      "status": "Existing",
+      "ratings": {
+        "depth": 4,
+        "coverage": 4,
+        "evidence": 2,
+        "grading": 5,
+        "readiness": 5
+      },
+      "weighted_score": 80.0,
+      "rationale": {
+        "depth": "Identity, sorting, quantities and snapshot reset form multiple invariants",
+        "coverage": "Only batch-ingestion/deduplication family among the other nine",
+        "evidence": "Documented local challenge, no employer authentication",
+        "grading": "Six independent probes with deterministic totals/order/state reset",
+        "readiness": "Existing Python scaffold, fixtures and runner"
+      },
+      "overall_rank": 11,
+      "existing_rank": 4,
+      "quality_without_readiness": 77.78,
+      "quality_rank": 14
+    },
+    {
+      "exercise_ids": [
+        33
+      ],
+      "name": "Compiler cost and optimization",
+      "status": "New",
+      "ratings": {
+        "depth": 5,
+        "coverage": 5,
+        "evidence": 2,
+        "grading": 3,
+        "readiness": 2
+      },
+      "weighted_score": 77.0,
+      "rationale": {
+        "depth": "Parsing, liveness, dead code and constants demand semantic understanding",
+        "coverage": "Introduces language/dataflow analysis missing from the ten",
+        "evidence": "Detailed public practice; exact memory/division conventions must be authored",
+        "grading": "Oracle and liveness allocation conventions are substantial grading risks until specified",
+        "readiness": "New mini-language, independent interpreter and advanced fixtures"
+      },
+      "overall_rank": 12,
+      "new_rank": 8,
+      "quality_without_readiness": 81.11,
+      "quality_rank": 11
+    },
+    {
+      "exercise_ids": [
+        5
+      ],
+      "name": "Configurable logger",
+      "status": "New",
+      "ratings": {
+        "depth": 4,
+        "coverage": 5,
+        "evidence": 2,
+        "grading": 4,
+        "readiness": 3
+      },
+      "weighted_score": 77.0,
+      "rationale": {
+        "depth": "API design, copied context, reconfiguration and sink failures interact",
+        "coverage": "Adds library/configuration design absent from the ten",
+        "evidence": "Logger comment has disputed employer attribution; no published full prompt",
+        "grading": "In-memory sinks are objective; design/failure-policy choices require explicit rubric",
+        "readiness": "Focused TypeScript scaffold, demo and failure tests"
+      },
+      "overall_rank": 13,
+      "new_rank": 9,
+      "quality_without_readiness": 78.89,
+      "quality_rank": 12
+    },
+    {
+      "exercise_ids": [
+        13
+      ],
+      "name": "Extensible hand comparison",
+      "status": "New",
+      "ratings": {
+        "depth": 4,
+        "coverage": 4,
+        "evidence": 2,
+        "grading": 5,
+        "readiness": 3
+      },
+      "weighted_score": 76.0,
+      "rationale": {
+        "depth": "Parser, comparison keys and alternate rules supply a coherent staged library",
+        "coverage": "New parser/rule domain, although a second card family reduces portfolio novelty",
+        "evidence": "Public comparator practice; generic card-game account does not establish exact ranking rules",
+        "grading": "Supplied finite rules enable exact exhaustive comparisons",
+        "readiness": "New deck/rules fixtures and baseline comparator"
+      },
+      "overall_rank": 14,
+      "new_rank": 10,
+      "quality_without_readiness": 77.78,
+      "quality_rank": 15
+    },
+    {
+      "exercise_ids": [
+        35
+      ],
+      "name": "Meeting scheduler",
+      "status": "New",
+      "ratings": {
+        "depth": 4,
+        "coverage": 4,
+        "evidence": 2,
+        "grading": 5,
+        "readiness": 3
+      },
+      "weighted_score": 76.0,
+      "rationale": {
+        "depth": "Earliest gaps, half-open intervals and atomic reserve form a meaningful system",
+        "coverage": "Extends existing boundary/concurrency concepts into scheduling",
+        "evidence": "Public practice with original precise window and reservation rules",
+        "grading": "Small interval oracle and barriers yield objective tests",
+        "readiness": "New service and fixtures with no new runtime family"
+      },
+      "overall_rank": 15,
+      "new_rank": 11,
+      "quality_without_readiness": 77.78,
+      "quality_rank": 16
+    },
+    {
+      "exercise_ids": [
+        26
+      ],
+      "name": "Notification feed",
+      "status": "Existing",
+      "ratings": {
+        "depth": 4,
+        "coverage": 4,
+        "evidence": 2,
+        "grading": 4,
+        "readiness": 5
+      },
+      "weighted_score": 76.0,
+      "rationale": {
+        "depth": "Concurrent updates and duplicate marks must converge",
+        "coverage": "Distinct async state problem; some UI overlap with labels",
+        "evidence": "Documented local challenge, no external employer match",
+        "grading": "Six probes establish store behavior; rendered badge remains explicit review",
+        "readiness": "Existing React starter and runner; rendered verification still needs evidence"
+      },
+      "overall_rank": 16,
+      "existing_rank": 5,
+      "quality_without_readiness": 73.33,
+      "quality_rank": 21
+    },
+    {
+      "exercise_ids": [
+        19
+      ],
+      "name": "Toy runway scheduler",
+      "status": "New",
+      "ratings": {
+        "depth": 5,
+        "coverage": 4,
+        "evidence": 3,
+        "grading": 3,
+        "readiness": 2
+      },
+      "weighted_score": 75.0,
+      "rationale": {
+        "depth": "Exclusion, readiness, priority, cancellation and closures interact",
+        "coverage": "Adds open-ended event modeling, sharing ideas with load balancing",
+        "evidence": "Official illustrative example, not confirmed live candidate question",
+        "grading": "Tests depend on extensive original policy and domain assumptions",
+        "readiness": "Substantial simulator and clarification/calibration work"
+      },
+      "overall_rank": 17,
+      "new_rank": 12,
+      "quality_without_readiness": 78.89,
+      "quality_rank": 13
+    },
+    {
+      "exercise_ids": [
+        9
+      ],
+      "name": "Search, filters and routing",
+      "status": "New",
+      "ratings": {
+        "depth": 4,
+        "coverage": 4,
+        "evidence": 3,
+        "grading": 4,
+        "readiness": 3
+      },
+      "weighted_score": 75.0,
+      "rationale": {
+        "depth": "Coordinates browser URL state, filtering and API behavior",
+        "coverage": "Adds routes and filter composition alongside existing ranking and persistence exercises",
+        "evidence": "Anonymous firsthand full-stack question submission; detailed domain is our adaptation",
+        "grading": "Deterministic data but browser routing requires integration tests",
+        "readiness": "React/Express patterns exist; new fixtures and browser coverage still needed"
+      },
+      "overall_rank": 18,
+      "new_rank": 13,
+      "quality_without_readiness": 76.67,
+      "quality_rank": 17
+    },
+    {
+      "exercise_ids": [
+        23
+      ],
+      "name": "Invoice transitions",
+      "status": "Existing",
+      "ratings": {
+        "depth": 3,
+        "coverage": 4,
+        "evidence": 2,
+        "grading": 5,
+        "readiness": 5
+      },
+      "weighted_score": 74.0,
+      "rationale": {
+        "depth": "Focused state-machine correction with API/state preservation",
+        "coverage": "Dedicated explicit transition graph among the other nine",
+        "evidence": "Documented local challenge, external use unknown",
+        "grading": "Full transition matrix and preserved amounts give exact objective checks",
+        "readiness": "Existing starter and independent evaluation wiring"
+      },
+      "overall_rank": 19,
+      "existing_rank": 6,
+      "quality_without_readiness": 71.11,
+      "quality_rank": 22
+    },
+    {
+      "exercise_ids": [
+        17
+      ],
+      "name": "Transactional wallet transfers",
+      "status": "New",
+      "ratings": {
+        "depth": 5,
+        "coverage": 4,
+        "evidence": 1,
+        "grading": 4,
+        "readiness": 2
+      },
+      "weighted_score": 73.0,
+      "rationale": {
+        "depth": "Durable idempotency, rollback and concurrent debits require transaction modeling",
+        "coverage": "Adds atomic money movement beyond webhook retries and quoting",
+        "evidence": "Original adaptation without a verified external question match",
+        "grading": "Exact balances are objective; failure injection and isolation tests need care",
+        "readiness": "Requires transaction-capable fixtures and concurrency validation"
+      },
+      "overall_rank": 20,
+      "new_rank": 14,
+      "quality_without_readiness": 76.67,
+      "quality_rank": 18
+    },
+    {
+      "exercise_ids": [
+        36
+      ],
+      "name": "Crawler frontier and cooldown",
+      "status": "New",
+      "ratings": {
+        "depth": 5,
+        "coverage": 3,
+        "evidence": 2,
+        "grading": 4,
+        "readiness": 3
+      },
+      "weighted_score": 73.0,
+      "rationale": {
+        "depth": "Readiness, leases, stable priority and bounded retry form a complex state machine",
+        "coverage": "Useful new semantics, but queue/retry overlap with webhook is substantial",
+        "evidence": "Detailed public practice; lease/attempt contract is original",
+        "grading": "Fake-clock oracle is feasible; lease and delayed-head cases require careful fixtures",
+        "readiness": "New queue scaffold but existing runtime and retry testing patterns"
+      },
+      "overall_rank": 21,
+      "new_rank": 15,
+      "quality_without_readiness": 74.44,
+      "quality_rank": 19
+    },
+    {
+      "exercise_ids": [
+        31
+      ],
+      "name": "Sum-15 card strategy",
+      "status": "New",
+      "ratings": {
+        "depth": 4,
+        "coverage": 5,
+        "evidence": 2,
+        "grading": 3,
+        "readiness": 3
+      },
+      "weighted_score": 73.0,
+      "rationale": {
+        "depth": "Separates move legality, baseline choice and quality evaluation",
+        "coverage": "Adds seeded decision-strategy evaluation missing from the ten",
+        "evidence": "Public sum-15 practice; generic firsthand card-game report does not authenticate this game",
+        "grading": "Legality is exact but quality metric and simulation fairness need calibration",
+        "readiness": "New engine and seeded benchmark; familiar Python tooling"
+      },
+      "overall_rank": 22,
+      "new_rank": 16,
+      "quality_without_readiness": 74.44,
+      "quality_rank": 20
+    },
+    {
+      "exercise_ids": [
+        38
+      ],
+      "name": "Contained-string progression",
+      "status": "New",
+      "ratings": {
+        "depth": 3,
+        "coverage": 4,
+        "evidence": 2,
+        "grading": 5,
+        "readiness": 4
+      },
+      "weighted_score": 72.0,
+      "rationale": {
+        "depth": "Basic search, shortest output and all-pair scaling; limited domain modeling",
+        "coverage": "Adds substring/multi-pattern search absent from the ten",
+        "evidence": "Detailed public practice, no verified employer prompt",
+        "grading": "Small pairwise oracle gives exact results and tie checks",
+        "readiness": "Small scaffold and generated lists; no UI or transactional infrastructure"
+      },
+      "overall_rank": 23,
+      "new_rank": 17,
+      "quality_without_readiness": 71.11,
+      "quality_rank": 23
+    },
+    {
+      "exercise_ids": [
+        28
+      ],
+      "name": "Workspace ticket labels",
+      "status": "Existing",
+      "ratings": {
+        "depth": 4,
+        "coverage": 3,
+        "evidence": 2,
+        "grading": 4,
+        "readiness": 5
+      },
+      "weighted_score": 71.0,
+      "rationale": {
+        "depth": "Workspace validation, persistence and client propagation interact",
+        "coverage": "Shares persistence with order hold and isolation with document access",
+        "evidence": "Documented local challenge, external use unknown",
+        "grading": "Five probes plus UI suite; rendered persisted selection needs review",
+        "readiness": "Existing full-stack starter and evaluator wiring"
+      },
+      "overall_rank": 24,
+      "existing_rank": 7,
+      "quality_without_readiness": 67.78,
+      "quality_rank": 26
+    },
+    {
+      "exercise_ids": [
+        10
+      ],
+      "name": "Per-user rate limiter",
+      "status": "New",
+      "ratings": {
+        "depth": 4,
+        "coverage": 3,
+        "evidence": 3,
+        "grading": 4,
+        "readiness": 3
+      },
+      "weighted_score": 70.0,
+      "rationale": {
+        "depth": "Boundary, identity and atomic concurrent updates provide useful depth",
+        "coverage": "Overlaps tenant scoping and bounded delivery concepts",
+        "evidence": "Firsthand rate-limiting theme; exact policy/limits are original",
+        "grading": "Fake-clock counts are objective; multi-instance behavior needs shared-store tests",
+        "readiness": "Focused middleware and atomic store fixture"
+      },
+      "overall_rank": 25,
+      "new_rank": 18,
+      "quality_without_readiness": 71.11,
+      "quality_rank": 24
+    },
+    {
+      "exercise_ids": [
+        30
+      ],
+      "name": "Pricing extraction",
+      "status": "Existing",
+      "ratings": {
+        "depth": 3,
+        "coverage": 4,
+        "evidence": 2,
+        "grading": 4,
+        "readiness": 5
+      },
+      "weighted_score": 70.0,
+      "rationale": {
+        "depth": "Focused extraction while preserving cents, order and input immutability",
+        "coverage": "Only explicit refactoring ticket among the other nine",
+        "evidence": "Documented local challenge, no verified employer use",
+        "grading": "Golden outputs are objective; delegation direction needs source review",
+        "readiness": "Existing working golden behavior and scaffold; extraction is intentionally unfinished"
+      },
+      "overall_rank": 26,
+      "existing_rank": 8,
+      "quality_without_readiness": 66.67,
+      "quality_rank": 27
+    },
+    {
+      "exercise_ids": [
+        24
+      ],
+      "name": "Proration boundary",
+      "status": "Existing",
+      "ratings": {
+        "depth": 3,
+        "coverage": 3,
+        "evidence": 2,
+        "grading": 5,
+        "readiness": 5
+      },
+      "weighted_score": 69.0,
+      "rationale": {
+        "depth": "Focused temporal correction with offset and microsecond details",
+        "coverage": "Unique subscription-period semantics but overlaps broader money/boundary practice",
+        "evidence": "Documented local challenge, external use unknown",
+        "grading": "Seven probes and visible boundary fixtures give exact expectations",
+        "readiness": "Existing Python billing scaffold and evaluator"
+      },
+      "overall_rank": 27,
+      "existing_rank": 9,
+      "quality_without_readiness": 65.56,
+      "quality_rank": 29
+    },
+    {
+      "exercise_ids": [
+        32
+      ],
+      "name": "Friend recommendation",
+      "status": "New",
+      "ratings": {
+        "depth": 4,
+        "coverage": 5,
+        "evidence": 2,
+        "grading": 2,
+        "readiness": 2
+      },
+      "weighted_score": 67.0,
+      "rationale": {
+        "depth": "Graph candidates and held-out evaluation combine algorithms and metrics",
+        "coverage": "Adds recommendations/quality assessment absent from the ten",
+        "evidence": "Detailed public practice; exact quality metric is unavailable",
+        "grading": "Legality is clear, but meaningful recommendation quality and leakage control remain hard to calibrate",
+        "readiness": "Requires defensible dataset, split, baseline and metric design"
+      },
+      "overall_rank": 28,
+      "new_rank": 19,
+      "quality_without_readiness": 70.0,
+      "quality_rank": 25
+    },
+    {
+      "exercise_ids": [
+        37
+      ],
+      "name": "Expense rules and trip aggregation",
+      "status": "New",
+      "ratings": {
+        "depth": 4,
+        "coverage": 2,
+        "evidence": 2,
+        "grading": 5,
+        "readiness": 3
+      },
+      "weighted_score": 66.0,
+      "rationale": {
+        "depth": "Numeric parsing, grouped thresholds and rule composition interact",
+        "coverage": "Heavy overlap with existing money, rules and merge exercises",
+        "evidence": "Detailed public practice without employer authentication",
+        "grading": "Exact cents and explicit predicates support straightforward independent oracles",
+        "readiness": "Focused rules scaffold and grouping fixtures"
+      },
+      "overall_rank": 29,
+      "new_rank": 20,
+      "quality_without_readiness": 66.67,
+      "quality_rank": 28
+    },
+    {
+      "exercise_ids": [
+        20
+      ],
+      "name": "Test-contract diagnosis",
+      "status": "New",
+      "ratings": {
+        "depth": 3,
+        "coverage": 3,
+        "evidence": 3,
+        "grading": 4,
+        "readiness": 4
+      },
+      "weighted_score": 66.0,
+      "rationale": {
+        "depth": "Evidence-based correction of a disputed assertion rather than broad implementation",
+        "coverage": "Adds valuable judgment, but works well embedded in other question debriefs",
+        "evidence": "Firsthand test-alignment stage; the parser scenario is original",
+        "grading": "Explicit contract supports exact regressions; written reasoning needs review",
+        "readiness": "Small parser/contract scaffold and deliberately faulty assertion"
+      },
+      "overall_rank": 30,
+      "new_rank": 21,
+      "quality_without_readiness": 64.44,
+      "quality_rank": 30
+    },
+    {
+      "exercise_ids": [
+        14
+      ],
+      "name": "Six-feature dashboard",
+      "status": "New",
+      "ratings": {
+        "depth": 4,
+        "coverage": 3,
+        "evidence": 2,
+        "grading": 3,
+        "readiness": 2
+      },
+      "weighted_score": 61.0,
+      "rationale": {
+        "depth": "Feature composition and stale requests require coherent frontend work",
+        "coverage": "Duplicates much of existing React state/persistence and proposed search work",
+        "evidence": "A six-feature report exists but its features are unknown; this particular dashboard is original",
+        "grading": "Interaction composition and acceptance scope need browser/manual calibration",
+        "readiness": "Broad UI capstone with substantial fixtures and polish"
+      },
+      "overall_rank": 31,
+      "new_rank": 22,
+      "quality_without_readiness": 63.33,
+      "quality_rank": 31
+    },
+    {
+      "exercise_ids": [
+        8
+      ],
+      "name": "Watchlist persistence",
+      "status": "New",
+      "ratings": {
+        "depth": 3,
+        "coverage": 1,
+        "evidence": 3,
+        "grading": 5,
+        "readiness": 3
+      },
+      "weighted_score": 58.0,
+      "rationale": {
+        "depth": "Focused controller/service/store round-trip incident",
+        "coverage": "Substantially duplicates order-hold and label persistence",
+        "evidence": "Firsthand MovieDB failure theme; our HTTP and duplicate contract is original",
+        "grading": "Add-then-read and database uniqueness outcomes are objective",
+        "readiness": "New app variant despite familiar server/UI patterns"
+      },
+      "overall_rank": 32,
+      "new_rank": 23,
+      "quality_without_readiness": 57.78,
+      "quality_rank": 32
+    },
+    {
+      "exercise_ids": [
+        27
+      ],
+      "name": "Order hold persistence",
+      "status": "Existing",
+      "ratings": {
+        "depth": 2,
+        "coverage": 2,
+        "evidence": 2,
+        "grading": 5,
+        "readiness": 5
+      },
+      "weighted_score": 58.0,
+      "rationale": {
+        "depth": "Primarily field propagation, legacy defaults and response persistence",
+        "coverage": "Heavily overlaps the richer ticket-label propagation family",
+        "evidence": "Documented local challenge, no verified employer use",
+        "grading": "Six probes cover round trip, isolation, Unicode and optional values",
+        "readiness": "Existing scaffold and grading wiring; strong low-friction warm-up"
+      },
+      "overall_rank": 33,
+      "existing_rank": 10,
+      "quality_without_readiness": 53.33,
+      "quality_rank": 34
+    },
+    {
+      "exercise_ids": [
+        16
+      ],
+      "name": "Verification expiry and reuse",
+      "status": "New",
+      "ratings": {
+        "depth": 3,
+        "coverage": 2,
+        "evidence": 1,
+        "grading": 5,
+        "readiness": 3
+      },
+      "weighted_score": 57.0,
+      "rationale": {
+        "depth": "Atomic consume and expiry improve a focused endpoint task",
+        "coverage": "Overlaps current time boundaries and idempotency; adds token lifecycle",
+        "evidence": "Original practice variant without verified external prompt",
+        "grading": "Fake clock and atomic consume checks are objective",
+        "readiness": "New endpoint/token scaffold and concurrency cases"
+      },
+      "overall_rank": 34,
+      "new_rank": 24,
+      "quality_without_readiness": 56.67,
+      "quality_rank": 33
+    },
+    {
+      "exercise_ids": [
+        11
+      ],
+      "name": "Password policy consistency",
+      "status": "New",
+      "ratings": {
+        "depth": 2,
+        "coverage": 1,
+        "evidence": 3,
+        "grading": 5,
+        "readiness": 4
+      },
+      "weighted_score": 54.0,
+      "rationale": {
+        "depth": "Primarily a shared validation and boundary correction",
+        "coverage": "Adds little beyond existing validation/boundary/route tasks",
+        "evidence": "Firsthand password-validation theme; our Unicode/length policy is original",
+        "grading": "Exact type and boundary rules are readily testable",
+        "readiness": "Small validator scaffold and two endpoint fixtures"
+      },
+      "overall_rank": 35,
+      "new_rank": 25,
+      "quality_without_readiness": 51.11,
+      "quality_rank": 36
+    },
+    {
+      "exercise_ids": [
+        7
+      ],
+      "name": "Team portal",
+      "status": "New",
+      "ratings": {
+        "depth": 3,
+        "coverage": 1,
+        "evidence": 3,
+        "grading": 4,
+        "readiness": 2
+      },
+      "weighted_score": 52.0,
+      "rationale": {
+        "depth": "Focused member search and role persistence with authorization",
+        "coverage": "Strong overlap with labels, tenant isolation and other persistence tasks",
+        "evidence": "Firsthand team-portal comment; specific search/roles are ours",
+        "grading": "API checks are clear but UI/error paths require integration review",
+        "readiness": "New full-stack app despite small marginal coverage"
+      },
+      "overall_rank": 36,
+      "new_rank": 26,
+      "quality_without_readiness": 53.33,
+      "quality_rank": 35
+    }
+  ]
+}

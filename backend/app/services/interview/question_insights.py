@@ -1,0 +1,266 @@
+"""Original contract checkpoints enriching the existing ten candidate tickets."""
+
+INSIGHTS = {'invoice-status-transition': {'invariant': 'Transition legality is a directed graph; rejected '
+                                            'writes must preserve the entire invoice.',
+                               'examples': 'Use the full four-by-four transition matrix, including '
+                                           'same-state rejection, terminal void and preservation '
+                                           'of amount on 409.',
+                               'twist': 'Discuss how adding an audited reopen operation changes '
+                                        'the graph and migration policy; it is not a baseline '
+                                        'permission.',
+                               'counterexample': 'Blocking every transition from paid also blocks '
+                                                 'the legal paid-to-void operation.',
+                               'candidate_checkpoint_text': 'This ticket tests: Transition '
+                                                            'legality is a directed graph; '
+                                                            'rejected writes must preserve the '
+                                                            'entire invoice. Verification focus: '
+                                                            'Use the full four-by-four transition '
+                                                            'matrix, including same-state '
+                                                            'rejection, terminal void and '
+                                                            'preservation of amount on 409. '
+                                                            'Checkpoint 1: Reproduce the reported '
+                                                            'behavior and state the contract '
+                                                            'invariant. Checkpoint 2: Repair the '
+                                                            'smallest relevant path and verify '
+                                                            'preservation on success and '
+                                                            'rejection. Checkpoint 3: Defend your '
+                                                            'change with a counterexample and '
+                                                            'discuss the explicitly optional '
+                                                            'changed requirement.'},
+ 'order-hold-reason': {'invariant': 'A successful response must describe persisted aggregate '
+                                    'state, not echo the request.',
+                       'examples': 'Trace hold, later GET, overwrite, release and another hold. '
+                                   'Preserve money/customer fields and legacy nulls.',
+                       'twist': 'Discuss concurrent edits and a version precondition; no new '
+                                'concurrency endpoint is required.',
+                       'counterexample': 'Echoing hold_reason in POST can pass the immediate '
+                                         'response but fail the following GET.',
+                       'candidate_checkpoint_text': 'This ticket tests: A successful response must '
+                                                    'describe persisted aggregate state, not echo '
+                                                    'the request. Verification focus: Trace hold, '
+                                                    'later GET, overwrite, release and another '
+                                                    'hold. Preserve money/customer fields and '
+                                                    'legacy nulls. Checkpoint 1: Reproduce the '
+                                                    'reported behavior and state the contract '
+                                                    'invariant. Checkpoint 2: Repair the smallest '
+                                                    'relevant path and verify preservation on '
+                                                    'success and rejection. Checkpoint 3: Defend '
+                                                    'your change with a counterexample and discuss '
+                                                    'the explicitly optional changed requirement.'},
+ 'catalog-suggest-latency': {'invariant': 'Optimization changes work performed while preserving '
+                                          'the complete ranked output and untouched input.',
+                             'examples': 'Compare score/popularity/id ties, normalized multi-token '
+                                         'queries, zero limit, and operation counts before '
+                                         'interpreting timing.',
+                             'twist': 'Discuss cache invalidation when products change, using a '
+                                      'changed-catalog example; caching is not automatically the '
+                                      'repair.',
+                             'counterexample': 'A stale query cache or a dishonest scan counter '
+                                               'can look fast while violating the contract.',
+                             'candidate_checkpoint_text': 'This ticket tests: Optimization changes '
+                                                          'work performed while preserving the '
+                                                          'complete ranked output and untouched '
+                                                          'input. Verification focus: Compare '
+                                                          'score/popularity/id ties, normalized '
+                                                          'multi-token queries, zero limit, and '
+                                                          'operation counts before interpreting '
+                                                          'timing. Checkpoint 1: Reproduce the '
+                                                          'reported behavior and state the '
+                                                          'contract invariant. Checkpoint 2: '
+                                                          'Repair the smallest relevant path and '
+                                                          'verify preservation on success and '
+                                                          'rejection. Checkpoint 3: Defend your '
+                                                          'change with a counterexample and '
+                                                          'discuss the explicitly optional changed '
+                                                          'requirement.'},
+ 'notification-feed-stale': {'invariant': 'Async completion must converge with current store state '
+                                          'and the rendered badge.',
+                             'examples': 'Verify two different quick marks, repeated marks, an '
+                                         'already-read row and a rejected request; inspect '
+                                         'rendered rows and count together.',
+                             'twist': 'Discuss a late load response arriving after a mark and what '
+                                      'request-generation or merge policy would mean; this remains '
+                                      'a discussion extension.',
+                             'counterexample': 'Writing an old captured list after awaiting a '
+                                               'request can restore a row that another request '
+                                               'already marked read.',
+                             'candidate_checkpoint_text': 'This ticket tests: Async completion '
+                                                          'must converge with current store state '
+                                                          'and the rendered badge. Verification '
+                                                          'focus: Verify two different quick '
+                                                          'marks, repeated marks, an already-read '
+                                                          'row and a rejected request; inspect '
+                                                          'rendered rows and count together. '
+                                                          'Checkpoint 1: Reproduce the reported '
+                                                          'behavior and state the contract '
+                                                          'invariant. Checkpoint 2: Repair the '
+                                                          'smallest relevant path and verify '
+                                                          'preservation on success and rejection. '
+                                                          'Checkpoint 3: Defend your change with a '
+                                                          'counterexample and discuss the '
+                                                          'explicitly optional changed '
+                                                          'requirement.'},
+ 'workspace-label-propagation': {'invariant': 'Validated workspace ids must survive storage, '
+                                              'response serialization and later component '
+                                              'hydration.',
+                                 'examples': 'Verify selected checkboxes after PUT, GET and '
+                                             'remount; clear all labels; reject mixed '
+                                             'valid/foreign lists without changing prior labels.',
+                                 'twist': 'Discuss deleting a label while a user edits a ticket '
+                                          'and how to expose the conflict; do not silently add '
+                                          'that behavior to the baseline.',
+                                 'counterexample': 'Updating only a response object or optimistic '
+                                                   'component state does not prove the next read '
+                                                   'contains the labels.',
+                                 'candidate_checkpoint_text': 'This ticket tests: Validated '
+                                                              'workspace ids must survive storage, '
+                                                              'response serialization and later '
+                                                              'component hydration. Verification '
+                                                              'focus: Verify selected checkboxes '
+                                                              'after PUT, GET and remount; clear '
+                                                              'all labels; reject mixed '
+                                                              'valid/foreign lists without '
+                                                              'changing prior labels. Checkpoint '
+                                                              '1: Reproduce the reported behavior '
+                                                              'and state the contract invariant. '
+                                                              'Checkpoint 2: Repair the smallest '
+                                                              'relevant path and verify '
+                                                              'preservation on success and '
+                                                              'rejection. Checkpoint 3: Defend '
+                                                              'your change with a counterexample '
+                                                              'and discuss the explicitly optional '
+                                                              'changed requirement.'},
+ 'shipment-csv-merge': {'invariant': 'Event identity, ordering and quantity aggregation are '
+                                     'separate responsibilities.',
+                        'examples': 'Repartition the same events across files and require equal '
+                                    'results; distinguish duplicate event_id from repeated status '
+                                    'and preserve input batches.',
+                        'twist': 'Discuss conflicting payloads for the same event id and agree on '
+                                 'a policy before implementing it; the baseline fixtures use '
+                                 'matching duplicate records.',
+                        'counterexample': 'Deduplicating by status discards distinct scans; '
+                                          'summing before deduplication counts a repeated physical '
+                                          'event twice.',
+                        'candidate_checkpoint_text': 'This ticket tests: Event identity, ordering '
+                                                     'and quantity aggregation are separate '
+                                                     'responsibilities. Verification focus: '
+                                                     'Repartition the same events across files and '
+                                                     'require equal results; distinguish duplicate '
+                                                     'event_id from repeated status and preserve '
+                                                     'input batches. Checkpoint 1: Reproduce the '
+                                                     'reported behavior and state the contract '
+                                                     'invariant. Checkpoint 2: Repair the smallest '
+                                                     'relevant path and verify preservation on '
+                                                     'success and rejection. Checkpoint 3: Defend '
+                                                     'your change with a counterexample and '
+                                                     'discuss the explicitly optional changed '
+                                                     'requirement.'},
+ 'tenant-document-acl': {'invariant': 'Authorization constrains resource lookup and mutation; '
+                                      'errors must not reveal a foreign resource.',
+                         'examples': 'Check both tenant directions and both GET/PATCH paths. '
+                                     'Compare rejected response and stored fields, then '
+                                     'demonstrate authorized edits still work.',
+                         'twist': 'Discuss sharing access between tenants with an explicit grant '
+                                  'model; it does not permit removing baseline tenant isolation.',
+                         'counterexample': 'Hiding sensitive fields in GET while allowing PATCH '
+                                           'still permits another tenant to mutate the document.',
+                         'candidate_checkpoint_text': 'This ticket tests: Authorization constrains '
+                                                      'resource lookup and mutation; errors must '
+                                                      'not reveal a foreign resource. Verification '
+                                                      'focus: Check both tenant directions and '
+                                                      'both GET/PATCH paths. Compare rejected '
+                                                      'response and stored fields, then '
+                                                      'demonstrate authorized edits still work. '
+                                                      'Checkpoint 1: Reproduce the reported '
+                                                      'behavior and state the contract invariant. '
+                                                      'Checkpoint 2: Repair the smallest relevant '
+                                                      'path and verify preservation on success and '
+                                                      'rejection. Checkpoint 3: Defend your change '
+                                                      'with a counterexample and discuss the '
+                                                      'explicitly optional changed requirement.'},
+ 'webhook-delivery-retry': {'invariant': 'Attempt identity differs from delivery identity, and '
+                                         'bounded concurrency differs from result order.',
+                            'examples': 'Run the same delivery id twice, exhaust retries, and '
+                                        'process mixed success/failure batches. Charge once per '
+                                        'delivery processing even if every attempt fails.',
+                            'twist': 'Discuss a worker restart and durable idempotency, plus what '
+                                     'happens when the receiver processes a request but the '
+                                     'response is lost.',
+                            'counterexample': 'Charging only on success violates '
+                                              'exhausted-delivery accounting; charging on each '
+                                              'attempt duplicates the per-delivery effect.',
+                            'candidate_checkpoint_text': 'This ticket tests: Attempt identity '
+                                                         'differs from delivery identity, and '
+                                                         'bounded concurrency differs from result '
+                                                         'order. Verification focus: Run the same '
+                                                         'delivery id twice, exhaust retries, and '
+                                                         'process mixed success/failure batches. '
+                                                         'Charge once per delivery processing even '
+                                                         'if every attempt fails. Checkpoint 1: '
+                                                         'Reproduce the reported behavior and '
+                                                         'state the contract invariant. Checkpoint '
+                                                         '2: Repair the smallest relevant path and '
+                                                         'verify preservation on success and '
+                                                         'rejection. Checkpoint 3: Defend your '
+                                                         'change with a counterexample and discuss '
+                                                         'the explicitly optional changed '
+                                                         'requirement.'},
+ 'pricing-rule-extract': {'invariant': 'Behavior-preserving extraction includes arithmetic order, '
+                                       'rounding and the direction of delegation.',
+                          'examples': 'Preserve type order and code order within a type, half-up '
+                                      'rounding, applied codes, input immutability and the final '
+                                      'floor. Inspect quote-to-applyRules delegation.',
+                          'twist': 'Discuss adding a new rule type while retaining old golden '
+                                   'outputs and explicit ordering; do not change baseline cents.',
+                          'counterexample': 'Implementing applyRules as a wrapper around quote '
+                                            'preserves outputs but does not extract the loop from '
+                                            'quote.',
+                          'candidate_checkpoint_text': 'This ticket tests: Behavior-preserving '
+                                                       'extraction includes arithmetic order, '
+                                                       'rounding and the direction of delegation. '
+                                                       'Verification focus: Preserve type order '
+                                                       'and code order within a type, half-up '
+                                                       'rounding, applied codes, input '
+                                                       'immutability and the final floor. Inspect '
+                                                       'quote-to-applyRules delegation. Checkpoint '
+                                                       '1: Reproduce the reported behavior and '
+                                                       'state the contract invariant. Checkpoint '
+                                                       '2: Repair the smallest relevant path and '
+                                                       'verify preservation on success and '
+                                                       'rejection. Checkpoint 3: Defend your '
+                                                       'change with a counterexample and discuss '
+                                                       'the explicitly optional changed '
+                                                       'requirement.'},
+ 'subscription-proration-boundary': {'invariant': 'A stored instant has one period owner under '
+                                                  'half-open intervals; display timezone is '
+                                                  'separate from billing identity.',
+                                     'examples': 'Check start, end, adjacent periods, equivalent '
+                                                 'offsets and microseconds, alongside an exact '
+                                                 'midpoint monetary calculation.',
+                                     'twist': 'Discuss a daylight-saving transition or non-monthly '
+                                              'period using instants and elapsed duration; keep '
+                                              'the baseline period contract.',
+                                     'counterexample': 'Returning zero for every cancellation '
+                                                       'fixes the endpoint example while '
+                                                       'destroying legitimate mid-period credits.',
+                                     'candidate_checkpoint_text': 'This ticket tests: A stored '
+                                                                  'instant has one period owner '
+                                                                  'under half-open intervals; '
+                                                                  'display timezone is separate '
+                                                                  'from billing identity. '
+                                                                  'Verification focus: Check '
+                                                                  'start, end, adjacent periods, '
+                                                                  'equivalent offsets and '
+                                                                  'microseconds, alongside an '
+                                                                  'exact midpoint monetary '
+                                                                  'calculation. Checkpoint 1: '
+                                                                  'Reproduce the reported behavior '
+                                                                  'and state the contract '
+                                                                  'invariant. Checkpoint 2: Repair '
+                                                                  'the smallest relevant path and '
+                                                                  'verify preservation on success '
+                                                                  'and rejection. Checkpoint 3: '
+                                                                  'Defend your change with a '
+                                                                  'counterexample and discuss the '
+                                                                  'explicitly optional changed '
+                                                                  'requirement.'}}

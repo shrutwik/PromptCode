@@ -2,54 +2,1652 @@
   "version": 1,
   "questions": {
     "invoice-status-transition": {
-      "min_visible_tests": 8,
-      "requirements": {"legal transitions": ["legal-graph", "api-transition-matrix"], "rejected writes preserve state": ["illegal-preserves-paid", "missing-status-preserves-state"], "missing resources": ["missing-distinct"]},
-      "manual_requirements": []
+      "min_visible_tests": 10,
+      "requirements": {
+        "legal transitions": [
+          "legal-graph",
+          "api-transition-matrix"
+        ],
+        "rejected writes preserve state": [
+          "illegal-preserves-paid",
+          "missing-status-preserves-state"
+        ],
+        "missing resources": [
+          "missing-distinct"
+        ],
+        "pressure-case: terminal-sequence-preserves": [
+          "terminal-sequence-preserves"
+        ]
+      },
+      "manual_requirements": [],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Establish the legal graph",
+          "task": "Enumerate every state pair and distinguish an illegal transition from an absent invoice.",
+          "acceptance": [
+            "Every state pair matches the legal graph; missing resources and illegal moves are distinct."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "legal-graph",
+            "missing-distinct"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Apply legal lifecycle changes",
+          "task": "Repair API/service transitions while preserving customer, money and issued identity.",
+          "acceptance": [
+            "Legal lifecycle transitions preserve money/customer identity; the complete invoice remains unchanged on rejection."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "legal-api-transition",
+            "api-transition-matrix"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "The complete legal lifecycle must end in a terminal state whose rejected edit preserves every field."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "illegal-preserves-paid",
+            "missing-status-preserves-state",
+            "terminal-sequence-preserves"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "Two users attempt different transitions from the same revision. Design a compare-and-set/version check and explain which loser receives a conflict without overwriting the winner.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "Transition legality is a directed graph; rejected writes preserve the entire stored invoice."
     },
     "order-hold-reason": {
-      "min_visible_tests": 6,
-      "requirements": {"persist and overwrite reasons": ["reason-persists", "reason-overwrite-and-isolation"], "legacy and optional null": ["legacy-null", "optional-reason-and-repeat-release"], "release": ["release-clears"], "missing resources": ["missing-order"]},
+      "min_visible_tests": 7,
+      "requirements": {
+        "persist and overwrite reasons": [
+          "reason-persists",
+          "reason-overwrite-and-isolation"
+        ],
+        "legacy and optional null": [
+          "legacy-null",
+          "optional-reason-and-repeat-release"
+        ],
+        "release": [
+          "release-clears"
+        ],
+        "missing resources": [
+          "missing-order"
+        ]
+      },
       "manual_requirements": []
     },
     "catalog-suggest-latency": {
-      "min_visible_tests": 7,
-      "requirements": {"ranking and ties": ["ranking-ties", "multi-token-no-input-mutation"], "empty and limited queries": ["no-match-and-limit", "empty-query-and-zero-limit"], "large catalog": ["large-catalog-ranking"]},
-      "manual_requirements": ["200ms latency under calibrated load", "scan instrumentation cannot be self-attested"]
+      "min_visible_tests": 9,
+      "requirements": {
+        "ranking and ties": [
+          "ranking-ties",
+          "multi-token-no-input-mutation"
+        ],
+        "empty and limited queries": [
+          "no-match-and-limit",
+          "empty-query-and-zero-limit"
+        ],
+        "large catalog": [
+          "large-catalog-ranking"
+        ],
+        "pressure-case: changed-catalog-parity": [
+          "changed-catalog-parity"
+        ]
+      },
+      "manual_requirements": [
+        "200ms latency under calibrated load",
+        "scan instrumentation cannot be self-attested"
+      ],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Establish ranked parity",
+          "task": "Capture score, popularity and id tie rules, normalized tokens, empty searches and exact limit behavior.",
+          "acceptance": [
+            "Preserve score/popularity/id ordering, token normalization, empty output and prefix limits."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "ranking-ties",
+            "no-match-and-limit",
+            "empty-query-and-zero-limit"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Reduce measured work",
+          "task": "Repair the service path; compare ranked outputs and operation counts before interpreting latency.",
+          "acceptance": [
+            "Ranked outputs agree; verify real work and record calibrated latency, retaining the declared manual review requirements."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "large-catalog-ranking",
+            "multi-token-no-input-mutation"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "A repeated query against changed data must reflect the new ranked winner and preserve prefix limits."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "changed-catalog-parity"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "Add indexed catalogue updates or a query cache. Define invalidation/version ownership and show a changed-product query that detects stale results; counters still require independent review.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "An optimization may change work performed but must preserve the entire ranking and current data."
     },
     "notification-feed-stale": {
-      "min_visible_tests": 5,
-      "requirements": {"loaded state": ["loaded-count", "already-read"], "concurrency": ["concurrent-marks", "duplicate-concurrent-marks"], "failed writes": ["failed-mark-preserves-state"]},
-      "manual_requirements": ["React rendered badge matches store"]
+      "min_visible_tests": 7,
+      "requirements": {
+        "loaded state": [
+          "loaded-count",
+          "already-read"
+        ],
+        "concurrency": [
+          "concurrent-marks",
+          "duplicate-concurrent-marks"
+        ],
+        "failed writes": [
+          "failed-mark-preserves-state"
+        ],
+        "pressure-case: mixed-success-failure": [
+          "mixed-success-failure"
+        ]
+      },
+      "manual_requirements": [
+        "React rendered badge matches store"
+      ],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Establish observable state",
+          "task": "Reproduce one mark and verify both stored read state and the rendered count, including already-read rows.",
+          "acceptance": [
+            "Stored read state and rendered badge agree after one action, including an already-read row."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "loaded-count",
+            "one-mark",
+            "already-read"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Merge concurrent successes",
+          "task": "Repair two distinct and repeated quick actions without replacing another action\u2019s update.",
+          "acceptance": [
+            "Distinct and repeated concurrent successes converge without overwriting another action\u2019s update."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "concurrent-marks",
+            "duplicate-concurrent-marks"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "A failed concurrent mark must not erase two successful independent updates."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "failed-mark-preserves-state",
+            "mixed-success-failure"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "A refresh started before a mark completes afterward. Define request-generation or merge semantics and prove a stale response cannot undo a successful mark; discuss which server guarantees are needed.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "Each async completion merges into current state and must converge with rendered rows and badge."
     },
     "workspace-label-propagation": {
-      "min_visible_tests": 7,
-      "requirements": {"persistence and clearing": ["persist-roundtrip", "clear-labels"], "workspace boundaries": ["cross-workspace-rejected", "workspace-list-isolation"], "rejected writes preserve state": ["invalid-update-preserves-labels"]},
-      "manual_requirements": ["React screen displays persisted labels"]
+      "min_visible_tests": 8,
+      "requirements": {
+        "persistence and clearing": [
+          "persist-roundtrip",
+          "clear-labels"
+        ],
+        "workspace boundaries": [
+          "cross-workspace-rejected",
+          "workspace-list-isolation"
+        ],
+        "rejected writes preserve state": [
+          "invalid-update-preserves-labels"
+        ]
+      },
+      "manual_requirements": [
+        "React screen displays persisted labels"
+      ]
     },
     "shipment-csv-merge": {
-      "min_visible_tests": 6,
-      "requirements": {"identity and timestamp ordering": ["same-status-distinct-id", "duplicate-id-once", "ties-negative-and-multi-file-dedup"], "shipment isolation": ["independent-shipments"], "state replacement": ["empty-clears-state", "next-merge-replaces-totals"]},
-      "manual_requirements": []
+      "min_visible_tests": 8,
+      "requirements": {
+        "identity and timestamp ordering": [
+          "same-status-distinct-id",
+          "duplicate-id-once",
+          "ties-negative-and-multi-file-dedup"
+        ],
+        "shipment isolation": [
+          "independent-shipments"
+        ],
+        "state replacement": [
+          "empty-clears-state",
+          "next-merge-replaces-totals"
+        ],
+        "pressure-case: unrelated-shipment-invariance": [
+          "unrelated-shipment-invariance"
+        ]
+      },
+      "manual_requirements": [],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Recover event identity",
+          "task": "Reproduce duplicate replay versus distinct same-status events and preserve deterministic timeline order.",
+          "acceptance": [
+            "Distinct same-status events remain; an exact replay contributes once."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "same-status-distinct-id",
+            "duplicate-id-once"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Aggregate without leaked state",
+          "task": "Deduplicate before quantities, handle ties/negative deltas and replace totals on subsequent/empty merges.",
+          "acceptance": [
+            "Quantities include negative deltas, isolate shipments and replace previous merge state, including empty input."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "independent-shipments",
+            "empty-clears-state",
+            "ties-negative-and-multi-file-dedup",
+            "next-merge-replaces-totals"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "Adding unrelated records and a replayed event must not change an existing shipment total."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "unrelated-shipment-invariance"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "The same event id arrives with different content. Define whether to reject, quarantine or explicitly version the correction; the present baseline only defines exact replays, so do not silently invent first-wins semantics.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "Event id identifies one contribution; status and shipment id do not."
     },
     "tenant-document-acl": {
-      "min_visible_tests": 9,
-      "requirements": {"bidirectional tenant isolation": ["cross-tenant-get", "cross-tenant-patch", "reverse-tenant-isolation"], "authentication": ["unauthenticated", "unauthenticated-mutations"], "authorized access": ["own-list-and-get", "own-patch", "other-tenant-own"], "missing resources": ["missing-id"]},
-      "manual_requirements": []
+      "min_visible_tests": 11,
+      "requirements": {
+        "bidirectional tenant isolation": [
+          "cross-tenant-get",
+          "cross-tenant-patch",
+          "reverse-tenant-isolation"
+        ],
+        "authentication": [
+          "unauthenticated",
+          "unauthenticated-mutations"
+        ],
+        "authorized access": [
+          "own-list-and-get",
+          "own-patch",
+          "other-tenant-own"
+        ],
+        "missing resources": [
+          "missing-id"
+        ],
+        "pressure-case: interleaved-scoped-writes": [
+          "interleaved-scoped-writes"
+        ]
+      },
+      "manual_requirements": [],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Identify scope and failures",
+          "task": "Distinguish missing authentication, missing resources and a resource outside the caller\u2019s tenant without disclosing private content.",
+          "acceptance": [
+            "No authentication yields 401; missing or out-of-scope resources yield 404 without private content."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "unauthenticated",
+            "missing-id"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Apply policy end to end",
+          "task": "Keep authorized list/read/edit flows working in both tenants and preserve untouched document fields.",
+          "acceptance": [
+            "Authorized reads/edits succeed in both tenants and leave unrelated fields and documents intact."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "own-list-and-get",
+            "other-tenant-own",
+            "own-patch"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "Denied foreign requests must not poison later authorized writes or unrelated data."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "cross-tenant-get",
+            "cross-tenant-patch",
+            "reverse-tenant-isolation",
+            "unauthenticated-mutations",
+            "interleaved-scoped-writes"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "Introduce explicit cross-tenant sharing grants. Specify owner and recipient rights, revocation and default denial before extending lookup policy; a grant must not authorize unrelated documents.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "Authorization scopes resource lookup and writes; hiding response fields is insufficient."
     },
     "webhook-delivery-retry": {
-      "min_visible_tests": 5,
-      "requirements": {"billing idempotency": ["retry-charge-once", "repeat-delivery-idempotent", "exhausted-retries-charge-once"], "attempt limits": ["attempts-bounded"], "batch concurrency and order": ["flush-concurrency", "mixed-batch-result-order"]},
-      "manual_requirements": []
+      "min_visible_tests": 7,
+      "requirements": {
+        "billing idempotency": [
+          "retry-charge-once",
+          "repeat-delivery-idempotent",
+          "exhausted-retries-charge-once"
+        ],
+        "attempt limits": [
+          "attempts-bounded"
+        ],
+        "batch concurrency and order": [
+          "flush-concurrency",
+          "mixed-batch-result-order"
+        ],
+        "pressure-case: duplicate-batch-identity": [
+          "duplicate-batch-identity"
+        ]
+      },
+      "manual_requirements": [],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Trace one delivery",
+          "task": "Reproduce a transient failure and separate one billing effect from multiple bounded HTTP attempts.",
+          "acceptance": [
+            "One charge belongs to one delivery id; attempts never exceed policy, including exhaustion."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "retry-charge-once",
+            "attempts-bounded"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Deliver a bounded batch",
+          "task": "Preserve per-input outcomes while capping active posts and handling exhausted retries.",
+          "acceptance": [
+            "At most five posts are active; one outcome remains in each input position."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "flush-concurrency",
+            "exhausted-retries-charge-once",
+            "mixed-batch-result-order"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "Duplicate delivery ids in one concurrent batch share billing identity but keep one result per job."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "repeat-delivery-idempotent",
+            "duplicate-batch-identity"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "Persist idempotency across restarts and handle a receiver that commits before its reply is lost. Define the idempotency key/payload policy and identify what requires receiver cooperation before claiming exactly-once effects.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "Billing identity belongs to a delivery; attempts and batch positions are separate identities."
     },
     "pricing-rule-extract": {
-      "min_visible_tests": 7,
-      "requirements": {"ordering and money": ["order-and-rounding", "same-type-order", "half-cent-rounding"], "floor and empty rules": ["floor-zero", "empty-preserves"], "input immutability": ["repeated-call-no-input-mutation"]},
-      "manual_requirements": ["quote delegates to extracted applyRules; source review"]
+      "min_visible_tests": 8,
+      "requirements": {
+        "ordering and money": [
+          "order-and-rounding",
+          "same-type-order",
+          "half-cent-rounding"
+        ],
+        "floor and empty rules": [
+          "floor-zero",
+          "empty-preserves"
+        ],
+        "input immutability": [
+          "repeated-call-no-input-mutation"
+        ]
+      },
+      "manual_requirements": [
+        "quote delegates to extracted applyRules; source review"
+      ]
     },
     "subscription-proration-boundary": {
-      "min_visible_tests": 7,
-      "requirements": {"half-open boundaries": ["end-excluded", "start-included", "microsecond-boundaries"], "credits": ["mid-period-credit", "before-period"], "timezone and adjacent periods": ["timezone-equivalence", "adjacent-period-single-membership"]},
+      "min_visible_tests": 8,
+      "requirements": {
+        "half-open boundaries": [
+          "end-excluded",
+          "start-included",
+          "microsecond-boundaries"
+        ],
+        "credits": [
+          "mid-period-credit",
+          "before-period"
+        ],
+        "timezone and adjacent periods": [
+          "timezone-equivalence",
+          "adjacent-period-single-membership"
+        ]
+      },
       "manual_requirements": []
+    },
+    "warehouse-route-planner": {
+      "min_visible_tests": 9,
+      "requirements": {
+        "Repair endpoint-preserving rendering.": [
+          "endpoint-markers",
+          "short-path"
+        ],
+        "Implement shortest legal routing, including unreachable output.": [
+          "two-badges",
+          "reusable-badge",
+          "unreachable"
+        ],
+        "Support badge inventory and forbidden directed edges; defend revisit behavior.": [
+          "gate-before-badge",
+          "reverse-edge-allowed",
+          "invalid-grid"
+        ],
+        "pressure-case: badge-revisit": [
+          "badge-revisit"
+        ]
+      },
+      "manual_requirements": [],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Preserve the map",
+          "task": "Reproduce the rendering defect and distinguish route marks from endpoint, badge and gate tiles.",
+          "acceptance": [
+            "Endpoints and permission tiles survive rendering; malformed grids are rejected."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "endpoint-markers",
+            "invalid-grid"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Route with permissions",
+          "task": "Implement shortest legal traversal with deterministic neighbor ties, reusable badges and directed restrictions.",
+          "acceptance": [
+            "Return the shortest legal route or None, with stated neighbor ties and reusable permission inventory."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "short-path",
+            "two-badges",
+            "reusable-badge",
+            "unreachable"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "A coordinate must be revisited with a different permission inventory."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "gate-before-badge",
+            "reverse-edge-allowed",
+            "badge-revisit"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "Give floor cells different movement costs. Explain why FIFO BFS no longer guarantees minimum cost and how state identity, tie rules and the independent oracle change.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "Search state is position plus acquired permissions; display must preserve topology."
+    },
+    "courier-payment-ledger": {
+      "min_visible_tests": 9,
+      "requirements": {
+        "Correct second-level payout precision.": [
+          "payout-precision",
+          "per-record-rounding"
+        ],
+        "Implement totals and cutoff payments without duplicate effects.": [
+          "incremental-pay",
+          "unknown-driver",
+          "conflict-preserves"
+        ],
+        "Compute peak distinct-driver activity with touching intervals.": [
+          "peak-distinct",
+          "window-clipping",
+          "invalid-preserves"
+        ],
+        "pressure-case: nonmonotonic-cutoffs": [
+          "nonmonotonic-cutoffs"
+        ]
+      },
+      "manual_requirements": [],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Recover precise amounts",
+          "task": "Repair per-delivery half-up rounding using integer cents and reject invalid/conflicting records without mutation.",
+          "acceptance": [
+            "Round each delivery half-up in integer cents; conflicting or invalid records preserve the ledger."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "payout-precision",
+            "per-record-rounding",
+            "unknown-driver",
+            "invalid-preserves"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Pay and measure activity",
+          "task": "Implement completed-delivery cutoff payments and clipped half-open distinct-driver activity.",
+          "acceptance": [
+            "Pay only unpaid deliveries completed by the cutoff; count distinct active drivers in a clipped half-open window."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "incremental-pay",
+            "peak-distinct",
+            "window-clipping"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "An earlier cutoff after a later payment cannot charge again or change ledger totals."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "conflict-preserves",
+            "nonmonotonic-cutoffs"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "A completed delivery is corrected after payment. Design immutable adjustment records and idempotent refunds; explain how historical receipts and current unpaid amounts differ.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "Rounded delivery costs, successful payments and distinct-driver activity are different aggregates."
+    },
+    "worker-job-dispatch": {
+      "min_visible_tests": 9,
+      "requirements": {
+        "Correct exact completion-boundary eligibility.": [
+          "exact-boundary",
+          "fifo-queue"
+        ],
+        "Implement idle-worker and in-flight scheduling with queued jobs.": [
+          "simultaneous-release",
+          "sorted-arrivals",
+          "idle-gap"
+        ],
+        "Show deterministic ties and explain complexity using a slow small-input oracle.": [
+          "invalid-duration",
+          "duplicate-id",
+          "empty-jobs"
+        ],
+        "pressure-case: queued-permutation": [
+          "queued-permutation"
+        ]
+      },
+      "manual_requirements": [],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Repair eligibility",
+          "task": "Reproduce exact completion-boundary behavior and validate job identities/durations before scheduling.",
+          "acceptance": [
+            "A worker finishing now is eligible; duplicate ids and invalid durations are rejected."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "exact-boundary",
+            "invalid-duration",
+            "duplicate-id",
+            "empty-jobs"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Schedule queued work",
+          "task": "Implement idle and busy worker management, stable arrivals, complete release and FIFO backlog handling.",
+          "acceptance": [
+            "Release all eligible workers, choose the lowest idle id, and preserve stable FIFO arrival order."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "fifo-queue",
+            "simultaneous-release",
+            "sorted-arrivals",
+            "idle-gap"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "Input permutation does not reorder distinct arrivals, and a backlog remains FIFO."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "queued-permutation"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "Add job priorities without preempting active work. Define fairness/starvation policy and stable ties, then identify which queue and oracle must change.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "Arrival eligibility, FIFO waiting order and idle-worker selection are separate orderings."
+    },
+    "bounded-recency-cache": {
+      "min_visible_tests": 9,
+      "requirements": {
+        "Repair read promotion and eviction.": [
+          "read-recency",
+          "shrink-oldest"
+        ],
+        "Implement resize, replacement and zero capacity.": [
+          "grow-keeps-order",
+          "zero-capacity",
+          "none-is-cached"
+        ],
+        "Make get_or_put atomic and preserve state when the factory fails.": [
+          "concurrent-factory",
+          "invalid-construction",
+          "factory-retry"
+        ],
+        "pressure-case: invalid-resize-preserves": [
+          "invalid-resize-preserves"
+        ]
+      },
+      "manual_requirements": [],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Restore recency",
+          "task": "Reproduce read-driven eviction and distinguish a cached None from a miss.",
+          "acceptance": [
+            "Successful reads promote entries; a cached None is a hit."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "read-recency",
+            "none-is-cached",
+            "invalid-construction"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Resize and create safely",
+          "task": "Handle growth/shrink/zero capacity, same-key concurrent factories and exceptions without caching failures.",
+          "acceptance": [
+            "Bounds survive resize and zero capacity; same-key creation is atomic and failed factories are not cached."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "shrink-oldest",
+            "grow-keeps-order",
+            "zero-capacity",
+            "concurrent-factory",
+            "factory-retry"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "A rejected resize must preserve both the capacity and recency order used by the next eviction."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "invalid-resize-preserves"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "Add TTL with an injected monotonic clock. Define the exact expiration boundary, whether expired reads affect recency, and how expiry interacts with atomic factories and resize.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "Successful reads/writes promote recency; compound creation and validation must preserve the bound."
+    },
+    "service-impact-analysis": {
+      "min_visible_tests": 9,
+      "requirements": {
+        "Fix normalized path boundaries and root behavior.": [
+          "prefix-boundary",
+          "root-normalized"
+        ],
+        "Implement direct file and deleted-directory impact.": [
+          "reverse-closure",
+          "dependency-direction",
+          "deleted-watch-descendant"
+        ],
+        "Propagate through dependents with cycle termination.": [
+          "ordinary-file-not-parent-delete",
+          "cycle-terminates",
+          "unknown-service"
+        ],
+        "pressure-case: normalized-delete-closure": [
+          "normalized-delete-closure"
+        ]
+      },
+      "manual_requirements": [],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Repair path semantics",
+          "task": "Normalize roots and slash forms while distinguishing watched-path ancestry from a bare string prefix.",
+          "acceptance": [
+            "Normalize root/slash forms and honor path-component boundaries."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "prefix-boundary",
+            "root-normalized",
+            "unknown-service"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Propagate impact",
+          "task": "Handle changed files/deleted subtrees, reverse edges, cycles and unknown-service rejection.",
+          "acceptance": [
+            "Deletion matches watched descendants; reverse dependency closure terminates through cycles and rejects unknown services."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "reverse-closure",
+            "dependency-direction",
+            "deleted-watch-descendant",
+            "ordinary-file-not-parent-delete",
+            "cycle-terminates"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "Repeated normalized deletion must preserve scope boundaries; deleting root affects every watched service."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "normalized-delete-closure"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "Add conditional dependencies enabled by environment. Define the active graph before traversal and show how using the union of all environments would overstate impact.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "Path ancestry uses component boundaries; dependency impact propagates from dependency to dependent."
+    },
+    "unique-word-selection": {
+      "min_visible_tests": 9,
+      "requirements": {
+        "Repair legality independently from optimality.": [
+          "validator-legality",
+          "optimum-not-greedy"
+        ],
+        "Implement exact compatible-subset search with explicit ties.": [
+          "tie-by-index",
+          "occurrence-identity",
+          "empty-word-tie"
+        ],
+        "Compare small-input brute-force results and discuss larger-input pruning.": [
+          "no-clean-words",
+          "alphabet-contract",
+          "all-26"
+        ],
+        "pressure-case: overlap-trap": [
+          "overlap-trap"
+        ]
+      },
+      "manual_requirements": [],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Validate independently",
+          "task": "Repair legality for selected occurrences, internal duplicates, invalid characters and empty inputs.",
+          "acceptance": [
+            "Selected indices are distinct and in range; each character occurs at most once."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "validator-legality",
+            "alphabet-contract",
+            "no-clean-words"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Find an exact optimum",
+          "task": "Implement compatible-mask search with fewer-word then lexicographic ties, including duplicate occurrences.",
+          "acceptance": [
+            "Maximize character count exactly, then prefer fewer words and lexicographically smaller indices."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "optimum-not-greedy",
+            "tie-by-index",
+            "occurrence-identity",
+            "empty-word-tie",
+            "all-26"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "An exact optimum must beat a tempting overlapping word and omit useless empty words."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "overlap-trap"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "Give each word a value and maximize total value instead of unique character count. Show why keeping the fewest-word representative for a mask may no longer be a valid dominance rule.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "Legality differs from optimality; index identity and deterministic ties are part of the objective."
+    },
+    "expression-cost-analysis": {
+      "min_visible_tests": 9,
+      "requirements": {
+        "Repair multi-digit metadata loading.": [
+          "metadata-values",
+          "custom-cost"
+        ],
+        "Analyze arithmetic cost and alias-aware temporary liveness.": [
+          "dead-branch",
+          "folded-program",
+          "division-rule"
+        ],
+        "Eliminate dead assignments and propagate/fold constants without changing semantics.": [
+          "alias-liveness",
+          "invalid-ssa",
+          "division-zero"
+        ],
+        "pressure-case: alias-dead-work": [
+          "alias-dead-work"
+        ]
+      },
+      "manual_requirements": [],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Trust the input model",
+          "task": "Repair full integer fixture metadata and validate the allowed grammar, SSA ordering and arithmetic error contract.",
+          "acceptance": [
+            "Full integer metadata survives loading; invalid grammar/SSA and arithmetic cases follow the stated contract."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "metadata-values",
+            "invalid-ssa",
+            "division-zero"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Measure live work",
+          "task": "Implement weighted arithmetic costs and alias-aware temporary liveness under allocation-before-release semantics.",
+          "acceptance": [
+            "Costs reflect live arithmetic and aliases share storage; allocate results before freeing last-use operands."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "custom-cost",
+            "alias-liveness"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "Dead-code removal must reduce cost while preserving the alias-aware allocation peak of live work."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "dead-branch",
+            "folded-program",
+            "division-rule",
+            "alias-dead-work"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "Introduce an operation with an observable side effect. Explain why backward reachability from res alone no longer justifies removing that operation and what the optimizer must preserve.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "Fixture truth, storage identity, allocation timing and dataflow reachability are separate concerns."
+    },
+    "room-reservation-scheduler": {
+      "min_visible_tests": 9,
+      "requirements": {
+        "Repair overlap semantics.": [
+          "boundary-helper",
+          "gap-exact-fit"
+        ],
+        "Find earliest gaps across nested and unsorted bookings.": [
+          "overlapping-union",
+          "upper-bound",
+          "sorted-insert"
+        ],
+        "Keep bookings sorted and reserve atomically for concurrent callers.": [
+          "atomic-reserve",
+          "invalid-window",
+          "input-copy"
+        ],
+        "pressure-case: failed-reserve-preserves": [
+          "failed-reserve-preserves"
+        ]
+      },
+      "manual_requirements": [],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Repair interval boundaries",
+          "task": "Distinguish touching half-open intervals from overlap and validate duration/window inputs.",
+          "acceptance": [
+            "Touching intervals do not overlap; invalid durations/windows preserve the calendar."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "boundary-helper",
+            "invalid-window"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Find and reserve a gap",
+          "task": "Handle nested bookings, earliest exact fits, bounded windows, input copies and concurrent insertion.",
+          "acceptance": [
+            "Return the earliest bounded gap in the booking union; find and insertion are one atomic reservation."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "gap-exact-fit",
+            "overlapping-union",
+            "upper-bound",
+            "sorted-insert",
+            "atomic-reserve",
+            "input-copy"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "An unavailable reservation leaves the calendar intact; a later exact adjacent slot remains bookable."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "failed-reserve-preserves"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "Add cancellation and rescheduling by reservation id. Define which reservation is released and ensure a failed reschedule restores the original slot atomically.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "A calendar is an interval union; find and insert form one atomic reservation."
+    },
+    "card-triple-strategy": {
+      "min_visible_tests": 8,
+      "requirements": {
+        "Repair identity and multiplicity validation.": [
+          "physical-multiplicity",
+          "absent-card"
+        ],
+        "Implement a deterministic legal chooser and safe removal.": [
+          "deterministic-choice",
+          "sum-constraint",
+          "table-order-independent"
+        ],
+        "Compare with the exhaustive oracle; explain a changed scoring objective without silently changing legality.": [
+          "safe-removal",
+          "invalid-removal",
+          "empty-table"
+        ]
+      },
+      "manual_requirements": []
+    },
+    "structured-event-logger": {
+      "min_visible_tests": 9,
+      "requirements": {
+        "Repair inclusive severity filtering.": [
+          "level-boundaries",
+          "continue-sinks"
+        ],
+        "Implement sink isolation and explicit failure observations.": [
+          "sink-copies",
+          "original-context-copy",
+          "config-atomic"
+        ],
+        "Support atomic reconfiguration and copied structured records.": [
+          "unknown-emission",
+          "clock-record",
+          "configuration-next-call"
+        ],
+        "pressure-case: rejected-config-clock": [
+          "rejected-config-clock"
+        ]
+      },
+      "manual_requirements": [],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Repair event eligibility",
+          "task": "Verify exact thresholds, unknown-level rejection, clock injection and suppressed-event behavior.",
+          "acceptance": [
+            "Thresholds are inclusive; unknown policies are rejected before writes and filtered events produce no records."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "level-boundaries",
+            "unknown-emission",
+            "clock-record"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Deliver isolated records",
+          "task": "Continue after failed sinks and separate caller-owned context and per-sink nested data.",
+          "acceptance": [
+            "Each sink receives copied nested data; failures are reported by index without stopping later sinks."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "continue-sinks",
+            "sink-copies",
+            "original-context-copy"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "Rejected configuration must preserve the prior policy; filtered events must not invoke the clock or sinks."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "config-atomic",
+            "configuration-next-call",
+            "rejected-config-clock"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "Allow asynchronous sinks. Specify backpressure, timeout/cancellation and failure reporting before adapting emit; a rejected promise must not be mistaken for successful delivery.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "Threshold inclusion, sink isolation and configuration replacement each have their own failure boundary."
+    },
+    "extensible-hand-comparison": {
+      "min_visible_tests": 9,
+      "requirements": {
+        "contract and basic behavior": [
+          "ten-rank",
+          "ace-rank",
+          "category"
+        ],
+        "boundaries and preservation": [
+          "kicker",
+          "suit-neutral",
+          "variant"
+        ],
+        "identity and integration": [
+          "duplicate",
+          "invalid-order"
+        ],
+        "pressure-case: comparison-order-laws": [
+          "comparison-order-laws"
+        ]
+      },
+      "manual_requirements": [],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Parse valid identities",
+          "task": "Repair multi-character ranks and reject invalid or repeated physical cards.",
+          "acceptance": [
+            "Parse the entire rank token; reject repeated physical cards and invalid rule orders."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "ten-rank",
+            "ace-rank",
+            "duplicate",
+            "invalid-order"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Compare under supplied rules",
+          "task": "Implement complete category/tie keys, neutral suits and an explicit category-order permutation.",
+          "acceptance": [
+            "Category, pair kicker and descending rank keys determine -1/0/1; suits do not break ties."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "category",
+            "kicker",
+            "suit-neutral",
+            "variant"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "Category dominance must remain antisymmetric and transitive even when the weaker category has larger ranks."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "comparison-order-laws"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "Accept partial hands. Specify how incomplete categories compare with complete hands before coding; do not import five-card poker semantics or invent suit tie-breaks.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "Physical identity validates hands; category precedence and rank keys determine comparison."
+    },
+    "runway-event-scheduler": {
+      "min_visible_tests": 9,
+      "requirements": {
+        "contract and basic behavior": [
+          "boundary",
+          "priority",
+          "emergency"
+        ],
+        "boundaries and preservation": [
+          "no-preemption",
+          "closure-fit",
+          "closure-touch"
+        ],
+        "identity and integration": [
+          "cancel-at-dispatch",
+          "reselect"
+        ],
+        "pressure-case: cancel-during-closure": [
+          "cancel-during-closure"
+        ]
+      },
+      "manual_requirements": [],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Repair occupancy boundaries",
+          "task": "Validate touching closure/flight boundaries and distinguish a delayed start from overlap.",
+          "acceptance": [
+            "Occupancy may end at closure start and never overlaps a closed interval."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "boundary",
+            "closure-touch"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Schedule eligible flights",
+          "task": "Implement deterministic emergency/landing/takeoff priority, non-preemption and reselection after closures.",
+          "acceptance": [
+            "Only arrived flights compete; deterministic priority does not preempt active occupancy, and closures trigger reselection."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "priority",
+            "emergency",
+            "no-preemption",
+            "closure-fit",
+            "reselect"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "A cancellation that arrives while the runway is closed must be applied before selecting the delayed flight."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "cancel-at-dispatch",
+            "cancel-during-closure"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "Add a second runway with its own closures and eligible flight types. Define assignment and tie policy jointly; duplicating a one-runway queue can violate global readiness and exclusion.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "Ready-set eligibility precedes priority; active occupancy is non-preemptive and half-open."
+    },
+    "transactional-wallet-transfer": {
+      "min_visible_tests": 9,
+      "requirements": {
+        "contract and basic behavior": [
+          "move",
+          "durable-replay",
+          "conflict"
+        ],
+        "boundaries and preservation": [
+          "insufficient",
+          "rollback-debit",
+          "rollback-receipt"
+        ],
+        "identity and integration": [
+          "no-overdraw",
+          "http-status"
+        ],
+        "pressure-case: failed-receipt-reusable": [
+          "failed-receipt-reusable"
+        ]
+      },
+      "manual_requirements": [],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Repair all-or-nothing writes",
+          "task": "Reproduce both injected failure points and verify balances and receipts roll back together.",
+          "acceptance": [
+            "Both failure hooks roll back debit, credit and receipt together."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "rollback-debit",
+            "rollback-receipt",
+            "insufficient"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Make retries and concurrency durable",
+          "task": "Return immutable stored replay results, reject payload conflicts and prevent overdrafts across independent connections.",
+          "acceptance": [
+            "Successful receipts replay the original result; payload reuse conflicts and independent concurrent debits cannot overdraw."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "move",
+            "durable-replay",
+            "conflict",
+            "no-overdraw",
+            "http-status"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "A rolled-back receipt must not reserve its id or payload; the later successful payload becomes durable."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "failed-receipt-reusable"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "Add partial refunds referencing an original transfer. Enforce a cumulative refund cap, recipient direction and independent refund idempotency within one transaction.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "Balance validation, debit, credit and payload-bound successful receipt share one durable transaction."
+    },
+    "canvas-document-editor": {
+      "min_visible_tests": 9,
+      "requirements": {
+        "contract and basic behavior": [
+          "zoom-drag",
+          "only-selection",
+          "drag-history"
+        ],
+        "boundaries and preservation": [
+          "round-trip",
+          "invalid-preserves",
+          "delete-selection"
+        ],
+        "identity and integration": [
+          "style-isolated",
+          "duplicate-reject"
+        ],
+        "pressure-case: branch-clears-redo": [
+          "branch-clears-redo"
+        ]
+      },
+      "manual_requirements": [
+        "React rendered selection, dragging, history and save/reload"
+      ],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Repair movement",
+          "task": "Render and select shapes, convert screen movement through zoom and leave every unselected shape unchanged.",
+          "acceptance": [
+            "Rendered selected-shape movement uses screen delta divided by zoom; unselected shapes stay fixed."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "zoom-drag",
+            "only-selection",
+            "duplicate-reject"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Load and edit a document",
+          "task": "Validate JSON before replacement; preserve styles, selection and dimensions through save/load, delete and completed-action history.",
+          "acceptance": [
+            "Validated load preserves rejected state; save/load, deletion and one-entry completed-drag history agree with rendering."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "round-trip",
+            "invalid-preserves",
+            "delete-selection",
+            "style-isolated",
+            "drag-history"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "A new committed edit after undo must discard the abandoned redo branch."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "branch-clears-redo"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "Add multi-selection and group dragging. Define one group history action, selection persistence and deletion rules; show how a single selected-id model must change.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "The document owns identity and coordinates; pointer previews are distinct from committed history."
+    },
+    "movie-search-routing": {
+      "min_visible_tests": 9,
+      "requirements": {
+        "contract and basic behavior": [
+          "and-filters",
+          "year",
+          "literal-query"
+        ],
+        "boundaries and preservation": [
+          "page-after-filter",
+          "reset-page",
+          "invalid-page"
+        ],
+        "identity and integration": [
+          "detail-http",
+          "direct-shell"
+        ],
+        "pressure-case: combined-filter-page-http": [
+          "combined-filter-page-http"
+        ]
+      },
+      "manual_requirements": [
+        "React URL hydration, direct detail/404 and stale-response behavior"
+      ],
+      "parts": [
+        {
+          "number": 1,
+          "title": "Repair query semantics",
+          "task": "Combine all filters, decode literals once and reject invalid pages before serving results.",
+          "acceptance": [
+            "All filters combine before paging; literals decode once and invalid numeric queries return 400."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "and-filters",
+            "year",
+            "literal-query",
+            "invalid-page"
+          ]
+        },
+        {
+          "number": 2,
+          "title": "Integrate browser routes",
+          "task": "Hydrate refresh/back state, reset pages, serve direct detail routes and retain latest-request loading/error/result ownership.",
+          "acceptance": [
+            "URL state hydrates refresh/back, detail/404 routes work, and stale responses cannot own current rows/errors/loading."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "page-after-filter",
+            "reset-page",
+            "detail-http",
+            "direct-shell"
+          ]
+        },
+        {
+          "number": 3,
+          "title": "Pressure-test the model",
+          "task": "Run the added fixture, then construct a second input exposing the same incorrect assumption. Explain the expected outcome before accepting a proposed AI repair.",
+          "acceptance": [
+            "All three filters must compose before sort, total and page selection at the HTTP boundary."
+          ],
+          "mode": "baseline",
+          "case_ids": [
+            "combined-filter-page-http"
+          ]
+        },
+        {
+          "number": 4,
+          "title": "Changed requirement \u2014 optional discussion",
+          "task": "The catalogue changes between pages. Compare snapshot tokens or cursor pagination with numeric offsets; define ordering and URL behavior before promising stable traversal.",
+          "acceptance": [
+            "Identify the changed invariant, affected code/data, and a minimal counterexample before proposing an implementation."
+          ],
+          "mode": "discussion",
+          "case_ids": []
+        }
+      ],
+      "invariant": "The URL is canonical view state; filter/sort/count/page order and request identity must agree across browser and API."
     }
-  }
+  },
+  "expected_question_count": 25
 }

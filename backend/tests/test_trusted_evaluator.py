@@ -31,7 +31,7 @@ def verify(envelope,**kw):
     return evaluator.verify_result(envelope,signing_key=KEY,session_id=SID,job_id=JID,challenge_slug='order-hold-reason',source_digest=DIGEST,challenge_version=CV,lease_token=LEASE,**kw)
 
 def test_all_registry_questions_have_independent_inventory():
-    assert len(list_challenges())==10
+    assert len(list_challenges())==25
     for c in list_challenges():
         cases=cases_for(c['slug'])
         assert len(cases)>=5
@@ -164,6 +164,13 @@ EDGE_MUTATIONS = {
  'pricing-rule-extract':('src/money.ts','Math.round(n + Number.EPSILON)','Math.floor(n)','half-cent-rounding'),
  'subscription-proration-boundary':('proration/period.py','period.start <= instant < period.end','period.start < instant < period.end','adjacent-period-single-membership'),
 }
+
+from expansion_reference_fixtures import EDGE_MUTATIONS as NEW_EDGE_MUTATIONS
+from expansion_reference_fixtures import MUTATIONS as NEW_MUTATIONS
+
+MUTATIONS.update(NEW_MUTATIONS)
+EDGE_MUTATIONS.update(NEW_EDGE_MUTATIONS)
+
 
 def test_every_question_has_edge_regression_detection():
     assert set(EDGE_MUTATIONS) == {c['slug'] for c in list_challenges()}

@@ -115,3 +115,16 @@ register('subscription-proration-boundary',[
  ('adjacent-period-single-membership',3,period+"next_p=period_from_iso('2026-02-01T00:00:00Z','2026-03-01T00:00:00Z')\ninstant=parse_utc('2026-02-01T01:00:00+01:00')\nresult=[contains(p,instant),contains(next_p,instant),proration_credit(Subscription('next',2800,next_p),'2026-02-01T01:00:00+01:00')]",[False,True,2800]),
  ('microsecond-boundaries',3,period+"result=[contains(p,parse_utc('2026-01-31T23:59:59.999999Z')),contains(p,parse_utc('2026-02-01T00:00:00.000001Z')),contains(p,parse_utc('2025-12-31T23:59:59.999999Z')),proration_credit(s,'2026-01-31T23:59:59.999999Z')]",[True,False,False,0]),
 ])
+
+from .expansion import INVENTORIES as EXPANSION_INVENTORIES
+
+INVENTORIES.update(EXPANSION_INVENTORIES)
+
+from .ranked import INVENTORIES as RANKED_INVENTORIES
+
+INVENTORIES.update(RANKED_INVENTORIES)
+
+from .depth import INVENTORIES as DEPTH_INVENTORIES
+
+for _slug,_cases in DEPTH_INVENTORIES.items():
+    INVENTORIES[_slug] += _cases

@@ -76,3 +76,13 @@ Display time <5m ideal; correct file <15m.
 2. Q: Why tests passed? A: Missing boundary fixture.
 3. Q: Display bug? A: Not on credit path.
 4. Q: Credit formula? A: Membership gate was wrong.
+
+## Deeper assessment insight
+
+A stored instant has one period owner under half-open intervals; display timezone is separate from billing identity.
+
+Check start, end, adjacent periods, equivalent offsets and microseconds, alongside an exact midpoint monetary calculation.
+
+Plausible wrong repair: Returning zero for every cancellation fixes the endpoint example while destroying legitimate mid-period credits. Ask the candidate for a concrete failing example, not just an assertion that the shortcut is bad.
+
+Changed requirement: Discuss a daylight-saving transition or non-monthly period using instants and elapsed duration; keep the baseline period contract. Keep this separate from baseline scoring and record the candidate reasoning and verification evidence.

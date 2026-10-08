@@ -1,6 +1,509 @@
 {
-  "version": 1,
+  "version": 4,
   "challenges": [
+    {
+      "slug": "warehouse-route-planner",
+      "title": "Warehouse routes",
+      "type": "Progressive implementation",
+      "stack": "Python",
+      "difficulty": "hard",
+      "estimated_minutes": 55,
+      "summary": "The warehouse route preview draws over its endpoints, and a robot cannot plan a legal route through badge-controlled passages. Complete the existing route library and explain the search state.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "README.md",
+        "contracts.py",
+        "engine.py"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 1
+    },
+    {
+      "slug": "webhook-delivery-retry",
+      "title": "Webhook retry",
+      "type": "Webhook delivery",
+      "stack": "TypeScript / Node",
+      "difficulty": "medium",
+      "estimated_minutes": 32,
+      "summary": "A retried webhook charged the customer twice. Retries stay safe, and a flush stays bounded.",
+      "test_command": "npm test",
+      "install_command": "npm install",
+      "entry_files": [
+        "src/worker.ts",
+        "src/retryPolicy.ts",
+        "README.md"
+      ],
+      "runner": {
+        "image": "promptcode-runner-node:latest",
+        "commands": {
+          "run_tests": "npm test",
+          "run_targeted_tests": "npm test",
+          "run_benchmark": "npm test"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 2
+    },
+    {
+      "slug": "courier-payment-ledger",
+      "title": "Courier payments",
+      "type": "Progressive implementation",
+      "stack": "Python",
+      "difficulty": "medium",
+      "estimated_minutes": 50,
+      "summary": "Courier payouts truncate sub-hour work. Restore exact delivery accounting, then complete incremental payments and distinct-driver activity reporting.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "README.md",
+        "contracts.py",
+        "engine.py"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 3
+    },
+    {
+      "slug": "tenant-document-acl",
+      "title": "Document access",
+      "type": "Tenant isolation",
+      "stack": "Python / FastAPI",
+      "difficulty": "medium",
+      "estimated_minutes": 32,
+      "summary": "Acme opened a Globex document by id. Another tenant\u2019s file has to look missing, and same-tenant access has to keep working.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "app/service.py",
+        "app/auth.py",
+        "README.md"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 4
+    },
+    {
+      "slug": "worker-job-dispatch",
+      "title": "Worker dispatch",
+      "type": "Progressive implementation",
+      "stack": "Python",
+      "difficulty": "medium",
+      "estimated_minutes": 45,
+      "summary": "A worker pool mishandles jobs arriving at a completion boundary and forgets queued work. Complete deterministic dispatch without changing FIFO arrival order.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "README.md",
+        "contracts.py",
+        "engine.py"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 5
+    },
+    {
+      "slug": "catalog-suggest-latency",
+      "title": "Search suggest",
+      "type": "Search performance",
+      "stack": "TypeScript / Node",
+      "difficulty": "medium",
+      "estimated_minutes": 30,
+      "summary": "Suggest is too slow on a 10k catalog. Hit the latency and scan budget without changing rank order.",
+      "test_command": "npm test",
+      "install_command": "npm install",
+      "entry_files": [
+        "src/suggest.ts",
+        "src/service.ts",
+        "README.md"
+      ],
+      "runner": {
+        "image": "promptcode-runner-node:latest",
+        "commands": {
+          "run_tests": "npm test",
+          "run_targeted_tests": "npm test",
+          "run_benchmark": "npm test"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 6
+    },
+    {
+      "slug": "bounded-recency-cache",
+      "title": "Bounded cache",
+      "type": "Progressive implementation",
+      "stack": "Python",
+      "difficulty": "hard",
+      "estimated_minutes": 50,
+      "summary": "Recently read entries are evicted from a cache. Repair recency, then support resizing and atomic same-key creation.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "README.md",
+        "contracts.py",
+        "engine.py"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 7
+    },
+    {
+      "slug": "unique-word-selection",
+      "title": "Unique word selection",
+      "type": "Algorithm analysis",
+      "stack": "Python",
+      "difficulty": "hard",
+      "estimated_minutes": 45,
+      "summary": "A subset validator rejects legal smaller answers and accepts repeated characters. Repair legality, find an optimum, and explain scaling without overstating complexity.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "README.md",
+        "contracts.py",
+        "engine.py"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 8
+    },
+    {
+      "slug": "service-impact-analysis",
+      "title": "Service impact",
+      "type": "Progressive implementation",
+      "stack": "Python",
+      "difficulty": "hard",
+      "estimated_minutes": 50,
+      "summary": "A change detector confuses neighboring path prefixes and reports incomplete downstream impact. Repair path semantics and complete the impact graph.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "README.md",
+        "contracts.py",
+        "engine.py"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 9
+    },
+    {
+      "slug": "canvas-document-editor",
+      "title": "Canvas editor",
+      "type": "Frontend integration",
+      "stack": "React / TypeScript",
+      "difficulty": "hard",
+      "estimated_minutes": 60,
+      "summary": "The stored document is the source of truth; rendering is a projection.",
+      "test_command": "npm test",
+      "install_command": "npm ci",
+      "entry_files": [
+        "README.md",
+        "src/CanvasEditor.tsx",
+        "src/designStore.ts"
+      ],
+      "runner": {
+        "image": "promptcode-runner-node:latest",
+        "commands": {
+          "run_tests": "npm test",
+          "run_targeted_tests": "npm test",
+          "run_benchmark": "npm test"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 10
+    },
+    {
+      "slug": "shipment-csv-merge",
+      "title": "Shipment CSV",
+      "type": "Shipment merge",
+      "stack": "Python",
+      "difficulty": "medium",
+      "estimated_minutes": 30,
+      "summary": "Two shipment files landed out of order. The timeline and the quantity both have to come out once, in time order.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "shipment_merge/merge.py",
+        "shipment_merge/parse.py",
+        "README.md"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 11
+    },
+    {
+      "slug": "expression-cost-analysis",
+      "title": "Expression analysis",
+      "type": "Algorithm analysis",
+      "stack": "Python",
+      "difficulty": "hard",
+      "estimated_minutes": 60,
+      "summary": "A fixture loader truncates cost metadata, making a small expression analyzer look correct. Repair loading, implement cost/liveness analysis, then remove dead work and fold constants.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "README.md",
+        "contracts.py",
+        "engine.py"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 12
+    },
+    {
+      "slug": "structured-event-logger",
+      "title": "Structured logger",
+      "type": "Progressive implementation",
+      "stack": "Python",
+      "difficulty": "medium",
+      "estimated_minutes": 45,
+      "summary": "A configurable logger filters severity incorrectly and one failed sink prevents other destinations from receiving events. Complete predictable emission and atomic configuration.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "README.md",
+        "contracts.py",
+        "engine.py"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 13
+    },
+    {
+      "slug": "extensible-hand-comparison",
+      "title": "Hand comparison",
+      "type": "Algorithm and policy",
+      "stack": "Python",
+      "difficulty": "medium",
+      "estimated_minutes": 45,
+      "summary": "Identity validation and rank semantics are separate.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "README.md",
+        "engine.py"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 14
+    },
+    {
+      "slug": "room-reservation-scheduler",
+      "title": "Room reservations",
+      "type": "Progressive implementation",
+      "stack": "Python",
+      "difficulty": "medium",
+      "estimated_minutes": 50,
+      "summary": "A room service rejects back-to-back bookings and races two callers into one free slot. Repair interval semantics and implement atomic reservation.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "README.md",
+        "contracts.py",
+        "engine.py"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 15
+    },
+    {
+      "slug": "notification-feed-stale",
+      "title": "Notification feed",
+      "type": "Feed consistency",
+      "stack": "React / TypeScript",
+      "difficulty": "medium",
+      "estimated_minutes": 28,
+      "summary": "The unread badge drifts after mark-as-read, and two quick marks drop an update.",
+      "test_command": "npm test",
+      "install_command": "npm install",
+      "entry_files": [
+        "src/NotificationList.tsx",
+        "src/feedStore.ts",
+        "README.md"
+      ],
+      "runner": {
+        "image": "promptcode-runner-node:latest",
+        "commands": {
+          "run_tests": "npm test",
+          "run_targeted_tests": "npm test",
+          "run_benchmark": "npm test"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 16
+    },
+    {
+      "slug": "runway-event-scheduler",
+      "title": "Runway simulation",
+      "type": "Algorithm and policy",
+      "stack": "Python",
+      "difficulty": "medium",
+      "estimated_minutes": 45,
+      "summary": "Eligibility precedes priority.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "README.md",
+        "engine.py"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 17
+    },
+    {
+      "slug": "movie-search-routing",
+      "title": "Search and routes",
+      "type": "Frontend integration",
+      "stack": "React / Express / TypeScript",
+      "difficulty": "hard",
+      "estimated_minutes": 60,
+      "summary": "Use one parser/serializer contract at the browser and HTTP boundaries.",
+      "test_command": "npm test",
+      "install_command": "npm ci",
+      "entry_files": [
+        "README.md",
+        "src/MovieApp.tsx",
+        "src/queryState.ts",
+        "src/api.ts"
+      ],
+      "runner": {
+        "image": "promptcode-runner-node:latest",
+        "commands": {
+          "run_tests": "npm test",
+          "run_targeted_tests": "npm test",
+          "run_benchmark": "npm test"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 18
+    },
     {
       "slug": "invoice-status-transition",
       "title": "Invoice status",
@@ -26,7 +529,36 @@
         "timeoutSeconds": 60,
         "memoryMb": 768,
         "cpuLimit": 1.5
-      }
+      },
+      "featured_rank": 19
+    },
+    {
+      "slug": "transactional-wallet-transfer",
+      "title": "Wallet transfers",
+      "type": "Transaction incident",
+      "stack": "Python / FastAPI / SQLite",
+      "difficulty": "hard",
+      "estimated_minutes": 60,
+      "summary": "Use a durable receipt keyed by request id and exact payload.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "README.md",
+        "engine.py",
+        "app.py"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      },
+      "featured_rank": 20
     },
     {
       "slug": "order-hold-reason",
@@ -57,60 +589,6 @@
       }
     },
     {
-      "slug": "catalog-suggest-latency",
-      "title": "Search suggest",
-      "type": "Search performance",
-      "stack": "TypeScript / Node",
-      "difficulty": "medium",
-      "estimated_minutes": 30,
-      "summary": "Suggest is too slow on a 10k catalog. Hit the latency and scan budget without changing rank order.",
-      "test_command": "npm test",
-      "install_command": "npm install",
-      "entry_files": [
-        "src/suggest.ts",
-        "src/service.ts",
-        "README.md"
-      ],
-      "runner": {
-        "image": "promptcode-runner-node:latest",
-        "commands": {
-          "run_tests": "npm test",
-          "run_targeted_tests": "npm test",
-          "run_benchmark": "npm test"
-        },
-        "timeoutSeconds": 60,
-        "memoryMb": 768,
-        "cpuLimit": 1.5
-      }
-    },
-    {
-      "slug": "notification-feed-stale",
-      "title": "Notification feed",
-      "type": "Feed consistency",
-      "stack": "React / TypeScript",
-      "difficulty": "medium",
-      "estimated_minutes": 28,
-      "summary": "The unread badge drifts after mark-as-read, and two quick marks drop an update.",
-      "test_command": "npm test",
-      "install_command": "npm install",
-      "entry_files": [
-        "src/NotificationList.tsx",
-        "src/feedStore.ts",
-        "README.md"
-      ],
-      "runner": {
-        "image": "promptcode-runner-node:latest",
-        "commands": {
-          "run_tests": "npm test",
-          "run_targeted_tests": "npm test",
-          "run_benchmark": "npm test"
-        },
-        "timeoutSeconds": 60,
-        "memoryMb": 768,
-        "cpuLimit": 1.5
-      }
-    },
-    {
       "slug": "workspace-label-propagation",
       "title": "Ticket labels",
       "type": "Labels across the stack",
@@ -121,87 +599,6 @@
       "test_command": "npm test",
       "install_command": "npm install",
       "entry_files": [
-        "README.md"
-      ],
-      "runner": {
-        "image": "promptcode-runner-node:latest",
-        "commands": {
-          "run_tests": "npm test",
-          "run_targeted_tests": "npm test",
-          "run_benchmark": "npm test"
-        },
-        "timeoutSeconds": 60,
-        "memoryMb": 768,
-        "cpuLimit": 1.5
-      }
-    },
-    {
-      "slug": "shipment-csv-merge",
-      "title": "Shipment CSV",
-      "type": "Shipment merge",
-      "stack": "Python",
-      "difficulty": "medium",
-      "estimated_minutes": 30,
-      "summary": "Two shipment files landed out of order. The timeline and the quantity both have to come out once, in time order.",
-      "test_command": "pytest -q",
-      "install_command": "pip install -r requirements.txt",
-      "entry_files": [
-        "shipment_merge/merge.py",
-        "shipment_merge/parse.py",
-        "README.md"
-      ],
-      "runner": {
-        "image": "promptcode-runner-python:latest",
-        "commands": {
-          "run_tests": "pytest -q",
-          "run_targeted_tests": "pytest -q",
-          "run_benchmark": "pytest -q"
-        },
-        "timeoutSeconds": 60,
-        "memoryMb": 768,
-        "cpuLimit": 1.5
-      }
-    },
-    {
-      "slug": "tenant-document-acl",
-      "title": "Document access",
-      "type": "Tenant isolation",
-      "stack": "Python / FastAPI",
-      "difficulty": "medium",
-      "estimated_minutes": 32,
-      "summary": "Acme opened a Globex document by id. Another tenant’s file has to look missing, and same-tenant access has to keep working.",
-      "test_command": "pytest -q",
-      "install_command": "pip install -r requirements.txt",
-      "entry_files": [
-        "app/service.py",
-        "app/auth.py",
-        "README.md"
-      ],
-      "runner": {
-        "image": "promptcode-runner-python:latest",
-        "commands": {
-          "run_tests": "pytest -q",
-          "run_targeted_tests": "pytest -q",
-          "run_benchmark": "pytest -q"
-        },
-        "timeoutSeconds": 60,
-        "memoryMb": 768,
-        "cpuLimit": 1.5
-      }
-    },
-    {
-      "slug": "webhook-delivery-retry",
-      "title": "Webhook retry",
-      "type": "Webhook delivery",
-      "stack": "TypeScript / Node",
-      "difficulty": "medium",
-      "estimated_minutes": 32,
-      "summary": "A retried webhook charged the customer twice. Retries stay safe, and a flush stays bounded.",
-      "test_command": "npm test",
-      "install_command": "npm install",
-      "entry_files": [
-        "src/worker.ts",
-        "src/retryPolicy.ts",
         "README.md"
       ],
       "runner": {
@@ -257,6 +654,33 @@
         "proration/billing.py",
         "proration/period.py",
         "README.md"
+      ],
+      "runner": {
+        "image": "promptcode-runner-python:latest",
+        "commands": {
+          "run_tests": "pytest -q",
+          "run_targeted_tests": "pytest -q",
+          "run_benchmark": "pytest -q"
+        },
+        "timeoutSeconds": 60,
+        "memoryMb": 768,
+        "cpuLimit": 1.5
+      }
+    },
+    {
+      "slug": "card-triple-strategy",
+      "title": "Card triples",
+      "type": "Progressive implementation",
+      "stack": "Python",
+      "difficulty": "medium",
+      "estimated_minutes": 45,
+      "summary": "A strategy selects nonexistent or repeated physical cards. Repair move validation, implement a deterministic chooser and compare it with an exhaustive small-table oracle.",
+      "test_command": "pytest -q",
+      "install_command": "pip install -r requirements.txt",
+      "entry_files": [
+        "README.md",
+        "contracts.py",
+        "engine.py"
       ],
       "runner": {
         "image": "promptcode-runner-python:latest",

@@ -1,0 +1,1 @@
+import {build} from 'esbuild';import {createRequire} from 'node:module';await build({entryPoints:['src/api.ts'],bundle:true,platform:'node',format:'cjs',packages:'external',outfile:'.dev-api.cjs'});const require=createRequire(import.meta.url);require('./.dev-api.cjs').createApp().listen(3001,'127.0.0.1');

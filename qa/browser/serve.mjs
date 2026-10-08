@@ -12,7 +12,8 @@ const root = resolve(qa, '../..');
 const frontend = join(root, 'frontend');
 const monaco = join(qa, 'node_modules/monaco-editor/min');
 const scratch = mkdtempSync(join(tmpdir(), 'promptcode-browser-'));
-const questions = { feed: 'notification-feed-stale', labels: 'workspace-label-propagation' };
+const questions = { feed: 'notification-feed-stale', labels: 'workspace-label-propagation',
+  canvas: 'canvas-document-editor', search: 'movie-search-routing' };
 const bundles = new Map();
 const python = process.env.PROMPTCODE_QA_PYTHON || 'python3';
 execFileSync(python, ['-c', `
@@ -20,7 +21,7 @@ import sys
 from pathlib import Path
 sys.path[:0] = [${JSON.stringify(join(root, 'backend'))}, ${JSON.stringify(join(root, 'backend/tests'))}]
 from trusted_reference_fixtures import reference_snapshot
-for slug in ['notification-feed-stale', 'workspace-label-propagation']:
+for slug in ['notification-feed-stale', 'workspace-label-propagation', 'canvas-document-editor', 'movie-search-routing']:
     reference_snapshot(slug, Path(${JSON.stringify(scratch)}) / slug)
 `], { cwd: root });
 
@@ -28,12 +29,15 @@ for (const [name, slug] of Object.entries(questions)) {
   for (const variant of ['starter', 'reference']) {
     const source = variant === 'reference' ? join(scratch, slug) : join(root, 'challenges', slug);
     if (variant === 'reference') symlinkSync(join(root, 'challenges', slug, 'node_modules'), join(source, 'node_modules'), 'dir');
-    const component = name === 'feed' ? './src/NotificationList' : './client/TicketLabels';
+    const components = { feed: ['NotificationList', './src/NotificationList', '<NotificationList />'],
+      labels: ['TicketLabels', './client/TicketLabels', '<TicketLabels ticketId="ticket" />'],
+      canvas: ['CanvasEditor', './src/CanvasEditor', '<CanvasEditor />'],
+      search: ['MovieApp', './src/MovieApp', '<MovieApp />'] };
+    const [exportName, component, element] = components[name];
     const setup = name === 'feed'
       ? "import {seedServer} from './src/api';seedServer([{id:'a',title:'First',read:false},{id:'b',title:'Second',read:false}]);"
-      : '';
-    const element = name === 'feed' ? '<NotificationList />' : '<TicketLabels ticketId="ticket" />';
-    const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import {${name === 'feed' ? 'NotificationList' : 'TicketLabels'}} from '${component}';${setup}createRoot(document.getElementById('root')).render(${element});`;
+      : name === 'search' ? "history.replaceState({},'', '/movies');" : '';
+    const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import {${exportName}} from '${component}';${setup}createRoot(document.getElementById('root')).render(${element});`;
     const result = buildSync({ stdin: { contents: entry, resolveDir: source, loader: 'tsx' }, bundle: true, platform: 'browser', write: false });
     bundles.set(`${name}/${variant}`, result.outputFiles[0].contents);
   }
@@ -79,7 +83,7 @@ const server = createServer((req, res) => {
       if (url.pathname === fixtureBase + '/events' && req.method === 'POST') { res.end('{}'); return; }
       res.writeHead(404).end(); return;
     }
-    const question = url.pathname.match(/^\/_questions\/(feed|labels)$/);
+    const question = url.pathname.match(/^\/_questions\/(feed|labels|canvas|search)$/);
     if (question) {
       const variant = url.searchParams.get('variant') || 'starter';
       if (!['starter', 'reference'].includes(variant)) { res.writeHead(404).end(); return; }
@@ -94,6 +98,8 @@ const server = createServer((req, res) => {
     }
     const assetRoot = url.pathname.startsWith('/_monaco/') ? monaco : frontend;
     let rel = url.pathname.startsWith('/_monaco/') ? url.pathname.slice(9) : url.pathname.replace(/^\/static\//, '');
+    if (url.pathname === '/challenges') rel = 'interview-challenges.html';
+    else if (url.pathname.startsWith('/challenges/')) rel = 'interview-challenge.html';
     if (url.pathname.startsWith('/session/')) rel = 'interview-session.html';
     const path = resolve(assetRoot, decodeURIComponent(rel).replace(/^\//, ''));
     if (!path.startsWith(assetRoot + sep)) { res.writeHead(404).end(); return; }

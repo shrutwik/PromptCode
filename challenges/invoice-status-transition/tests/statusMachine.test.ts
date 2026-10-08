@@ -32,3 +32,18 @@ describe('allowed transitions', () => {
     expect(() => transitionInvoice('inv_paid', 'draft')).toThrow(/Illegal transition/);
   });
 });
+
+it('matches the entire legal graph rather than one patched paid edge', () => {
+  const statuses = ['draft', 'sent', 'paid', 'void'] as const;
+  const legal = new Set(['draft:sent', 'draft:void', 'sent:paid', 'sent:void', 'paid:void']);
+  for (const from of statuses) for (const to of statuses) {
+    expect(canTransition(from, to)).toBe(legal.has(`${from}:${to}`));
+  }
+});
+
+it('Part 3: terminal-sequence-preserves',async()=>{
+const {handleRequest}=await import('../src/api');
+const {resetStore,seedInvoice,getInvoice}=await import('../src/store');
+const result=await (async()=>{resetStore();seedInvoice({id:'chain',customerId:'c',status:'draft',amountCents:3001,issuedAt:'2026-01-01',updatedAt:'2026-01-01'});const statuses=(['sent','paid','void'] as const).map(status=>handleRequest({method:'POST',path:'/invoices/chain/transition',body:{status}}).status);const before=JSON.stringify(getInvoice('chain'));const denied=handleRequest({method:'POST',path:'/invoices/chain/transition',body:{status:'paid'}}).status;return [statuses,denied,getInvoice('chain')!.status,getInvoice('chain')!.amountCents,JSON.stringify(getInvoice('chain'))===before];})();
+expect(result).toEqual([[200, 200, 200], 409, "void", 3001, true]);
+});

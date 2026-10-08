@@ -4,13 +4,19 @@ from __future__ import annotations
 
 from typing import Any
 
+from .expansion_tasks import TASKS as EXPANSION_TASKS
+from .question_insights import INSIGHTS
+from .question_parts import parts_for
+from .ranked_tasks import TASKS as RANKED_TASKS
+from .registry import get_challenge
+
 # Each task is one engineering ticket. The kind is the work.
 # problem and body are the whole brief. guide is the order of work, not hidden requirements.
 GUIDE = [
-    "First, read the codebase and run the tests so you can see what fails.",
-    "Then, open the code those failures touch. Ask the assistant about one piece, and check the suggestion against the file before you accept it.",
-    "Then, run the tests again and read the failure before the next edit.",
-    "Submit when the suite is green. You will be asked what you kept and what you rejected.",
+    "First, read the contract and run the tests. State the invariant and reproduce one failure before changing code.",
+    "Then, trace the relevant code path. Ask the assistant about a scoped piece, and check its assumptions against the files before accepting an edit.",
+    "Then, verify the happy path, a boundary or rejected input, and preserved state. Keep the provided tests intact; use scratch.py or scratch.ts for extra experiments.",
+    "Submit with verification evidence. Explain why the change works, a plausible wrong fix you rejected, and what a changed requirement would affect.",
 ]
 TASKS: dict[str, dict[str, Any]] = {
     "invoice-status-transition": {
@@ -226,6 +232,21 @@ TASKS: dict[str, dict[str, Any]] = {
 }
 
 
+TASKS.update(EXPANSION_TASKS)
+TASKS.update(RANKED_TASKS)
+for _slug, _insight in INSIGHTS.items():
+    _checkpoint_text = _insight['candidate_checkpoint_text']
+    if parts_for(_slug):
+        _checkpoint_text = _checkpoint_text.split(' Checkpoint 1:')[0]
+    TASKS[_slug]['levels'][0]['body'] += ' ' + _checkpoint_text
+
+for _slug in TASKS:
+    if parts_for(_slug):
+        TASKS[_slug]['levels'][0]['body'] = TASKS[_slug]['levels'][0]['body'].split(' Working checkpoints:')[0]
+        if 'npm test' not in TASKS[_slug]['levels'][0]['body'] and 'pytest -q' not in TASKS[_slug]['levels'][0]['body']:
+            TASKS[_slug]['levels'][0]['body'] += ' Run ' + get_challenge(_slug)['test_command'] + '.'
+
+
 def task_for(slug: str) -> dict[str, Any] | None:
     task = TASKS.get(slug)
     if not task:
@@ -257,6 +278,7 @@ def level_view(slug: str, index: int, *, tests_on_step: int) -> dict[str, Any] |
         "body": current["body"],
         "problem": task["problem"],
         "guide": list(GUIDE),
+        "parts": parts_for(slug),
         "can_advance": index < len(levels) - 1 and tests_on_step > 0,
         "is_last": index == len(levels) - 1,
         "earlier": earlier,

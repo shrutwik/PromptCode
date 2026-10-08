@@ -1,0 +1,135 @@
+{
+  "registry_version": 2,
+  "new_questions": [
+    {
+      "slug": "warehouse-route-planner",
+      "title": "Warehouse routes",
+      "checkpoints": [
+        "Repair endpoint-preserving rendering.",
+        "Implement shortest legal routing, including unreachable output.",
+        "Support badge inventory and forbidden directed edges; defend revisit behavior."
+      ],
+      "underlying_invariant": "A position is not the complete state when permissions change during traversal. Separate display output from topology and search state.",
+      "visible_cases": 8,
+      "trusted_cases": 8,
+      "calibration": "pending mock-session validation"
+    },
+    {
+      "slug": "courier-payment-ledger",
+      "title": "Courier payments",
+      "checkpoints": [
+        "Correct second-level payout precision.",
+        "Implement totals and cutoff payments without duplicate effects.",
+        "Compute peak distinct-driver activity with touching intervals."
+      ],
+      "underlying_invariant": "Money rounding is a record-level policy; payment idempotency and the identity of an active driver are separate invariants.",
+      "visible_cases": 8,
+      "trusted_cases": 8,
+      "calibration": "pending mock-session validation"
+    },
+    {
+      "slug": "worker-job-dispatch",
+      "title": "Worker dispatch",
+      "checkpoints": [
+        "Correct exact completion-boundary eligibility.",
+        "Implement idle-worker and in-flight scheduling with queued jobs.",
+        "Show deterministic ties and explain complexity using a slow small-input oracle."
+      ],
+      "underlying_invariant": "Readiness ordering and selection ordering are different: earliest completion chooses when to dispatch, lowest idle id chooses where.",
+      "visible_cases": 8,
+      "trusted_cases": 8,
+      "calibration": "pending mock-session validation"
+    },
+    {
+      "slug": "bounded-recency-cache",
+      "title": "Bounded cache",
+      "checkpoints": [
+        "Repair read promotion and eviction.",
+        "Implement resize, replacement and zero capacity.",
+        "Make get_or_put atomic and preserve state when the factory fails."
+      ],
+      "underlying_invariant": "Recency is an invariant, not insertion order. Atomic creation concerns the entire read/compute/write sequence, including cached None.",
+      "visible_cases": 8,
+      "trusted_cases": 8,
+      "calibration": "pending mock-session validation"
+    },
+    {
+      "slug": "service-impact-analysis",
+      "title": "Service impact",
+      "checkpoints": [
+        "Fix normalized path boundaries and root behavior.",
+        "Implement direct file and deleted-directory impact.",
+        "Propagate through dependents with cycle termination."
+      ],
+      "underlying_invariant": "String prefix is not path ancestry; dependency propagation follows the reverse of the depends-on relation.",
+      "visible_cases": 8,
+      "trusted_cases": 8,
+      "calibration": "pending mock-session validation"
+    },
+    {
+      "slug": "unique-word-selection",
+      "title": "Unique word selection",
+      "checkpoints": [
+        "Repair legality independently from optimality.",
+        "Implement exact compatible-subset search with explicit ties.",
+        "Compare small-input brute-force results and discuss larger-input pruning."
+      ],
+      "underlying_invariant": "A validator measures legality, not whether a strategy found the best answer. Character masks compress compatibility, not the exponential worst-case search space.",
+      "visible_cases": 8,
+      "trusted_cases": 8,
+      "calibration": "pending mock-session validation"
+    },
+    {
+      "slug": "expression-cost-analysis",
+      "title": "Expression analysis",
+      "checkpoints": [
+        "Repair multi-digit metadata loading.",
+        "Analyze arithmetic cost and alias-aware temporary liveness.",
+        "Eliminate dead assignments and propagate/fold constants without changing semantics."
+      ],
+      "underlying_invariant": "First verify the fixture oracle. Cost reduction is meaningful only if dependency and liveness semantics are explicit and preserved.",
+      "visible_cases": 8,
+      "trusted_cases": 8,
+      "calibration": "pending mock-session validation"
+    },
+    {
+      "slug": "room-reservation-scheduler",
+      "title": "Room reservations",
+      "checkpoints": [
+        "Repair overlap semantics.",
+        "Find earliest gaps across nested and unsorted bookings.",
+        "Keep bookings sorted and reserve atomically for concurrent callers."
+      ],
+      "underlying_invariant": "A correct overlap helper is not enough: finding and committing a reservation must share one atomic boundary.",
+      "visible_cases": 8,
+      "trusted_cases": 8,
+      "calibration": "pending mock-session validation"
+    },
+    {
+      "slug": "card-triple-strategy",
+      "title": "Card triples",
+      "checkpoints": [
+        "Repair identity and multiplicity validation.",
+        "Implement a deterministic legal chooser and safe removal.",
+        "Compare with the exhaustive oracle; explain a changed scoring objective without silently changing legality."
+      ],
+      "underlying_invariant": "Physical-card membership is a multiset/identity constraint. Prove legality before evaluating any strategy objective.",
+      "visible_cases": 8,
+      "trusted_cases": 8,
+      "calibration": "pending mock-session validation"
+    },
+    {
+      "slug": "structured-event-logger",
+      "title": "Structured logger",
+      "checkpoints": [
+        "Repair inclusive severity filtering.",
+        "Implement sink isolation and explicit failure observations.",
+        "Support atomic reconfiguration and copied structured records."
+      ],
+      "underlying_invariant": "Logging success has a delivery policy. Independent sink failures and copied event snapshots keep observability from changing application state.",
+      "visible_cases": 8,
+      "trusted_cases": 8,
+      "calibration": "pending mock-session validation"
+    }
+  ]
+}

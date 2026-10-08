@@ -42,3 +42,19 @@ describe('idempotency and concurrency', () => {
     expect(getMaxInFlight()).toBeLessThanOrEqual(5);
   });
 });
+
+it('keeps the billing identity stable across two processing calls', async () => {
+  let posts = 0;
+  const client = { post: async () => { posts++; return { ok: true, status: 200 }; } };
+  await deliverOne(job('same-delivery'), client, { maxAttempts: 1, backoffMs: 0 });
+  await deliverOne(job('same-delivery'), client, { maxAttempts: 1, backoffMs: 0 });
+  expect(posts).toBe(2);
+  expect(chargeCount('same-delivery')).toBe(1);
+});
+
+it('Part 3: duplicate-batch-identity',async()=>{
+const {deliverAll}=await import('../src/worker');
+const {resetCharges,chargeCount}=await import('../src/sideEffects');
+const result=await (async()=>{resetCharges();let posts=0;const ids=["same", "other", "same"];const jobs=ids.map(id=>({id,url:'https://test/'+id,payload:{id},attempts:0}));const client={post:async()=>{posts++;return {ok:true,status:200};}};const outcomes=await deliverAll(jobs,client,{maxAttempts:1,backoffMs:0});return [outcomes,posts,chargeCount(),chargeCount(ids[0])];})();
+expect(result).toEqual([[true, true, true], 3, 2, 1]);
+});

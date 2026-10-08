@@ -521,6 +521,7 @@ async def challenges_with_progress(
                 difficulty=c["difficulty"],
                 estimated_minutes=int(c.get("estimated_minutes") or 30),
                 summary=c.get("summary") or "",
+                featured_rank=c.get("featured_rank"),
                 progress=progress,
                 attempt_count=len(sess),
                 best_score=best,

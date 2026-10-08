@@ -63,3 +63,13 @@ Extract <20m; continuously green.
 2. Q: Why half-up? A: money.roundHalfUp.
 3. Q: Surcharge first? A: Changes goldens — forbidden.
 4. Q: Keep applied? A: Audit trail.
+
+## Deeper assessment insight
+
+Behavior-preserving extraction includes arithmetic order, rounding and the direction of delegation.
+
+Preserve type order and code order within a type, half-up rounding, applied codes, input immutability and the final floor. Inspect quote-to-applyRules delegation.
+
+Plausible wrong repair: Implementing applyRules as a wrapper around quote preserves outputs but does not extract the loop from quote. Ask the candidate for a concrete failing example, not just an assertion that the shortcut is bad.
+
+Changed requirement: Discuss adding a new rule type while retaining old golden outputs and explicit ordering; do not change baseline cents. Keep this separate from baseline scoring and record the candidate reasoning and verification evidence.

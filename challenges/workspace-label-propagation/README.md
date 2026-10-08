@@ -20,3 +20,11 @@ The export spreadsheet is a hypothesis for where labels went.
 npm install
 npm test
 ```
+
+## Investigation checkpoints
+
+This ticket tests: Validated workspace ids must survive storage, response serialization and later component hydration. Verification focus: Verify selected checkboxes after PUT, GET and remount; clear all labels; reject mixed valid/foreign lists without changing prior labels. Checkpoint 1: Reproduce the reported behavior and state the contract invariant. Checkpoint 2: Repair the smallest relevant path and verify preservation on success and rejection. Checkpoint 3: Defend your change with a counterexample and discuss the explicitly optional changed requirement.
+
+## Optional review extension
+
+Discuss deleting a label while a user edits a ticket and how to expose the conflict; do not silently add that behavior to the baseline. This is discussion-only and does not alter baseline acceptance tests. Keep the supplied tests and configuration intact; use scratch.py or scratch.ts for independent experiments. Explain what you asked the assistant to do and which assumption you verified.

@@ -73,3 +73,13 @@ Locate omission <10m; green <30m.
 2. Q: Empty reason? A: Allowed by ticket.
 3. Q: DB migrate? A: Field already on model.
 4. Q: Required OpenAPI? A: Optional default null.
+
+## Deeper assessment insight
+
+A successful response must describe persisted aggregate state, not echo the request.
+
+Trace hold, later GET, overwrite, release and another hold. Preserve money/customer fields and legacy nulls.
+
+Plausible wrong repair: Echoing hold_reason in POST can pass the immediate response but fail the following GET. Ask the candidate for a concrete failing example, not just an assertion that the shortcut is bad.
+
+Changed requirement: Discuss concurrent edits and a version precondition; no new concurrency endpoint is required. Keep this separate from baseline scoring and record the candidate reasoning and verification evidence.

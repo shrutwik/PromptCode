@@ -24,7 +24,9 @@ def run_gate(*, challenges_dir: Path, contract_path: Path = CONTRACT_PATH) -> di
         questions = contract['questions']
         entries = registry['challenges']
         slugs = [entry['slug'] for entry in entries]
-        if (contract['version'] != 1 or len(slugs) != 10 or len(set(slugs)) != len(slugs)
+        expected_count = contract.get('expected_question_count')
+        if (contract['version'] != 1 or type(expected_count) is not int or expected_count <= 0
+                or len(slugs) != expected_count or len(set(slugs)) != len(slugs)
                 or set(questions) != set(slugs)):
             raise ValueError('Registry and quality contract do not match')
     except (OSError, ValueError, KeyError, TypeError) as error:
@@ -52,6 +54,26 @@ def run_gate(*, challenges_dir: Path, contract_path: Path = CONTRACT_PATH) -> di
             for requirement, case_ids in requirements.items():
                 if not requirement or not isinstance(case_ids, list) or not case_ids or not set(case_ids) <= ids:
                     raise ValueError('Uncovered requirement: ' + str(requirement))
+            if entry.get('featured_rank') is not None:
+                parts = quality.get('parts', [])
+                if (len(parts) != 4 or [part.get('number') for part in parts] != [1, 2, 3, 4]
+                        or [part.get('mode') for part in parts] != ['baseline'] * 3 + ['discussion']):
+                    raise ValueError('Invalid featured question parts')
+                assigned = []
+                for part in parts:
+                    if (not part.get('title') or not part.get('task')
+                            or not isinstance(part.get('acceptance'), list) or not part['acceptance']
+                            or any(not isinstance(item, str) or not item for item in part['acceptance'])
+                            or not isinstance(part.get('case_ids'), list)):
+                        raise ValueError('Invalid part acceptance')
+                    if part['mode'] == 'discussion':
+                        if part['case_ids']:
+                            raise ValueError('Discussion changes baseline grading')
+                    elif not part['case_ids']:
+                        raise ValueError('Unverified baseline part')
+                    assigned.extend(part['case_ids'])
+                if len(assigned) != len(set(assigned)) or set(assigned) != ids:
+                    raise ValueError('Parts must cover each independent case once')
             if quality['manual_requirements'] != MANUAL_REQUIREMENTS.get(slug, []):
                 raise ValueError('Undeclared manual coverage gap')
             for name in ('README.md', 'SOLUTION.md'):

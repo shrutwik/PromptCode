@@ -15,6 +15,7 @@ class InterviewChallengeCard(BaseModel):
     difficulty: str
     estimated_minutes: int
     summary: str
+    featured_rank: int | None = Field(default=None, ge=1, le=20)
 
 
 class InterviewChallengeDetail(InterviewChallengeCard):
@@ -38,6 +39,14 @@ class EarlierStep(BaseModel):
     body: str
 
 
+class InterviewPart(BaseModel):
+    number: int = Field(ge=1, le=4)
+    title: str
+    task: str
+    acceptance: list[str]
+    mode: str = Field(pattern="^(baseline|discussion)$")
+
+
 class LevelStepResponse(BaseModel):
     index: int
     total: int
@@ -46,6 +55,7 @@ class LevelStepResponse(BaseModel):
     body: str
     problem: str
     guide: list[str] = Field(default_factory=list)
+    parts: list[InterviewPart] = Field(default_factory=list)
     can_advance: bool
     is_last: bool
     earlier: list[EarlierStep] = Field(default_factory=list)

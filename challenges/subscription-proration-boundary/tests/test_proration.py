@@ -41,3 +41,7 @@ def test_microsecond_boundaries():
     assert contains(period, parse_utc('2026-01-31T23:59:59.999999Z'))
     assert not contains(period, parse_utc('2026-02-01T00:00:00.000001Z'))
     assert not contains(period, parse_utc('2025-12-31T23:59:59.999999Z'))
+
+def test_start_credit_is_full_at_equivalent_offset():
+    period = period_from_iso('2026-01-01T00:00:00Z', '2026-02-01T00:00:00Z')
+    assert proration_credit(Subscription('start', 3100, period), '2025-12-31T19:00:00-05:00') == 3100

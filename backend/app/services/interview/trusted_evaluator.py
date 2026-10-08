@@ -73,7 +73,9 @@ def verify_result(envelope: dict[str, Any], *, signing_key: str, session_id: str
 
 
 def _probe_command(slug: str, probe: str) -> list[str]:
-    is_python=slug in {'order-hold-reason','shipment-csv-merge','tenant-document-acl','subscription-proration-boundary'}
+    from .registry import get_runner_config
+
+    is_python=get_runner_config(slug)['image'].endswith('python:latest')
     if is_python:
         # This adapter is not trusted grading logic: candidate imports may alter it.
         # Only its JSON output is observed. It contains no expectation or credentials.

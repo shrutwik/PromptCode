@@ -32,7 +32,8 @@ The opt-in Docker tests validate each starter, each repair, a plausible incorrec
 repair for every question, forged grade-shaped output, and immutable Python/Node
 submission signing. Reference implementations never enter candidate images.
 
-The v2 inventory has 62 independent cases across all ten coding questions.
+The v5 inventory has 202 independent cases across twenty-five coding questions: the
+original 62 cases plus 80 cases for ten progressive additions, 40 cases for five ranked additions and 20 pressure cases.
 Coverage includes the invoice API transition matrix, rejected-write state
 preservation, bidirectional tenant isolation, Unicode and optional hold reasons,
 empty and zero-limit searches, repeated concurrent notifications, multi-file
@@ -41,6 +42,19 @@ half-cent rounding, and microsecond and adjacent-period boundaries.
 Visible practice suites exercise the same requirements with separate assertions.
 Ten additional edge-case mutations verify that superficially correct repairs
 are rejected, alongside the ten original incorrect-repair checks.
+
+The expansion adds twenty more wrong-repair fixtures (a baseline and an edge
+mutation per new question). `expansion.py` holds its independent inputs and
+observations. Reviewed reference sources remain test-only in
+`backend/tests/expansion_reference_fixtures.py`; they never enter candidate
+images. Local authoring QA in `test_interview_expansion_quality.py` checks those
+reviewed sources and known starters in fresh subprocesses; it is not the
+production candidate evaluator and does not sign results. Docker release QA
+continues to validate all twenty-five questions in the actual isolated runner.
+
+Registry version 4 and evaluator version v5 intentionally invalidate old result
+bindings. Checkpoints live inside one ticket; optional review discussions do not
+silently add ungraded requirements to the baseline.
 
 Run the isolated grading validation from the repository root:
 
@@ -52,3 +66,7 @@ Docker and the configured runner images are required. Practice tests intentional
 fail on incident starters; validate green runs against the reviewed reference
 repairs, preserving the starter bugs for candidates. Changing the inventory
 version and digest intentionally invalidates previously bound grading evidence.
+
+The five additional ranked families add forty independent probes and ten wrong-repair cases. Their reviewed references are in `backend/tests/ranked_reference_fixtures.py`. Canvas and search have rendered visible suites and explicit human-review requirements; state/HTTP probes alone do not close those requirements. The ranked top twenty remain distinguishable from five retained exercises via candidate-safe `featured_rank` metadata.
+
+The October 8 refinement advances to evaluator v5 and registry version 4: 202 probes across 25 questions. Twenty new pressure probes live in `depth.py`, with different public fixtures. Each featured question maps all independent cases once to three baseline parts; its fourth part is optional discussion and has no grading cases. Publication checks enforce this partition. Original manual review gaps remain declared.

@@ -59,3 +59,20 @@ describe('latency and scans', () => {
     expect(scanCount()).toBeLessThan(20_000);
   });
 });
+
+it('preserves score before popularity and id while limiting the result', () => {
+  const rows = [
+    { id: 'b', title: 'B', category: 'x', popularity: 9, tokens: ['phone'] },
+    { id: 'a', title: 'A', category: 'x', popularity: 9, tokens: ['phone'] },
+    { id: 'z', title: 'Z', category: 'phone', popularity: 100, tokens: [] },
+    { id: 'c', title: 'C', category: 'phone', popularity: 0, tokens: ['phone'] },
+  ];
+  expect(suggest(rows, 'phone', { limit: 3 }).map(row => row.id)).toEqual(['c', 'a', 'b']);
+  expect(suggest(rows, 'phone', { limit: 4 }).map(row => row.id)).toEqual(['c', 'a', 'b', 'z']);
+});
+
+it('Part 3: changed-catalog-parity',async()=>{
+const {suggest}=await import('../src/suggest');
+const result=await (async()=>{const rows=[{"id": "b", "title": "B", "category": "x", "popularity": 10, "tokens": ["phone"]}, {"id": "a", "title": "A", "category": "x", "popularity": 10, "tokens": ["phone"]}];const first=suggest(rows,"phone",{limit:2}).map(p=>p.id);const changed=[...rows,{id:'winner',title:'W',category:"phone",popularity:0,tokens:["phone"]}];const second=suggest(changed,"phone",{limit:2}).map(p=>p.id);const prefix=suggest(changed,"phone",{limit:1}).map(p=>p.id);return [first,second,prefix,rows.length];})();
+expect(result).toEqual([["a", "b"], ["winner", "a"], ["winner"], 2]);
+});

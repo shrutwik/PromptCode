@@ -70,9 +70,9 @@ def test_large_disagreements_block_agreement_gate():
     assert not result["agreement_gate_met"]
 
 
-def test_all_ten_challenges_have_explicit_pending_anchor_inventory():
+def test_all_twenty_challenges_have_explicit_pending_anchor_inventory():
     template = pilot_template()
-    assert len(template["challenges"]) == 10
+    assert len(template["challenges"]) == 25
     assert template["records"] == []
     assert all(c["anchor_status"] == "pending_independent_validation" for c in template["challenges"])
 

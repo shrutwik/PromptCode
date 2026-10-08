@@ -4,7 +4,7 @@ WORK = {"incident", "change", "performance", "consistency", "security", "deliver
 
 
 def test_each_task_is_one_engineering_ticket():
-    assert len(TASKS) == 10
+    assert len(TASKS) == 25
     problems = set()
     for slug, task in TASKS.items():
         problems.add(task["problem"])
@@ -15,7 +15,7 @@ def test_each_task_is_one_engineering_ticket():
         assert kind not in {"bug", "feature"}, slug
         assert "Feature" not in levels[0]["title"]
         assert "npm test" in levels[0]["body"] or "pytest -q" in levels[0]["body"]
-    assert len(problems) == 10
+    assert len(problems) == 25
 
 
 def test_the_ticket_is_the_whole_ask():

@@ -22,3 +22,11 @@ People are blaming the metrics counter. That is a hypothesis.
 pip install -r requirements.txt
 pytest -q
 ```
+
+## Investigation checkpoints
+
+This ticket tests: A successful response must describe persisted aggregate state, not echo the request. Verification focus: Trace hold, later GET, overwrite, release and another hold. Preserve money/customer fields and legacy nulls. Checkpoint 1: Reproduce the reported behavior and state the contract invariant. Checkpoint 2: Repair the smallest relevant path and verify preservation on success and rejection. Checkpoint 3: Defend your change with a counterexample and discuss the explicitly optional changed requirement.
+
+## Optional review extension
+
+Discuss concurrent edits and a version precondition; no new concurrency endpoint is required. This is discussion-only and does not alter baseline acceptance tests. Keep the supplied tests and configuration intact; use scratch.py or scratch.ts for independent experiments. Explain what you asked the assistant to do and which assumption you verified.

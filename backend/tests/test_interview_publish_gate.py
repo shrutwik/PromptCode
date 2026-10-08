@@ -12,7 +12,7 @@ CHALLENGES = Path(__file__).resolve().parents[2] / 'challenges'
 def test_all_questions_have_reviewed_publication_contracts():
     result = run_gate(challenges_dir=CHALLENGES)
     assert result['pass'], result
-    assert result['question_count'] == 10
+    assert result['question_count'] == 25
 
 
 @pytest.mark.parametrize('change', ['missing-question', 'uncovered-requirement', 'manual-gap', 'invalid-floor'])
@@ -44,5 +44,5 @@ def test_invalid_entry_files_block_question_publication(tmp_path, entry):
     result = run_gate(challenges_dir=source)
     failed = [row for row in result['questions'] if not row['pass']]
     assert len(failed) == 1
-    assert failed[0]['slug'] == 'invoice-status-transition'
+    assert failed[0]['slug'] == registry['challenges'][0]['slug']
     assert failed[0]['issues'] == ['Invalid candidate entry file: ' + entry]

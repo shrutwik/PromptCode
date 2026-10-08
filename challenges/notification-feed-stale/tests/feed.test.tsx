@@ -46,3 +46,22 @@ describe('concurrency', () => {
     expect(getSnapshot().filter(n => n.id !== 'n3').every(n => n.read)).toBe(true);
   });
 });
+
+it('renders converged read rows and badge after two quick actions', async () => {
+  render(<NotificationList />);
+  await waitFor(() => expect(screen.getByTestId('unread-count').textContent).toBe('2'));
+  fireEvent.click(screen.getByTestId('mark-n1'));
+  fireEvent.click(screen.getByTestId('mark-n2'));
+  await waitFor(() => {
+    expect(screen.getByTestId('read-n1').textContent).toBe('read');
+    expect(screen.getByTestId('read-n2').textContent).toBe('read');
+    expect(screen.getByTestId('unread-count').textContent).toBe('0');
+  });
+});
+
+it('Part 3: mixed-success-failure',async()=>{
+const {seedServer}=await import('../src/api');
+const {resetStore,loadFeed,markAsRead,getSnapshot,unreadCount}=await import('../src/feedStore');
+const result=await (async()=>{resetStore();seedServer([{"id": "a", "title": "a", "read": false}, {"id": "b", "title": "b", "read": false}]);await loadFeed();const settled=await Promise.allSettled([markAsRead('a'),markAsRead('missing'),markAsRead('b')]);return [unreadCount(),getSnapshot().map(n=>n.read),settled.map(r=>r.status)];})();
+expect(result).toEqual([0, [true, true], ["fulfilled", "rejected", "fulfilled"]]);
+});

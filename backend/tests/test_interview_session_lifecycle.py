@@ -185,7 +185,10 @@ def test_editor_conflicts_and_saved_revision_recovery(api, clock):
     assert timer("resume", token).status_code == 200
     assert timer("resume", "b" * 16).status_code == 409
     files = client.get(base + "/files", headers=headers).json()
-    path = next(file["path"] for file in files if file["path"].startswith("src/"))
+    from app.services.interview.registry import get_challenge
+
+    path = get_challenge(slug)["entry_files"][0]
+    assert any(file["path"] == path for file in files)
     url = base + "/files/" + path
     original = client.get(url, headers=headers).json()
     content = original["content"] + "\n"

@@ -18,3 +18,11 @@ The tests that already describe those cases stay as they are. Leave them alone a
 pip install -r requirements.txt
 pytest -q
 ```
+
+## Investigation checkpoints
+
+This ticket tests: A stored instant has one period owner under half-open intervals; display timezone is separate from billing identity. Verification focus: Check start, end, adjacent periods, equivalent offsets and microseconds, alongside an exact midpoint monetary calculation. Checkpoint 1: Reproduce the reported behavior and state the contract invariant. Checkpoint 2: Repair the smallest relevant path and verify preservation on success and rejection. Checkpoint 3: Defend your change with a counterexample and discuss the explicitly optional changed requirement.
+
+## Optional review extension
+
+Discuss a daylight-saving transition or non-monthly period using instants and elapsed duration; keep the baseline period contract. This is discussion-only and does not alter baseline acceptance tests. Keep the supplied tests and configuration intact; use scratch.py or scratch.ts for independent experiments. Explain what you asked the assistant to do and which assumption you verified.

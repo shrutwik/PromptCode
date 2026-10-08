@@ -34,7 +34,7 @@ from app.services.interview.workspace import (  # noqa: E402
 
 def main() -> int:
     items = list_challenges()
-    assert len(items) == 10, len(items)
+    assert len(items) == 25, len(items)
     slug = items[0]["slug"]
     assert get_challenge(slug)
     readme = candidate_readme(slug)

@@ -64,3 +64,13 @@ API <15m; full <35m.
 2. Q: PUT returns ids? A: Client sync.
 3. Q: Empty array? A: Explicit none.
 4. Q: Authz? A: Out of scope.
+
+## Deeper assessment insight
+
+Validated workspace ids must survive storage, response serialization and later component hydration.
+
+Verify selected checkboxes after PUT, GET and remount; clear all labels; reject mixed valid/foreign lists without changing prior labels.
+
+Plausible wrong repair: Updating only a response object or optimistic component state does not prove the next read contains the labels. Ask the candidate for a concrete failing example, not just an assertion that the shortcut is bad.
+
+Changed requirement: Discuss deleting a label while a user edits a ticket and how to expose the conflict; do not silently add that behavior to the baseline. Keep this separate from baseline scoring and record the candidate reasoning and verification evidence.

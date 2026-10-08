@@ -18,6 +18,7 @@ from app.models.interview_session import (
     InterviewSessionEvent,
 )
 from app.models.user import User
+from app.services.interview.calibration import challenge_version_for
 from app.services.interview.grading import DIMENSIONS, HumanReview, pending_assessment
 from app.services.interview.grading_review import append_review, review_context
 from app.services.interview.trusted_cases import (
@@ -30,6 +31,7 @@ from app.services.interview.trusted_evaluator import VERSION, sign_result
 KEY='test-grading-signing-key-at-least-32-bytes'
 
 async def setup(tmp_path, monkeypatch, slug="order-hold-reason"):
+    version = challenge_version_for(slug)
     monkeypatch.setattr('app.services.interview.grading_calibration.publication_allowed', lambda:True)
     monkeypatch.setattr('app.services.interview.grading_review.get_settings', lambda:SimpleNamespace(grading_signing_key=KEY))
     engine=create_async_engine('sqlite+aiosqlite:///'+str(tmp_path/'review.db'))
@@ -42,11 +44,11 @@ async def setup(tmp_path, monkeypatch, slug="order-hold-reason"):
     async with factory() as db:
         users=[User(email=f'u{i}@test.com',username=f'u{i}',password_hash='hash',role='interviewer' if i else None) for i in range(3)]
         db.add_all(users);await db.flush()
-        session=InterviewSession(user_id=users[0].id,owner_token='token',challenge_slug=slug,workspace_path='/no')
+        session=InterviewSession(user_id=users[0].id,owner_token='token',challenge_slug=slug,challenge_version=version,workspace_path='/no')
         db.add(session);await db.flush()
-        assessment=pending_assessment(session_id=str(session.id),challenge_slug=session.challenge_slug,challenge_version='1',events=[],test_summary={},defend_answers={'0':'I verified the persistence change and release regression.'})
+        assessment=pending_assessment(session_id=str(session.id),challenge_slug=session.challenge_slug,challenge_version=version,events=[],test_summary={},defend_answers={'0':'I verified the persistence change and release regression.'})
         evaluation=InterviewEvaluation(session_id=session.id,metrics={'assessment':assessment})
-        job=InterviewGradingJob(session_id=session.id,source_digest=digest,snapshot_path=str(snapshot),snapshot_manifest={'files':manifest},challenge_slug=session.challenge_slug,challenge_version='1',lease_token='f'*64,status='completed')
+        job=InterviewGradingJob(session_id=session.id,source_digest=digest,snapshot_path=str(snapshot),snapshot_manifest={'files':manifest},challenge_slug=session.challenge_slug,challenge_version=version,lease_token='f'*64,status='completed')
         db.add_all([evaluation,job]);await db.flush()
         cases=cases_for(session.challenge_slug);total=sum(c.weight for c in cases)
         payload={'session_id':str(session.id),'job_id':str(job.id),'challenge_slug':session.challenge_slug,'source_digest':job.source_digest,'challenge_version':job.challenge_version,'lease_token':job.lease_token,'evaluator_version':VERSION,'inventory_digest':inventory_digest(session.challenge_slug),'complete':True,'cases':[{'id':c.id,'weight':c.weight,'passed':True,'error':None} for c in cases],'earned_weight':total,'total_weight':total,'score_percent':100.0,'manual_requirements':MANUAL_REQUIREMENTS.get(session.challenge_slug,[])}

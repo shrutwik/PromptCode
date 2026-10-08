@@ -781,12 +781,19 @@ function renderLevel(level) {
   ticketEl.classList.add("is-brief");
   ticketEl.classList.remove("is-readme");
   const guide = (level.guide || []).map((line) => `<li>${esc(line)}</li>`).join("");
+  const parts = (level.parts || []).map((part) => `<section class="brief-part">
+    <h4>Part ${esc(part.number)} — ${esc(part.title)}</h4>
+    <p>${esc(part.task)}</p>
+    <ul class="brief-guide">${(part.acceptance || []).map((line) => `<li>${esc(line)}</li>`).join("")}</ul>
+    ${part.mode === "discussion" ? '<p class="step-note">Optional discussion. No extra coding requirement or automated score.</p>' : ""}
+  </section>`).join("");
   ticketEl.innerHTML = `<article class="brief">
     <p class="step-kicker">${esc(level.kind)}</p>
     <h3>${esc(level.title)}</h3>
     <p class="step-problem">${esc(level.problem)}</p>
     <h4 class="brief-label">The work</h4>
     <p>${esc(level.body)}</p>
+    ${parts}
     <h4 class="brief-label">How to work</h4>
     <ol class="brief-guide">${guide}</ol>
     <p class="step-note">The assistant can be wrong. Check it against the code, then submit when the tests pass.</p>

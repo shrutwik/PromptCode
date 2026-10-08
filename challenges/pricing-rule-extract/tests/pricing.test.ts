@@ -41,3 +41,13 @@ describe('golden quotes', () => {
     expect(applyRules(2000, rules)).toEqual(quote({ baseCents: 2000, rules }));
   });
 });
+
+it('keeps code ordering within a rule type in the extracted calculation', () => {
+  const rules = [
+    { type: 'percent_off' as const, pct: 10, code: 'b' },
+    { type: 'surcharge_percent' as const, pct: 10, code: 's' },
+    { type: 'percent_off' as const, pct: 20, code: 'a' },
+  ];
+  expect(applyRules(101, rules)).toEqual({ finalCents: 80, applied: ['a', 'b', 's'] });
+  expect(quote({ baseCents: 101, rules })).toEqual({ finalCents: 80, applied: ['a', 'b', 's'] });
+});
