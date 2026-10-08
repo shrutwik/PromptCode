@@ -34,7 +34,7 @@ def test_all_registry_questions_have_independent_inventory():
     assert len(list_challenges())==10
     for c in list_challenges():
         cases=cases_for(c['slug'])
-        assert len(cases)>=3
+        assert len(cases)>=5
         assert len({v.id for v in cases})==len(cases)
         assert all(v.weight>0 and 'pytest' not in v.probe and 'vitest' not in v.probe for v in cases)
         assert len(inventory_digest(c['slug']))==64
@@ -150,12 +150,33 @@ MUTATIONS = {
  'subscription-proration-boundary':('proration/period.py','period.start <= instant < period.end','period.start < instant < period.end','start-included'),
 }
 
+# Subtle repairs that previously passed happy paths: zero limits, partial ACLs,
+# stale totals, failed requests, cents rounding, and reordered mixed results.
+EDGE_MUTATIONS = {
+ 'invoice-status-transition':('src/statusMachine.ts',"paid: ['void']","paid: ['draft', 'void']",'api-transition-matrix'),
+ 'order-hold-reason':('app/service.py','order.hold_reason = reason','order.hold_reason = reason.upper() if reason else reason','reason-overwrite-and-isolation'),
+ 'catalog-suggest-latency':('src/suggest.ts','opts.limit ?? 10','opts.limit || 10','empty-query-and-zero-limit'),
+ 'notification-feed-stale':('src/feedStore.ts','await markReadOnServer(id);','await markReadOnServer(id).catch(() => undefined);','failed-mark-preserves-state'),
+ 'workspace-label-propagation':('server/app.ts',"if (labelIds.some((id) => !allowed.has(id)))","if (false)",'invalid-update-preserves-labels'),
+ 'shipment-csv-merge':('shipment_merge/merge.py','dict(qty)','{**getattr(merge_events, "last_qty", {}), **dict(qty)}','next-merge-replaces-totals'),
+ 'tenant-document-acl':('app/service.py','doc.tenant_id != principal.tenant_id',"(principal.tenant_id == 'tenant_acme' and doc.tenant_id != principal.tenant_id)",'reverse-tenant-isolation'),
+ 'webhook-delivery-retry':('src/worker.ts','return results;','return results.reverse();','mixed-batch-result-order'),
+ 'pricing-rule-extract':('src/money.ts','Math.round(n + Number.EPSILON)','Math.floor(n)','half-cent-rounding'),
+ 'subscription-proration-boundary':('proration/period.py','period.start <= instant < period.end','period.start < instant < period.end','adjacent-period-single-membership'),
+}
+
+def test_every_question_has_edge_regression_detection():
+    assert set(EDGE_MUTATIONS) == {c['slug'] for c in list_challenges()}
+    for slug, (_, _, _, case_id) in EDGE_MUTATIONS.items():
+        assert case_id in {case.id for case in cases_for(slug)}
+
 @pytest.mark.skipif(os.getenv('PROMPTCODE_AUDIT_DOCKER')!='1',reason='opt-in live mutant validation')
+@pytest.mark.parametrize('mutations',[MUTATIONS,EDGE_MUTATIONS],ids=['baseline','edge'])
 @pytest.mark.parametrize('slug',list(MUTATIONS))
-def test_live_independent_inventory_rejects_plausible_wrong_fix(slug,tmp_path):
+def test_live_independent_inventory_rejects_plausible_wrong_fix(slug,tmp_path,mutations):
     from trusted_reference_fixtures import reference_snapshot
     path=reference_snapshot(slug,tmp_path/'source')
-    file,old,new,case_id=MUTATIONS[slug]
+    file,old,new,case_id=mutations[slug]
     p=path/file;source=p.read_text();assert old in source;p.write_text(source.replace(old,new))
     case=next(c for c in cases_for(slug) if c.id==case_id)
     observed,error=evaluator._run_probe(path,slug,case.probe)

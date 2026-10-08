@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { canTransition, allowedTargets } from '../src/statusMachine.js';
 import { transitionInvoice } from '../src/invoiceService.js';
-import { resetStore, seedInvoice } from '../src/store.js';
+import { resetStore, seedInvoice, getInvoice } from '../src/store.js';
 import { handleRequest } from '../src/api.js';
 beforeEach(() => {
   resetStore();
@@ -9,6 +9,16 @@ beforeEach(() => {
   seedInvoice({ id: 'inv_paid', customerId: 'cus_1', amountCents: 1200, status: 'paid', issuedAt: '2024-05-01T12:00:00.000Z', updatedAt: '2024-05-02T12:00:00.000Z' });
 });
 describe('allowed transitions', () => {
+  it('refused API changes preserve the invoice including money', () => {
+    const before = { ...getInvoice('inv_paid')! };
+    expect(handleRequest({ method: 'POST', path: '/invoices/inv_paid/transition', body: { status: 'draft' } }).status).toBe(409);
+    expect(getInvoice('inv_paid')).toEqual(before);
+  });
+  it('missing status is a validation error with no mutation', () => {
+    const before = { ...getInvoice('inv_1')! };
+    expect(handleRequest({ method: 'POST', path: '/invoices/inv_1/transition', body: {} }).status).toBe(400);
+    expect(getInvoice('inv_1')).toEqual(before);
+  });
   it('draft can go to sent', () => { expect(canTransition('draft', 'sent')).toBe(true); expect(transitionInvoice('inv_1', 'sent').status).toBe('sent'); });
   it('sent can go to paid', () => { transitionInvoice('inv_1', 'sent'); expect(transitionInvoice('inv_1', 'paid').status).toBe('paid'); });
   it('paid can go to void', () => { expect(transitionInvoice('inv_paid', 'void').status).toBe('void'); });

@@ -26,6 +26,7 @@ def reference_snapshot(slug: str, dest: Path) -> Path:
         replace('server/app.ts','const { id, workspaceId, title } = ticket;','const { id, workspaceId, title, labelIds } = ticket;')
         replace('server/app.ts','res.json({ id, workspaceId, title });','res.json({ id, workspaceId, title, labelIds });')
         replace('server/app.ts','title: saved.title });','title: saved.title, labelIds: saved.labelIds });')
+        replace('client/TicketLabels.tsx','setSelected([]);','setSelected(ticket.labelIds ?? []);')
     elif slug=='shipment-csv-merge':
         replace('shipment_merge/merge.py','seen_status: set[tuple[str, str]] = set()','seen_status: set[str] = set()')
         replace('shipment_merge/merge.py','key = (event.shipment_id, event.status)','key = event.event_id')

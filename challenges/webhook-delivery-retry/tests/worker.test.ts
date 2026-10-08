@@ -6,6 +6,23 @@ import type { DeliveryJob } from '../src/types.js';
 function job(id: string): DeliveryJob { return { id, url: `https://example.test/${id}`, payload: { id }, attempts: 0 }; }
 beforeEach(() => { resetCharges(); resetConcurrencyStats(); });
 describe('deliverOne', () => {
+  it('caps failed attempts and charges an exhausted delivery only once', async () => {
+    let calls = 0;
+    const client = { post: async () => { calls++; return { ok: false, status: 500 }; } };
+    expect(await deliverOne(job('failed'), client, { maxAttempts: 4, backoffMs: 0 })).toBe(false);
+    expect(calls).toBe(4);
+    expect(chargeCount('failed')).toBe(1);
+  });
+  it('preserves mixed batch result order and handles an empty batch', async () => {
+    const jobs = Array.from({ length: 12 }, (_, i) => job(String(i)));
+    const client = { post: async (url: string) => {
+      const ok = Number(url.split('/').pop()) % 2 === 0;
+      return { ok, status: ok ? 200 : 500 };
+    } };
+    expect(await deliverAll(jobs, client, { maxAttempts: 2, backoffMs: 0 })).toEqual(jobs.map((_, i) => i % 2 === 0));
+    expect(chargeCount()).toBe(12);
+    expect(await deliverAll([], client, { maxAttempts: 2, backoffMs: 0 })).toEqual([]);
+  });
   it('eventually succeeds after transient failures', async () => {
     const client = flakyClient(new Map([['d1', 2]]));
     expect(await deliverOne(job('d1'), client, { maxAttempts: 3, backoffMs: 0 })).toBe(true);

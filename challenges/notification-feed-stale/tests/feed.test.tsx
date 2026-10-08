@@ -26,6 +26,19 @@ describe('UI', () => {
   });
 });
 describe('concurrency', () => {
+  it('coalesces repeated concurrent marks without losing other updates', async () => {
+    await loadFeed();
+    await Promise.all(['n1', 'n2', 'n1', 'n3', 'n2'].map(markAsRead));
+    expect(unreadCount()).toBe(0);
+    expect(getSnapshot().map(n => [n.id, n.read])).toEqual([['n1', true], ['n2', true], ['n3', true]]);
+  });
+  it('keeps the snapshot intact when a mark fails', async () => {
+    await loadFeed();
+    const before = JSON.stringify(getSnapshot());
+    await expect(markAsRead('missing')).rejects.toThrow('not found');
+    expect(JSON.stringify(getSnapshot())).toBe(before);
+    expect(unreadCount()).toBe(2);
+  });
   it('marks two without clobber', async () => {
     await loadFeed();
     await Promise.all([markAsRead('n1'), markAsRead('n2')]);

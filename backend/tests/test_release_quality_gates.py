@@ -14,7 +14,7 @@ def test_release_quality_gates_pass_in_non_strict_mode() -> None:
         prompt_samples=root / "docs" / "prompt_judge_samples.jsonl",
     )
     assert result["pass"] is True
-    assert result["summary"]["total_gates"] == 6
+    assert result["summary"]["total_gates"] == 7
 
 
 def test_release_quality_gates_pass_in_strict_mode() -> None:

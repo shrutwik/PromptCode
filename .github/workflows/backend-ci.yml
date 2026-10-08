@@ -176,6 +176,88 @@ jobs:
           docker build -f docker/Dockerfile.interview-node -t promptcode-runner-node:latest .
           docker build -f docker/Dockerfile.interview-python -t promptcode-runner-python:latest .
 
+      - name: Set up Python for isolated quality checks
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install release-check dependencies
+        run: pip install -r backend/requirements-dev.txt
+
+      - name: Validate isolated questions, references, incorrect repairs and grading attacks
+        env:
+          PROMPTCODE_AUDIT_DOCKER: "1"
+          PROMPTCODE_JWT_SECRET: ci-test-secret
+          PROMPTCODE_DEBUG: "true"
+          PYTHONPATH: backend
+        run: |
+          python backend/scripts/run_test_suite.py \
+            backend/tests/test_trusted_evaluator.py \
+            backend/tests/test_interview_question_release.py \
+            backend/tests/test_audit_grading_integrity.py \
+            backend/tests/test_interview_executor.py \
+            -q --tb=short --junitxml=output/quality/interview.xml
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          suites = ET.parse('output/quality/interview.xml').getroot().findall('testsuite')
+          assert suites and sum(int(s.get('tests', 0)) for s in suites) >= 90
+          assert all(int(s.get('skipped', 0)) == 0 for s in suites), 'Isolated release checks must not be skipped'
+          PY
+
+      - name: Record calibrated reference performance
+        env:
+          PYTHONPATH: backend
+        run: python -m scripts.run_interview_performance_gate --output output/quality/reference-performance.json
+
+      - name: Preserve isolated quality evidence
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: isolated-quality-evidence
+          path: output/quality/
+          retention-days: 7
+
+  browser-quality:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up maintained Node LTS
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24.20.0"
+          cache: npm
+          cache-dependency-path: qa/browser/package-lock.json
+
+      - name: Install locked browser and question dependencies
+        run: |
+          npm ci --ignore-scripts --prefix qa/browser
+          sh scripts/prebuild-interview-node-deps.sh
+
+      - name: Run frontend state and editor helper checks
+        run: node --test frontend/js/pages/*.test.js
+
+      - name: Install test browsers
+        working-directory: qa/browser
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Run real editor, recovery, accessibility and question UI checks
+        working-directory: qa/browser
+        run: npm test
+
+      - name: Preserve browser failure traces and report
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: browser-quality-evidence
+          path: |
+            qa/browser/report/
+            qa/browser/results/
+          retention-days: 7
+
   compose-startup-integration:
     runs-on: ubuntu-latest
     steps:
@@ -188,7 +270,7 @@ jobs:
   deploy:
     name: Push image to ghcr.io
     runs-on: ubuntu-latest
-    needs: [backend-tests, schema-drift, docker-build, compose-startup-integration]
+    needs: [backend-tests, schema-drift, docker-build, compose-startup-integration, browser-quality]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     concurrency:
       group: promptcode-production-deploy

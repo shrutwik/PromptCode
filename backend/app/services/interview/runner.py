@@ -1147,6 +1147,7 @@ def _result(
 
 def _parse_test_counts(output: str) -> dict[str, int]:
     """Best-effort structured counts from vitest/pytest output (not a scraper grade)."""
+    output = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", output)
     # pytest summaries can put failures first. Read the final summary line so
     # assertion text or earlier output cannot supply a partial count.
     summaries = re.findall(
@@ -1166,17 +1167,16 @@ def _parse_test_counts(output: str) -> dict[str, int]:
             "skipped": skipped,
             "total": passed + failed + skipped,
         }
-    # vitest: "Tests  2 failed | 2 passed (4)"
-    m = re.search(
-        r"Tests\s+(\d+)\s+failed\s*\|\s*(\d+)\s+passed\s*\((\d+)\)",
-        output,
-        re.I,
-    )
-    if m:
-        failed, passed, total = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        return {"passed": passed, "failed": failed, "skipped": 0, "total": total}
-    m = re.search(r"Tests\s+(\d+)\s+passed", output, re.I)
-    if m:
-        passed = int(m.group(1))
-        return {"passed": passed, "failed": 0, "skipped": 0, "total": passed}
+    # Vitest status order varies; skipped/todo tests must not look like a full pass.
+    summaries = re.findall(r"^[ \t]*Tests[ \t]+(.+)$", output, re.I | re.M)
+    if summaries:
+        counts = {status.lower(): int(count) for count, status in re.findall(
+            r"(\d+)\s+(passed|failed|skipped|todo)", summaries[-1], re.I
+        )}
+        passed, failed = counts.get('passed', 0), counts.get('failed', 0)
+        skipped = counts.get('skipped', 0) + counts.get('todo', 0)
+        total = passed + failed + skipped
+        declared = re.search(r"\((\d+)\)", summaries[-1])
+        if total and (declared is None or int(declared.group(1)) == total):
+            return {"passed": passed, "failed": failed, "skipped": skipped, "total": total}
     return {"passed": 0, "failed": 0, "skipped": 0, "total": 0}

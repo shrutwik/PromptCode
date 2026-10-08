@@ -12,11 +12,19 @@ import json
 from pathlib import Path
 from typing import Any
 
-from app.services.evaluation.benchmarking import evaluate_reproducibility, load_benchmark_cases
+from app.services.evaluation.benchmarking import (
+    evaluate_reproducibility,
+    load_benchmark_cases,
+)
 from app.services.evaluation.weight_profile import validate_weight_profile_freeze
 from scripts.run_challenge_publish_gate import run_gate as run_challenge_publish_gate
-from scripts.run_evaluator_regression_gate import run_gate as run_evaluator_regression_gate
-from scripts.run_prompt_judge_calibration_gate import run_gate as run_prompt_judge_calibration_gate
+from scripts.run_evaluator_regression_gate import (
+    run_gate as run_evaluator_regression_gate,
+)
+from scripts.run_interview_publish_gate import run_gate as run_interview_publish_gate
+from scripts.run_prompt_judge_calibration_gate import (
+    run_gate as run_prompt_judge_calibration_gate,
+)
 from scripts.run_prompt_judge_dataset_freshness_gate import (
     run_gate as run_prompt_judge_dataset_freshness_gate,
 )
@@ -75,6 +83,7 @@ def run_all_gates(
 
     gates = {
         "challenge_publish": challenge_publish,
+        "interview_publish": run_interview_publish_gate(challenges_dir=challenges_dir),
         "reproducibility": reproducibility,
         "regression_pack": regression,
         "prompt_judge_dataset_freshness": dataset_freshness,

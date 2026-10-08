@@ -1,0 +1,14 @@
+{
+  "name": "promptcode-browser-quality",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "serve": "node serve.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@axe-core/playwright": "4.13.0",
+    "esbuild": "0.28.2",
+    "monaco-editor": "0.52.2"
+  }
+}

@@ -2,6 +2,19 @@ import { describe, it, expect } from 'vitest';
 import { quote, applyRules } from '../src/pricingEngine.js';
 import { roundHalfUp } from '../src/money.js';
 describe('golden quotes', () => {
+  it('rounds half cents up for both discounts and surcharges', () => {
+    expect(applyRules(5, [{ type: 'percent_off', pct: 10, code: 'p' }])).toEqual({ finalCents: 4, applied: ['p'] });
+    expect(quote({ baseCents: 5, rules: [{ type: 'surcharge_percent', pct: 10, code: 's' }] })).toEqual({ finalCents: 6, applied: ['s'] });
+  });
+  it('does not mutate rules across repeated quotes', () => {
+    const input = { baseCents: 100, rules: [{ type: 'surcharge_percent' as const, pct: 10, code: 's' },
+      { type: 'amount_off' as const, cents: 7, code: 'a' }] };
+    const before = JSON.stringify(input);
+    const expected = { finalCents: 102, applied: ['a', 's'] };
+    expect(quote(input)).toEqual(expected);
+    expect(applyRules(input.baseCents, input.rules)).toEqual(expected);
+    expect(JSON.stringify(input)).toBe(before);
+  });
   it('applies percent then amount then surcharge', () => {
     const result = quote({
       baseCents: 10000,

@@ -1,7 +1,7 @@
 from shipment_merge.parse import parse_csv
 from shipment_merge.summarize import summarize
 from shipment_merge.models import ShipmentEvent
-from shipment_merge.merge import merge_events
+from shipment_merge.merge import merge_events, total_quantity
 DAY1 = """event_id,shipment_id,status,ts,quantity_delta
 e1,s1,created,2024-01-01T10:00:00Z,1
 e2,s1,picked,2024-01-01T15:00:00Z,0
@@ -22,3 +22,17 @@ def test_duplicate_event_id_across_batches_not_double_counted():
 def test_same_status_different_event_ids_kept_in_ts_order():
     events=[ShipmentEvent("e1","s1","picked","2024-01-01T10:00:00Z",0), ShipmentEvent("e2","s1","picked","2024-01-01T12:00:00Z",0)]
     assert [e.event_id for e in merge_events([events])] == ["e1","e2"]
+
+def test_timestamp_ties_negative_deltas_and_duplicates():
+    a = ShipmentEvent('a', 'ship', 'scan', '2026-01-01', 5)
+    b = ShipmentEvent('b', 'ship', 'scan', '2026-01-01', -2)
+    assert [e.event_id for e in merge_events([[b, a], [], [a, b, a]])] == ['a', 'b']
+    assert total_quantity('ship') == 3
+
+def test_next_merge_replaces_previous_totals():
+    merge_events([[ShipmentEvent('old', 'old-ship', 'scan', '2026-01-01', 9)]])
+    merge_events([[ShipmentEvent('new', 'new-ship', 'scan', '2026-01-02', 4)]])
+    assert total_quantity('old-ship') == 0
+    assert total_quantity('new-ship') == 4
+    assert merge_events([]) == []
+    assert total_quantity('new-ship') == 0

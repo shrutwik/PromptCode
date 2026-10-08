@@ -107,7 +107,7 @@ function requestPause(unloading = false) {
       body: JSON.stringify({ action: "pause", editor_token: editorToken }),
     }).catch(() => {});
   } else {
-    timerAction("pause", { quiet: true, skipAuthRedirect: true });
+    timerAction("pause", { quiet: true, skipAuthRedirect: true, keepalive: true });
   }
 }
 
@@ -945,7 +945,6 @@ document.getElementById("saveBtn").onclick = () =>
 document.getElementById("testBtn").onclick = () => {
   setSessionStatus("busy", "Running");
   runCmd("run_tests")
-    .then(() => setSessionStatus("ok", "Ready"))
     .catch((e) => { setSessionStatus("fail", "Error"); logTerm(String(e.message || e)); });
 };
 document.getElementById("relevantBtn").onclick = () => runCmd("run_targeted_tests").catch((e) => logTerm(String(e.message || e)));

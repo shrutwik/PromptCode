@@ -41,7 +41,7 @@ _SAFE_SLUG = re.compile(r"[a-z0-9][a-z0-9-]*")
 # The stack each sandbox image must satisfy. Kept beside the dependency layer so
 # a rebuilt image is checked against both at once.
 STACK_BASE_IMAGES = {
-    "node": "node:20.19-bookworm-slim",
+    "node": "node:24.20.0-bookworm-slim",
     "python": "python:3.12-slim-bookworm",
 }
 

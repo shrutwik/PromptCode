@@ -1,6 +1,6 @@
 # Interview Node/TS runner — deps tooling preinstalled; no network during candidate runs.
 # Build: docker build -f docker/Dockerfile.interview-node -t promptcode-runner-node:latest .
-FROM node:20.19-bookworm-slim AS challenge-deps
+FROM node:24.20.0-bookworm-slim AS challenge-deps
 WORKDIR /src
 COPY challenges/ /src/challenges/
 COPY scripts/prebuild-interview-node-deps.sh /src/scripts/prebuild-interview-node-deps.sh
@@ -11,12 +11,11 @@ RUN sh /src/scripts/prebuild-interview-node-deps.sh \
        mkdir -p "/deps/$slug"; cp -a "$dir" "/deps/$slug/node_modules"; \
      done
 
-FROM node:20.19-bookworm-slim
+FROM node:24.20.0-bookworm-slim
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates \
   && rm -rf /var/lib/apt/lists/* \
-  && npm install -g npm@10 \
   && useradd -m -u 10001 runner
 
 ENV npm_config_update_notifier=false \

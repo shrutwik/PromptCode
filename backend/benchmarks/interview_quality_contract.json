@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "questions": {
+    "invoice-status-transition": {
+      "min_visible_tests": 8,
+      "requirements": {"legal transitions": ["legal-graph", "api-transition-matrix"], "rejected writes preserve state": ["illegal-preserves-paid", "missing-status-preserves-state"], "missing resources": ["missing-distinct"]},
+      "manual_requirements": []
+    },
+    "order-hold-reason": {
+      "min_visible_tests": 6,
+      "requirements": {"persist and overwrite reasons": ["reason-persists", "reason-overwrite-and-isolation"], "legacy and optional null": ["legacy-null", "optional-reason-and-repeat-release"], "release": ["release-clears"], "missing resources": ["missing-order"]},
+      "manual_requirements": []
+    },
+    "catalog-suggest-latency": {
+      "min_visible_tests": 7,
+      "requirements": {"ranking and ties": ["ranking-ties", "multi-token-no-input-mutation"], "empty and limited queries": ["no-match-and-limit", "empty-query-and-zero-limit"], "large catalog": ["large-catalog-ranking"]},
+      "manual_requirements": ["200ms latency under calibrated load", "scan instrumentation cannot be self-attested"]
+    },
+    "notification-feed-stale": {
+      "min_visible_tests": 5,
+      "requirements": {"loaded state": ["loaded-count", "already-read"], "concurrency": ["concurrent-marks", "duplicate-concurrent-marks"], "failed writes": ["failed-mark-preserves-state"]},
+      "manual_requirements": ["React rendered badge matches store"]
+    },
+    "workspace-label-propagation": {
+      "min_visible_tests": 7,
+      "requirements": {"persistence and clearing": ["persist-roundtrip", "clear-labels"], "workspace boundaries": ["cross-workspace-rejected", "workspace-list-isolation"], "rejected writes preserve state": ["invalid-update-preserves-labels"]},
+      "manual_requirements": ["React screen displays persisted labels"]
+    },
+    "shipment-csv-merge": {
+      "min_visible_tests": 6,
+      "requirements": {"identity and timestamp ordering": ["same-status-distinct-id", "duplicate-id-once", "ties-negative-and-multi-file-dedup"], "shipment isolation": ["independent-shipments"], "state replacement": ["empty-clears-state", "next-merge-replaces-totals"]},
+      "manual_requirements": []
+    },
+    "tenant-document-acl": {
+      "min_visible_tests": 9,
+      "requirements": {"bidirectional tenant isolation": ["cross-tenant-get", "cross-tenant-patch", "reverse-tenant-isolation"], "authentication": ["unauthenticated", "unauthenticated-mutations"], "authorized access": ["own-list-and-get", "own-patch", "other-tenant-own"], "missing resources": ["missing-id"]},
+      "manual_requirements": []
+    },
+    "webhook-delivery-retry": {
+      "min_visible_tests": 5,
+      "requirements": {"billing idempotency": ["retry-charge-once", "repeat-delivery-idempotent", "exhausted-retries-charge-once"], "attempt limits": ["attempts-bounded"], "batch concurrency and order": ["flush-concurrency", "mixed-batch-result-order"]},
+      "manual_requirements": []
+    },
+    "pricing-rule-extract": {
+      "min_visible_tests": 7,
+      "requirements": {"ordering and money": ["order-and-rounding", "same-type-order", "half-cent-rounding"], "floor and empty rules": ["floor-zero", "empty-preserves"], "input immutability": ["repeated-call-no-input-mutation"]},
+      "manual_requirements": ["quote delegates to extracted applyRules; source review"]
+    },
+    "subscription-proration-boundary": {
+      "min_visible_tests": 7,
+      "requirements": {"half-open boundaries": ["end-excluded", "start-included", "microsecond-boundaries"], "credits": ["mid-period-credit", "before-period"], "timezone and adjacent periods": ["timezone-equivalence", "adjacent-period-single-membership"]},
+      "manual_requirements": []
+    }
+  }
+}

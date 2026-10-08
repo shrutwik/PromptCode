@@ -13,7 +13,7 @@ class Case:
     probe: str
     expected: object
 
-VERSION = 'behavioral-2026-10-v1'
+VERSION = 'behavioral-2026-10-v2'
 MANUAL_REQUIREMENTS = {
     'catalog-suggest-latency': ['200ms latency under calibrated load', 'scan instrumentation cannot be self-attested'],
     'notification-feed-stale': ['React rendered badge matches store'],

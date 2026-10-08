@@ -303,6 +303,12 @@ test("leaving the window pauses and returning resumes the same attempt", async (
 
 test("hidden tabs and offline connections pause, then resume on return", async () => {
   const p = page();
+  const originalTimer = p.context.InterviewAPI.timer;
+  const pauses = [];
+  p.context.InterviewAPI.timer = (id, action, options) => {
+    if (action === "pause") pauses.push(options);
+    return originalTimer(id, action, options);
+  };
   p.context.document.hidden = true;
   p.events["document:visibilitychange"][0]();
   await p.run("timerQueue");
@@ -319,6 +325,8 @@ test("hidden tabs and offline connections pause, then resume on return", async (
   p.events.online[0]();
   await p.run("timerQueue");
   assert.equal(p.run("sessionReadOnly"), false);
+  assert.equal(pauses.length, 2);
+  assert.ok(pauses.every(options => options.keepalive === true));
 });
 
 test("navigation sends a keepalive pause without resetting the attempt", () => {

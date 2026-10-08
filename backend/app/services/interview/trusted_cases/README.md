@@ -31,3 +31,24 @@ calibration readiness.
 The opt-in Docker tests validate each starter, each repair, a plausible incorrect
 repair for every question, forged grade-shaped output, and immutable Python/Node
 submission signing. Reference implementations never enter candidate images.
+
+The v2 inventory has 62 independent cases across all ten coding questions.
+Coverage includes the invoice API transition matrix, rejected-write state
+preservation, bidirectional tenant isolation, Unicode and optional hold reasons,
+empty and zero-limit searches, repeated concurrent notifications, multi-file
+deduplication and negative quantities, exhausted retries and batch result order,
+half-cent rounding, and microsecond and adjacent-period boundaries.
+Visible practice suites exercise the same requirements with separate assertions.
+Ten additional edge-case mutations verify that superficially correct repairs
+are rejected, alongside the ten original incorrect-repair checks.
+
+Run the isolated grading validation from the repository root:
+
+```sh
+PROMPTCODE_AUDIT_DOCKER=1 PYTHONPATH=backend .venv/bin/python -m pytest backend/tests/test_trusted_evaluator.py -q
+```
+
+Docker and the configured runner images are required. Practice tests intentionally
+fail on incident starters; validate green runs against the reviewed reference
+repairs, preserving the starter bugs for candidates. Changing the inventory
+version and digest intentionally invalidates previously bound grading evidence.

@@ -152,6 +152,11 @@ def test_off_topic_redirects_can_vary_without_calling_the_model(monkeypatch):
     ('1 passed, 2 warnings in 0.03s', {'passed': 1, 'failed': 0, 'skipped': 0, 'total': 1}),
     ('Tests  2 failed | 2 passed (4)', {'passed': 2, 'failed': 2, 'skipped': 0, 'total': 4}),
     ('Tests  4 passed (4)', {'passed': 4, 'failed': 0, 'skipped': 0, 'total': 4}),
+    ('Tests  \x1b[32m4 passed\x1b[0m (4)', {'passed': 4, 'failed': 0, 'skipped': 0, 'total': 4}),
+    ('Tests  2 passed | 1 skipped | 1 todo (4)', {'passed': 2, 'failed': 0, 'skipped': 2, 'total': 4}),
+    ('Tests  1 failed | 2 passed | 1 skipped (4)', {'passed': 2, 'failed': 1, 'skipped': 1, 'total': 4}),
+    ('Tests  2 passed (3)', {'passed': 0, 'failed': 0, 'skipped': 0, 'total': 0}),
+    ('Tests  3 passed (3)\nTests  2 failed (2)', {'passed': 0, 'failed': 2, 'skipped': 0, 'total': 2}),
     ('assert "999 passed"\n2 failed, 2 passed in 0.03s', {'passed': 2, 'failed': 2, 'skipped': 0, 'total': 4}),
     ('1 passed in 0.01s\n2 failed, 2 passed in 0.03s', {'passed': 2, 'failed': 2, 'skipped': 0, 'total': 4}),
 ])

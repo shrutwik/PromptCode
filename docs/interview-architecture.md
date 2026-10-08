@@ -105,7 +105,7 @@ Allowed when `PROMPTCODE_DEBUG=true` or `X-PromptCode-Internal-Token` matches `P
 | Starter/workspace files | yes (blocked list) | yes |
 | SOLUTION.md / guides | no | yes (post-submit defend parse) |
 | Interviewer file roles | no | yes (`interviewer_file_roles`) |
-| Hidden evaluator tests | not leaked in report | N/A (allowlisted suite only for MVP) |
+| Independent evaluator cases and expectations | excluded from workspace and assistant context | server-owned inventories, compared outside candidate execution; signed and bound to the frozen source |
 | AI API keys | no | env only |
 
 ## Local vs production
@@ -125,3 +125,22 @@ Allowed when `PROMPTCODE_DEBUG=true` or `X-PromptCode-Internal-Token` matches `P
 - Remaining product risks: session cleanup TTL, auth hardening, observability, beta onboarding — not runner/AI rewrites.
 
 See also: `docs/interview-mvp.md`.
+
+## Current quality and grading boundaries
+
+The visible pytest/Vitest suites give advisory practice feedback. A frozen source
+snapshot is evaluated independently in resource-limited, network-disabled Docker
+or managed sandboxes. Expected results and signing credentials stay outside the
+candidate process. Case inventories and evaluator versions bind the signed result;
+changing either invalidates previous evidence bindings. Human review and real-pilot
+calibration gates govern publication of reviewed practice ratings.
+
+The release pipeline now validates question coverage contracts, executes all ten
+reviewed visible suites plus independent reference/starter/incorrect-repair and
+attack checks, records calibrated reference performance, and exercises real Monaco
+and both React questions in browsers. Browser API fixtures and known-reference
+measurements are release QA, not authoritative candidate grading. Rendering,
+performance/instrumentation and pricing-source delegation retain explicit human
+checks for arbitrary candidate submissions. See `product-quality-plan.md` and
+`grading-operations.md` for the current execution checkpoint and remaining launch
+evidence requirements.

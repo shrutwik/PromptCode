@@ -30,3 +30,25 @@ def test_hold_reason_round_trip_and_legacy_null():
     assert client.get("/orders/ord_legacy").json().get("hold_reason") is None
     client.post("/orders/ord_new/hold", json={"hold_reason": "fraud_review"})
     assert client.get("/orders/ord_new").json()["hold_reason"] == "fraud_review"
+
+def test_replacing_reason_preserves_money_and_other_orders():
+    client.post('/orders/ord_new/hold', json={'hold_reason': 'first'})
+    response = client.post('/orders/ord_new/hold', json={'hold_reason': 'Révision 仓库'})
+    assert response.status_code == 200
+    saved = client.get('/orders/ord_new').json()
+    assert saved['hold_reason'] == 'Révision 仓库'
+    assert saved['total_cents'] == 2500
+    assert saved['customer_id'] == 'c2'
+    legacy = client.get('/orders/ord_legacy').json()
+    assert legacy['status'] == 'open'
+    assert legacy['hold_reason'] is None
+
+def test_optional_reason_and_repeat_release():
+    held = client.post('/orders/ord_new/hold', json={})
+    assert held.status_code == 200
+    assert held.json()['hold_reason'] is None
+    for _ in range(2):
+        released = client.post('/orders/ord_new/release')
+        assert released.status_code == 200
+        assert released.json()['status'] == 'open'
+        assert released.json()['hold_reason'] is None

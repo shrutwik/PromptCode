@@ -24,3 +24,7 @@ MEMORY.md
 
 # Interview session workspaces
 backend/data/interview_workspaces/
+
+# Browser release-test artifacts
+qa/browser/report/
+qa/browser/results/

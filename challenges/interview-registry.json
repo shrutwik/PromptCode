@@ -68,7 +68,7 @@
       "install_command": "npm install",
       "entry_files": [
         "src/suggest.ts",
-        "src/suggestService.ts",
+        "src/service.ts",
         "README.md"
       ],
       "runner": {
@@ -94,8 +94,8 @@
       "test_command": "npm test",
       "install_command": "npm install",
       "entry_files": [
-        "src/hooks/useNotificationFeed.ts",
-        "src/store/notificationStore.ts",
+        "src/NotificationList.tsx",
+        "src/feedStore.ts",
         "README.md"
       ],
       "runner": {
@@ -200,7 +200,7 @@
       "test_command": "npm test",
       "install_command": "npm install",
       "entry_files": [
-        "src/deliveryWorker.ts",
+        "src/worker.ts",
         "src/retryPolicy.ts",
         "README.md"
       ],
@@ -228,7 +228,7 @@
       "install_command": "npm install",
       "entry_files": [
         "src/pricingEngine.ts",
-        "src/quoteService.ts",
+        "src/rules.ts",
         "README.md"
       ],
       "runner": {
