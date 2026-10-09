@@ -226,7 +226,7 @@ class Settings(BaseSettings):
     database_pool_timeout_seconds: float = Field(default=15.0, gt=0, le=300)
     database_command_timeout_seconds: float = Field(default=30.0, gt=0, le=600)
     database_connect_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
-    interview_max_ai_requests_per_session: int = 10
+    interview_max_ai_requests_per_session: int = 150
     auth_cookie_enabled: bool = False  # prefer HttpOnly cookies in prod when true
     auth_cookie_secure: bool = True
     auth_cookie_samesite: str = "lax"
@@ -268,15 +268,15 @@ class Settings(BaseSettings):
     ai_trial_requests: int = Field(default=1000000, ge=1)
     ai_trial_tokens: int = Field(default=1000000000, ge=1)
     ai_trial_cost_micros: int = Field(default=0, ge=0)
-    ai_global_requests: int = Field(default=200, ge=1)
-    ai_global_tokens: int = Field(default=500000, ge=1)
-    ai_global_cost_micros: int = Field(default=1000000, ge=1)
-    ai_user_requests: int = Field(default=20, ge=1)
-    ai_user_tokens: int = Field(default=500000, ge=1)
-    ai_user_cost_micros: int = Field(default=1000000, ge=1)
-    ai_session_requests: int = Field(default=10, ge=1)
-    ai_session_tokens: int = Field(default=250000, ge=1)
-    ai_session_cost_micros: int = Field(default=500000, ge=1)
+    ai_global_requests: int = Field(default=3000, ge=1)
+    ai_global_tokens: int = Field(default=7500000, ge=1)
+    ai_global_cost_micros: int = Field(default=15000000, ge=1)
+    ai_user_requests: int = Field(default=300, ge=1)
+    ai_user_tokens: int = Field(default=7500000, ge=1)
+    ai_user_cost_micros: int = Field(default=15000000, ge=1)
+    ai_session_requests: int = Field(default=150, ge=1)
+    ai_session_tokens: int = Field(default=3750000, ge=1)
+    ai_session_cost_micros: int = Field(default=7500000, ge=1)
     ai_question_only: bool = True
     ai_provider: str = ""
     ai_model: str = "gpt-4o-mini"
